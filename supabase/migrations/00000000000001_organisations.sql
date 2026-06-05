@@ -10,10 +10,5 @@ CREATE TABLE organisations (
 
 ALTER TABLE organisations ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Authenticated users can read their own org" ON organisations
-  FOR SELECT USING (
-    id IN (SELECT org_id FROM users WHERE id = auth.uid())
-  );
-
 CREATE POLICY "Service role has full access" ON organisations
   USING (auth.role() = 'service_role');

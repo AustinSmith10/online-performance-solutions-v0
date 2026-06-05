@@ -37,3 +37,9 @@ CREATE POLICY "Super admins can read all users" ON users
 
 CREATE POLICY "Service role has full access" ON users
   USING (auth.role() = 'service_role');
+
+-- Now that users exists, add the cross-reference policy on organisations
+CREATE POLICY "Users can read their own org" ON organisations
+  FOR SELECT USING (
+    id IN (SELECT org_id FROM users WHERE id = auth.uid())
+  );
