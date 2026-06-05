@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState, useActionState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { confirmTotpEnrollment, type ConfirmTotpState } from "@/app/actions/auth";
@@ -23,6 +22,12 @@ export default function Setup2FAPage() {
   useEffect(() => {
     async function enroll() {
       const supabase = createClient();
+
+      // Remove any stale unverified factors before starting a fresh enrollment
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const unverified = factors?.totp?.filter((f) => (f.status as string) === "unverified") ?? [];
+      await Promise.all(unverified.map((f) => supabase.auth.mfa.unenroll({ factorId: f.id })));
+
       const { data, error } = await supabase.auth.mfa.enroll({
         factorType: "totp",
         issuer: "OPS",
@@ -72,12 +77,12 @@ export default function Setup2FAPage() {
       {enrollData && (
         <div className="space-y-6">
           <div className="flex justify-center">
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={enrollData.qrCode}
               alt="TOTP QR code"
               width={192}
               height={192}
-              unoptimized
             />
           </div>
 

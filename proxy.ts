@@ -92,18 +92,18 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/complete-profile", request.url));
   }
 
-  // TOTP enforcement
-  const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aalData) {
-    if (aalData.nextLevel === "aal1") {
-      // No TOTP enrolled — mandatory setup
-      return NextResponse.redirect(new URL("/setup-2fa", request.url));
-    }
-    if (aalData.nextLevel === "aal2" && aalData.currentLevel === "aal1") {
-      // TOTP enrolled but not verified this session
-      const url = new URL("/verify-2fa", request.url);
-      url.searchParams.set("next", pathname);
-      return NextResponse.redirect(url);
+  // TOTP enforcement (skipped in development for easier local testing)
+  if (process.env.NODE_ENV !== "development") {
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalData) {
+      if (aalData.nextLevel === "aal1") {
+        return NextResponse.redirect(new URL("/setup-2fa", request.url));
+      }
+      if (aalData.nextLevel === "aal2" && aalData.currentLevel === "aal1") {
+        const url = new URL("/verify-2fa", request.url);
+        url.searchParams.set("next", pathname);
+        return NextResponse.redirect(url);
+      }
     }
   }
 

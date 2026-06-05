@@ -145,7 +145,7 @@ export async function login(
   });
 
   const next = formData.get("next") as string | null;
-  redirect(next ?? "/");
+  redirect(next || "/");
 }
 
 // ─── Logout ───────────────────────────────────────────────────────────────────
@@ -253,7 +253,7 @@ export async function verifyTotp(
   }
 
   const next = formData.get("next") as string | null;
-  redirect(next ?? "/");
+  redirect(next || "/");
 }
 
 // ─── TOTP enrollment confirmation ─────────────────────────────────────────────
