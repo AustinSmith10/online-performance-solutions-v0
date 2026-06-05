@@ -15,7 +15,28 @@ export type PaymentMethod = "upfront" | "credit_deduction" | "deferred";
 
 export type ConsultantAvailability = "available" | "on_leave" | "at_capacity";
 
-export type NotificationChannel = "email" | "dashboard";
+export type NotificationType =
+  | "acknowledgement"
+  | "approval_request"
+  | "modifications_requested"
+  | "pbdr_delivery"
+  | "credit_deduction"
+  | "low_credit"
+  | "assignment_required"
+  | "consultant_assigned"
+  | "project_submitted"
+  | "project_approved"
+  | "project_dispatched";
+
+export interface Notification {
+  id: string;
+  recipient_id: string;
+  project_id: string | null;
+  type: NotificationType;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
 
 export interface User {
   id: string;

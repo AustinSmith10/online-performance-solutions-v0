@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { logout } from "@/app/actions/auth";
+import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 
 export default async function AdminShellLayout({
   children,
@@ -13,8 +14,9 @@ export default async function AdminShellLayout({
     <div className="flex min-h-screen bg-zinc-50">
       {/* Sidebar */}
       <aside className="w-56 shrink-0 border-r border-zinc-200 bg-white">
-        <div className="flex h-14 items-center border-b border-zinc-200 px-4">
+        <div className="flex h-14 items-center justify-between border-b border-zinc-200 px-4">
           <span className="text-sm font-semibold text-zinc-900">OPS Admin</span>
+          <NotificationTrayServer />
         </div>
         <nav className="space-y-0.5 p-3">
           <NavLink href="/admin/organisations">Organisations</NavLink>
