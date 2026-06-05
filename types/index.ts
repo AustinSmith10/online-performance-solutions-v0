@@ -20,10 +20,19 @@ export type NotificationChannel = "email" | "dashboard";
 export interface User {
   id: string;
   email: string;
-  full_name: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  company_role: string | null;
+  state_territory: string | null;
   role: UserRole;
-  org_id: string;
-  is_active: boolean;
+  org_id: string | null;
+  availability: ConsultantAvailability;
+  is_locked: boolean;
+  totp_enabled: boolean;
+  profile_complete: boolean;
+  failed_login_count: number;
+  invited_at: string | null;
   created_at: string;
 }
 

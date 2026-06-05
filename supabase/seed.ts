@@ -8,15 +8,64 @@ const supabase = createClient(
 async function seed() {
   console.log("Seeding OPS local database...");
 
-  // TODO: Insert Stockland org once schema is defined (issue #3 onward)
-  // const { data: org } = await supabase.from("organisations").insert({ name: "Stockland", slug: "stockland", ... }).select().single();
+  // Seed Stockland org
+  const { data: org, error: orgError } = await supabase
+    .from("organisations")
+    .insert({
+      name: "Stockland",
+      slug: "stockland",
+      payment_method: "credit_deduction",
+      credit_balance: 100,
+      delivery_timeline_days: 5,
+    })
+    .select()
+    .single();
 
-  // TODO: Insert test users once auth schema is in place (issue #3)
-  // - super_admin: admin@ddeg.com.au
-  // - consultant: consultant@ddeg.com.au
-  // - client: client@stockland.com.au
+  if (orgError) {
+    console.error("Failed to insert org:", orgError.message);
+    return;
+  }
 
-  console.log("Seed complete (no-op until schema migrations land).");
+  // Seed test users via Supabase Auth admin API (invite flow)
+  const testUsers = [
+    { email: "admin@ddeg.com.au", role: "super_admin" as const },
+    { email: "consultant@ddeg.com.au", role: "consultant" as const },
+    { email: "client@stockland.com.au", role: "client" as const },
+  ];
+
+  for (const u of testUsers) {
+    const { data: authUser, error: authError } =
+      await supabase.auth.admin.createUser({
+        email: u.email,
+        password: "Ops@TestPass1!",
+        email_confirm: true,
+        app_metadata: { role: u.role, org_id: org.id },
+        user_metadata: { profile_complete: true },
+      });
+
+    if (authError) {
+      console.error(`Failed to create ${u.email}:`, authError.message);
+      continue;
+    }
+
+    await supabase.from("users").insert({
+      id: authUser.user.id,
+      email: u.email,
+      first_name: u.role === "super_admin" ? "Admin" : u.role === "consultant" ? "Test" : "Client",
+      last_name: "User",
+      phone: "0400000000",
+      company_role: u.role,
+      state_territory: "NSW",
+      role: u.role,
+      org_id: org.id,
+      profile_complete: true,
+      invited_at: new Date().toISOString(),
+    });
+
+    console.log(`Created ${u.email}`);
+  }
+
+  console.log("Seed complete.");
 }
 
 seed().catch((error) => {
