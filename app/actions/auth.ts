@@ -84,10 +84,10 @@ export async function login(
       const newCount = userRow.failed_login_count + 1;
       await adminClient
         .from("users")
-        .update({ failed_login_count: newCount, is_locked: newCount >= 5 })
+        .update({ failed_login_count: newCount, is_locked: newCount >= 15 })
         .eq("id", userRow.id);
 
-      if (newCount >= 5) {
+      if (newCount >= 15) {
         return {
           errors: {
             form: ["Account locked after repeated failed attempts. Contact your administrator."],
