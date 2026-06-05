@@ -42,8 +42,14 @@ export interface Organisation {
   slug: string;
   payment_method: PaymentMethod;
   credit_balance: number;
-  delivery_timeline_days: number;
+  credit_limit: number;
+  delivery_working_days: number;
+  state_territory: string | null;
+  abandoned_draft_days: number;
+  is_frozen: boolean;
+  email_whitelist: string[];
   created_at: string;
+  updated_at: string;
 }
 
 export interface Project {

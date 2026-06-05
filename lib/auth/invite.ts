@@ -5,13 +5,13 @@ import type { UserRole } from "@/types";
 export async function sendInvite(
   email: string,
   role: UserRole,
-  orgId: string
+  orgId?: string
 ) {
   const supabase = createAdminClient();
 
   const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm`,
-    data: { role, org_id: orgId },
+    data: { role, org_id: orgId ?? null },
   });
 
   if (error) return { error: error.message };
@@ -19,7 +19,7 @@ export async function sendInvite(
 
   // Set role in app_metadata so it appears in the JWT (service-role only field)
   await supabase.auth.admin.updateUserById(data.user.id, {
-    app_metadata: { role, org_id: orgId },
+    app_metadata: { role, org_id: orgId ?? null },
   });
 
   // Pre-create the public users row
@@ -27,7 +27,7 @@ export async function sendInvite(
     id: data.user.id,
     email,
     role,
-    org_id: orgId,
+    org_id: orgId ?? null,
     invited_at: new Date().toISOString(),
   });
 
