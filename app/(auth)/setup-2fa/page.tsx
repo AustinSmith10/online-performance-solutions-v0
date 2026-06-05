@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState, useActionState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { confirmTotpEnrollment, type ConfirmTotpState } from "@/app/actions/auth";
@@ -71,11 +72,12 @@ export default function Setup2FAPage() {
       {enrollData && (
         <div className="space-y-6">
           <div className="flex justify-center">
-            {/* qr_code is a data: URI (SVG or PNG) from Supabase */}
-            <img
+            <Image
               src={enrollData.qrCode}
               alt="TOTP QR code"
-              className="h-48 w-48"
+              width={192}
+              height={192}
+              unoptimized
             />
           </div>
 
