@@ -2,7 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { UserRole } from "@/types";
-import { SESSION_EXPIRY_COOKIE } from "@/lib/auth/session";
+
+// Inlined to avoid importing lib/auth/session.ts which pulls in next/headers
+const SESSION_EXPIRY_COOKIE = "ops-session-expires";
 
 // Paths that bypass all auth checks
 const PUBLIC_PATHS = [
@@ -32,16 +34,13 @@ export async function proxy(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet, headers) {
+        setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
-          );
-          Object.entries(headers).forEach(([key, value]) =>
-            supabaseResponse.headers.set(key, value)
           );
         },
       },
@@ -74,12 +73,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Session timeout — compare against our role-based expiry cookie
+  // Enforce role-based session timeout via the custom expiry cookie set on login.
+  // Treat a missing cookie the same as an expired one — the browser stopped sending
+  // it because its Max-Age elapsed, meaning the custom session window is over.
   const expiresAt = request.cookies.get(SESSION_EXPIRY_COOKIE)?.value;
-  if (expiresAt && Date.now() > parseInt(expiresAt, 10)) {
-    const url = new URL("/api/auth/signout", request.url);
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+  if (!expiresAt || Date.now() > parseInt(expiresAt, 10)) {
+    return NextResponse.redirect(new URL("/api/auth/signout", request.url));
   }
 
   // Auth flow paths (profile setup, 2FA) skip further checks
@@ -108,15 +107,21 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Role gating against defined route prefixes
+  const userRole = user.app_metadata?.role as UserRole | undefined;
+
+  // Root → redirect to role portal
+  if (pathname === "/") {
+    return NextResponse.redirect(
+      new URL(portalForRole(userRole), request.url)
+    );
+  }
+
+  // Block cross-portal access
   const route = ROLE_ROUTES.find((r) => pathname.startsWith(r.prefix));
-  if (route) {
-    const userRole = user.app_metadata?.role as UserRole | undefined;
-    if (!userRole || !route.roles.includes(userRole)) {
-      return NextResponse.redirect(
-        new URL(portalForRole(userRole), request.url)
-      );
-    }
+  if (route && (!userRole || !route.roles.includes(userRole))) {
+    return NextResponse.redirect(
+      new URL(portalForRole(userRole), request.url)
+    );
   }
 
   return supabaseResponse;
