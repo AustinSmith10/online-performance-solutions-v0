@@ -1,0 +1,28 @@
+# Railway deployment configuration for OPS
+# Three services defined: ops-web, ops-worker, ops-pdf
+# Deploy each via Railway dashboard pointing to this repo with the service name as the root service.
+
+[services.ops-web]
+# Next.js application
+builder = "NIXPACKS"
+buildCommand = "npm run build"
+startCommand = "npm start"
+healthcheckPath = "/api/health"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[services.ops-worker]
+# pg-boss background job worker
+builder = "NIXPACKS"
+buildCommand = "npm run build"
+startCommand = "npm run worker"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[services.ops-pdf]
+# Gotenberg with LibreOffice — handles .docx → PDF conversion
+# Deploy as a Docker image service in the Railway dashboard (not a Nixpacks build)
+# Image: gotenberg/gotenberg:8
+# Start command: gotenberg --api-timeout=60s --libreoffice-restart-after=10
+# Internal port: 3000
+# No public domain required — accessed internally via $RAILWAY_PRIVATE_DOMAIN

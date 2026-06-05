@@ -1,0 +1,17 @@
+version: "3.8"
+
+# Local development environment for OPS
+# - Gotenberg: .docx → PDF conversion (used by ops-pdf in prod)
+# - Supabase: managed separately via `npx supabase start`
+#   (starts postgres, auth, storage, studio, inbucket on localhost:54321)
+
+services:
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    command:
+      - "gotenberg"
+      - "--api-timeout=60s"
+      - "--libreoffice-restart-after=10"
