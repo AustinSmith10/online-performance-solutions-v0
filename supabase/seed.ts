@@ -8,8 +8,8 @@ const supabase = createClient(
 async function seed() {
   console.log("Seeding OPS database...");
 
-  // ── Seed test org ──────────────────────────────────────────────────────────
-  const { data: org, error: orgError } = await supabase
+  // ── Orgs ───────────────────────────────────────────────────────────────────
+  const { data: stockland, error: orgError } = await supabase
     .from("organisations")
     .upsert(
       {
@@ -25,14 +25,13 @@ async function seed() {
     .select()
     .single();
 
-  if (orgError) {
-    console.error("Failed to upsert org:", orgError.message);
+  if (orgError || !stockland) {
+    console.error("Failed to upsert org:", orgError?.message);
     return;
   }
-  console.log("Org ready:", org.name, org.id);
+  console.log("Org ready:", stockland.name, stockland.id);
 
-  // ── Seed users ─────────────────────────────────────────────────────────────
-  // Clean up any previously seeded real-domain accounts
+  // ── Remove stale real-domain accounts ──────────────────────────────────────
   const staleEmails = [
     "fire@ddeg.com.au",
     "consultant@ddeg.com.au",
@@ -47,34 +46,97 @@ async function seed() {
     }
   }
 
-  const testUsers = [
+  // ── Users ──────────────────────────────────────────────────────────────────
+  type UserSpec = {
+    email: string;
+    role: "super_admin" | "consultant" | "client";
+    firstName: string;
+    lastName: string;
+    orgId: string | null;
+    availability?: "available" | "on_leave" | "at_capacity";
+  };
+
+  const testUsers: UserSpec[] = [
+    // Super admin
     {
       email: "admin@ops.test",
-      role: "super_admin" as const,
+      role: "super_admin",
       firstName: "Admin",
       lastName: "User",
       orgId: null,
     },
+    // Consultants — varied availability for realistic assignment testing
     {
       email: "consultant@ops.test",
-      role: "consultant" as const,
+      role: "consultant",
       firstName: "Test",
       lastName: "Consultant",
       orgId: null,
+      availability: "available",
     },
     {
+      email: "consultant2@ops.test",
+      role: "consultant",
+      firstName: "Sarah",
+      lastName: "Chen",
+      orgId: null,
+      availability: "available",
+    },
+    {
+      email: "consultant3@ops.test",
+      role: "consultant",
+      firstName: "Marcus",
+      lastName: "Webb",
+      orgId: null,
+      availability: "on_leave",
+    },
+    {
+      email: "consultant4@ops.test",
+      role: "consultant",
+      firstName: "Priya",
+      lastName: "Nair",
+      orgId: null,
+      availability: "at_capacity",
+    },
+    {
+      email: "consultant5@ops.test",
+      role: "consultant",
+      firstName: "James",
+      lastName: "O'Brien",
+      orgId: null,
+      availability: "available",
+    },
+    // Clients
+    {
       email: "client@ops.test",
-      role: "client" as const,
+      role: "client",
       firstName: "Test",
       lastName: "Client",
-      orgId: org.id,
+      orgId: stockland.id,
+    },
+    {
+      email: "client2@ops.test",
+      role: "client",
+      firstName: "Emma",
+      lastName: "Davis",
+      orgId: stockland.id,
+    },
+    {
+      email: "client3@ops.test",
+      role: "client",
+      firstName: "Ryan",
+      lastName: "Thompson",
+      orgId: stockland.id,
     },
   ];
 
+  // Track seeded user IDs keyed by email
+  const seededIds: Record<string, string> = {};
+
+  const { data: existingAuth } = await supabase.auth.admin.listUsers();
+
   for (const u of testUsers) {
-    // Check if auth user already exists
-    const { data: existing } = await supabase.auth.admin.listUsers();
-    const alreadyExists = existing?.users.find((a) => a.email === u.email);
+    const alreadyExists = existingAuth?.users.find((a) => a.email === u.email);
 
     let userId: string;
 
@@ -98,7 +160,6 @@ async function seed() {
       userId = authUser.user.id;
     }
 
-    // Upsert public users row
     const { error: dbError } = await supabase.from("users").upsert(
       {
         id: userId,
@@ -110,6 +171,7 @@ async function seed() {
         state_territory: "NSW",
         role: u.role,
         org_id: u.orgId,
+        availability: u.availability ?? "available",
         profile_complete: true,
         totp_enabled: false,
         invited_at: new Date().toISOString(),
@@ -120,17 +182,62 @@ async function seed() {
     if (dbError) {
       console.error(`Failed to upsert users row for ${u.email}:`, dbError.message);
     } else {
-      console.log(`Ready: ${u.email} (${u.role})`);
+      console.log(`Ready: ${u.email} (${u.role}${u.availability ? `, ${u.availability}` : ""})`);
+      seededIds[u.email] = userId;
     }
   }
 
-  console.log("\nSeed complete.");
-  console.log("Login at http://localhost:3000/login");
-  console.log("  admin@ops.test      → Super Admin");
-  console.log("  consultant@ops.test → Consultant");
-  console.log("  client@ops.test     → Client");
-  console.log("Password for all accounts: Ops@TestPass1!");
-  console.log("Note: 2FA setup required on first login.");
+  // ── Dummy project ──────────────────────────────────────────────────────────
+  // Submitted, unassigned — lets the Super Admin test the full assign/reassign flow.
+  const submittedById = seededIds["client@ops.test"];
+  if (submittedById) {
+    const { data: existing } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("project_number", "OPS-0001")
+      .maybeSingle();
+
+    if (existing) {
+      console.log("Dummy project OPS-0001 already exists — skipping");
+    } else {
+      const { error: projError } = await supabase.from("projects").insert({
+        org_id: stockland.id,
+        submitted_by: submittedById,
+        status: "submitted",
+        project_number: "OPS-0001",
+        po_number: "PO-2024-001",
+        delivery_recipient_email: "client@ops.test",
+        expected_delivery_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10),
+      });
+
+      if (projError) {
+        console.error("Failed to insert dummy project:", projError.message);
+      } else {
+        console.log("Dummy project OPS-0001 created (status: submitted, unassigned)");
+      }
+    }
+  } else {
+    console.warn("Could not find client@ops.test — skipping dummy project");
+  }
+
+  // ── Summary ────────────────────────────────────────────────────────────────
+  console.log("\nSeed complete. Password for all accounts: Ops@TestPass1!");
+  console.log("Note: 2FA setup required on first login.\n");
+  console.log("Super Admin:");
+  console.log("  admin@ops.test");
+  console.log("\nConsultants:");
+  console.log("  consultant@ops.test   — available");
+  console.log("  consultant2@ops.test  — available   (Sarah Chen)");
+  console.log("  consultant3@ops.test  — on_leave    (Marcus Webb)");
+  console.log("  consultant4@ops.test  — at_capacity (Priya Nair)");
+  console.log("  consultant5@ops.test  — available   (James O'Brien)");
+  console.log("\nClients (Stockland):");
+  console.log("  client@ops.test");
+  console.log("  client2@ops.test  (Emma Davis)");
+  console.log("  client3@ops.test  (Ryan Thompson)");
+  console.log("\nDummy project: OPS-0001 (submitted, unassigned) → /admin/projects");
 }
 
 seed().catch((error) => {
