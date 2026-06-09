@@ -9,7 +9,8 @@
     "lint": "eslint",
     "type-check": "tsc --noEmit",
     "worker": "tsx worker.ts",
-    "db:generate": "npx supabase gen types typescript --local > types/supabase.ts"
+    "db:generate": "npx supabase gen types typescript --local > types/supabase.ts",
+    "seed": "node --env-file=.env.local ./node_modules/.bin/tsx supabase/seed.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
