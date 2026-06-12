@@ -22,11 +22,32 @@ export type NotificationType =
   | "pbdr_delivery"
   | "credit_deduction"
   | "low_credit"
+  | "insufficient_credit"
+  | "payment_override"
   | "assignment_required"
   | "consultant_assigned"
   | "project_submitted"
   | "project_approved"
   | "project_dispatched";
+
+export type CreditEventType =
+  | "top_up"
+  | "deduction"
+  | "deferred_debit"
+  | "upfront_log"
+  | "override";
+
+export interface CreditLedgerEntry {
+  id: string;
+  org_id: string;
+  project_id: string | null;
+  event_type: CreditEventType;
+  amount: number;
+  balance_after: number;
+  performed_by: string | null;
+  notes: string | null;
+  created_at: string;
+}
 
 export interface Notification {
   id: string;
@@ -64,6 +85,7 @@ export interface Organisation {
   payment_method: PaymentMethod;
   credit_balance: number;
   credit_limit: number;
+  deferred_balance: number;
   delivery_working_days: number;
   state_territory: string | null;
   abandoned_draft_days: number;
@@ -84,6 +106,11 @@ export interface Project {
   po_number: string | null;
   delivery_recipient_email: string | null;
   expected_delivery_date: string | null;
+  credit_deducted: boolean;
+  payment_override: boolean;
+  payment_override_reason: string | null;
+  payment_override_at: string | null;
+  payment_override_by: string | null;
   created_at: string;
   updated_at: string;
 }
