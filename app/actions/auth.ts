@@ -134,14 +134,15 @@ export async function login(
 
   // Set role-based session expiry cookie
   const role = (userRow?.role ?? "client") as UserRole;
-  const expiresAt = Date.now() + SESSION_DURATION[role];
+  const durationMs = SESSION_DURATION[role];
+  const expiresAt = Date.now() + durationMs;
   const cookieStore = await cookies();
   cookieStore.set(SESSION_EXPIRY_COOKIE, String(expiresAt), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    expires: new Date(expiresAt),
+    maxAge: durationMs / 1000,
   });
 
   const next = formData.get("next") as string | null;

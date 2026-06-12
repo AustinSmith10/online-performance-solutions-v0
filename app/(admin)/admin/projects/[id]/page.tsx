@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { assignConsultantFromForm } from "@/app/actions/projects";
+import { AssignForm, type ConsultantOption } from "./_components/AssignForm";
 import type { ProjectStatus, ConsultantAvailability } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -76,18 +76,8 @@ export default async function ProjectDetailPage({
     } | null;
   };
 
-  type ConsultantOption = {
-    id: string;
-    first_name: string | null;
-    last_name: string | null;
-    email: string;
-    availability: ConsultantAvailability;
-  };
-
   const project = projectResult.data as unknown as ProjectDetail;
   const consultants = (consultantsResult.data ?? []) as ConsultantOption[];
-
-  const assignAction = assignConsultantFromForm.bind(null, id);
 
   const currentConsultantId = project.assigned?.id ?? "";
 
@@ -152,37 +142,12 @@ export default async function ProjectDetailPage({
           </p>
         )}
 
-        <form action={assignAction} className="flex items-end gap-3">
-          <div className="flex-1">
-            <label htmlFor="consultant_id" className="mb-1 block text-xs font-medium text-zinc-600">
-              {project.assigned ? "Reassign to" : "Assign to"}
-            </label>
-            <select
-              id="consultant_id"
-              name="consultant_id"
-              defaultValue={currentConsultantId}
-              required
-              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
-            >
-              <option value="" disabled>
-                Select a consultant…
-              </option>
-              {consultants.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {[c.first_name, c.last_name].filter(Boolean).join(" ") || c.email}
-                  {" — "}
-                  {AVAILABILITY_LABELS[c.availability]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            type="submit"
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-          >
-            {project.assigned ? "Reassign" : "Assign"}
-          </button>
-        </form>
+        <AssignForm
+          projectId={id}
+          consultants={consultants}
+          currentConsultantId={currentConsultantId}
+          isReassign={!!project.assigned}
+        />
 
         {consultants.length === 0 && (
           <p className="mt-3 text-sm text-zinc-400">

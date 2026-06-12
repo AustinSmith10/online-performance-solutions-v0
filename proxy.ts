@@ -65,35 +65,44 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // No session → redirect to login, preserving destination
+  const isApiRoute = pathname.startsWith("/api/");
+
+  // No session → API routes get 401 JSON; pages redirect to login
   if (!user) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  // Enforce role-based session timeout via the custom expiry cookie set on login.
-  // Treat a missing cookie the same as an expired one — the browser stopped sending
-  // it because its Max-Age elapsed, meaning the custom session window is over.
-  const expiresAt = request.cookies.get(SESSION_EXPIRY_COOKIE)?.value;
-  if (!expiresAt || Date.now() > parseInt(expiresAt, 10)) {
-    return NextResponse.redirect(new URL("/api/auth/signout", request.url));
-  }
-
-  // Auth flow paths (profile setup, 2FA) skip further checks
+  // Auth flow paths (profile setup, 2FA) bypass the expiry check — invited users
+  // arrive here without a session cookie and must be allowed through to complete setup.
   if (AUTH_FLOW_PATHS.some((p) => pathname.startsWith(p))) {
     return supabaseResponse;
   }
 
-  // Profile completeness check
+  // Enforce role-based session timeout via the custom expiry cookie set on login.
+  // Treat a missing cookie the same as an expired one — Max-Age has elapsed.
+  // API routes get 401 JSON; pages redirect to the signout handler.
+  const expiresAt = request.cookies.get(SESSION_EXPIRY_COOKIE)?.value;
+  if (!expiresAt || Date.now() > parseInt(expiresAt, 10)) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Session expired" }, { status: 401 });
+    }
+    return NextResponse.redirect(new URL("/api/auth/signout", request.url));
+  }
+
+  // Profile completeness check (pages only — API callers are always fully enrolled)
   const profileComplete = user.user_metadata?.profile_complete === true;
-  if (!profileComplete) {
+  if (!profileComplete && !isApiRoute) {
     return NextResponse.redirect(new URL("/complete-profile", request.url));
   }
 
   // TOTP enforcement (skipped in development for easier local testing)
-  if (process.env.NODE_ENV !== "development") {
+  if (process.env.NODE_ENV !== "development" && !isApiRoute) {
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalData) {
       if (aalData.nextLevel === "aal1") {
@@ -116,9 +125,12 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  // Block cross-portal access
+  // Block cross-portal access (pages) / enforce role for API routes
   const route = ROLE_ROUTES.find((r) => pathname.startsWith(r.prefix));
   if (route && (!userRole || !route.roles.includes(userRole))) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     return NextResponse.redirect(
       new URL(portalForRole(userRole), request.url)
     );

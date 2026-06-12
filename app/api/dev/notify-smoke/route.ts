@@ -22,7 +22,7 @@ export async function GET() {
     type: "acknowledgement",
     message: "Smoke test — your submission has been received.",
     emailSubject: "OPS smoke test: submission received",
-    emailReact: AcknowledgementEmail({
+    emailHtml: AcknowledgementEmail({
       recipientName: user.email ?? "there",
       projectId: "SMOKE-001",
       expectedDeliveryDate: "12 Jun 2026",

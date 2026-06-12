@@ -2,7 +2,6 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/sender";
 import type { NotificationType } from "./types";
-import type { ReactElement } from "react";
 
 export interface NotifyOptions {
   recipientId: string;
@@ -10,7 +9,7 @@ export interface NotifyOptions {
   message: string;
   projectId?: string;
   emailSubject: string;
-  emailReact: ReactElement;
+  emailHtml: string;
 }
 
 export async function notify({
@@ -19,7 +18,7 @@ export async function notify({
   message,
   projectId,
   emailSubject,
-  emailReact,
+  emailHtml,
 }: NotifyOptions): Promise<void> {
   const admin = createAdminClient();
 
@@ -43,5 +42,9 @@ export async function notify({
     return;
   }
 
-  await sendEmail({ to: userResult.data.email, subject: emailSubject, react: emailReact });
+  try {
+    await sendEmail({ to: userResult.data.email, subject: emailSubject, html: emailHtml });
+  } catch (err) {
+    console.error("[notify] email send failed (non-fatal):", err);
+  }
 }

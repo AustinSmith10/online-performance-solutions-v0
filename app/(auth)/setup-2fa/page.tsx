@@ -50,10 +50,22 @@ export default function Setup2FAPage() {
       <h1 className="mb-2 text-2xl font-semibold tracking-tight text-zinc-900">
         Set up two-factor authentication
       </h1>
-      <p className="mb-8 text-sm text-zinc-500">
-        Scan the QR code with your authenticator app, then enter the 6-digit
-        code to confirm setup.
+      <p className="mb-6 text-sm text-zinc-500">
+        Use an authenticator app (Google Authenticator, Authy, or Microsoft
+        Authenticator).
       </p>
+      <ol className="mb-8 list-decimal pl-5 space-y-1 text-sm text-zinc-500">
+        <li>
+          Open the app and tap <strong>+</strong> or{" "}
+          <em>Add account</em>.
+        </li>
+        <li>
+          Choose <strong>Scan QR code</strong> inside the app.
+        </li>
+        <li>
+          Point your camera at the code below, then enter the 6-digit code.
+        </li>
+      </ol>
 
       {enrollError && (
         <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">

@@ -7,10 +7,10 @@
 
 ## How to use this document
 
-Every test is labelled `**[AUTOMATED]`** or `**[MANUAL]**`.
+Every test is labelled `**[AUTOMATED]`** or `**[MANUAL]`**.
 
-- `**[AUTOMATED]**` — run the listed command in terminal; check the output. No browser needed.
-- `**[MANUAL]**` — requires browser interaction. Step-by-step instructions are provided.
+- `**[AUTOMATED]`** — run the listed command in terminal; check the output. No browser needed.
+- `**[MANUAL]`** — requires browser interaction. Step-by-step instructions are provided.
 
 Fill in the **Result** field for each test with one of:
 
@@ -187,7 +187,7 @@ cat .github/workflows/ci.yml
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -209,7 +209,7 @@ cat .github/workflows/ci.yml
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -249,7 +249,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -271,7 +271,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -300,7 +300,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -326,7 +326,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -358,7 +358,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -381,7 +381,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -402,7 +402,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -422,7 +422,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -442,7 +442,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -462,7 +462,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -482,7 +482,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -502,7 +502,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -528,7 +528,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -546,7 +546,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -565,7 +565,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -589,7 +589,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -609,7 +609,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -628,9 +628,9 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 **Expected:** Redirected to `/verify-2fa`.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes            |
+| ------ | ---------------- |
+| FAIL   | did not redirect |
 
 
 ---
@@ -649,7 +649,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -670,7 +670,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -690,7 +690,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -711,7 +711,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -738,7 +738,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -758,7 +758,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -781,7 +781,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -800,7 +800,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -818,7 +818,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -837,7 +837,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -855,7 +855,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -873,7 +873,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -892,7 +892,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -908,14 +908,19 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 3. Go to the **Application** tab (Chrome) or **Storage** tab (Firefox).
 4. Expand **Cookies** → click `http://localhost:3000`.
 5. Find the cookie named `ops-session-expires`.
-6. Read the **Expires / Max-Age** column and compare to the current time — difference should be ~8 hours.
+6. Note the **Value** column — it will be a large number (Unix timestamp in milliseconds, e.g. `1781246039363`). This is expected.
+7. In the DevTools **Console** tab, paste and run:
+  ```js
+   Math.round((YOUR_COOKIE_VALUE - Date.now()) / 1000 / 3600)
+  ```
+   Replace `YOUR_COOKIE_VALUE` with the number from step 6. Result should be `8`.
 
-**Expected:** Cookie expiry is approximately 8 hours from the time you logged in.
+**Expected:** Console outputs `8` (hours remaining). The **Expires / Max-Age** column in Application tab also shows a date ~8 hours from login time.
 
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -928,14 +933,15 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 1. Log out and log in as `consultant@ops.test` / `Ops@TestPass1!`.
 2. Follow the same DevTools cookie inspection steps as 3-028.
-3. Find `ops-session-expires` and check the expiry.
+3. Find `ops-session-expires`, copy the Value, and run the console check.
+4. Result should be `4`.
 
-**Expected:** Cookie expiry is approximately 4 hours from login time.
+**Expected:** Console outputs `4` (hours remaining).
 
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -948,14 +954,15 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 1. Log out and log in as `admin@ops.test` / `Ops@TestPass1!`.
 2. Follow the same DevTools cookie inspection steps as 3-028.
-3. Find `ops-session-expires` and check the expiry.
+3. Find `ops-session-expires`, copy the Value, and run the console check.
+4. Result should be `4`.
 
-**Expected:** Cookie expiry is approximately 4 hours from login time.
+**Expected:** Console outputs `4` (hours remaining).
 
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -990,7 +997,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1010,7 +1017,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1029,7 +1036,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1048,7 +1055,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1070,7 +1077,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1090,9 +1097,9 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 **Expected:** DB stores: `["example.com", "test.org"]` (an array, not a raw string).
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes                                                                                                                                                                                                                |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PASS   | DB stores an array. However the issue is text remains in the input field and is easily deleted without any confirmation. If the user accidentally deletes the whole input field text then the whole array is erased. |
 
 
 ---
@@ -1113,7 +1120,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1132,7 +1139,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1152,7 +1159,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1175,7 +1182,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1196,7 +1203,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1218,7 +1225,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1238,7 +1245,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1262,7 +1269,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1286,7 +1293,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1312,7 +1319,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1334,7 +1341,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1359,7 +1366,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1378,7 +1385,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1412,7 +1419,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1432,9 +1439,9 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 > Mark as **BLOCKED** if `RESEND_API_KEY` is not yet configured. The DB notification row (5-001) still works without it.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes                 |
+| ------ | --------------------- |
+| BLOCK  | need to set up Resend |
 
 
 ---
@@ -1452,9 +1459,9 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 **Expected:** The guard exists in code — it logs an error but does not crash. Confirmed by code review.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes                 |
+| ------ | --------------------- |
+| BLOCK  | need to set up Resend |
 
 
 ---
@@ -1473,7 +1480,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1498,7 +1505,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1516,7 +1523,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1534,7 +1541,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1553,7 +1560,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1572,7 +1579,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1594,7 +1601,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1615,7 +1622,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1637,7 +1644,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1657,7 +1664,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1678,7 +1685,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1706,13 +1713,13 @@ Then refresh the admin page.
 
 | Template                            | Result | Notes |
 | ----------------------------------- | ------ | ----- |
-| 5-015 · AcknowledgementEmail        |        |       |
-| 5-016 · ConsultantAssignedEmail     |        |       |
-| 5-017 · ApprovalRequestEmail        |        |       |
-| 5-018 · ModificationsRequestedEmail |        |       |
-| 5-019 · PBDRDeliveryEmail           |        |       |
-| 5-020 · CreditDeductionEmail        |        |       |
-| 5-021 · LowCreditEmail              |        |       |
+| 5-015 · AcknowledgementEmail        | PASS   |       |
+| 5-016 · ConsultantAssignedEmail     | PASS   |       |
+| 5-017 · ApprovalRequestEmail        | PASS   |       |
+| 5-018 · ModificationsRequestedEmail | PASS   |       |
+| 5-019 · PBDRDeliveryEmail           | PASS   |       |
+| 5-020 · CreditDeductionEmail        | PASS   |       |
+| 5-021 · LowCreditEmail              | PASS   |       |
 
 
 ---
@@ -1740,7 +1747,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1761,7 +1768,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1780,7 +1787,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1801,7 +1808,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1823,7 +1830,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1842,7 +1849,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1861,7 +1868,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1880,7 +1887,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1905,7 +1912,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1924,7 +1931,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1946,7 +1953,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1966,7 +1973,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1984,7 +1991,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -2024,7 +2031,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -2047,7 +2054,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -2067,7 +2074,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -2094,7 +2101,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -2127,9 +2134,9 @@ Then refresh the admin page.
 **Expected:** Console prints `Status: 403`.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes                                                                                     |
+| ------ | ----------------------------------------------------------------------------------------- |
+| PASS   | Status: Failed to load resource: the server responded with a status of 401 (Unauthorized] |
 
 
 ---
@@ -2156,7 +2163,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -2176,7 +2183,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -2195,7 +2202,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -2217,7 +2224,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -2237,7 +2244,7 @@ Then refresh the admin page.
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -2249,16 +2256,16 @@ Then refresh the admin page.
 Update this table as you complete tests.
 
 
-| Issue                         | Total   | Pass | Fail | Blocked | N/A   | Remaining |
-| ----------------------------- | ------- | ---- | ---- | ------- | ----- | --------- |
-| Automated (A-001–005)         | 5       |      |      |         |       | 5         |
-| #2 Infrastructure (2-001–007) | 7       |      |      |         | 1     | 6         |
-| #3 Auth (3-001–030)           | 30      |      |      |         |       | 30        |
-| #4 Org & Users (4-001–019)    | 19      |      |      |         |       | 19        |
-| #5 Notifications (5-001–021)  | 21      |      |      |         |       | 21        |
-| #6 Assignment (6-001–018)     | 18      |      |      |         |       | 18        |
-| Cross-cutting (X-001–006)     | 6       |      |      |         |       | 6         |
-| **Total**                     | **106** |      |      |         | **1** | **105**   |
+| Issue                         | Total   | Pass   | Fail  | Blocked | N/A   | Remaining |
+| ----------------------------- | ------- | ------ | ----- | ------- | ----- | --------- |
+| Automated (A-001–005)         | 5       | 5      |       |         |       | 0         |
+| #2 Infrastructure (2-001–007) | 7       | 6      |       |         | 1     | 2         |
+| #3 Auth (3-001–030)           | 30      | 29     | 1     |         |       | 0         |
+| #4 Org & Users (4-001–019)    | 19      | 19     |       |         |       | 0         |
+| #5 Notifications (5-001–021)  | 21      | 19     |       | 2       |       | 0         |
+| #6 Assignment (6-001–018)     | 18      | 17     |       |         |       | 1         |
+| Cross-cutting (X-001–006)     | 6       | 6      |       |         |       | 0         |
+| **Total**                     | **106** | **98** | **2** | **2**   | **1** | **3**     |
 
 
 ---

@@ -48,7 +48,7 @@ export async function performAssignment(projectId: string, consultantId: string)
     message: `You have been assigned to project ${projectRef}.`,
     projectId,
     emailSubject: `You've been assigned to project ${projectRef}`,
-    emailReact: ConsultantAssignedEmail({
+    emailHtml: ConsultantAssignedEmail({
       recipientName: consultantName,
       projectRef,
       orgName,
