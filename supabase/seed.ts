@@ -222,6 +222,56 @@ async function seed() {
     console.warn("Could not find client@ops.test — skipping dummy project");
   }
 
+  // ── Audit log seed data ────────────────────────────────────────────────────
+  const adminId = seededIds["admin@ops.test"] ?? null;
+  const consultantId = seededIds["consultant@ops.test"] ?? null;
+  const clientId = seededIds["client@ops.test"] ?? null;
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("project_number", "OPS-0001")
+    .maybeSingle();
+  const projectId = project?.id ?? null;
+
+  // Check if audit seed already exists
+  const { count } = await supabase
+    .from("audit_log")
+    .select("*", { count: "exact", head: true })
+    .eq("event_type", "audit.seed");
+
+  if ((count ?? 0) > 0) {
+    console.log("Audit log already seeded — skipping");
+  } else {
+    const now = new Date();
+    const ago = (mins: number) => new Date(now.getTime() - mins * 60 * 1000).toISOString();
+
+    const auditEntries = [
+      { event_type: "auth.login", actor_id: adminId, actor_email: "admin@ops.test", project_id: null, org_id: null, metadata: { role: "super_admin" }, created_at: ago(120) },
+      { event_type: "auth.login", actor_id: clientId, actor_email: "client@ops.test", project_id: null, org_id: stockland.id, metadata: { role: "client" }, created_at: ago(110) },
+      { event_type: "org.created", actor_id: adminId, actor_email: "admin@ops.test", project_id: null, org_id: stockland.id, metadata: { name: "Stockland", payment_method: "credit_deduction" }, created_at: ago(100) },
+      { event_type: "org.updated", actor_id: adminId, actor_email: "admin@ops.test", project_id: null, org_id: stockland.id, metadata: { name: "Stockland", payment_method: "credit_deduction" }, created_at: ago(90) },
+      { event_type: "credit.top_up", actor_id: adminId, actor_email: "admin@ops.test", project_id: null, org_id: stockland.id, metadata: { amount: 100, balance_after: 100, notes: "Initial credit allocation" }, created_at: ago(80) },
+      { event_type: "assignment.created", actor_id: adminId, actor_email: "admin@ops.test", project_id: projectId, org_id: stockland.id, metadata: { consultant_id: consultantId, consultant_name: "Test Consultant" }, created_at: ago(70) },
+      { event_type: "auth.login", actor_id: consultantId, actor_email: "consultant@ops.test", project_id: null, org_id: null, metadata: { role: "consultant" }, created_at: ago(60) },
+      { event_type: "credit.deduction", actor_id: adminId, actor_email: "admin@ops.test", project_id: projectId, org_id: stockland.id, metadata: { balance_after: 99 }, created_at: ago(50) },
+      { event_type: "payment.override_applied", actor_id: adminId, actor_email: "admin@ops.test", project_id: projectId, org_id: stockland.id, metadata: { reason: "Client requested expedited processing", project_number: "OPS-0001" }, created_at: ago(40) },
+      { event_type: "payment.override_reconciled", actor_id: adminId, actor_email: "admin@ops.test", project_id: projectId, org_id: stockland.id, metadata: { project_number: "OPS-0001" }, created_at: ago(30) },
+      { event_type: "org.frozen", actor_id: adminId, actor_email: "admin@ops.test", project_id: null, org_id: stockland.id, metadata: { source: "organisations" }, created_at: ago(20) },
+      { event_type: "org.unfrozen", actor_id: adminId, actor_email: "admin@ops.test", project_id: null, org_id: stockland.id, metadata: { source: "organisations" }, created_at: ago(10) },
+      { event_type: "auth.login", actor_id: adminId, actor_email: "admin@ops.test", project_id: null, org_id: null, metadata: { role: "super_admin" }, created_at: ago(5) },
+      // Sentinel — used to detect whether audit seed has been run
+      { event_type: "audit.seed", actor_id: null, actor_email: null, project_id: null, org_id: null, metadata: { note: "seed script marker" }, created_at: ago(0) },
+    ];
+
+    const { error: auditErr } = await supabase.from("audit_log").insert(auditEntries);
+    if (auditErr) {
+      console.error("Failed to seed audit_log:", auditErr.message);
+    } else {
+      console.log(`Seeded ${auditEntries.length} audit log entries`);
+    }
+  }
+
   // ── Summary ────────────────────────────────────────────────────────────────
   console.log("\nSeed complete. Password for all accounts: Ops@TestPass1!");
   console.log("Note: 2FA setup required on first login.\n");
