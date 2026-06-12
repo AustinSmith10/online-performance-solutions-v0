@@ -1,0 +1,326 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole } from "@/lib/auth/session";
+import { auditLog } from "@/lib/audit/log";
+import { extractPlaceholderTokens } from "@/lib/documents/validator";
+import { detectSource, isKnownToken } from "@/lib/documents/field-keys";
+
+export type UploadTemplateState = { error?: string };
+
+export async function uploadTemplate(
+  _prev: UploadTemplateState,
+  formData: FormData
+): Promise<UploadTemplateState> {
+  const actor = await requireRole("super_admin");
+
+  const orgId = (formData.get("org_id") as string | null)?.trim();
+  if (!orgId) return { error: "Organisation is required." };
+
+  const file = formData.get("file") as File | null;
+  const name = (formData.get("name") as string | null)?.trim();
+
+  if (!name) return { error: "Template name is required." };
+  if (!file || file.size === 0) return { error: "A .docx file is required." };
+  if (!file.name.endsWith(".docx")) return { error: "Only .docx files are supported." };
+  if (file.size > 20 * 1024 * 1024) return { error: "File must be under 20 MB." };
+
+  const supabase = createAdminClient();
+  const templateId = crypto.randomUUID();
+  const storagePath = `${orgId}/${templateId}/${file.name}`;
+
+  const fileBuffer = await file.arrayBuffer();
+
+  let tokens: string[];
+  try {
+    tokens = await extractPlaceholderTokens(fileBuffer);
+  } catch {
+    return { error: "Could not parse the .docx file. Ensure it is a valid Word document." };
+  }
+
+  const { error: uploadError } = await supabase.storage
+    .from("templates")
+    .upload(storagePath, fileBuffer, {
+      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+
+  if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
+
+  const { error: insertError } = await supabase.from("templates").insert({
+    id: templateId,
+    org_id: orgId,
+    name,
+    storage_path: storagePath,
+    status: "draft",
+    created_by: actor.id,
+  });
+
+  if (insertError) {
+    await supabase.storage.from("templates").remove([storagePath]);
+    return { error: `Failed to save template: ${insertError.message}` };
+  }
+
+  if (tokens.length > 0) {
+    const mappingRows = tokens.map((token) => ({
+      template_id: templateId,
+      placeholder_token: token,
+      field_key: detectSource(token),
+      is_mapped: isKnownToken(token),
+    }));
+    const { error: mappingError } = await supabase
+      .from("template_field_mappings")
+      .insert(mappingRows);
+
+    if (mappingError) {
+      return { error: `Mappings could not be saved: ${mappingError.message}` };
+    }
+  }
+
+  await auditLog("template.uploaded", actor.id, actor.email, {
+    orgId,
+    metadata: { templateId, name, tokenCount: tokens.length },
+  });
+
+  revalidatePath(`/admin/templates`);
+  redirect(`/admin/templates/${templateId}`);
+}
+
+export type ActivateTemplateState = { error?: string };
+
+export async function activateTemplate(
+  templateId: string
+): Promise<ActivateTemplateState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const { data: mappings, error: mapErr } = await supabase
+    .from("template_field_mappings")
+    .select("placeholder_token, is_mapped")
+    .eq("template_id", templateId);
+
+  if (mapErr) return { error: mapErr.message };
+
+  const unknown = (mappings ?? []).filter((m) => !m.is_mapped);
+  if (unknown.length > 0) {
+    return {
+      error: `Cannot activate: ${unknown.length} token(s) with unrecognised prefix — ${unknown.map((m) => `{${m.placeholder_token}}`).join(", ")}.`,
+    };
+  }
+
+  const { data: template, error: tmplErr } = await supabase
+    .from("templates")
+    .select("org_id, name")
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (tmplErr || !template) return { error: "Template not found." };
+
+  const { error } = await supabase
+    .from("templates")
+    .update({ status: "active" })
+    .eq("id", templateId);
+
+  if (error) return { error: error.message };
+
+  await auditLog("template.activated", actor.id, actor.email, {
+    orgId: template.org_id as string,
+    metadata: { templateId, name: template.name },
+  });
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  revalidatePath(`/admin/templates`);
+  revalidatePath(`/admin/organisations/${template.org_id}`);
+  return {};
+}
+
+export type DeactivateTemplateState = { error?: string };
+
+export async function deactivateTemplate(
+  templateId: string
+): Promise<DeactivateTemplateState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const { data: template, error: tmplErr } = await supabase
+    .from("templates")
+    .select("org_id, name")
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (tmplErr || !template) return { error: "Template not found." };
+
+  const { error } = await supabase
+    .from("templates")
+    .update({ status: "inactive" })
+    .eq("id", templateId);
+
+  if (error) return { error: error.message };
+
+  await auditLog("template.deactivated", actor.id, actor.email, {
+    orgId: template.org_id as string,
+    metadata: { templateId, name: template.name },
+  });
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  revalidatePath(`/admin/templates`);
+  revalidatePath(`/admin/organisations/${template.org_id}`);
+  return {};
+}
+
+export type DeleteTemplateState = { error?: string };
+
+export async function deleteTemplate(
+  templateId: string
+): Promise<DeleteTemplateState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const { data: template, error: tmplErr } = await supabase
+    .from("templates")
+    .select("org_id, name, storage_path")
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (tmplErr || !template) return { error: "Template not found." };
+
+  // Delete DB record (cascades to template_field_mappings)
+  const { error: deleteErr } = await supabase
+    .from("templates")
+    .delete()
+    .eq("id", templateId);
+
+  if (deleteErr) return { error: deleteErr.message };
+
+  // Best-effort storage cleanup
+  await supabase.storage
+    .from("templates")
+    .remove([template.storage_path as string]);
+
+  await auditLog("template.deleted", actor.id, actor.email, {
+    orgId: template.org_id as string,
+    metadata: { templateId, name: template.name },
+  });
+
+  revalidatePath("/admin/templates");
+  revalidatePath(`/admin/organisations/${template.org_id}`);
+  redirect("/admin/templates");
+}
+
+export type ReuploadTemplateState = { error?: string };
+
+export async function reuploadTemplate(
+  templateId: string,
+  _prev: ReuploadTemplateState,
+  formData: FormData
+): Promise<ReuploadTemplateState> {
+  const actor = await requireRole("super_admin");
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "A .docx file is required." };
+  if (!file.name.endsWith(".docx")) return { error: "Only .docx files are supported." };
+  if (file.size > 20 * 1024 * 1024) return { error: "File must be under 20 MB." };
+
+  const supabase = createAdminClient();
+
+  const { data: template, error: tmplErr } = await supabase
+    .from("templates")
+    .select("org_id, name, storage_path")
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (tmplErr || !template) return { error: "Template not found." };
+
+  const fileBuffer = await file.arrayBuffer();
+
+  let tokens: string[];
+  try {
+    tokens = await extractPlaceholderTokens(fileBuffer);
+  } catch {
+    return { error: "Could not parse the .docx file. Ensure it is a valid Word document." };
+  }
+
+  const newStoragePath = `${template.org_id}/${templateId}/${file.name}`;
+
+  // Remove old file then upload new one
+  await supabase.storage.from("templates").remove([template.storage_path as string]);
+
+  const { error: uploadError } = await supabase.storage
+    .from("templates")
+    .upload(newStoragePath, fileBuffer, {
+      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      upsert: true,
+    });
+
+  if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
+
+  // Reset template to draft with new storage path
+  const { error: updateErr } = await supabase
+    .from("templates")
+    .update({ storage_path: newStoragePath, status: "draft" })
+    .eq("id", templateId);
+
+  if (updateErr) return { error: updateErr.message };
+
+  // Replace all token mappings
+  await supabase
+    .from("template_field_mappings")
+    .delete()
+    .eq("template_id", templateId);
+
+  if (tokens.length > 0) {
+    const mappingRows = tokens.map((token) => ({
+      template_id: templateId,
+      placeholder_token: token,
+      field_key: detectSource(token),
+      is_mapped: isKnownToken(token),
+    }));
+    const { error: mappingError } = await supabase
+      .from("template_field_mappings")
+      .insert(mappingRows);
+
+    if (mappingError) return { error: `Mappings could not be saved: ${mappingError.message}` };
+  }
+
+  await auditLog("template.reuploaded", actor.id, actor.email, {
+    orgId: template.org_id as string,
+    metadata: { templateId, name: template.name, tokenCount: tokens.length },
+  });
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return {};
+}
+
+export type ReactivateTemplateState = { error?: string };
+
+export async function reactivateTemplate(
+  templateId: string
+): Promise<ReactivateTemplateState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const { data: template, error: tmplErr } = await supabase
+    .from("templates")
+    .select("org_id, name")
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (tmplErr || !template) return { error: "Template not found." };
+
+  const { error } = await supabase
+    .from("templates")
+    .update({ status: "active" })
+    .eq("id", templateId);
+
+  if (error) return { error: error.message };
+
+  await auditLog("template.reactivated", actor.id, actor.email, {
+    orgId: template.org_id as string,
+    metadata: { templateId, name: template.name },
+  });
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  revalidatePath(`/admin/templates`);
+  return {};
+}

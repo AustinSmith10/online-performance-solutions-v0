@@ -24,7 +24,6 @@ const OrgSchema = z.object({
     .min(1, { error: "Must be at least 1 day" })
     .max(90, { error: "Must be 90 days or fewer" }),
   credit_limit: z.coerce.number().int().min(0).default(0),
-  email_whitelist: z.string().optional(),
 });
 
 export type OrgFormState = {
@@ -39,14 +38,6 @@ export type OrgFormState = {
     form?: string[];
   };
 };
-
-function parseEmailWhitelist(raw: string | undefined): string[] {
-  if (!raw?.trim()) return [];
-  return raw
-    .split(",")
-    .map((d) => d.trim().toLowerCase())
-    .filter(Boolean);
-}
 
 function slugify(name: string): string {
   return name
@@ -68,15 +59,13 @@ export async function createOrganisation(
     state_territory: formData.get("state_territory"),
     abandoned_draft_days: formData.get("abandoned_draft_days"),
     credit_limit: formData.get("credit_limit") || 0,
-    email_whitelist: formData.get("email_whitelist"),
   });
 
   if (!validated.success) {
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const { email_whitelist: rawWhitelist, ...fields } = validated.data;
-  const email_whitelist = parseEmailWhitelist(rawWhitelist);
+  const fields = validated.data;
   const slug = slugify(fields.name);
 
   const supabase = createAdminClient();
@@ -94,7 +83,7 @@ export async function createOrganisation(
 
   const { data: org, error } = await supabase
     .from("organisations")
-    .insert({ ...fields, slug: finalSlug, email_whitelist })
+    .insert({ ...fields, slug: finalSlug, email_whitelist: [] })
     .select("id")
     .single();
 
@@ -123,32 +112,127 @@ export async function updateOrganisation(
     state_territory: formData.get("state_territory"),
     abandoned_draft_days: formData.get("abandoned_draft_days"),
     credit_limit: formData.get("credit_limit") || 0,
-    email_whitelist: formData.get("email_whitelist"),
   });
 
   if (!validated.success) {
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const { email_whitelist: rawWhitelist, ...fields } = validated.data;
-  const email_whitelist = parseEmailWhitelist(rawWhitelist);
-
   const supabase = createAdminClient();
   const { error } = await supabase
     .from("organisations")
-    .update({ ...fields, email_whitelist, updated_at: new Date().toISOString() })
+    .update({ ...validated.data, updated_at: new Date().toISOString() })
     .eq("id", id);
 
   if (error) return { errors: { form: [error.message] } };
 
   await auditLog("org.updated", actor.id, actor.email, {
     orgId: id,
-    metadata: { name: fields.name, payment_method: fields.payment_method },
+    metadata: { name: validated.data.name, payment_method: validated.data.payment_method },
   });
 
   revalidatePath(`/admin/organisations/${id}`);
   revalidatePath("/admin/organisations");
   return { saved: true };
+}
+
+export type OrgConfigState = { saved?: boolean; error?: string };
+
+export async function updateOrgConfig(
+  orgId: string,
+  _prev: OrgConfigState,
+  formData: FormData
+): Promise<OrgConfigState> {
+  const actor = await requireRole("super_admin");
+
+  const config: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith("ORG_") && typeof value === "string") {
+      config[key] = value.trim();
+    }
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("organisations")
+    .update({ org_config: config, updated_at: new Date().toISOString() })
+    .eq("id", orgId);
+
+  if (error) return { error: error.message };
+
+  await auditLog("org.config_updated", actor.id, actor.email, {
+    orgId,
+    metadata: { keys: Object.keys(config) },
+  });
+
+  revalidatePath(`/admin/organisations/${orgId}`);
+  return { saved: true };
+}
+
+const DomainSchema = z
+  .string()
+  .min(1, "Domain required")
+  .max(253)
+  .toLowerCase()
+  .trim()
+  .regex(/^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/, "Invalid domain format");
+
+export type WhitelistState = { saved?: boolean; error?: string };
+
+export async function addEmailDomain(
+  orgId: string,
+  _prev: WhitelistState,
+  formData: FormData
+): Promise<WhitelistState> {
+  await requireRole("super_admin");
+
+  const parsed = DomainSchema.safeParse(formData.get("domain"));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const domain = parsed.data;
+  const supabase = createAdminClient();
+
+  const { data: org } = await supabase
+    .from("organisations")
+    .select("email_whitelist")
+    .eq("id", orgId)
+    .single();
+
+  const current: string[] = org?.email_whitelist ?? [];
+  if (current.includes(domain)) return { error: "Domain already in whitelist" };
+
+  const { error } = await supabase
+    .from("organisations")
+    .update({ email_whitelist: [...current, domain], updated_at: new Date().toISOString() })
+    .eq("id", orgId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/organisations/${orgId}`);
+  return { saved: true };
+}
+
+export async function removeEmailDomain(orgId: string, domain: string) {
+  await requireRole("super_admin");
+
+  const supabase = createAdminClient();
+
+  const { data: org } = await supabase
+    .from("organisations")
+    .select("email_whitelist")
+    .eq("id", orgId)
+    .single();
+
+  const updated = (org?.email_whitelist ?? []).filter((d: string) => d !== domain);
+
+  const { error } = await supabase
+    .from("organisations")
+    .update({ email_whitelist: updated, updated_at: new Date().toISOString() })
+    .eq("id", orgId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/admin/organisations/${orgId}`);
 }
 
 export async function setOrgFrozen(id: string, frozen: boolean) {

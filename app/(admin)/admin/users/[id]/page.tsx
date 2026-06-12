@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { unlockUser, setConsultantAvailability, resetUserTotp } from "@/app/actions/admin-users";
+import { unlockUser, setConsultantAvailability, resetUserTotp, requireUserTotp } from "@/app/actions/admin-users";
 import { EditUserForm } from "./_components/edit-user-form";
 import type { User, Organisation, ConsultantAvailability } from "@/types";
 
@@ -31,6 +31,7 @@ export default async function UserDetailPage({
 
   const unlockAction = unlockUser.bind(null, id);
   const resetTotpAction = resetUserTotp.bind(null, id);
+  const requireTotpAction = requireUserTotp.bind(null, id);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -90,7 +91,7 @@ export default async function UserDetailPage({
             <p className="mt-0.5 text-sm text-zinc-500">
               {u.totp_enabled
                 ? "2FA is active. Disable to let the user re-enroll on next login."
-                : "Not configured. The user will be prompted to set up 2FA on next login."}
+                : "Not configured. Enabling will require the user to set up 2FA on next login."}
             </p>
           </div>
           <span
@@ -103,16 +104,27 @@ export default async function UserDetailPage({
             {u.totp_enabled ? "Enabled" : "Not configured"}
           </span>
         </div>
-        {u.totp_enabled && (
-          <form action={resetTotpAction} className="mt-4">
-            <button
-              type="submit"
-              className="rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
-            >
-              Disable 2FA
-            </button>
-          </form>
-        )}
+        <div className="mt-4">
+          {u.totp_enabled ? (
+            <form action={resetTotpAction}>
+              <button
+                type="submit"
+                className="rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+              >
+                Disable 2FA
+              </button>
+            </form>
+          ) : (
+            <form action={requireTotpAction}>
+              <button
+                type="submit"
+                className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              >
+                Require 2FA setup
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       {/* Unlock */}

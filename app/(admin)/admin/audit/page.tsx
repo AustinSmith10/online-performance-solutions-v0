@@ -48,8 +48,8 @@ export default async function AuditPage({
   const hasFilter = email || event_type || project_id || from || to;
 
   return (
-    <div>
-      <div className="mb-6">
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div>
         <h1 className="text-xl font-semibold text-zinc-900">Audit trail</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Immutable system event log. Showing last {PAGE_SIZE} matching entries.
@@ -57,7 +57,7 @@ export default async function AuditPage({
       </div>
 
       {/* Filter form — plain HTML GET */}
-      <form method="GET" className="mb-6 flex flex-wrap gap-3">
+      <form method="GET" className="flex flex-wrap gap-3">
         <input
           type="text"
           name="email"
@@ -108,23 +108,25 @@ export default async function AuditPage({
       </form>
 
       {entries.length === 0 ? (
-        <p className="text-sm text-zinc-500">No audit entries found.</p>
+        <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+          No audit entries found.
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <div className="rounded-lg border border-zinc-200 bg-white">
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50">
+            <thead className="border-b border-zinc-100">
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Timestamp</th>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Event type</th>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Actor</th>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Project</th>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Metadata</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Timestamp</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Event type</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Actor</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Metadata</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100">
+            <tbody className="divide-y divide-zinc-50">
               {entries.map((entry) => (
-                <tr key={entry.id} className="hover:bg-zinc-50">
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">
+                <tr key={entry.id}>
+                  <td className="whitespace-nowrap px-5 py-3 text-xs text-zinc-500">
                     {new Date(entry.created_at).toLocaleString("en-AU", {
                       day: "2-digit",
                       month: "short",
@@ -134,16 +136,16 @@ export default async function AuditPage({
                       second: "2-digit",
                     })}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-800">
+                  <td className="px-5 py-3 font-mono text-xs text-zinc-800">
                     {entry.event_type}
                   </td>
-                  <td className="px-4 py-3 text-xs text-zinc-600">
+                  <td className="px-5 py-3 text-xs text-zinc-600">
                     {entry.actor_email ?? (entry.actor_id ? entry.actor_id.slice(0, 8) + "…" : "—")}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-400">
+                  <td className="px-5 py-3 font-mono text-xs text-zinc-400">
                     {entry.project_id ? entry.project_id.slice(0, 8) + "…" : "—"}
                   </td>
-                  <td className="max-w-xs truncate px-4 py-3 font-mono text-xs text-zinc-400">
+                  <td className="max-w-xs truncate px-5 py-3 font-mono text-xs text-zinc-400">
                     {entry.metadata ? JSON.stringify(entry.metadata) : "—"}
                   </td>
                 </tr>

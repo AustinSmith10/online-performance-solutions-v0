@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ClickableRow } from "@/components/ClickableRow";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -52,53 +52,50 @@ export default async function ProjectsPage() {
   const projects = (data ?? []) as unknown as ProjectRow[];
 
   return (
-    <div>
-      <div className="mb-6">
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900">Projects</h1>
       </div>
 
       {projects.length === 0 ? (
-        <p className="text-sm text-zinc-500">No projects yet. They will appear here once clients submit via the portal.</p>
+        <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+          No projects yet. They will appear here once clients submit via the portal.
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <div className="rounded-lg border border-zinc-200 bg-white">
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50">
+            <thead className="border-b border-zinc-100">
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Project</th>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Organisation</th>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Consultant</th>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Status</th>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Created</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Consultant</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Created</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100">
+            <tbody className="divide-y divide-zinc-50">
               {projects.map((p) => (
-                <tr key={p.id} className="hover:bg-zinc-50">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/admin/projects/${p.id}`}
-                      className="font-medium text-zinc-900 hover:underline"
-                    >
-                      {p.project_number ?? p.id.slice(0, 8)}
-                    </Link>
+                <ClickableRow key={p.id} href={`/admin/projects/${p.id}`}>
+                  <td className="px-5 py-3 font-medium text-zinc-900">
+                    {p.project_number ?? p.id.slice(0, 8)}
                   </td>
-                  <td className="px-4 py-3 text-zinc-600">
+                  <td className="px-5 py-3 text-zinc-600">
                     {p.organisations?.name ?? "—"}
                   </td>
-                  <td className="px-4 py-3 text-zinc-600">
+                  <td className="px-5 py-3 text-zinc-600">
                     {p.consultant
                       ? [p.consultant.first_name, p.consultant.last_name].filter(Boolean).join(" ") || p.consultant.email
                       : <span className="text-zinc-400">Unassigned</span>}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-3">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}>
                       {STATUS_LABELS[p.status]}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-zinc-500">
+                  <td className="px-5 py-3 text-zinc-500">
                     {new Date(p.created_at).toLocaleDateString("en-AU")}
                   </td>
-                </tr>
+                </ClickableRow>
               ))}
             </tbody>
           </table>

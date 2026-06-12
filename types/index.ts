@@ -102,6 +102,7 @@ export interface Organisation {
   abandoned_draft_days: number;
   is_frozen: boolean;
   email_whitelist: string[];
+  org_config: Record<string, string>;
   created_at: string;
   updated_at: string;
 }
@@ -126,12 +127,24 @@ export interface Project {
   updated_at: string;
 }
 
+export type TemplateStatus = "draft" | "active" | "inactive";
+
 export interface Template {
   id: string;
   org_id: string;
   name: string;
-  file_path: string;
-  is_active: boolean;
+  storage_path: string;
+  status: TemplateStatus;
+  created_by: string;
+  created_at: string;
+}
+
+export interface TemplateFieldMapping {
+  id: string;
+  template_id: string;
+  placeholder_token: string;
+  field_key: string | null;
+  is_mapped: boolean;
   created_at: string;
 }
 

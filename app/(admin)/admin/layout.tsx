@@ -24,6 +24,7 @@ export default async function AdminShellLayout({
           <NavLink href="/admin/consultants">Consultants</NavLink>
           <NavLink href="/admin/clients">Clients</NavLink>
           <NavLink href="/admin/projects">Projects</NavLink>
+          <NavLink href="/admin/templates">Templates</NavLink>
           <NavLink href="/admin/credits">Credits</NavLink>
           <NavLink href="/admin/audit">Audit</NavLink>
         </nav>

@@ -80,11 +80,18 @@ export function NotificationTray({
         <div style={tray} onClick={handleOutsideClick}>
           <div style={trayHeader}>
             <span style={trayTitle}>Notifications</span>
-            {unread > 0 && (
-              <button onClick={() => void markAllRead()} style={markAllBtn}>
-                Mark all read
-              </button>
-            )}
+            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+              {unread > 0 && (
+                <button onClick={() => void markAllRead()} style={markAllBtn}>
+                  Mark all read
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button onClick={() => setNotifications([])} style={clearBtn}>
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
           <div style={list}>
@@ -191,6 +198,15 @@ const markAllBtn: React.CSSProperties = {
   cursor: "pointer",
   fontSize: "12px",
   color: "#3b82f6",
+  padding: 0,
+};
+
+const clearBtn: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  fontSize: "12px",
+  color: "#a1a1aa",
   padding: 0,
 };
 

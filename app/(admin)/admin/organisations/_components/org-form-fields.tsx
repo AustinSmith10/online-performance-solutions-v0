@@ -92,21 +92,6 @@ export function OrgFormFields({ state, defaults }: Props) {
         </Field>
       </div>
 
-      <Field
-        label="Email whitelist (comma-separated domains)"
-        error={undefined}
-      >
-        <input
-          name="email_whitelist"
-          type="text"
-          placeholder="example.com, another.com.au"
-          defaultValue={defaults?.email_whitelist?.join(", ") ?? ""}
-          className={input()}
-        />
-        <p className="mt-1 text-xs text-zinc-400">
-          Only these sender domains can submit via the email webhook. Leave blank to allow all.
-        </p>
-      </Field>
     </>
   );
 }

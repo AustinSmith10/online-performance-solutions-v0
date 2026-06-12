@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { sendInvite } from "@/lib/auth/invite";
+import { auditLog } from "@/lib/audit/log";
 import type { ConsultantAvailability } from "@/types";
 
 const InviteSchema = z.object({
@@ -113,11 +114,10 @@ export type EditUserState = {
 };
 
 export async function resetUserTotp(userId: string) {
-  await requireRole("super_admin");
+  const actor = await requireRole("super_admin");
 
   const supabase = createAdminClient();
 
-  // Remove all verified TOTP factors from Supabase Auth so the AAL gate is cleared
   const { data: factorData } = await supabase.auth.admin.mfa.listFactors({ userId });
   const totpFactors = factorData?.factors?.filter((f) => f.factor_type === "totp") ?? [];
   await Promise.all(
@@ -126,6 +126,33 @@ export async function resetUserTotp(userId: string) {
 
   const { error } = await supabase.from("users").update({ totp_enabled: false }).eq("id", userId);
   if (error) throw new Error(error.message);
+
+  await auditLog("auth.2fa_disabled", actor.id, actor.email, {
+    metadata: { target_user_id: userId, factors_removed: totpFactors.length },
+  });
+
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+}
+
+export async function requireUserTotp(userId: string) {
+  const actor = await requireRole("super_admin");
+
+  const supabase = createAdminClient();
+
+  // Clear any stale unverified (partial) TOTP enrollment so the user starts fresh
+  const { data: factorData } = await supabase.auth.admin.mfa.listFactors({ userId });
+  const unverifiedFactors =
+    factorData?.factors?.filter(
+      (f) => f.factor_type === "totp" && (f.status as string) === "unverified"
+    ) ?? [];
+  await Promise.all(
+    unverifiedFactors.map((f) => supabase.auth.admin.mfa.deleteFactor({ userId, id: f.id }))
+  );
+
+  await auditLog("auth.2fa_required", actor.id, actor.email, {
+    metadata: { target_user_id: userId },
+  });
 
   revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");

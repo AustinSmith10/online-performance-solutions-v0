@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ClickableRow } from "@/components/ClickableRow";
 import type { Organisation, PaymentMethod } from "@/types";
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -21,8 +21,8 @@ export default async function CreditsPage() {
   >[];
 
   return (
-    <div>
-      <div className="mb-6">
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div>
         <h1 className="text-xl font-semibold text-zinc-900">Credits</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Credit balances and ledger across all organisations.
@@ -30,33 +30,34 @@ export default async function CreditsPage() {
       </div>
 
       {orgs.length === 0 ? (
-        <p className="text-sm text-zinc-500">No organisations yet.</p>
+        <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+          No organisations yet.
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <div className="rounded-lg border border-zinc-200 bg-white">
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50">
+            <thead className="border-b border-zinc-100">
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Organisation</th>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Payment</th>
-                <th className="px-4 py-3 text-right font-medium text-zinc-600">Credit balance</th>
-                <th className="px-4 py-3 text-right font-medium text-zinc-600">Deferred tab</th>
-                <th className="px-4 py-3 text-left font-medium text-zinc-600">Status</th>
-                <th className="px-4 py-3" />
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Payment</th>
+                <th className="px-5 py-3 text-right font-medium text-zinc-500">Credit balance</th>
+                <th className="px-5 py-3 text-right font-medium text-zinc-500">Deferred tab</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100">
+            <tbody className="divide-y divide-zinc-50">
               {orgs.map((org) => (
-                <tr key={org.id} className="hover:bg-zinc-50">
-                  <td className="px-4 py-3 font-medium text-zinc-900">{org.name}</td>
-                  <td className="px-4 py-3 text-zinc-600">
+                <ClickableRow key={org.id} href={`/admin/credits/${org.id}`}>
+                  <td className="px-5 py-3 font-medium text-zinc-900">{org.name}</td>
+                  <td className="px-5 py-3 text-zinc-600">
                     {PAYMENT_LABELS[org.payment_method]}
                   </td>
-                  <td className="px-4 py-3 text-right text-zinc-900">
+                  <td className="px-5 py-3 text-right text-zinc-900">
                     {org.payment_method === "credit_deduction"
                       ? org.credit_balance.toLocaleString()
                       : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right text-zinc-900">
+                  <td className="px-5 py-3 text-right text-zinc-900">
                     {org.payment_method === "deferred" ? (
                       <span>
                         {org.deferred_balance.toLocaleString()}
@@ -68,7 +69,7 @@ export default async function CreditsPage() {
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-3">
                     {org.is_frozen ? (
                       <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
                         Frozen
@@ -79,15 +80,7 @@ export default async function CreditsPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/admin/credits/${org.id}`}
-                      className="text-sm text-zinc-500 hover:text-zinc-900 hover:underline"
-                    >
-                      Manage →
-                    </Link>
-                  </td>
-                </tr>
+                </ClickableRow>
               ))}
             </tbody>
           </table>
