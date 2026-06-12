@@ -2,6 +2,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
+import { auditLog } from "@/lib/audit/log";
 
 const LOW_CREDIT_THRESHOLD = 3;
 
@@ -87,6 +88,11 @@ export async function topUpCredit(
     notes: notes ?? null,
   });
 
+  await auditLog("credit.top_up", performedById, null, {
+    orgId,
+    metadata: { amount, balance_after: newBalance, notes: notes ?? null },
+  });
+
   revalidatePath(`/admin/credits/${orgId}`);
   revalidatePath("/admin/credits");
 }
@@ -169,6 +175,12 @@ export async function deductCredit(
     )
   );
 
+  await auditLog("credit.deduction", performedById, null, {
+    orgId,
+    projectId,
+    metadata: { balance_after: newBalance },
+  });
+
   await fireLowCreditNotifications(orgId, newBalance);
 
   revalidatePath(`/admin/credits/${orgId}`);
@@ -224,6 +236,12 @@ export async function debitDeferred(
     balance_after: newDeferred,
     performed_by: performedById,
     notes: `Deferred tab: ${newDeferred}`,
+  });
+
+  await auditLog("credit.deferred_debit", performedById, null, {
+    orgId,
+    projectId,
+    metadata: { deferred_balance_after: newDeferred },
   });
 
   revalidatePath(`/admin/credits/${orgId}`);
@@ -326,6 +344,12 @@ export async function logOverride(
       }).catch(() => {})
     )
   );
+
+  await auditLog("payment.override_applied", performedById, null, {
+    projectId,
+    orgId: project.org_id as string,
+    metadata: { reason, project_number: project.project_number ?? null },
+  });
 
   revalidatePath(`/admin/projects/${projectId}`);
   revalidatePath("/admin/projects");

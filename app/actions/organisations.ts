@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { auditLog } from "@/lib/audit/log";
 
 const OrgSchema = z.object({
   name: z.string().min(1, { error: "Name required" }).trim(),
@@ -58,7 +59,7 @@ export async function createOrganisation(
   _prev: OrgFormState,
   formData: FormData
 ): Promise<OrgFormState> {
-  await requireRole("super_admin");
+  const actor = await requireRole("super_admin");
 
   const validated = OrgSchema.safeParse({
     name: formData.get("name"),
@@ -99,6 +100,11 @@ export async function createOrganisation(
 
   if (error) return { errors: { form: [error.message] } };
 
+  await auditLog("org.created", actor.id, actor.email, {
+    orgId: org.id,
+    metadata: { name: fields.name, payment_method: fields.payment_method },
+  });
+
   revalidatePath("/admin/organisations");
   redirect(`/admin/organisations/${org.id}`);
 }
@@ -108,7 +114,7 @@ export async function updateOrganisation(
   _prev: OrgFormState,
   formData: FormData
 ): Promise<OrgFormState> {
-  await requireRole("super_admin");
+  const actor = await requireRole("super_admin");
 
   const validated = OrgSchema.safeParse({
     name: formData.get("name"),
@@ -135,13 +141,18 @@ export async function updateOrganisation(
 
   if (error) return { errors: { form: [error.message] } };
 
+  await auditLog("org.updated", actor.id, actor.email, {
+    orgId: id,
+    metadata: { name: fields.name, payment_method: fields.payment_method },
+  });
+
   revalidatePath(`/admin/organisations/${id}`);
   revalidatePath("/admin/organisations");
   return { saved: true };
 }
 
 export async function setOrgFrozen(id: string, frozen: boolean) {
-  await requireRole("super_admin");
+  const actor = await requireRole("super_admin");
 
   const supabase = createAdminClient();
   const { error } = await supabase
@@ -150,6 +161,11 @@ export async function setOrgFrozen(id: string, frozen: boolean) {
     .eq("id", id);
 
   if (error) throw new Error(error.message);
+
+  await auditLog(frozen ? "org.frozen" : "org.unfrozen", actor.id, actor.email, {
+    orgId: id,
+    metadata: { source: "organisations" },
+  });
 
   revalidatePath(`/admin/organisations/${id}`);
   revalidatePath("/admin/organisations");

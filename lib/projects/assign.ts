@@ -2,9 +2,15 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
+import { auditLog } from "@/lib/audit/log";
 import { ConsultantAssignedEmail } from "@/lib/email/templates/ConsultantAssignedEmail";
 
-export async function performAssignment(projectId: string, consultantId: string) {
+export async function performAssignment(
+  projectId: string,
+  consultantId: string,
+  actorId?: string,
+  actorEmail?: string
+) {
   const supabase = createAdminClient();
 
   const [projectResult, consultantResult] = await Promise.all([
@@ -54,6 +60,12 @@ export async function performAssignment(projectId: string, consultantId: string)
       orgName,
       portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/ops`,
     }),
+  });
+
+  await auditLog("assignment.created", actorId ?? null, actorEmail ?? null, {
+    projectId,
+    orgId: project.org_id as string,
+    metadata: { consultant_id: consultantId, consultant_name: consultantName },
   });
 
   revalidatePath(`/admin/projects/${projectId}`);

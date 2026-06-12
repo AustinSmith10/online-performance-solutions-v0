@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { topUpCredit, logOverride } from "@/lib/payments/ledger";
+import { auditLog } from "@/lib/audit/log";
 import type { CreditEventType } from "@/types";
 
 export type FreezeState = { error?: string; success?: boolean };
@@ -14,7 +15,7 @@ export async function setOrgFrozenFromCredits(
   _prev: FreezeState,
   _formData: FormData
 ): Promise<FreezeState> {
-  await requireRole("super_admin");
+  const actor = await requireRole("super_admin");
 
   const supabase = createAdminClient();
   const { error } = await supabase
@@ -23,6 +24,11 @@ export async function setOrgFrozenFromCredits(
     .eq("id", orgId);
 
   if (error) return { error: error.message };
+
+  await auditLog(frozen ? "org.frozen" : "org.unfrozen", actor.id, actor.email, {
+    orgId,
+    metadata: { source: "credits" },
+  });
 
   revalidatePath(`/admin/credits/${orgId}`);
   revalidatePath("/admin/credits");
@@ -141,6 +147,12 @@ export async function reconcileOverrideAction(
     balance_after: (org?.credit_balance as number) ?? 0,
     performed_by: actor.id,
     notes: `Override reconciled by ${actor.email ?? actor.id}`,
+  });
+
+  await auditLog("payment.override_reconciled", actor.id, actor.email, {
+    projectId,
+    orgId: project.org_id as string,
+    metadata: { project_number: project.project_number ?? null },
   });
 
   revalidatePath(`/admin/projects/${projectId}`);

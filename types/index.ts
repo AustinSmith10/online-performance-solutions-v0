@@ -37,6 +37,17 @@ export type CreditEventType =
   | "upfront_log"
   | "override";
 
+export interface AuditLogEntry {
+  id: string;
+  event_type: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  project_id: string | null;
+  org_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
 export interface CreditLedgerEntry {
   id: string;
   org_id: string;

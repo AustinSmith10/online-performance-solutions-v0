@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SESSION_DURATION, SESSION_EXPIRY_COOKIE } from "@/lib/auth/session";
+import { auditLog } from "@/lib/audit/log";
 import type { UserRole } from "@/types";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -143,6 +144,10 @@ export async function login(
     sameSite: "lax",
     path: "/",
     maxAge: durationMs / 1000,
+  });
+
+  await auditLog("auth.login", authData.user.id, authData.user.email ?? email, {
+    metadata: { role },
   });
 
   const next = formData.get("next") as string | null;
