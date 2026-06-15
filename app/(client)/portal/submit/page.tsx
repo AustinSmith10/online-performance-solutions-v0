@@ -1,6 +1,5 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { redirect } from "next/navigation";
 import { SubmissionForm } from "./_components/SubmissionForm";
 
 export default async function SubmitPage() {
@@ -37,7 +36,7 @@ export default async function SubmitPage() {
       <div className="mb-8">
         <h1 className="text-xl font-semibold text-zinc-900">New report request</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Upload your purchase order and building plans. We'll extract the details automatically.
+          Upload your purchase order and building plans. We&apos;ll extract the details automatically.
         </p>
       </div>
       <SubmissionForm

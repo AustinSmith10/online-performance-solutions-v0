@@ -23,17 +23,17 @@ export function TemplateStatusActions({ templateId, status, canActivate }: Props
   const [activateState, activateAction, activatePending] = useActionState<
     ActivateTemplateState,
     FormData
-  >(async (_prev, _fd) => activate(), {});
+  >(async () => activate(), {});
 
   const [deactivateState, deactivateAction, deactivatePending] = useActionState<
     DeactivateTemplateState,
     FormData
-  >(async (_prev, _fd) => deactivate(), {});
+  >(async () => deactivate(), {});
 
   const [reactivateState, reactivateAction, reactivatePending] = useActionState<
     DeactivateTemplateState,
     FormData
-  >(async (_prev, _fd) => reactivate(), {});
+  >(async () => reactivate(), {});
 
   const error =
     activateState?.error ?? deactivateState?.error ?? reactivateState?.error;

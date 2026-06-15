@@ -46,7 +46,7 @@ export default async function AdminRecoveryPage() {
       <div>
         <h1 className="text-xl font-semibold text-zinc-900">Recovery bin</h1>
         <p className="mt-0.5 text-sm text-zinc-500">
-          All organisations' deleted projects. Permanently purged after 30 days.
+          All organisations&apos; deleted projects. Permanently purged after 30 days.
         </p>
       </div>
 

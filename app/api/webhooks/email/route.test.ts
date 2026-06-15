@@ -17,37 +17,6 @@ vi.mock("@/lib/documents/extractor", () => ({
   extractDocumentFields: mockExtractDocumentFields,
 }));
 
-// Supabase admin client mock — built as a chainable fluent builder
-function makeSupabaseMock(overrides: Record<string, unknown> = {}) {
-  const storage = {
-    from: vi.fn().mockReturnValue({
-      upload: vi.fn().mockResolvedValue({ error: null }),
-    }),
-  };
-
-  const base = {
-    from: vi.fn(),
-    storage,
-    ...overrides,
-  };
-
-  // Default query chain: .select().eq().single() → configurable data/error
-  const chain = (data: unknown, error: unknown = null) => ({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    is: vi.fn().mockReturnThis(),
-    not: vi.fn().mockReturnThis(),
-    lt: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-    single: vi.fn().mockResolvedValue({ data, error }),
-    insert: vi.fn().mockResolvedValue({ data, error }),
-    update: vi.fn().mockReturnThis(),
-  });
-
-  return { ...base, _chain: chain };
-}
-
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(),
 }));
