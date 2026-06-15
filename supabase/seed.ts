@@ -222,6 +222,84 @@ async function seed() {
     console.warn("Could not find client@ops.test — skipping dummy project");
   }
 
+  // ── Delivered / complete projects — for Report History testing ────────────
+  const deliveredProjects: Array<{
+    project_number: string;
+    po_number: string;
+    address: string;
+    status: "delivered" | "complete";
+    daysAgo: number;
+  }> = [
+    { project_number: "OPS-0002", po_number: "PO-2024-002", address: "12 Rosewood Crescent, Halcyon Promenade", status: "complete",  daysAgo: 45 },
+    { project_number: "OPS-0003", po_number: "PO-2024-003", address: "7 Banksia Drive, Halcyon Edgebrook",     status: "complete",  daysAgo: 30 },
+    { project_number: "OPS-0004", po_number: "PO-2024-004", address: "3 Wattle Way, Halcyon Vista",            status: "delivered", daysAgo: 14 },
+  ];
+
+  // ── Overdue project ────────────────────────────────────────────────────────
+  const { data: existingOverdue } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("project_number", "OPS-0005")
+    .maybeSingle();
+
+  if (existingOverdue) {
+    console.log("Overdue project OPS-0005 already exists — skipping");
+  } else {
+    const { error: overdueErr } = await supabase.from("projects").insert({
+      org_id: stockland.id,
+      submitted_by: submittedById,
+      status: "in_review",
+      project_number: "OPS-0005",
+      po_number: "PO-2024-005",
+      expected_delivery_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10),
+      extracted_fields: { CLIENT_ADDRESS: "55 Paperbark Lane, Halcyon Dales" },
+    });
+    if (overdueErr) {
+      console.error("Failed to insert overdue project:", overdueErr.message);
+    } else {
+      console.log("Overdue project OPS-0005 created (status: in_review, due 7 days ago)");
+    }
+  }
+
+  for (const p of deliveredProjects) {
+    const { data: existing } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("project_number", p.project_number)
+      .maybeSingle();
+
+    if (existing) {
+      console.log(`Project ${p.project_number} already exists — skipping`);
+      continue;
+    }
+
+    const submittedAt = new Date(Date.now() - p.daysAgo * 24 * 60 * 60 * 1000).toISOString();
+    const deliveryDate = new Date(Date.now() - (p.daysAgo - 5) * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+
+    const { error: projError } = await supabase.from("projects").insert({
+      org_id: stockland.id,
+      submitted_by: submittedById,
+      status: p.status,
+      project_number: p.project_number,
+      po_number: p.po_number,
+      expected_delivery_date: deliveryDate,
+      credit_deducted: true,
+      extracted_fields: { CLIENT_ADDRESS: p.address },
+      created_at: submittedAt,
+      updated_at: submittedAt,
+    });
+
+    if (projError) {
+      console.error(`Failed to insert project ${p.project_number}:`, projError.message);
+    } else {
+      console.log(`Project ${p.project_number} created (status: ${p.status})`);
+    }
+  }
+
   // ── Audit log seed data ────────────────────────────────────────────────────
   const adminId = seededIds["admin@ops.test"] ?? null;
   const consultantId = seededIds["consultant@ops.test"] ?? null;
