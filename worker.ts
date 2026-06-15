@@ -27,6 +27,45 @@ async function main() {
     }
   });
 
+  // Expire abandoned email-sourced drafts. Runs daily at 02:00.
+  // Per-org cutoff derived from organisations.abandoned_draft_days (default 14).
+  await boss.schedule("expire-draft", "0 2 * * *", {});
+  await boss.work("expire-draft", async () => {
+    const supabase = createAdminClient();
+
+    const { data: orgs, error: orgError } = await supabase
+      .from("organisations")
+      .select("id, abandoned_draft_days");
+
+    if (orgError || !orgs) {
+      console.error("[expire-draft] Failed to fetch organisations:", orgError);
+      return;
+    }
+
+    let totalExpired = 0;
+
+    for (const org of orgs) {
+      const days = (org.abandoned_draft_days as number) ?? 14;
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+      const { error, count } = await supabase
+        .from("projects")
+        .update({ deleted_at: new Date().toISOString() }, { count: "exact" })
+        .eq("org_id", org.id)
+        .eq("status", "draft")
+        .is("deleted_at", null)
+        .lt("updated_at", cutoff);
+
+      if (error) {
+        console.error(`[expire-draft] Failed for org ${org.id}:`, error);
+      } else {
+        totalExpired += count ?? 0;
+      }
+    }
+
+    console.log(`[expire-draft] Expired ${totalExpired} abandoned draft(s)`);
+  });
+
   // Job handlers are registered here as features are built:
   // e.g. boss.work("generate-pbdb", handlers.generatePbdb)
   //      boss.work("dispatch-email", handlers.dispatchEmail)

@@ -17,6 +17,7 @@ interface Template {
 interface Props {
   templates: Template[];
   defaultTemplateId: string | null;
+  initialState?: ExtractState;
 }
 
 const EXTRACT_FIELD_LABELS: Record<string, string> = {
@@ -89,7 +90,7 @@ interface ReviewStepProps {
 }
 
 function ReviewStep({ state, submitAction, submitPending, submitError }: ReviewStepProps) {
-  const { extracted, poPath, plansPath, templateId, orgConfig, developments } = state;
+  const { extracted, projectId, templateId, orgConfig, developments } = state;
 
   const [modified, setModified] = useState<Set<string>>(new Set());
   const markModified = (key: string) =>
@@ -106,11 +107,8 @@ function ReviewStep({ state, submitAction, submitPending, submitError }: ReviewS
   return (
     <form action={submitAction} className="space-y-6">
       {/* Pass-through hidden fields */}
+      <input type="hidden" name="project_id" value={projectId} />
       <input type="hidden" name="template_id" value={templateId} />
-      <input type="hidden" name="po_path" value={poPath} />
-      <input type="hidden" name="plans_path" value={plansPath} />
-      <input type="hidden" name="po_original_name" value="purchase_order.pdf" />
-      <input type="hidden" name="plans_original_name" value="building_plans.pdf" />
       <input type="hidden" name="extracted_po_number" value={extracted.po_number.value} />
       {/* Trustee value from controlled select */}
       <input type="hidden" name="EXTRACT_TRUSTEE" value={selectedTrustee} />
@@ -250,10 +248,10 @@ function ReviewStep({ state, submitAction, submitPending, submitError }: ReviewS
 
 // ── Main form component ───────────────────────────────────────────────────────
 
-export function SubmissionForm({ templates, defaultTemplateId }: Props) {
+export function SubmissionForm({ templates, defaultTemplateId, initialState }: Props) {
   const [extractState, extractAction, extractPending] = useActionState<ExtractState, FormData>(
     extractFields,
-    { step: 1 }
+    initialState ?? { step: 1 }
   );
   const [submitState, submitAction, submitPending] = useActionState(submitProject, {});
 

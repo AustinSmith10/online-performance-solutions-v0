@@ -117,6 +117,21 @@ export default async function ClientProjectDetailPage({
         />
       </div>
 
+      {project.status === "draft" && (
+        <Link
+          href={`/portal/submit/resume/${project.id}`}
+          className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-5 py-4 hover:bg-zinc-50 transition-colors"
+        >
+          <div>
+            <p className="text-sm font-medium text-zinc-900">This submission is still a draft</p>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Your documents have been saved — click here to review and submit.
+            </p>
+          </div>
+          <span className="ml-4 shrink-0 text-zinc-400">→</span>
+        </Link>
+      )}
+
       <div className="pt-2">
         <DeleteProjectButton projectId={project.id} />
       </div>

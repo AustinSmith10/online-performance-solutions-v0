@@ -23,8 +23,7 @@ export type ExtractState =
       step: 2;
       error?: string;
       extracted: ExtractionResult;
-      poPath: string;
-      plansPath: string;
+      projectId: string;
       templateId: string;
       orgConfig: Record<string, string>;
       developments: Development[];
@@ -48,14 +47,14 @@ export async function extractFields(
   if (poFile && poFile.size > 50 * 1024 * 1024) return { step: 1, error: "Purchase order must be under 50 MB." };
 
   const orgId = actor.org_id as string;
-  const submissionId = crypto.randomUUID();
+  const projectId = crypto.randomUUID();
 
   const hasPoFile = !!poFile && poFile.size > 0;
   const poBuffer = hasPoFile ? Buffer.from(await poFile.arrayBuffer()) : null;
   const plansBuffer = Buffer.from(await plansFile.arrayBuffer());
 
-  const poPath = hasPoFile ? `${orgId}/${submissionId}/po/${poFile.name}` : "";
-  const plansPath = `${orgId}/${submissionId}/plans/${plansFile.name}`;
+  const poPath = hasPoFile ? `${orgId}/${projectId}/po/${poFile.name}` : "";
+  const plansPath = `${orgId}/${projectId}/plans/${plansFile.name}`;
 
   const uploadsToRun: Promise<{ error: { message: string } | null }>[] = [
     supabase.storage.from("submissions").upload(plansPath, plansBuffer, { contentType: plansFile.type || "application/pdf" }),
@@ -99,7 +98,31 @@ export async function extractFields(
     return { step: 1, error: "Document extraction failed. Please check that your files are valid PDFs and try again." };
   }
 
-  return { step: 2, extracted, poPath, plansPath, templateId, orgConfig, developments };
+  // Persist draft — files are already in Storage, now write the project row and file records
+  const { error: projectError } = await supabase.from("projects").insert({
+    id: projectId,
+    org_id: orgId,
+    template_id: templateId,
+    submitted_by: actor.id,
+    status: "draft",
+    po_number: extracted.po_number.value || null,
+    extracted_fields: extracted,
+  });
+
+  if (projectError) {
+    const pathsToRemove = [plansPath, ...(hasPoFile ? [poPath] : [])];
+    await supabase.storage.from("submissions").remove(pathsToRemove);
+    console.error("[extractFields] draft project insert failed:", projectError);
+    return { step: 1, error: "Failed to save your draft. Please try again." };
+  }
+
+  const fileRecords = [
+    { project_id: projectId, file_type: "building_plans", storage_path: plansPath, original_filename: plansFile.name, uploaded_by: actor.id },
+    ...(hasPoFile ? [{ project_id: projectId, file_type: "po", storage_path: poPath, original_filename: poFile.name, uploaded_by: actor.id }] : []),
+  ];
+  await supabase.from("project_files").insert(fileRecords);
+
+  return { step: 2, extracted, projectId, templateId, orgConfig, developments };
 }
 
 // ─── Step 2: submit project ─────────────────────────────────────────────────
@@ -115,13 +138,10 @@ export async function submitProject(
 
   const orgId = actor.org_id as string;
 
+  const projectId = (formData.get("project_id") as string | null)?.trim();
   const templateId = (formData.get("template_id") as string | null)?.trim();
-  const poPath = (formData.get("po_path") as string | null)?.trim();
-  const plansPath = (formData.get("plans_path") as string | null)?.trim();
-  const poOriginalName = (formData.get("po_original_name") as string | null)?.trim() ?? "purchase_order.pdf";
-  const plansOriginalName = (formData.get("plans_original_name") as string | null)?.trim() ?? "building_plans.pdf";
 
-  if (!templateId || !poPath || !plansPath) {
+  if (!projectId || !templateId) {
     return { error: "Missing required submission data. Please start over." };
   }
 
@@ -158,6 +178,7 @@ export async function submitProject(
           .select("id, status")
           .eq("org_id", orgId)
           .eq("po_number", poNumber)
+          .neq("id", projectId)
           .not("status", "in", '("delivered","complete")')
       : Promise.resolve({ data: [] }),
     supabase
@@ -207,34 +228,24 @@ export async function submitProject(
     console.error("[submitProject] delivery date calculation failed:", err);
   }
 
-  const projectId = crypto.randomUUID();
-  const { error: insertError } = await supabase.from("projects").insert({
-    id: projectId,
-    org_id: orgId,
-    template_id: templateId,
-    submitted_by: actor.id,
-    status: "submitted",
-    po_number: poNumber,
-    delivery_recipient_email: deliveryEmail,
-    expected_delivery_date: expectedDeliveryDate,
-    extracted_fields: {
-      CLIENT_ADDRESS: clientAddress,
-      ...extractedFields,
-      ...orgFields,
-    },
-  });
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update({
+      status: "submitted",
+      po_number: poNumber,
+      delivery_recipient_email: deliveryEmail,
+      expected_delivery_date: expectedDeliveryDate,
+      extracted_fields: {
+        CLIENT_ADDRESS: clientAddress,
+        ...extractedFields,
+        ...orgFields,
+      },
+    })
+    .eq("id", projectId)
+    .eq("org_id", orgId)
+    .eq("submitted_by", actor.id);
 
-  if (insertError) return { error: `Failed to create project: ${insertError.message}` };
-
-  const fileRecords = [
-    { project_id: projectId, file_type: "building_plans", storage_path: plansPath, original_filename: plansOriginalName, uploaded_by: actor.id },
-    ...(poPath ? [{ project_id: projectId, file_type: "po", storage_path: poPath, original_filename: poOriginalName, uploaded_by: actor.id }] : []),
-  ];
-  const { error: filesError } = await supabase.from("project_files").insert(fileRecords);
-
-  if (filesError) {
-    console.error("[submitProject] project_files insert error:", filesError);
-  }
+  if (updateError) return { error: `Failed to submit project: ${updateError.message}` };
 
   try {
     await notify({
@@ -274,7 +285,8 @@ export async function submitProject(
   });
 
   revalidatePath("/portal");
-  redirect("/portal");
+  revalidatePath(`/portal/projects/${projectId}`);
+  redirect(`/portal/projects/${projectId}`);
 }
 
 // ─── Email templates ─────────────────────────────────────────────────────────
