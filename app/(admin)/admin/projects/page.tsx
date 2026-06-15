@@ -36,6 +36,7 @@ export default async function ProjectsPage() {
       id,
       extracted_fields,
       status,
+      payment_override,
       expected_delivery_date,
       created_at,
       organisations(name),
@@ -48,6 +49,7 @@ export default async function ProjectsPage() {
     id: string;
     extracted_fields: Record<string, string> | null;
     status: ProjectStatus;
+    payment_override: boolean;
     expected_delivery_date: string | null;
     created_at: string;
     organisations: { name: string } | null;
@@ -97,6 +99,11 @@ export default async function ProjectsPage() {
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}>
                       {STATUS_LABELS[p.status]}
                     </span>
+                    {p.payment_override && (
+                      <span className="ml-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        Override — Payment Pending
+                      </span>
+                    )}
                     {p.expected_delivery_date &&
                       p.expected_delivery_date < todayIso &&
                       !TERMINAL_STATUSES.has(p.status) && (
