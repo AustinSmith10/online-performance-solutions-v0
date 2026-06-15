@@ -26,14 +26,17 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   complete: "bg-zinc-100 text-zinc-500",
 };
 
+const TERMINAL_STATUSES = new Set<ProjectStatus>(["delivered", "complete"]);
+
 export default async function ProjectsPage() {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("projects")
     .select(`
       id,
-      project_number,
+      extracted_fields,
       status,
+      expected_delivery_date,
       created_at,
       organisations(name),
       consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email)
@@ -42,14 +45,16 @@ export default async function ProjectsPage() {
 
   type ProjectRow = {
     id: string;
-    project_number: string | null;
+    extracted_fields: Record<string, string> | null;
     status: ProjectStatus;
+    expected_delivery_date: string | null;
     created_at: string;
     organisations: { name: string } | null;
     consultant: { first_name: string | null; last_name: string | null; email: string } | null;
   };
 
   const projects = (data ?? []) as unknown as ProjectRow[];
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -66,7 +71,7 @@ export default async function ProjectsPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-zinc-100">
               <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Consultant</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
@@ -77,7 +82,7 @@ export default async function ProjectsPage() {
               {projects.map((p) => (
                 <ClickableRow key={p.id} href={`/admin/projects/${p.id}`}>
                   <td className="px-5 py-3 font-medium text-zinc-900">
-                    {p.project_number ?? p.id.slice(0, 8)}
+                    {p.extracted_fields?.CLIENT_ADDRESS ?? p.id.slice(0, 8)}
                   </td>
                   <td className="px-5 py-3 text-zinc-600">
                     {p.organisations?.name ?? "—"}
@@ -91,6 +96,13 @@ export default async function ProjectsPage() {
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}>
                       {STATUS_LABELS[p.status]}
                     </span>
+                    {p.expected_delivery_date &&
+                      p.expected_delivery_date < todayIso &&
+                      !TERMINAL_STATUSES.has(p.status) && (
+                        <span className="ml-1.5 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                          Overdue
+                        </span>
+                      )}
                   </td>
                   <td className="px-5 py-3 text-zinc-500">
                     {new Date(p.created_at).toLocaleDateString("en-AU")}

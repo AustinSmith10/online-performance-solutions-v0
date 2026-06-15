@@ -39,13 +39,16 @@ const EMPTY_RESULT: ExtractionResult = {
   dev_name: EMPTY_FIELD,
 };
 
-function buildPrompt(poText: string, plansText: string): string {
+function buildPrompt(poText: string | null, plansText: string): string {
+  const poSection = poText
+    ? `--- PURCHASE ORDER ---\n${poText}`
+    : `--- PURCHASE ORDER ---\n(no purchase order provided)`;
+
   return `You are a document data extractor for an Australian building compliance system.
 
-Below is text extracted from two documents:
+Below is text extracted from the submitted documents:
 
---- PURCHASE ORDER ---
-${poText}
+${poSection}
 
 --- BUILDING PLANS ---
 ${plansText}
@@ -64,7 +67,7 @@ Extract the following fields and return ONLY a JSON object with exactly this str
 }
 
 Field extraction rules:
-- po_number: Look for "PO Number", "Purchase Order No", "PO#", or similar in the PO document.
+- po_number: Look for "PO Number", "Purchase Order No", "PO#", or similar in the PO document. If no PO was provided, return "" with "low" confidence.
 - client_address: The site or property address — look in both documents. On building plans it is typically labelled "Address:", "Site Address:", "Property Address:", or appears in the title block near the lot/street details. On the PO it may appear as the delivery/site address.
 - house_type: Look for the EXACT label "House Type:" in the building plans and return the value that follows it. Common values are "Single Storey", "Double Storey", "Split Level". Do not infer or guess — only use the value found after "House Type:".
 - site_wd_no: Working drawing number for the site plan (labelled "WD", "Site Plan", "SP").
@@ -116,11 +119,11 @@ async function extractWithAnthropic(prompt: string): Promise<ExtractionResult> {
 }
 
 export async function extractDocumentFields(
-  poBuffer: Buffer,
+  poBuffer: Buffer | null,
   plansBuffer: Buffer
 ): Promise<ExtractionResult> {
   const [poText, plansText] = await Promise.all([
-    extractPdfText(poBuffer),
+    poBuffer ? extractPdfText(poBuffer) : Promise.resolve(null),
     extractPdfText(plansBuffer),
   ]);
 

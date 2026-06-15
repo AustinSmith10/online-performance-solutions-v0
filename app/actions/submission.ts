@@ -7,6 +7,8 @@ import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { extractDocumentFields, type ExtractionResult } from "@/lib/documents/extractor";
+import { getPublicHolidays } from "@/lib/delivery/public-holidays";
+import { addWorkingDays } from "@/lib/delivery/working-days";
 
 export interface Development {
   dev_name: string;
@@ -41,29 +43,38 @@ export async function extractFields(
   const poFile = formData.get("po_file") as File | null;
   const plansFile = formData.get("plans_file") as File | null;
 
-  if (!poFile || poFile.size === 0) return { step: 1, error: "Purchase order document is required." };
   if (!plansFile || plansFile.size === 0) return { step: 1, error: "Building plans document is required." };
-  if (poFile.size > 50 * 1024 * 1024) return { step: 1, error: "Purchase order must be under 50 MB." };
   if (plansFile.size > 50 * 1024 * 1024) return { step: 1, error: "Building plans must be under 50 MB." };
+  if (poFile && poFile.size > 50 * 1024 * 1024) return { step: 1, error: "Purchase order must be under 50 MB." };
 
   const orgId = actor.org_id as string;
   const submissionId = crypto.randomUUID();
 
-  const poBuffer = Buffer.from(await poFile.arrayBuffer());
+  const hasPoFile = !!poFile && poFile.size > 0;
+  const poBuffer = hasPoFile ? Buffer.from(await poFile.arrayBuffer()) : null;
   const plansBuffer = Buffer.from(await plansFile.arrayBuffer());
 
-  const poPath = `${orgId}/${submissionId}/po/${poFile.name}`;
+  const poPath = hasPoFile ? `${orgId}/${submissionId}/po/${poFile.name}` : "";
   const plansPath = `${orgId}/${submissionId}/plans/${plansFile.name}`;
 
-  const [poUpload, plansUpload] = await Promise.all([
-    supabase.storage.from("submissions").upload(poPath, poBuffer, { contentType: poFile.type || "application/pdf" }),
+  const uploadsToRun: Promise<{ error: { message: string } | null }>[] = [
     supabase.storage.from("submissions").upload(plansPath, plansBuffer, { contentType: plansFile.type || "application/pdf" }),
-  ]);
+  ];
+  if (hasPoFile && poBuffer) {
+    uploadsToRun.unshift(
+      supabase.storage.from("submissions").upload(poPath, poBuffer, { contentType: poFile.type || "application/pdf" })
+    );
+  }
 
-  if (poUpload.error) return { step: 1, error: `Failed to upload PO: ${poUpload.error.message}` };
-  if (plansUpload.error) {
-    await supabase.storage.from("submissions").remove([poPath]);
-    return { step: 1, error: `Failed to upload plans: ${plansUpload.error.message}` };
+  const uploadResults = await Promise.all(uploadsToRun);
+  for (const result of uploadResults) {
+    if (result.error) {
+      const uploaded = uploadResults.filter((r) => !r.error).map((_, i) =>
+        i === 0 && hasPoFile ? poPath : plansPath
+      );
+      await supabase.storage.from("submissions").remove(uploaded);
+      return { step: 1, error: `Failed to upload document: ${result.error.message}` };
+    }
   }
 
   // Run extraction + fetch org config + fetch developments in parallel
@@ -82,7 +93,8 @@ export async function extractFields(
     orgConfig = (orgResult.data?.org_config ?? {}) as Record<string, string>;
     developments = (devsResult.data ?? []) as Development[];
   } catch (err) {
-    await supabase.storage.from("submissions").remove([poPath, plansPath]);
+    const pathsToRemove = [plansPath, ...(hasPoFile ? [poPath] : [])];
+    await supabase.storage.from("submissions").remove(pathsToRemove);
     console.error("[extractFields] extraction failed:", err);
     return { step: 1, error: "Document extraction failed. Please check that your files are valid PDFs and try again." };
   }
@@ -118,8 +130,7 @@ export async function submitProject(
 
   if (!clientAddress) return { error: "Site address is required." };
 
-  const poNumber = (formData.get("extracted_po_number") as string | null)?.trim();
-  if (!poNumber) return { error: "PO number could not be determined. Please start over and re-upload your documents." };
+  const poNumber = (formData.get("extracted_po_number") as string | null)?.trim() || null;
 
   // Build extracted_fields: EXTRACT_ fields the client confirmed/overrode
   const extractedFields: Record<string, string> = {};
@@ -139,13 +150,23 @@ export async function submitProject(
     if (val) orgFields[key] = val;
   }
 
-  // Duplicate check: same PO number for this org with an active status
-  const { data: existing } = await supabase
-    .from("projects")
-    .select("id, status")
-    .eq("org_id", orgId)
-    .eq("po_number", poNumber)
-    .not("status", "in", '("delivered","complete")');
+  // Duplicate check (only when PO number is known) and org delivery config run in parallel
+  const [duplicateResult, { data: orgData }] = await Promise.all([
+    poNumber
+      ? supabase
+          .from("projects")
+          .select("id, status")
+          .eq("org_id", orgId)
+          .eq("po_number", poNumber)
+          .not("status", "in", '("delivered","complete")')
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from("organisations")
+      .select("delivery_working_days, state_territory")
+      .eq("id", orgId)
+      .single(),
+  ]);
+  const existing = duplicateResult.data;
 
   if (existing && existing.length > 0) {
     try {
@@ -167,6 +188,25 @@ export async function submitProject(
     return { error: `A project with PO number ${poNumber} is already active for your organisation. Your account manager has been notified.` };
   }
 
+  // Calculate expected delivery date (best-effort — don't block submission on failure)
+  let expectedDeliveryDate: string | null = null;
+  try {
+    const deliveryDays = orgData?.delivery_working_days ?? 5;
+    const stateTerritory = (orgData?.state_territory as string | null) ?? null;
+    const now = new Date();
+    const yearA = now.getUTCFullYear();
+    const yearB = yearA + 1;
+    const [holidaysA, holidaysB] = await Promise.all([
+      getPublicHolidays(stateTerritory, yearA),
+      getPublicHolidays(stateTerritory, yearB),
+    ]);
+    const holidays = new Set([...holidaysA, ...holidaysB]);
+    const dueDate = addWorkingDays(now, deliveryDays, holidays);
+    expectedDeliveryDate = dueDate.toISOString().slice(0, 10);
+  } catch (err) {
+    console.error("[submitProject] delivery date calculation failed:", err);
+  }
+
   const projectId = crypto.randomUUID();
   const { error: insertError } = await supabase.from("projects").insert({
     id: projectId,
@@ -176,6 +216,7 @@ export async function submitProject(
     status: "submitted",
     po_number: poNumber,
     delivery_recipient_email: deliveryEmail,
+    expected_delivery_date: expectedDeliveryDate,
     extracted_fields: {
       CLIENT_ADDRESS: clientAddress,
       ...extractedFields,
@@ -185,10 +226,11 @@ export async function submitProject(
 
   if (insertError) return { error: `Failed to create project: ${insertError.message}` };
 
-  const { error: filesError } = await supabase.from("project_files").insert([
-    { project_id: projectId, file_type: "po", storage_path: poPath, original_filename: poOriginalName, uploaded_by: actor.id },
+  const fileRecords = [
     { project_id: projectId, file_type: "building_plans", storage_path: plansPath, original_filename: plansOriginalName, uploaded_by: actor.id },
-  ]);
+    ...(poPath ? [{ project_id: projectId, file_type: "po", storage_path: poPath, original_filename: poOriginalName, uploaded_by: actor.id }] : []),
+  ];
+  const { error: filesError } = await supabase.from("project_files").insert(fileRecords);
 
   if (filesError) {
     console.error("[submitProject] project_files insert error:", filesError);
@@ -237,13 +279,13 @@ export async function submitProject(
 
 // ─── Email templates ─────────────────────────────────────────────────────────
 
-function submissionConfirmationEmail({ poNumber }: { poNumber: string }) {
+function submissionConfirmationEmail({ poNumber }: { poNumber: string | null }) {
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; color: #18181b; max-width: 560px; margin: 0 auto; padding: 24px;">
   <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Report request received</h2>
   <p style="color: #52525b; margin-bottom: 16px;">
-    Thank you — your report request for PO <strong>${escHtml(poNumber)}</strong> has been received and is being processed.
+    Thank you — your report request${poNumber ? ` for PO <strong>${escHtml(poNumber)}</strong>` : ""} has been received and is being processed.
   </p>
   <p style="color: #52525b; margin-bottom: 16px;">
     You will be notified once your report is ready. If you have any questions, please contact your account manager.
@@ -253,14 +295,14 @@ function submissionConfirmationEmail({ poNumber }: { poNumber: string }) {
 </html>`;
 }
 
-function duplicateSubmissionEmail({ poNumber, orgId }: { poNumber: string; orgId: string }) {
+function duplicateSubmissionEmail({ poNumber, orgId }: { poNumber: string | null; orgId: string }) {
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; color: #18181b; max-width: 560px; margin: 0 auto; padding: 24px;">
   <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Duplicate submission attempt</h2>
   <p style="color: #52525b; margin-bottom: 16px;">
     A client from organisation <code>${escHtml(orgId)}</code> attempted to submit a project with PO number
-    <strong>${escHtml(poNumber)}</strong>, which already has an active project record. No new record was created.
+    <strong>${escHtml(poNumber ?? "—")}</strong>, which already has an active project record. No new record was created.
   </p>
   <p style="color: #52525b; margin-bottom: 16px;">
     Please review and make a final call on whether a new record is required.
@@ -270,13 +312,13 @@ function duplicateSubmissionEmail({ poNumber, orgId }: { poNumber: string; orgId
 </html>`;
 }
 
-function adminSubmissionEmail({ poNumber, projectId }: { poNumber: string; projectId: string }) {
+function adminSubmissionEmail({ poNumber, projectId }: { poNumber: string | null; projectId: string }) {
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; color: #18181b; max-width: 560px; margin: 0 auto; padding: 24px;">
   <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">New project submission</h2>
   <p style="color: #52525b; margin-bottom: 16px;">
-    A new project has been submitted with PO number <strong>${escHtml(poNumber)}</strong>.
+    A new project has been submitted${poNumber ? ` with PO number <strong>${escHtml(poNumber)}</strong>` : " (no PO number)"}.
   </p>
   <p style="color: #52525b; margin-bottom: 16px;">
     Project ID: <code>${escHtml(projectId)}</code>

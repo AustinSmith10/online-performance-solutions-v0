@@ -33,13 +33,13 @@ export default async function ClientPortalPage() {
 
   const { data } = await supabase
     .from("projects")
-    .select("id, po_number, status, created_at, expected_delivery_date")
+    .select("id, extracted_fields, status, created_at, expected_delivery_date")
     .eq("org_id", user.org_id as string)
     .order("created_at", { ascending: false });
 
   type ProjectRow = {
     id: string;
-    po_number: string | null;
+    extracted_fields: Record<string, string> | null;
     status: ProjectStatus;
     created_at: string;
     expected_delivery_date: string | null;
@@ -80,7 +80,7 @@ export default async function ClientPortalPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-zinc-100">
               <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">PO number</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Submitted</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Expected delivery</th>
@@ -90,7 +90,7 @@ export default async function ClientPortalPage() {
               {projects.map((p) => (
                 <tr key={p.id} className="hover:bg-zinc-50">
                   <td className="px-5 py-3 font-medium text-zinc-900">
-                    {p.po_number ?? p.id.slice(0, 8)}
+                    {p.extracted_fields?.CLIENT_ADDRESS ?? p.id.slice(0, 8)}
                   </td>
                   <td className="px-5 py-3">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}>
@@ -102,7 +102,7 @@ export default async function ClientPortalPage() {
                   </td>
                   <td className="px-5 py-3 text-zinc-500">
                     {p.expected_delivery_date
-                      ? new Date(p.expected_delivery_date).toLocaleDateString("en-AU")
+                      ? <>Due by {new Date(p.expected_delivery_date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</>
                       : <span className="text-zinc-300">—</span>}
                   </td>
                 </tr>

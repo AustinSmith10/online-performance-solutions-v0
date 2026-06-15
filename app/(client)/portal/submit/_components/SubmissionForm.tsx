@@ -321,7 +321,7 @@ export function SubmissionForm({ templates, defaultTemplateId }: Props) {
 
         <div>
           <label className="block text-xs font-medium text-zinc-700 mb-1">
-            Purchase order (PDF) <span className="text-red-500">*</span>
+            Purchase order (PDF) <span className="text-zinc-400 font-normal">— optional</span>
           </label>
           <div
             className={`flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed px-4 py-8 text-center transition-colors ${
@@ -340,7 +340,6 @@ export function SubmissionForm({ templates, defaultTemplateId }: Props) {
               name="po_file"
               accept="application/pdf"
               className="sr-only"
-              required
               onChange={(e) => setPoFileName(e.target.files?.[0]?.name ?? null)}
             />
             {poFileName ? (
