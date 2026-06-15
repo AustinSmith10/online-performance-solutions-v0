@@ -27,6 +27,7 @@ export default async function AdminShellLayout({
           <NavLink href="/admin/templates">Templates</NavLink>
           <NavLink href="/admin/credits">Credits</NavLink>
           <NavLink href="/admin/audit">Audit</NavLink>
+          <NavLink href="/admin/recovery">Recovery Bin</NavLink>
         </nav>
         <div className="absolute bottom-0 w-56 border-t border-zinc-200 bg-white p-3">
           <p className="mb-2 truncate text-xs text-zinc-500">{user.email}</p>

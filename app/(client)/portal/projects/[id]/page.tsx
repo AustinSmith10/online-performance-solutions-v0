@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { DeleteProjectButton } from "./_components/DeleteProjectButton";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -53,6 +54,7 @@ export default async function ClientProjectDetailPage({
     .select("id, extracted_fields, status, po_number, created_at, expected_delivery_date")
     .eq("id", id)
     .eq("org_id", user.org_id as string)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!data) notFound();
@@ -113,6 +115,10 @@ export default async function ClientProjectDetailPage({
             )
           }
         />
+      </div>
+
+      <div className="pt-2">
+        <DeleteProjectButton projectId={project.id} />
       </div>
     </div>
   );

@@ -46,6 +46,29 @@ async function seed() {
     }
   }
 
+  // ── Second org ─────────────────────────────────────────────────────────────
+  const { data: meridian, error: meridianError } = await supabase
+    .from("organisations")
+    .upsert(
+      {
+        name: "Meridian Group",
+        slug: "meridian-group",
+        payment_method: "deferred",
+        credit_balance: 0,
+        delivery_working_days: 5,
+        state_territory: "VIC",
+      },
+      { onConflict: "slug" }
+    )
+    .select()
+    .single();
+
+  if (meridianError || !meridian) {
+    console.error("Failed to upsert Meridian org:", meridianError?.message);
+    return;
+  }
+  console.log("Org ready:", meridian.name, meridian.id);
+
   // ── Users ──────────────────────────────────────────────────────────────────
   type UserSpec = {
     email: string;
@@ -106,7 +129,7 @@ async function seed() {
       orgId: null,
       availability: "available",
     },
-    // Clients
+    // Clients — Stockland
     {
       email: "client@ops.test",
       role: "client",
@@ -127,6 +150,21 @@ async function seed() {
       firstName: "Ryan",
       lastName: "Thompson",
       orgId: stockland.id,
+    },
+    // Clients — Meridian Group
+    {
+      email: "client4@ops.test",
+      role: "client",
+      firstName: "Alex",
+      lastName: "Kim",
+      orgId: meridian.id,
+    },
+    {
+      email: "client5@ops.test",
+      role: "client",
+      firstName: "Sophie",
+      lastName: "Laurent",
+      orgId: meridian.id,
     },
   ];
 
@@ -350,6 +388,91 @@ async function seed() {
     }
   }
 
+  // ── Recovery bin seed ──────────────────────────────────────────────────────
+  // Soft-deleted projects across two orgs and multiple clients to test
+  // the client recovery bin (own-org filter) and admin recovery bin (all orgs).
+  const { count: recoveryCount } = await supabase
+    .from("projects")
+    .select("*", { count: "exact", head: true })
+    .not("deleted_at", "is", null);
+
+  if ((recoveryCount ?? 0) > 0) {
+    console.log("Recovery bin already seeded — skipping");
+  } else {
+    const client1Id = seededIds["client@ops.test"];
+    const client2Id = seededIds["client2@ops.test"];
+    const client4Id = seededIds["client4@ops.test"];
+    const client5Id = seededIds["client5@ops.test"];
+
+    const daysAgo = (n: number) =>
+      new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+
+    const recoveryProjects = [
+      // Stockland — client1: draft deleted 2 days ago (28 days left)
+      {
+        project_number: "OPS-R001",
+        org_id: stockland.id,
+        submitted_by: client1Id,
+        status: "draft",
+        po_number: null,
+        extracted_fields: { CLIENT_ADDRESS: "8 Bottlebrush Court, Halcyon Vista" },
+        deleted_at: daysAgo(2),
+        created_at: daysAgo(5),
+      },
+      // Stockland — client2: submitted deleted 20 days ago (10 days left)
+      {
+        project_number: "OPS-R002",
+        org_id: stockland.id,
+        submitted_by: client2Id,
+        status: "submitted",
+        po_number: "PO-2024-042",
+        extracted_fields: { CLIENT_ADDRESS: "22 Ironbark Avenue, Halcyon Promenade" },
+        deleted_at: daysAgo(20),
+        created_at: daysAgo(23),
+      },
+      // Stockland — client1: assigned deleted 8 days ago (22 days left)
+      {
+        project_number: "OPS-R003",
+        org_id: stockland.id,
+        submitted_by: client1Id,
+        status: "assigned",
+        po_number: "PO-2024-055",
+        extracted_fields: { CLIENT_ADDRESS: "14 Silky Oak Street, Halcyon Serrata" },
+        deleted_at: daysAgo(8),
+        created_at: daysAgo(12),
+      },
+      // Meridian Group — client4: draft deleted 27 days ago (3 days left — near expiry)
+      {
+        project_number: "OPS-R004",
+        org_id: meridian.id,
+        submitted_by: client4Id,
+        status: "draft",
+        po_number: null,
+        extracted_fields: { CLIENT_ADDRESS: "5 Meridian Boulevard, South Yarra VIC" },
+        deleted_at: daysAgo(27),
+        created_at: daysAgo(30),
+      },
+      // Meridian Group — client5: in_review deleted 5 days ago (25 days left)
+      {
+        project_number: "OPS-R005",
+        org_id: meridian.id,
+        submitted_by: client5Id,
+        status: "in_review",
+        po_number: "PO-2025-011",
+        extracted_fields: { CLIENT_ADDRESS: "91 Collins Street, Melbourne VIC" },
+        deleted_at: daysAgo(5),
+        created_at: daysAgo(9),
+      },
+    ].filter((p) => p.submitted_by); // guard against missing user IDs
+
+    const { error: recoveryErr } = await supabase.from("projects").insert(recoveryProjects);
+    if (recoveryErr) {
+      console.error("Failed to seed recovery bin:", recoveryErr.message);
+    } else {
+      console.log(`Seeded ${recoveryProjects.length} recovery bin entries across Stockland and Meridian Group`);
+    }
+  }
+
   // ── Summary ────────────────────────────────────────────────────────────────
   console.log("\nSeed complete. Password for all accounts: Ops@TestPass1!");
   console.log("Note: 2FA setup required on first login.\n");
@@ -365,7 +488,16 @@ async function seed() {
   console.log("  client@ops.test");
   console.log("  client2@ops.test  (Emma Davis)");
   console.log("  client3@ops.test  (Ryan Thompson)");
+  console.log("\nClients (Meridian Group):");
+  console.log("  client4@ops.test  (Alex Kim)");
+  console.log("  client5@ops.test  (Sophie Laurent)");
   console.log("\nDummy project: OPS-0001 (submitted, unassigned) → /admin/projects");
+  console.log("\nRecovery bin entries (soft-deleted):");
+  console.log("  OPS-R001 — Stockland/client1,  draft,     deleted 2d ago  (28d left)");
+  console.log("  OPS-R002 — Stockland/client2,  submitted, deleted 20d ago (10d left)");
+  console.log("  OPS-R003 — Stockland/client1,  assigned,  deleted 8d ago  (22d left)");
+  console.log("  OPS-R004 — Meridian/client4,   draft,     deleted 27d ago  (3d left — near expiry)");
+  console.log("  OPS-R005 — Meridian/client5,   in_review, deleted 5d ago  (25d left)");
 }
 
 seed().catch((error) => {

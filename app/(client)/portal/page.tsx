@@ -54,6 +54,7 @@ export default async function ClientPortalPage() {
       .from("projects")
       .select("id, extracted_fields, status, created_at, expected_delivery_date")
       .eq("org_id", orgId)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false }),
     supabase
       .from("organisations")

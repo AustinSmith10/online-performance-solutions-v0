@@ -123,6 +123,7 @@ export interface Project {
   payment_override_reason: string | null;
   payment_override_at: string | null;
   payment_override_by: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }

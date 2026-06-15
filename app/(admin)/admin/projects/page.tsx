@@ -41,6 +41,7 @@ export default async function ProjectsPage() {
       organisations(name),
       consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email)
     `)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   type ProjectRow = {

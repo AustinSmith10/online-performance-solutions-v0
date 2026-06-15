@@ -51,6 +51,7 @@ export default async function ProjectDetailPage({
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
       `)
       .eq("id", id)
+      .is("deleted_at", null)
       .maybeSingle(),
     supabase
       .from("users")

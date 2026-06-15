@@ -47,6 +47,7 @@ export default async function ConsultantOpsPage() {
     .select("id, extracted_fields, status, po_number, expected_delivery_date, created_at")
     .eq("assigned_consultant_id", user.id)
     .not("status", "eq", "draft")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   const projects = (data ?? []) as ProjectRow[];

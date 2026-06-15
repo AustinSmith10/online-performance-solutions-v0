@@ -15,6 +15,7 @@ export default async function ClientLayout({ children }: { children: React.React
             <nav className="flex gap-0.5">
               <NavLink href="/portal">My Reports</NavLink>
               <NavLink href="/portal/history">Report History</NavLink>
+              <NavLink href="/portal/recovery">Recovery Bin</NavLink>
             </nav>
           </div>
           <div className="flex items-center gap-3">
