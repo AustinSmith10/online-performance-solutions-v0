@@ -13,10 +13,13 @@
     "seed": "node --env-file=.env.local ./node_modules/.bin/tsx supabase/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.107.0",
     "docxtemplater": "^3.68.7",
     "next": "16.2.7",
+    "openai": "^6.42.0",
+    "pdf-parse": "^1.1.1",
     "pg-boss": "^12.18.2",
     "pizzip": "^3.2.0",
     "react": "19.2.4",
@@ -27,6 +30,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
