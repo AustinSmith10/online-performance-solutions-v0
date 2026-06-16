@@ -97,7 +97,7 @@ export async function activateTemplate(
 
   const { data: mappings, error: mapErr } = await supabase
     .from("template_field_mappings")
-    .select("placeholder_token, is_mapped")
+    .select("placeholder_token, field_key, is_mapped, display_label, extraction_hint")
     .eq("template_id", templateId);
 
   if (mapErr) return { error: mapErr.message };
@@ -106,6 +106,22 @@ export async function activateTemplate(
   if (unknown.length > 0) {
     return {
       error: `Cannot activate: ${unknown.length} token(s) with unrecognised prefix — ${unknown.map((m) => `{${m.placeholder_token}}`).join(", ")}.`,
+    };
+  }
+
+  const missingLabel = (mappings ?? []).filter((m) => !m.display_label?.trim());
+  if (missingLabel.length > 0) {
+    return {
+      error: `Cannot activate: display label missing for ${missingLabel.map((m) => `{${m.placeholder_token}}`).join(", ")}.`,
+    };
+  }
+
+  const missingHint = (mappings ?? []).filter(
+    (m) => m.field_key === "extract" && !m.extraction_hint?.trim()
+  );
+  if (missingHint.length > 0) {
+    return {
+      error: `Cannot activate: extraction hint missing for ${missingHint.map((m) => `{${m.placeholder_token}}`).join(", ")}.`,
     };
   }
 
@@ -290,6 +306,49 @@ export async function reuploadTemplate(
 
   revalidatePath(`/admin/templates/${templateId}`);
   return {};
+}
+
+export type UpdateTokenLabelsState = { error?: string; success?: boolean };
+
+export async function updateTokenLabels(
+  templateId: string,
+  _prev: UpdateTokenLabelsState,
+  formData: FormData
+): Promise<UpdateTokenLabelsState> {
+  await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const updates: Array<{
+    placeholder_token: string;
+    display_label: string;
+    extraction_hint: string | null;
+    is_required: boolean;
+    sort_order: number;
+  }> = [];
+
+  for (const [key, rawVal] of formData.entries()) {
+    if (key.startsWith("label_")) {
+      const token = key.slice(6);
+      const hint = (formData.get(`hint_${token}`) as string | null)?.trim() || null;
+      const label = (rawVal as string).trim();
+      const is_required = formData.get(`required_${token}`) === "on";
+      const sort_order = parseInt((formData.get(`order_${token}`) as string | null) ?? "0", 10) || 0;
+      if (token) updates.push({ placeholder_token: token, display_label: label, extraction_hint: hint, is_required, sort_order });
+    }
+  }
+
+  for (const { placeholder_token, display_label, extraction_hint, is_required, sort_order } of updates) {
+    const { error } = await supabase
+      .from("template_field_mappings")
+      .update({ display_label, extraction_hint, is_required, sort_order })
+      .eq("template_id", templateId)
+      .eq("placeholder_token", placeholder_token);
+
+    if (error) return { error: `Failed to save label for ${placeholder_token}: ${error.message}` };
+  }
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return { success: true };
 }
 
 export type ReactivateTemplateState = { error?: string };

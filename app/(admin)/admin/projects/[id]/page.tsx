@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AssignForm, type ConsultantOption } from "./_components/AssignForm";
 import { OverrideForm } from "./_components/OverrideForm";
+import { FieldsForm } from "./_components/FieldsForm";
+import { FileUploadForm } from "./_components/FileUploadForm";
+import { prettifyToken } from "@/lib/tokens/prettify";
 import type { ProjectStatus, ConsultantAvailability } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -23,6 +26,12 @@ const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
   at_capacity: "At capacity",
 };
 
+const FILE_TYPE_LABELS: Record<string, string> = {
+  building_plans: "Building Plans",
+  po: "Purchase Order",
+  additional: "Additional",
+};
+
 export default async function ProjectDetailPage({
   params,
 }: {
@@ -39,19 +48,21 @@ export default async function ProjectDetailPage({
         project_number,
         po_number,
         status,
+        extracted_fields,
+        template_id,
         delivery_recipient_email,
         expected_delivery_date,
         credit_deducted,
         payment_override,
         payment_override_reason,
         payment_override_at,
+        deleted_at,
         created_at,
         updated_at,
         organisations(id, name),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
       `)
       .eq("id", id)
-      .is("deleted_at", null)
       .maybeSingle(),
     supabase
       .from("users")
@@ -68,12 +79,15 @@ export default async function ProjectDetailPage({
     project_number: string | null;
     po_number: string | null;
     status: ProjectStatus;
+    extracted_fields: Record<string, string> | null;
+    template_id: string | null;
     delivery_recipient_email: string | null;
     expected_delivery_date: string | null;
     credit_deducted: boolean;
     payment_override: boolean;
     payment_override_reason: string | null;
     payment_override_at: string | null;
+    deleted_at: string | null;
     created_at: string;
     updated_at: string;
     organisations: { id: string; name: string } | null;
@@ -87,19 +101,61 @@ export default async function ProjectDetailPage({
   };
 
   const project = projectResult.data as unknown as ProjectDetail;
+  const isDeleted = !!project.deleted_at;
   const consultants = (consultantsResult.data ?? []) as ConsultantOption[];
-
   const currentConsultantId = project.assigned?.id ?? "";
+
+  // Load template mappings and project files in parallel
+  const [{ data: mappings }, { data: rawFiles }] = await Promise.all([
+    project.template_id
+      ? supabase
+          .from("template_field_mappings")
+          .select("placeholder_token, field_key, display_label")
+          .eq("template_id", project.template_id)
+          .order("placeholder_token")
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from("project_files")
+      .select("id, file_type, original_filename, storage_path, created_at")
+      .eq("project_id", id)
+      .order("created_at"),
+  ]);
+
+  const files = await Promise.all(
+    (rawFiles ?? []).map(async (f) => {
+      const { data: signed } = await supabase.storage
+        .from("submissions")
+        .createSignedUrl(f.storage_path as string, 3600);
+      return { ...f, signedUrl: signed?.signedUrl ?? null };
+    })
+  );
+
+  const labelMap = new Map<string, string>(
+    (mappings ?? []).map((m) => [
+      m.placeholder_token as string,
+      (m.display_label as string | null) ?? prettifyToken(m.placeholder_token as string),
+    ])
+  );
+
+  const extractedFields = project.extracted_fields ?? {};
+  const fieldEntries = Object.entries(extractedFields).map(([token, value]) => ({
+    token,
+    label: labelMap.get(token) ?? prettifyToken(token),
+    value: value as string,
+  }));
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <Link href="/admin/projects" className="text-sm text-zinc-500 hover:text-zinc-700">
-          ← Projects
+        <Link
+          href={isDeleted ? "/admin/recovery" : "/admin/projects"}
+          className="text-sm text-zinc-500 hover:text-zinc-700"
+        >
+          {isDeleted ? "← Recovery bin" : "← Projects"}
         </Link>
         <div className="mt-2 flex items-center gap-3 flex-wrap">
           <h1 className="text-xl font-semibold text-zinc-900">
-            {project.project_number ?? project.id.slice(0, 8)}
+            {project.po_number ? `PO ${project.po_number}` : (project.project_number ?? project.id.slice(0, 8))}
           </h1>
           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
             {STATUS_LABELS[project.status]}
@@ -111,6 +167,16 @@ export default async function ProjectDetailPage({
           )}
         </div>
       </div>
+
+      {isDeleted && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">This project is in the recovery bin.</span>{" "}
+          It will be permanently deleted after 30 days.{" "}
+          <Link href="/admin/recovery" className="font-medium underline hover:text-amber-900">
+            Go to recovery bin →
+          </Link>
+        </div>
+      )}
 
       {/* Project details */}
       <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
@@ -131,16 +197,68 @@ export default async function ProjectDetailPage({
         />
       </div>
 
-      {/* Assignment */}
+      {/* Submitted field values — editable by Super Admin */}
       <div className="rounded-lg border border-zinc-200 bg-white p-5">
+        <h2 className="mb-4 text-sm font-semibold text-zinc-900">Field values</h2>
+        <FieldsForm projectId={id} fields={fieldEntries} />
+      </div>
+
+      {/* Documents */}
+      <div className="rounded-lg border border-zinc-200 bg-white">
+        <div className="border-b border-zinc-100 px-5 py-4">
+          <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
+        </div>
+        {files.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-zinc-500">No documents uploaded yet.</p>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {files.map((f) => (
+              <div
+                key={f.id as string}
+                className="flex items-center justify-between px-5 py-3"
+              >
+                <div>
+                  <p className="text-sm text-zinc-900">
+                    {f.original_filename as string}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}{" "}
+                    &middot;{" "}
+                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                  </p>
+                </div>
+                {f.signedUrl && (
+                  <a
+                    href={f.signedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Download
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {!isDeleted && (
+          <div className="border-t border-zinc-100 px-5 py-4">
+            <FileUploadForm projectId={id} />
+          </div>
+        )}
+      </div>
+
+      {/* Assignment — hidden for deleted projects */}
+      {!isDeleted && <div className="rounded-lg border border-zinc-200 bg-white p-5">
         <h2 className="mb-1 text-sm font-semibold text-zinc-900">Consultant assignment</h2>
 
         {project.assigned && (
           <p className="mb-4 text-sm text-zinc-500">
             Currently assigned to{" "}
             <strong className="text-zinc-800">
-              {[project.assigned.first_name, project.assigned.last_name].filter(Boolean).join(" ") ||
-                project.assigned.email}
+              {[project.assigned.first_name, project.assigned.last_name]
+                .filter(Boolean)
+                .join(" ") || project.assigned.email}
             </strong>{" "}
             &mdash;{" "}
             <span
@@ -173,16 +291,22 @@ export default async function ProjectDetailPage({
             .
           </p>
         )}
-      </div>
+      </div>}
 
-      {/* Payment gate */}
-      <div className="rounded-lg border border-zinc-200 bg-white p-5">
+      {/* Payment gate — hidden for deleted projects */}
+      {!isDeleted && <div className="rounded-lg border border-zinc-200 bg-white p-5">
         <h2 className="mb-1 text-sm font-semibold text-zinc-900">Payment gate</h2>
 
         <div className="mb-4 flex gap-6 text-sm">
           <span>
             <span className="text-zinc-500">Credit deducted: </span>
-            <span className={project.credit_deducted ? "font-medium text-green-700" : "text-zinc-500"}>
+            <span
+              className={
+                project.credit_deducted
+                  ? "font-medium text-green-700"
+                  : "text-zinc-500"
+              }
+            >
               {project.credit_deducted ? "Yes" : "No"}
             </span>
           </span>
@@ -191,7 +315,9 @@ export default async function ProjectDetailPage({
               <span className="text-zinc-500">Override applied: </span>
               <span className="font-medium text-amber-700">
                 {project.payment_override_at
-                  ? new Date(project.payment_override_at).toLocaleDateString("en-AU")
+                  ? new Date(project.payment_override_at).toLocaleDateString(
+                      "en-AU"
+                    )
                   : "Yes"}
               </span>
             </span>
@@ -209,7 +335,7 @@ export default async function ProjectDetailPage({
           projectId={id}
           alreadyOverridden={project.payment_override}
         />
-      </div>
+      </div>}
     </div>
   );
 }

@@ -101,8 +101,8 @@ function ProjectSection({
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
         {title} ({projects.length})
       </h2>
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+        <table className="w-full min-w-[520px] text-sm">
           <thead className="border-b border-zinc-100">
             <tr>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
@@ -120,7 +120,7 @@ function ProjectSection({
               return (
                 <ClickableRow key={p.id} href={`/ops/projects/${p.id}`}>
                   <td className="px-5 py-3 font-medium text-zinc-900">
-                    {p.extracted_fields?.CLIENT_ADDRESS ?? p.id.slice(0, 8)}
+                    {p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8)}
                   </td>
                   <td className="px-5 py-3 text-zinc-600">
                     {p.po_number ?? <span className="text-zinc-400">—</span>}

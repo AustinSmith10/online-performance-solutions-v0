@@ -4,6 +4,7 @@ import type { ProjectStatus } from "@/types";
 
 type DeliveredProject = {
   id: string;
+  po_number: string | null;
   extracted_fields: Record<string, string> | null;
   status: ProjectStatus;
   created_at: string;
@@ -16,7 +17,7 @@ export default async function ClientHistoryPage() {
 
   const { data } = await supabase
     .from("projects")
-    .select("id, extracted_fields, status, created_at, expected_delivery_date")
+    .select("id, po_number, extracted_fields, status, created_at, expected_delivery_date")
     .eq("org_id", user.org_id as string)
     .in("status", ["delivered", "complete"])
     .order("created_at", { ascending: false });
@@ -40,8 +41,8 @@ export default async function ClientHistoryPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+          <table className="w-full min-w-[400px] text-sm">
             <thead className="border-b border-zinc-100">
               <tr>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
@@ -53,7 +54,7 @@ export default async function ClientHistoryPage() {
               {reports.map((r) => (
                 <tr key={r.id} className="hover:bg-zinc-50">
                   <td className="px-5 py-3 font-medium text-zinc-900">
-                    {r.extracted_fields?.CLIENT_ADDRESS ?? r.id.slice(0, 8)}
+                    {r.po_number ? `PO ${r.po_number}` : r.id.slice(0, 8)}
                   </td>
                   <td className="px-5 py-3 text-zinc-500">
                     {new Date(r.created_at).toLocaleDateString("en-AU", {

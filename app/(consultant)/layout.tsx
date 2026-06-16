@@ -2,22 +2,45 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { logout } from "@/app/actions/auth";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
+import { MobileNav } from "@/components/MobileNav";
 
-export default async function ConsultantLayout({ children }: { children: React.ReactNode }) {
+const NAV_ITEMS = [
+  { href: "/ops", label: "Workspace" },
+  { href: "/availability", label: "Availability" },
+];
+
+export default async function ConsultantLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const user = await requireRole("consultant");
 
   return (
-    <div className="flex min-h-screen bg-zinc-50">
-      <aside className="w-56 shrink-0 border-r border-zinc-200 bg-white">
+    <div className="flex min-h-screen flex-col bg-zinc-50 lg:h-screen lg:flex-row lg:overflow-hidden">
+      {/* Mobile top bar + drawer (hidden on desktop) */}
+      <MobileNav
+        title="OPS"
+        navItems={NAV_ITEMS}
+        userEmail={user.email}
+        logoutAction={logout}
+        notifications={<NotificationTrayServer />}
+      />
+
+      {/* Desktop sidebar (hidden on mobile) */}
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-zinc-200 bg-white lg:flex">
         <div className="flex h-14 items-center justify-between border-b border-zinc-200 px-4">
           <span className="text-sm font-semibold text-zinc-900">OPS</span>
           <NotificationTrayServer />
         </div>
-        <nav className="space-y-0.5 p-3">
-          <NavLink href="/ops">Workspace</NavLink>
-          <NavLink href="/availability">Availability</NavLink>
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
+          {NAV_ITEMS.map((item) => (
+            <NavLink key={item.href} href={item.href}>
+              {item.label}
+            </NavLink>
+          ))}
         </nav>
-        <div className="absolute bottom-0 w-56 border-t border-zinc-200 bg-white p-3">
+        <div className="border-t border-zinc-200 p-3">
           <p className="mb-2 truncate text-xs text-zinc-500">{user.email}</p>
           <form action={logout}>
             <button
@@ -30,12 +53,19 @@ export default async function ConsultantLayout({ children }: { children: React.R
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto p-8">{children}</main>
+      {/* Main — min-w-0 prevents flex children from overflowing */}
+      <main className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-8">{children}</main>
     </div>
   );
 }
 
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+function NavLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
   return (
     <Link
       href={href}

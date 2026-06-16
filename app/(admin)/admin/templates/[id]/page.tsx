@@ -12,6 +12,10 @@ type MappingRow = {
   placeholder_token: string;
   field_key: string | null;
   is_mapped: boolean;
+  display_label: string | null;
+  extraction_hint: string | null;
+  is_required: boolean;
+  sort_order: number;
 };
 
 type TemplateDetail = {
@@ -40,8 +44,9 @@ export default async function TemplatePage({
       .maybeSingle(),
     supabase
       .from("template_field_mappings")
-      .select("id, placeholder_token, field_key, is_mapped")
+      .select("id, placeholder_token, field_key, is_mapped, display_label, extraction_hint, is_required, sort_order")
       .eq("template_id", id)
+      .order("sort_order", { ascending: true })
       .order("placeholder_token", { ascending: true }),
   ]);
 
@@ -51,14 +56,19 @@ export default async function TemplatePage({
   const rows = (mappings ?? []) as MappingRow[];
 
   const redFlags = rows.filter((r) => !r.is_mapped);
+  const missingLabels = rows.filter((r) => !r.display_label?.trim());
+  const missingHints = rows.filter(
+    (r) => r.field_key === "extract" && !r.extraction_hint?.trim()
+  );
   const tokenSet = new Set(rows.map((r) => r.placeholder_token));
   const yellowFlags = Object.keys(template.org?.org_config ?? {}).filter(
     (key) => !tokenSet.has(key)
   );
-  const canActivate = redFlags.length === 0;
+  const canActivate =
+    redFlags.length === 0 && missingLabels.length === 0 && missingHints.length === 0;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       {/* Header */}
       <div>
         <Link href="/admin/templates" className="text-sm text-zinc-500 hover:text-zinc-700">
@@ -90,6 +100,20 @@ export default async function TemplatePage({
         </div>
       )}
 
+      {missingLabels.length > 0 && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span className="font-semibold">{missingLabels.length} token(s) missing a display label — </span>
+          set a label for every token before activating.
+        </div>
+      )}
+
+      {missingHints.length > 0 && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span className="font-semibold">{missingHints.length} EXTRACT token(s) missing an extraction hint — </span>
+          Claude needs to know what to look for before this template can be activated.
+        </div>
+      )}
+
       {yellowFlags.length > 0 && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <span className="font-semibold">{yellowFlags.length} org config field(s) not present in template — </span>
@@ -99,13 +123,13 @@ export default async function TemplatePage({
 
       {canActivate && yellowFlags.length === 0 && rows.length > 0 && (
         <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          All {rows.length} tokens recognised and all org fields present — template is ready to activate.
+          All {rows.length} tokens configured — template is ready to activate.
         </div>
       )}
 
       {canActivate && yellowFlags.length > 0 && rows.length > 0 && (
         <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          All {rows.length} tokens recognised — template can be activated (review missing org fields above).
+          All {rows.length} tokens configured — template can be activated (review missing org fields above).
         </div>
       )}
 
@@ -124,7 +148,7 @@ export default async function TemplatePage({
         <h2 className="mb-3 text-sm font-semibold text-zinc-900">Replace file</h2>
         <p className="mb-4 text-xs text-zinc-500">
           Upload a new .docx to replace the current file. Tokens will be re-extracted and the
-          template reset to draft.
+          template reset to draft. Labels and hints will need to be re-entered.
         </p>
         <ReuploadForm templateId={id} />
       </div>
@@ -136,7 +160,9 @@ export default async function TemplatePage({
             Tokens ({rows.length})
           </h2>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Source is auto-detected from the token prefix. Unrecognised tokens block activation.
+            Set a display label, extraction hint, and order for each token. Mark fields as required to block submission.
+            <code className="ml-1 rounded bg-zinc-100 px-1 font-mono">EXTRACT_ADDRESS</code> is always used for duplicate detection.
+            <code className="ml-1 rounded bg-zinc-100 px-1 font-mono">EXTRACT_TRUSTEE</code> and <code className="rounded bg-zinc-100 px-1 font-mono">EXTRACT_RAINFALL_INTENSITY</code> are auto-populated from the Halcyon table.
           </p>
         </div>
 
@@ -145,7 +171,7 @@ export default async function TemplatePage({
             No placeholders found in this document.
           </p>
         ) : (
-          <MappingTable rows={rows} missingOrgTokens={yellowFlags} />
+          <MappingTable rows={rows} templateId={id} missingOrgTokens={yellowFlags} />
         )}
       </div>
     </div>
@@ -159,7 +185,9 @@ function StatusBadge({ status }: { status: string }) {
     draft:    "bg-amber-100 text-amber-700",
   };
   return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] ?? "bg-zinc-100 text-zinc-500"}`}>
+    <span
+      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] ?? "bg-zinc-100 text-zinc-500"}`}
+    >
       {status}
     </span>
   );

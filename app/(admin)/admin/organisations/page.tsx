@@ -35,8 +35,8 @@ export default async function OrganisationsPage() {
           No organisations yet.
         </div>
       ) : (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+          <table className="w-full min-w-[520px] text-sm">
             <thead className="border-b border-zinc-100">
               <tr>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Name</th>

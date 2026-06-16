@@ -13,6 +13,9 @@ import {
 } from "@/lib/email/parser";
 import { extractDocumentFields } from "@/lib/documents/extractor";
 
+// Tokens auto-resolved from halcyon_developments — never sent to AI extraction
+const HALCYON_TOKENS = new Set(["EXTRACT_TRUSTEE", "EXTRACT_RAINFALL_INTENSITY"]);
+
 // Postmark retries on non-2xx — always return 200 so it doesn't retry on expected failures.
 
 export async function POST(req: NextRequest) {
@@ -189,17 +192,75 @@ async function handleNewSubmission(
   // Run field extraction if we have PDF files
   if (pdfBuffers.length > 0) {
     try {
+      // Load EXTRACT_ token mappings for the active template
+      let extractTokens: { token: string; label: string; hint: string }[] = [];
+      let templateHasTrustee = false;
+      let templateHasRainfall = false;
+      if (templateId) {
+        const { data: mappings } = await supabase
+          .from("template_field_mappings")
+          .select("placeholder_token, display_label, extraction_hint")
+          .eq("template_id", templateId)
+          .eq("field_key", "extract")
+          .order("sort_order")
+          .order("placeholder_token");
+        templateHasTrustee = (mappings ?? []).some(
+          (m) => m.placeholder_token === "EXTRACT_TRUSTEE"
+        );
+        templateHasRainfall = (mappings ?? []).some(
+          (m) => m.placeholder_token === "EXTRACT_RAINFALL_INTENSITY"
+        );
+        extractTokens = (mappings ?? [])
+          .filter((m) => !HALCYON_TOKENS.has(m.placeholder_token as string))
+          .map((m) => ({
+            token: m.placeholder_token as string,
+            label: (m.display_label as string | null) ?? (m.placeholder_token as string),
+            hint: (m.extraction_hint as string | null) ?? "",
+          }));
+      }
+
       const poBuffer = pdfBuffers[0];
       const plansBuffer = pdfBuffers[1] ?? pdfBuffers[0];
-      const extracted = await extractDocumentFields(poBuffer, plansBuffer);
+      const extracted = await extractDocumentFields(poBuffer, plansBuffer, extractTokens);
 
-      // Check duplicate PO
-      if (extracted.po_number.value) {
+      const fieldValues = Object.fromEntries(
+        Object.entries(extracted.fields).map(([k, v]) => [k, v.value])
+      );
+
+      // Resolve halcyon-derived fields from dev name
+      if (templateHasTrustee || templateHasRainfall) {
+        const devName = (fieldValues["EXTRACT_DEV_NAME"] ?? "").trim();
+        if (devName) {
+          const { data: developments } = await supabase
+            .from("halcyon_developments")
+            .select("dev_name, trustee_entity, aep")
+            .order("dev_name");
+          const needle = devName.toLowerCase();
+          const matchedDev =
+            (developments ?? []).find((d) => (d.dev_name as string).toLowerCase() === needle) ??
+            (developments ?? []).find(
+              (d) =>
+                (d.dev_name as string).toLowerCase().includes(needle) ||
+                needle.includes((d.dev_name as string).toLowerCase())
+            );
+          if (matchedDev) {
+            if (templateHasTrustee)
+              fieldValues["EXTRACT_TRUSTEE"] = matchedDev.trustee_entity as string;
+            if (templateHasRainfall)
+              fieldValues["EXTRACT_RAINFALL_INTENSITY"] = String(matchedDev.aep);
+          }
+        }
+      }
+
+      const siteAddress = (fieldValues["EXTRACT_ADDRESS"] ?? "").trim() || null;
+
+      // Check duplicate address
+      if (siteAddress) {
         const { data: dupe } = await supabase
           .from("projects")
           .select("id")
           .eq("org_id", org.id)
-          .eq("po_number", extracted.po_number.value)
+          .eq("site_address", siteAddress)
           .is("deleted_at", null)
           .not("status", "in", '("delivered","complete")')
           .maybeSingle();
@@ -207,13 +268,13 @@ async function handleNewSubmission(
         if (dupe) {
           await sendEmail({
             to: user.email,
-            subject: "OPS: Duplicate PO number detected",
-            html: duplicatePoHtml(user.email, extracted.po_number.value, dupe.id),
+            subject: "OPS: Duplicate address detected",
+            html: duplicateAddressHtml(user.email, siteAddress, dupe.id),
           });
-          await auditLog("email.duplicate_po", user.id, user.email, {
+          await auditLog("email.duplicate_address", user.id, user.email, {
             orgId: org.id,
             projectId: projectId,
-            metadata: { po_number: extracted.po_number.value, existing_project_id: dupe.id },
+            metadata: { site_address: siteAddress, existing_project_id: dupe.id },
           });
           // Soft-delete the just-created draft — it's a duplicate
           await supabase
@@ -224,12 +285,13 @@ async function handleNewSubmission(
         }
       }
 
-      // Save extracted fields and PO number to the project
+      // Save extracted field values, PO number, and site address to the project
       await supabase
         .from("projects")
         .update({
-          extracted_fields: extracted,
+          extracted_fields: fieldValues,
           ...(extracted.po_number.value ? { po_number: extracted.po_number.value } : {}),
+          ...(siteAddress ? { site_address: siteAddress } : {}),
         })
         .eq("id", projectId);
     } catch (err) {
@@ -265,7 +327,7 @@ async function handleThreadReply(
   // Validate the project exists and belongs to the user's org
   const { data: project } = await supabase
     .from("projects")
-    .select("id, org_id, status")
+    .select("id, org_id, status, template_id")
     .eq("id", projectId)
     .is("deleted_at", null)
     .single();
@@ -329,9 +391,24 @@ async function handleThreadReply(
   // Re-run extraction and merge new results into extracted_fields
   if (pdfBuffers.length > 0) {
     try {
+      const threadTemplateId = (project.template_id as string | null) ?? null;
+      let extractTokens: { token: string; label: string; hint: string }[] = [];
+      if (threadTemplateId) {
+        const { data: mappings } = await supabase
+          .from("template_field_mappings")
+          .select("placeholder_token, display_label, extraction_hint")
+          .eq("template_id", threadTemplateId)
+          .eq("field_key", "extract");
+        extractTokens = (mappings ?? []).map((m) => ({
+          token: m.placeholder_token as string,
+          label: (m.display_label as string | null) ?? (m.placeholder_token as string),
+          hint: (m.extraction_hint as string | null) ?? "",
+        }));
+      }
+
       const poBuffer = pdfBuffers[0];
       const plansBuffer = pdfBuffers[1] ?? pdfBuffers[0];
-      const extracted = await extractDocumentFields(poBuffer, plansBuffer);
+      const extracted = await extractDocumentFields(poBuffer, plansBuffer, extractTokens);
 
       // Fetch current extracted_fields to merge
       const { data: current } = await supabase
@@ -340,7 +417,10 @@ async function handleThreadReply(
         .eq("id", projectId)
         .single();
 
-      const merged = { ...(current?.extracted_fields ?? {}), ...extracted };
+      const newFieldValues = Object.fromEntries(
+        Object.entries(extracted.fields).map(([k, v]) => [k, v.value])
+      );
+      const merged = { ...(current?.extracted_fields as Record<string, string> ?? {}), ...newFieldValues };
 
       await supabase
         .from("projects")
@@ -397,10 +477,10 @@ function portalLinkHtml(email: string, orgName: string, portalLink: string): str
 <p>Regards,<br>OPS Team</p>`;
 }
 
-function duplicatePoHtml(email: string, poNumber: string, existingProjectId: string): string {
+function duplicateAddressHtml(email: string, siteAddress: string, existingProjectId: string): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return `<p>Hi,</p>
-<p>We received your email but detected a duplicate PO number: <strong>${poNumber}</strong>.</p>
-<p>A project with this PO number already exists. Please <a href="${appUrl}/portal/projects/${existingProjectId}">view the existing project</a> or contact your OPS account manager if you believe this is incorrect.</p>
+<p>We received your email but detected a duplicate address: <strong>${siteAddress}</strong>.</p>
+<p>An active project for this address already exists. Please <a href="${appUrl}/portal/projects/${existingProjectId}">view the existing project</a> or contact your OPS account manager if you believe this is incorrect.</p>
 <p>Regards,<br>OPS Team</p>`;
 }

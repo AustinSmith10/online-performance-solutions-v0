@@ -146,6 +146,10 @@ export interface TemplateFieldMapping {
   placeholder_token: string;
   field_key: string | null;
   is_mapped: boolean;
+  display_label: string | null;
+  extraction_hint: string | null;
+  is_required: boolean;
+  sort_order: number;
   created_at: string;
 }
 

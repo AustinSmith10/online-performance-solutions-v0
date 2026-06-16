@@ -10,17 +10,19 @@ export default async function ClientLayout({ children }: { children: React.React
     <div className="flex min-h-screen flex-col bg-zinc-50">
       <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          <div className="flex items-center gap-6">
-            <span className="text-sm font-semibold text-zinc-900">OPS</span>
-            <nav className="flex gap-0.5">
+          <div className="flex min-w-0 items-center gap-4">
+            <span className="shrink-0 text-sm font-semibold text-zinc-900">OPS</span>
+            <nav className="flex min-w-0 gap-0.5 overflow-x-auto">
               <NavLink href="/portal">My Reports</NavLink>
-              <NavLink href="/portal/history">Report History</NavLink>
-              <NavLink href="/portal/recovery">Recovery Bin</NavLink>
+              <NavLink href="/portal/history">History</NavLink>
+              <NavLink href="/portal/recovery">Recovery</NavLink>
             </nav>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="ml-4 flex shrink-0 items-center gap-3">
             <NotificationTrayServer />
-            <p className="hidden text-xs text-zinc-400 sm:block">{user.email}</p>
+            <p className="hidden max-w-[180px] truncate text-xs text-zinc-400 sm:block">
+              {user.email}
+            </p>
             <form action={logout}>
               <button
                 type="submit"
@@ -32,7 +34,7 @@ export default async function ClientLayout({ children }: { children: React.React
           </div>
         </div>
       </header>
-      <main className="flex-1">{children}</main>
+      <main className="min-w-0 flex-1">{children}</main>
     </div>
   );
 }
@@ -41,7 +43,7 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
   return (
     <Link
       href={href}
-      className="rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+      className="shrink-0 rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
     >
       {children}
     </Link>

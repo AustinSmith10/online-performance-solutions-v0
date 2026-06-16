@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DeleteProjectButton } from "./_components/DeleteProjectButton";
+import { FileUploadForm } from "./_components/FileUploadForm";
+import { prettifyToken } from "@/lib/tokens/prettify";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -29,16 +31,13 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   complete: "bg-zinc-100 text-zinc-500",
 };
 
-const TERMINAL_STATUSES = new Set<ProjectStatus>(["delivered", "complete"]);
-
-type ProjectDetail = {
-  id: string;
-  extracted_fields: Record<string, string> | null;
-  status: ProjectStatus;
-  po_number: string | null;
-  created_at: string;
-  expected_delivery_date: string | null;
+const FILE_TYPE_LABELS: Record<string, string> = {
+  building_plans: "Building Plans",
+  po: "Purchase Order",
+  additional: "Additional",
 };
+
+const TERMINAL_STATUSES = new Set<ProjectStatus>(["delivered", "complete"]);
 
 export default async function ClientProjectDetailPage({
   params,
@@ -51,31 +50,102 @@ export default async function ClientProjectDetailPage({
 
   const { data } = await supabase
     .from("projects")
-    .select("id, extracted_fields, status, po_number, created_at, expected_delivery_date")
+    .select(
+      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at"
+    )
     .eq("id", id)
     .eq("org_id", user.org_id as string)
-    .is("deleted_at", null)
     .maybeSingle();
 
   if (!data) notFound();
 
+  type ProjectDetail = {
+    id: string;
+    extracted_fields: Record<string, string> | null;
+    status: ProjectStatus;
+    po_number: string | null;
+    template_id: string | null;
+    created_at: string;
+    expected_delivery_date: string | null;
+    deleted_at: string | null;
+  };
+
   const project = data as unknown as ProjectDetail;
+  const isDeleted = !!project.deleted_at;
   const todayIso = new Date().toISOString().slice(0, 10);
   const isOverdue =
     !!project.expected_delivery_date &&
     project.expected_delivery_date < todayIso &&
     !TERMINAL_STATUSES.has(project.status);
 
+  // Load template mappings (for display labels) and project files in parallel
+  const [{ data: mappings }, { data: rawFiles }] = await Promise.all([
+    project.template_id
+      ? supabase
+          .from("template_field_mappings")
+          .select("placeholder_token, field_key, display_label")
+          .eq("template_id", project.template_id)
+          .order("placeholder_token")
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from("project_files")
+      .select("id, file_type, original_filename, storage_path, created_at")
+      .eq("project_id", id)
+      .order("created_at"),
+  ]);
+
+  // Generate signed URLs server-side
+  const files = await Promise.all(
+    (rawFiles ?? []).map(async (f) => {
+      const { data: signed } = await supabase.storage
+        .from("submissions")
+        .createSignedUrl(f.storage_path as string, 3600);
+      return {
+        ...f,
+        signedUrl: signed?.signedUrl ?? null,
+      };
+    })
+  );
+
+  // Build label map from template mappings
+  const labelMap = new Map<string, string>(
+    (mappings ?? []).map((m) => [
+      m.placeholder_token as string,
+      (m.display_label as string | null) ?? prettifyToken(m.placeholder_token as string),
+    ])
+  );
+
+  const extractedFields = project.extracted_fields ?? {};
+  const fieldEntries = Object.entries(extractedFields).map(([token, value]) => ({
+    token,
+    label: labelMap.get(token) ?? prettifyToken(token),
+    value: value as string,
+  }));
+
+  // Project title: prefer po_number, fall back to id prefix
+  const title = project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8);
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 space-y-6">
-      <Link href="/portal" className="text-sm text-zinc-500 hover:text-zinc-700">
-        ← My Reports
+      <Link
+        href={isDeleted ? "/portal/recovery" : "/portal"}
+        className="text-sm text-zinc-500 hover:text-zinc-700"
+      >
+        {isDeleted ? "← Recovery bin" : "← My Reports"}
       </Link>
 
+      {isDeleted && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">This project is in the recovery bin.</span>{" "}
+          It will be permanently deleted after 30 days.{" "}
+          <Link href="/portal/recovery" className="font-medium underline hover:text-amber-900">
+            Go to recovery bin →
+          </Link>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold text-zinc-900">
-          {project.extracted_fields?.CLIENT_ADDRESS ?? project.id.slice(0, 8)}
-        </h1>
+        <h1 className="text-xl font-semibold text-zinc-900">{title}</h1>
         <span
           className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}
         >
@@ -88,6 +158,7 @@ export default async function ClientProjectDetailPage({
         )}
       </div>
 
+      {/* Project summary */}
       <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
         <Row label="PO number" value={project.po_number ?? "—"} />
         <Row
@@ -104,11 +175,10 @@ export default async function ClientProjectDetailPage({
             project.expected_delivery_date ? (
               <span className={isOverdue ? "text-red-600" : ""}>
                 Your report is due by{" "}
-                {new Date(project.expected_delivery_date).toLocaleDateString("en-AU", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {new Date(project.expected_delivery_date).toLocaleDateString(
+                  "en-AU",
+                  { day: "numeric", month: "short", year: "numeric" }
+                )}
               </span>
             ) : (
               "—"
@@ -117,13 +187,16 @@ export default async function ClientProjectDetailPage({
         />
       </div>
 
-      {project.status === "draft" && (
+      {/* Draft resume prompt — hidden for deleted projects */}
+      {!isDeleted && project.status === "draft" && (
         <Link
           href={`/portal/submit/resume/${project.id}`}
           className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-5 py-4 hover:bg-zinc-50 transition-colors"
         >
           <div>
-            <p className="text-sm font-medium text-zinc-900">This submission is still a draft</p>
+            <p className="text-sm font-medium text-zinc-900">
+              This submission is still a draft
+            </p>
             <p className="mt-0.5 text-xs text-zinc-500">
               Your documents have been saved — click here to review and submit.
             </p>
@@ -132,9 +205,74 @@ export default async function ClientProjectDetailPage({
         </Link>
       )}
 
-      <div className="pt-2">
-        <DeleteProjectButton projectId={project.id} />
+      {/* Submitted field values */}
+      {fieldEntries.length > 0 && (
+        <div className="rounded-lg border border-zinc-200 bg-white">
+          <div className="border-b border-zinc-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-zinc-900">
+              Submitted details
+            </h2>
+          </div>
+          <div className="divide-y divide-zinc-100">
+            {fieldEntries.map(({ token, label, value }) => (
+              <Row key={token} label={label} value={value || "—"} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Documents */}
+      <div className="rounded-lg border border-zinc-200 bg-white">
+        <div className="border-b border-zinc-100 px-5 py-4">
+          <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
+        </div>
+        {files.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-zinc-500">No documents uploaded yet.</p>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {files.map((f) => (
+              <div
+                key={f.id as string}
+                className="flex items-center justify-between px-5 py-3"
+              >
+                <div>
+                  <p className="text-sm text-zinc-900">
+                    {f.original_filename as string}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}{" "}
+                    &middot;{" "}
+                    {new Date(f.created_at as string).toLocaleDateString(
+                      "en-AU"
+                    )}
+                  </p>
+                </div>
+                {f.signedUrl && (
+                  <a
+                    href={f.signedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Download
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {!isDeleted && (
+          <div className="border-t border-zinc-100 px-5 py-4">
+            <FileUploadForm projectId={id} />
+          </div>
+        )}
       </div>
+
+      {!isDeleted && (
+        <div className="pt-2">
+          <DeleteProjectButton projectId={project.id} />
+        </div>
+      )}
     </div>
   );
 }

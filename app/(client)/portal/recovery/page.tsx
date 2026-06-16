@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RestoreButton } from "./_components/RestoreButton";
+import { PurgeButton } from "./_components/PurgeButton";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -18,7 +19,8 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 
 type DeletedProject = {
   id: string;
-  extracted_fields: Record<string, string> | null;
+  po_number: string | null;
+  site_address: string | null;
   status: ProjectStatus;
   deleted_at: string;
 };
@@ -35,7 +37,7 @@ export default async function ClientRecoveryPage() {
 
   const { data } = await supabase
     .from("projects")
-    .select("id, extracted_fields, status, deleted_at")
+    .select("id, po_number, site_address, status, deleted_at")
     .eq("org_id", user.org_id as string)
     .not("deleted_at", "is", null)
     .order("deleted_at", { ascending: false });
@@ -64,11 +66,11 @@ export default async function ClientRecoveryPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+          <table className="w-full min-w-[580px] text-sm">
             <thead className="border-b border-zinc-100">
               <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Address / ID</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Status at deletion</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Deleted</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Days remaining</th>
@@ -78,10 +80,16 @@ export default async function ClientRecoveryPage() {
             <tbody className="divide-y divide-zinc-50">
               {projects.map((p) => {
                 const days = daysRemaining(p.deleted_at);
+                const label = p.site_address ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
                 return (
                   <tr key={p.id}>
                     <td className="px-5 py-3 font-medium text-zinc-900">
-                      {p.extracted_fields?.CLIENT_ADDRESS ?? p.id.slice(0, 8)}
+                      <Link
+                        href={`/portal/projects/${p.id}`}
+                        className="hover:underline"
+                      >
+                        {label}
+                      </Link>
                     </td>
                     <td className="px-5 py-3 text-zinc-500">
                       {STATUS_LABELS[p.status]}
@@ -98,8 +106,11 @@ export default async function ClientRecoveryPage() {
                         {days} {days === 1 ? "day" : "days"}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right">
-                      <RestoreButton projectId={p.id} />
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex flex-col items-end gap-2">
+                        <RestoreButton projectId={p.id} />
+                        <PurgeButton projectId={p.id} />
+                      </div>
                     </td>
                   </tr>
                 );

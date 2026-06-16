@@ -6,28 +6,49 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
-import { extractDocumentFields, type ExtractionResult } from "@/lib/documents/extractor";
+import { extractDocumentFields, type ExtractedField, type Confidence } from "@/lib/documents/extractor";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { addWorkingDays } from "@/lib/delivery/working-days";
 
 export interface Development {
   dev_name: string;
   trustee_entity: string;
+  aep: number;
 }
 
-// ─── Step 1: upload + extract ───────────────────────────────────────────────
+// Tokens auto-resolved from halcyon_developments — never sent to AI extraction
+const TRUSTEE_TOKEN = "EXTRACT_TRUSTEE";
+const RAINFALL_TOKEN = "EXTRACT_RAINFALL_INTENSITY";
+
+export interface TokenField {
+  token: string;
+  label: string;
+  value: string;
+  confidence: Confidence;
+  required: boolean;
+}
+
+// ─── Step 1 → 2 state ────────────────────────────────────────────────────────
 
 export type ExtractState =
   | { step: 1; error?: string }
   | {
       step: 2;
       error?: string;
-      extracted: ExtractionResult;
+      poNumber: ExtractedField;
+      tokenGroups: {
+        extract: TokenField[];
+        org: TokenField[];
+        client: TokenField[];
+      };
+      hasTrustee: boolean;
+      rainfallToken: string | null;
+      developments: Development[];
       projectId: string;
       templateId: string;
-      orgConfig: Record<string, string>;
-      developments: Development[];
     };
+
+// ─── Step 1: upload + extract ───────────────────────────────────────────────
 
 export async function extractFields(
   _prev: ExtractState,
@@ -42,9 +63,12 @@ export async function extractFields(
   const poFile = formData.get("po_file") as File | null;
   const plansFile = formData.get("plans_file") as File | null;
 
-  if (!plansFile || plansFile.size === 0) return { step: 1, error: "Building plans document is required." };
-  if (plansFile.size > 50 * 1024 * 1024) return { step: 1, error: "Building plans must be under 50 MB." };
-  if (poFile && poFile.size > 50 * 1024 * 1024) return { step: 1, error: "Purchase order must be under 50 MB." };
+  if (!plansFile || plansFile.size === 0)
+    return { step: 1, error: "Building plans document is required." };
+  if (plansFile.size > 50 * 1024 * 1024)
+    return { step: 1, error: "Building plans must be under 50 MB." };
+  if (poFile && poFile.size > 50 * 1024 * 1024)
+    return { step: 1, error: "Purchase order must be under 50 MB." };
 
   const orgId = actor.org_id as string;
   const projectId = crypto.randomUUID();
@@ -57,56 +81,134 @@ export async function extractFields(
   const plansPath = `${orgId}/${projectId}/plans/${plansFile.name}`;
 
   const uploadsToRun: Promise<{ error: { message: string } | null }>[] = [
-    supabase.storage.from("submissions").upload(plansPath, plansBuffer, { contentType: plansFile.type || "application/pdf" }),
+    supabase.storage
+      .from("submissions")
+      .upload(plansPath, plansBuffer, { contentType: plansFile.type || "application/pdf" }),
   ];
   if (hasPoFile && poBuffer) {
     uploadsToRun.unshift(
-      supabase.storage.from("submissions").upload(poPath, poBuffer, { contentType: poFile.type || "application/pdf" })
+      supabase.storage
+        .from("submissions")
+        .upload(poPath, poBuffer, { contentType: poFile.type || "application/pdf" })
     );
   }
 
   const uploadResults = await Promise.all(uploadsToRun);
   for (const result of uploadResults) {
     if (result.error) {
-      const uploaded = uploadResults.filter((r) => !r.error).map((_, i) =>
-        i === 0 && hasPoFile ? poPath : plansPath
-      );
+      const uploaded = uploadResults
+        .filter((r) => !r.error)
+        .map((_, i) => (i === 0 && hasPoFile ? poPath : plansPath));
       await supabase.storage.from("submissions").remove(uploaded);
       return { step: 1, error: `Failed to upload document: ${result.error.message}` };
     }
   }
 
-  // Run extraction + fetch org config + fetch developments in parallel
-  let extracted: ExtractionResult;
-  let orgConfig: Record<string, string> = {};
+  // Load template mappings + org config + run extraction in parallel
+  const [mappingsResult, orgResult] = await Promise.all([
+    supabase
+      .from("template_field_mappings")
+      .select("placeholder_token, field_key, display_label, extraction_hint, is_required")
+      .eq("template_id", templateId)
+      .eq("is_mapped", true)
+      .order("sort_order")
+      .order("placeholder_token"),
+    supabase.from("organisations").select("org_config").eq("id", orgId).single(),
+  ]);
+
+  const allMappings = mappingsResult.data ?? [];
+  const orgConfig = (orgResult.data?.org_config ?? {}) as Record<string, string>;
+
+  const extractMappings = allMappings.filter((m) => m.field_key === "extract");
+  const orgMappings = allMappings.filter((m) => m.field_key === "org");
+  const clientMappings = allMappings.filter((m) => m.field_key === "client");
+
+  const hasTrustee = extractMappings.some(
+    (m) => m.placeholder_token === TRUSTEE_TOKEN
+  );
+  const rainfallMapping = extractMappings.find(
+    (m) => m.placeholder_token === RAINFALL_TOKEN
+  );
+  const rainfallToken = rainfallMapping ? RAINFALL_TOKEN : null;
+  const needsHalcyon = hasTrustee || rainfallToken !== null;
+
+  // Exclude halcyon-resolved tokens from AI extraction
+  const halcyonTokens = new Set([TRUSTEE_TOKEN, RAINFALL_TOKEN]);
+  const extractTokens = extractMappings
+    .filter((m) => !halcyonTokens.has(m.placeholder_token))
+    .map((m) => ({
+      token: m.placeholder_token,
+      label: m.display_label ?? m.placeholder_token,
+      hint: m.extraction_hint ?? `Extract the value for ${m.placeholder_token} from the documents.`,
+    }));
+
+  let extraction;
   let developments: Development[] = [];
 
   try {
-    const [extractionResult, orgResult, devsResult] = await Promise.all([
-      extractDocumentFields(poBuffer, plansBuffer),
-      supabase.from("organisations").select("org_config").eq("id", orgId).single(),
-      supabase.from("halcyon_developments").select("dev_name, trustee_entity").order("dev_name"),
+    const [extractionResult, devsResult] = await Promise.all([
+      extractDocumentFields(poBuffer, plansBuffer, extractTokens),
+      needsHalcyon
+        ? supabase
+            .from("halcyon_developments")
+            .select("dev_name, trustee_entity, aep")
+            .order("dev_name")
+        : Promise.resolve({ data: [] }),
     ]);
-
-    extracted = extractionResult;
-    orgConfig = (orgResult.data?.org_config ?? {}) as Record<string, string>;
+    extraction = extractionResult;
     developments = (devsResult.data ?? []) as Development[];
+
+    // Auto-resolve trustee and rainfall intensity from Halcyon using the extracted dev name
+    if (needsHalcyon && developments.length > 0) {
+      const devName = extraction.fields["EXTRACT_DEV_NAME"]?.value?.trim() ?? "";
+      if (devName) {
+        const needle = devName.toLowerCase();
+        const matchedDev =
+          developments.find((d) => d.dev_name.toLowerCase() === needle) ??
+          developments.find(
+            (d) =>
+              d.dev_name.toLowerCase().includes(needle) ||
+              needle.includes(d.dev_name.toLowerCase())
+          );
+        if (matchedDev) {
+          if (hasTrustee) {
+            extraction.fields[TRUSTEE_TOKEN] = {
+              value: matchedDev.trustee_entity,
+              confidence: "high",
+            };
+          }
+          if (rainfallToken) {
+            extraction.fields[RAINFALL_TOKEN] = {
+              value: String(matchedDev.aep),
+              confidence: "high",
+            };
+          }
+        }
+      }
+    }
   } catch (err) {
     const pathsToRemove = [plansPath, ...(hasPoFile ? [poPath] : [])];
     await supabase.storage.from("submissions").remove(pathsToRemove);
     console.error("[extractFields] extraction failed:", err);
-    return { step: 1, error: "Document extraction failed. Please check that your files are valid PDFs and try again." };
+    return {
+      step: 1,
+      error:
+        "Document extraction failed. Please check that your files are valid PDFs and try again.",
+    };
   }
 
-  // Persist draft — files are already in Storage, now write the project row and file records
+  // Persist draft — save field values as plain strings so the resume page can read them
+  const draftFields = Object.fromEntries(
+    Object.entries(extraction.fields).map(([k, v]) => [k, v.value])
+  );
   const { error: projectError } = await supabase.from("projects").insert({
     id: projectId,
     org_id: orgId,
     template_id: templateId,
     submitted_by: actor.id,
     status: "draft",
-    po_number: extracted.po_number.value || null,
-    extracted_fields: extracted,
+    po_number: extraction.po_number.value || null,
+    extracted_fields: draftFields,
   });
 
   if (projectError) {
@@ -117,17 +219,66 @@ export async function extractFields(
   }
 
   const fileRecords = [
-    { project_id: projectId, file_type: "building_plans", storage_path: plansPath, original_filename: plansFile.name, uploaded_by: actor.id },
-    ...(hasPoFile ? [{ project_id: projectId, file_type: "po", storage_path: poPath, original_filename: poFile.name, uploaded_by: actor.id }] : []),
+    {
+      project_id: projectId,
+      file_type: "building_plans",
+      storage_path: plansPath,
+      original_filename: plansFile.name,
+      uploaded_by: actor.id,
+    },
+    ...(hasPoFile
+      ? [
+          {
+            project_id: projectId,
+            file_type: "po",
+            storage_path: poPath,
+            original_filename: poFile.name,
+            uploaded_by: actor.id,
+          },
+        ]
+      : []),
   ];
   await supabase.from("project_files").insert(fileRecords);
 
-  return { step: 2, extracted, projectId, templateId, orgConfig, developments };
+  const tokenGroups = {
+    extract: extractMappings.map((m) => ({
+      token: m.placeholder_token,
+      label: m.display_label ?? m.placeholder_token,
+      value: extraction.fields[m.placeholder_token]?.value ?? "",
+      confidence: extraction.fields[m.placeholder_token]?.confidence ?? ("low" as Confidence),
+      required: m.is_required ?? false,
+    })),
+    org: orgMappings.map((m) => ({
+      token: m.placeholder_token,
+      label: m.display_label ?? m.placeholder_token,
+      value: orgConfig[m.placeholder_token] ?? "",
+      confidence: "high" as Confidence,
+      required: false,
+    })),
+    client: clientMappings.map((m) => ({
+      token: m.placeholder_token,
+      label: m.display_label ?? m.placeholder_token,
+      value: "",
+      confidence: "high" as Confidence,
+      required: m.is_required ?? false,
+    })),
+  };
+
+  return {
+    step: 2,
+    poNumber: extraction.po_number,
+    tokenGroups,
+    hasTrustee,
+    rainfallToken,
+    developments,
+    projectId,
+    templateId,
+  };
 }
 
 // ─── Step 2: submit project ─────────────────────────────────────────────────
 
-export type SubmitState = { error?: string };
+export type SubmitState = { error?: string; duplicateProjectId?: string };
 
 export async function submitProject(
   _prev: SubmitState,
@@ -137,7 +288,6 @@ export async function submitProject(
   const supabase = createAdminClient();
 
   const orgId = actor.org_id as string;
-
   const projectId = (formData.get("project_id") as string | null)?.trim();
   const templateId = (formData.get("template_id") as string | null)?.trim();
 
@@ -145,71 +295,92 @@ export async function submitProject(
     return { error: "Missing required submission data. Please start over." };
   }
 
-  const clientAddress = (formData.get("client_address") as string | null)?.trim();
-  const deliveryEmail = (formData.get("delivery_recipient_email") as string | null)?.trim() || null;
-
-  if (!clientAddress) return { error: "Site address is required." };
-
   const poNumber = (formData.get("extracted_po_number") as string | null)?.trim() || null;
+  const deliveryEmail =
+    (formData.get("delivery_recipient_email") as string | null)?.trim() || null;
 
-  // Build extracted_fields: EXTRACT_ fields the client confirmed/overrode
+  // Collect all token values from form (EXTRACT_, ORG_, CLIENT_)
   const extractedFields: Record<string, string> = {};
-  for (const key of ["house_type", "site_wd_no", "floor_wd_no", "roof_wd_no", "draw_date", "dev_name"]) {
-    const val = (formData.get(`extracted_${key}`) as string | null)?.trim() ?? "";
-    if (val) extractedFields[`EXTRACT_${key.toUpperCase()}`] = val;
+  for (const [key, rawVal] of formData.entries()) {
+    if (
+      key.startsWith("EXTRACT_") ||
+      key.startsWith("ORG_") ||
+      key.startsWith("CLIENT_")
+    ) {
+      extractedFields[key] = (rawVal as string).trim();
+    }
   }
 
-  // Trustee confirmed/overridden by client
-  const trustee = (formData.get("EXTRACT_TRUSTEE") as string | null)?.trim() ?? "";
-  if (trustee) extractedFields["EXTRACT_TRUSTEE"] = trustee;
+  // Check required fields are populated
+  const { data: requiredMappings } = await supabase
+    .from("template_field_mappings")
+    .select("placeholder_token, display_label")
+    .eq("template_id", templateId)
+    .eq("is_required", true)
+    .eq("is_mapped", true);
 
-  // ORG_ fields confirmed/overridden by client
-  const orgFields: Record<string, string> = {};
-  for (const key of ["ORG_BUILDER_COY", "ORG_CERTIFIER_COY", "ORG_CERTIFIER_NAME"]) {
-    const val = (formData.get(key) as string | null)?.trim() ?? "";
-    if (val) orgFields[key] = val;
+  const missingRequired = (requiredMappings ?? []).filter(
+    (m) => !extractedFields[m.placeholder_token as string]?.trim()
+  );
+  if (missingRequired.length > 0) {
+    const labels = missingRequired
+      .map((m) => m.display_label ?? m.placeholder_token)
+      .join(", ");
+    return { error: `Please fill in all required fields before submitting: ${labels}.` };
   }
 
-  // Duplicate check (only when PO number is known) and org delivery config run in parallel
+  const siteAddress = (extractedFields["EXTRACT_ADDRESS"] ?? "").trim() || null;
+
+  // Duplicate address check and org delivery config in parallel
   const [duplicateResult, { data: orgData }] = await Promise.all([
-    poNumber
+    siteAddress
       ? supabase
           .from("projects")
-          .select("id, status")
+          .select("id")
           .eq("org_id", orgId)
-          .eq("po_number", poNumber)
+          .eq("site_address", siteAddress)
           .neq("id", projectId)
+          .is("deleted_at", null)
           .not("status", "in", '("delivered","complete")')
-      : Promise.resolve({ data: [] }),
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     supabase
       .from("organisations")
       .select("delivery_working_days, state_territory")
       .eq("id", orgId)
       .single(),
   ]);
-  const existing = duplicateResult.data;
 
-  if (existing && existing.length > 0) {
+  if (duplicateResult.data) {
+    const existingId = (duplicateResult.data as { id: string }).id;
     try {
-      const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
+      const { data: admins } = await supabase
+        .from("users")
+        .select("id")
+        .eq("role", "super_admin");
       await Promise.all(
         (admins ?? []).map((admin: { id: string }) =>
           notify({
             recipientId: admin.id,
             type: "project_submitted",
-            message: `Duplicate submission attempt: PO ${poNumber} already has an active project for org ${orgId}. No new record was created.`,
-            emailSubject: "Duplicate submission attempt — OPS",
-            emailHtml: duplicateSubmissionEmail({ poNumber, orgId }),
-          }).catch((err) => console.error("[submitProject] duplicate admin notify failed:", err))
+            message: `Duplicate address submission: "${siteAddress}" already has an active project for org ${orgId}. No new record was created.`,
+            emailSubject: "Duplicate address submission — OPS",
+            emailHtml: duplicateSubmissionEmail({ siteAddress, orgId }),
+          }).catch((err) =>
+            console.error("[submitProject] duplicate admin notify failed:", err)
+          )
         )
       );
     } catch (err) {
       console.error("[submitProject] duplicate notify setup failed:", err);
     }
-    return { error: `A project with PO number ${poNumber} is already active for your organisation. Your account manager has been notified.` };
+    return {
+      error: `A project for this address is already active for your organisation.`,
+      duplicateProjectId: existingId,
+    };
   }
 
-  // Calculate expected delivery date (best-effort — don't block submission on failure)
+  // Calculate expected delivery date
   let expectedDeliveryDate: string | null = null;
   try {
     const deliveryDays = orgData?.delivery_working_days ?? 5;
@@ -233,13 +404,10 @@ export async function submitProject(
     .update({
       status: "submitted",
       po_number: poNumber,
+      site_address: siteAddress,
       delivery_recipient_email: deliveryEmail,
       expected_delivery_date: expectedDeliveryDate,
-      extracted_fields: {
-        CLIENT_ADDRESS: clientAddress,
-        ...extractedFields,
-        ...orgFields,
-      },
+      extracted_fields: extractedFields,
     })
     .eq("id", projectId)
     .eq("org_id", orgId)
@@ -261,7 +429,10 @@ export async function submitProject(
   }
 
   try {
-    const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
+    const { data: admins } = await supabase
+      .from("users")
+      .select("id")
+      .eq("role", "super_admin");
     await Promise.all(
       (admins ?? []).map((admin: { id: string }) =>
         notify({
@@ -271,7 +442,9 @@ export async function submitProject(
           projectId,
           emailSubject: "New project submission — OPS",
           emailHtml: adminSubmissionEmail({ poNumber, projectId }),
-        }).catch((err) => console.error("[submitProject] admin notify failed:", err))
+        }).catch((err) =>
+          console.error("[submitProject] admin notify failed:", err)
+        )
       )
     );
   } catch (err) {
@@ -307,14 +480,20 @@ function submissionConfirmationEmail({ poNumber }: { poNumber: string | null }) 
 </html>`;
 }
 
-function duplicateSubmissionEmail({ poNumber, orgId }: { poNumber: string | null; orgId: string }) {
+function duplicateSubmissionEmail({
+  siteAddress,
+  orgId,
+}: {
+  siteAddress: string | null;
+  orgId: string;
+}) {
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; color: #18181b; max-width: 560px; margin: 0 auto; padding: 24px;">
-  <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Duplicate submission attempt</h2>
+  <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Duplicate address submission</h2>
   <p style="color: #52525b; margin-bottom: 16px;">
-    A client from organisation <code>${escHtml(orgId)}</code> attempted to submit a project with PO number
-    <strong>${escHtml(poNumber ?? "—")}</strong>, which already has an active project record. No new record was created.
+    A client from organisation <code>${escHtml(orgId)}</code> attempted to submit a project for address
+    <strong>${escHtml(siteAddress ?? "—")}</strong>, which already has an active project record. No new record was created.
   </p>
   <p style="color: #52525b; margin-bottom: 16px;">
     Please review and make a final call on whether a new record is required.
@@ -324,7 +503,13 @@ function duplicateSubmissionEmail({ poNumber, orgId }: { poNumber: string | null
 </html>`;
 }
 
-function adminSubmissionEmail({ poNumber, projectId }: { poNumber: string | null; projectId: string }) {
+function adminSubmissionEmail({
+  poNumber,
+  projectId,
+}: {
+  poNumber: string | null;
+  projectId: string;
+}) {
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; color: #18181b; max-width: 560px; margin: 0 auto; padding: 24px;">
@@ -347,5 +532,9 @@ function adminSubmissionEmail({ poNumber, projectId }: { poNumber: string | null
 }
 
 function escHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

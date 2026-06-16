@@ -25,7 +25,7 @@ export async function sendEmail({ to, subject, html, replyTo }: SendEmailOptions
     ...(replyTo ? { reply_to: replyTo } : {}),
   });
   if (error) {
+    // Log but do not throw — callers must not be blocked by email delivery failures.
     console.error("[email] send failed:", error);
-    throw new Error(`Email send failed: ${error.message}`);
   }
 }

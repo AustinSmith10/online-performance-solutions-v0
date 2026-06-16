@@ -2,37 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SubmissionForm } from "../../_components/SubmissionForm";
-import type { ExtractState, Development } from "@/app/actions/submission";
-import type { ExtractionResult, ExtractedField } from "@/lib/documents/extractor";
+import type { ExtractState, Development, TokenField } from "@/app/actions/submission";
 
-const EMPTY_FIELD: ExtractedField = { value: "", confidence: "low" };
-
-function toExtractionResult(raw: unknown): ExtractionResult {
-  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-
-  function field(key: string): ExtractedField {
-    const v = r[key];
-    if (v && typeof v === "object" && "value" in (v as object)) {
-      const f = v as Record<string, unknown>;
-      return {
-        value: typeof f.value === "string" ? f.value : "",
-        confidence: (f.confidence as ExtractedField["confidence"]) ?? "low",
-      };
-    }
-    return { ...EMPTY_FIELD };
-  }
-
-  return {
-    po_number: field("po_number"),
-    client_address: field("client_address"),
-    house_type: field("house_type"),
-    site_wd_no: field("site_wd_no"),
-    floor_wd_no: field("floor_wd_no"),
-    roof_wd_no: field("roof_wd_no"),
-    draw_date: field("draw_date"),
-    dev_name: field("dev_name"),
-  };
-}
+const RAINFALL_TOKEN = "EXTRACT_RAINFALL_INTENSITY";
+import type { Confidence } from "@/lib/documents/extractor";
 
 export default async function ResumeDraftPage({
   params,
@@ -44,61 +17,140 @@ export default async function ResumeDraftPage({
   const supabase = createAdminClient();
   const orgId = user.org_id as string;
 
-  const [{ data: project }, { data: templates }, { data: devsData }, { data: orgData }] =
+  const [{ data: project }, { data: templates }] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("id, status, template_id, extracted_fields, po_number")
+      .eq("id", id)
+      .eq("org_id", orgId)
+      .eq("submitted_by", user.id)
+      .is("deleted_at", null)
+      .maybeSingle(),
+    supabase
+      .from("templates")
+      .select("id, name")
+      .eq("org_id", orgId)
+      .eq("status", "active")
+      .order("name"),
+  ]);
+
+  if (!project) notFound();
+
+  if (project.status !== "draft") {
+    redirect(`/portal/projects/${id}`);
+  }
+
+  const templateId =
+    (project.template_id as string | null) ?? templates?.[0]?.id ?? "";
+
+  // Load mappings and org config for this template
+  const [{ data: mappings }, { data: orgData }, { data: devsData }] =
     await Promise.all([
       supabase
-        .from("projects")
-        .select("id, status, template_id, extracted_fields")
-        .eq("id", id)
-        .eq("org_id", orgId)
-        .eq("submitted_by", user.id)
-        .is("deleted_at", null)
-        .maybeSingle(),
-      supabase
-        .from("templates")
-        .select("id, name")
-        .eq("org_id", orgId)
-        .eq("status", "active")
-        .order("name"),
-      supabase
-        .from("halcyon_developments")
-        .select("dev_name, trustee_entity")
-        .order("dev_name"),
+        .from("template_field_mappings")
+        .select("placeholder_token, field_key, display_label, extraction_hint, is_required")
+        .eq("template_id", templateId)
+        .eq("is_mapped", true)
+        .order("sort_order")
+        .order("placeholder_token"),
       supabase
         .from("organisations")
         .select("org_config")
         .eq("id", orgId)
         .single(),
+      supabase
+        .from("halcyon_developments")
+        .select("dev_name, trustee_entity, aep")
+        .order("dev_name"),
     ]);
 
-  if (!project) notFound();
+  const allMappings = mappings ?? [];
+  const orgConfig = ((orgData?.org_config ?? {}) as Record<string, string>);
+  const savedFields: Record<string, string> = { ...((project.extracted_fields ?? {}) as Record<string, string>) };
+  const developments = (devsData ?? []) as Development[];
 
-  // Only drafts can be resumed — submitted/active projects go to the detail page
-  if (project.status !== "draft") {
-    redirect(`/portal/projects/${id}`);
+  const extractMappings = allMappings.filter((m) => m.field_key === "extract");
+  const orgMappings = allMappings.filter((m) => m.field_key === "org");
+  const clientMappings = allMappings.filter((m) => m.field_key === "client");
+  const hasTrustee = extractMappings.some(
+    (m) => m.placeholder_token === "EXTRACT_TRUSTEE"
+  );
+  const hasRainfall = extractMappings.some(
+    (m) => m.placeholder_token === RAINFALL_TOKEN
+  );
+  const rainfallToken = hasRainfall ? RAINFALL_TOKEN : null;
+  const needsHalcyon = hasTrustee || hasRainfall;
+
+  // Re-resolve trustee and rainfall from Halcyon using saved dev name
+  if (needsHalcyon && developments.length > 0) {
+    const devName = (savedFields["EXTRACT_DEV_NAME"] ?? "").trim();
+    if (devName) {
+      const needle = devName.toLowerCase();
+      const matchedDev =
+        developments.find((d) => d.dev_name.toLowerCase() === needle) ??
+        developments.find(
+          (d) =>
+            d.dev_name.toLowerCase().includes(needle) ||
+            needle.includes(d.dev_name.toLowerCase())
+        );
+      if (matchedDev) {
+        if (hasTrustee) savedFields["EXTRACT_TRUSTEE"] = matchedDev.trustee_entity;
+        if (hasRainfall) savedFields[RAINFALL_TOKEN] = String(matchedDev.aep);
+      }
+    }
   }
 
-  const templateId = (project.template_id as string | null) ?? templates?.[0]?.id ?? "";
+  function makeField(
+    m: { placeholder_token: string; display_label: string | null; field_key: string | null; is_required: boolean },
+    value: string,
+    confidence: Confidence = "low",
+    required = false
+  ): TokenField {
+    return {
+      token: m.placeholder_token,
+      label: m.display_label ?? m.placeholder_token,
+      value,
+      confidence,
+      required,
+    };
+  }
 
-  const extracted = toExtractionResult(project.extracted_fields);
-  const orgConfig = ((orgData?.org_config ?? {}) as Record<string, string>);
-  const developments = (devsData ?? []) as Development[];
+  const tokenGroups = {
+    extract: extractMappings.map((m) =>
+      makeField(m, savedFields[m.placeholder_token] ?? "", "medium", m.is_required)
+    ),
+    org: orgMappings.map((m) =>
+      makeField(m, savedFields[m.placeholder_token] ?? orgConfig[m.placeholder_token] ?? "", "high", false)
+    ),
+    client: clientMappings.map((m) =>
+      makeField(m, savedFields[m.placeholder_token] ?? "", "high", m.is_required)
+    ),
+  };
+
   const activeTemplates = (templates ?? []) as { id: string; name: string }[];
-  const defaultTemplateId = activeTemplates.length === 1 ? activeTemplates[0].id : null;
+  const defaultTemplateId =
+    activeTemplates.length === 1 ? activeTemplates[0].id : null;
 
   const initialState: ExtractState = {
     step: 2,
-    extracted,
+    poNumber: {
+      value: (project.po_number as string | null) ?? "",
+      confidence: "medium",
+    },
+    tokenGroups,
+    hasTrustee,
+    rainfallToken,
+    developments,
     projectId: id,
     templateId,
-    orgConfig,
-    developments,
   };
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-zinc-900">Continue report request</h1>
+        <h1 className="text-xl font-semibold text-zinc-900">
+          Continue report request
+        </h1>
         <p className="mt-1 text-sm text-zinc-500">
           Review the extracted details below and submit when ready.
         </p>

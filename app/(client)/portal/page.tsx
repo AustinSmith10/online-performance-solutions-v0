@@ -32,6 +32,7 @@ const TERMINAL_STATUSES = new Set<ProjectStatus>(["delivered", "complete"]);
 
 type ProjectRow = {
   id: string;
+  po_number: string | null;
   extracted_fields: Record<string, string> | null;
   status: ProjectStatus;
   created_at: string;
@@ -52,7 +53,7 @@ export default async function ClientPortalPage() {
   const [{ data: projectsData }, { data: orgData }] = await Promise.all([
     supabase
       .from("projects")
-      .select("id, extracted_fields, status, created_at, expected_delivery_date")
+      .select("id, po_number, extracted_fields, status, created_at, expected_delivery_date")
       .eq("org_id", orgId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false }),
@@ -120,7 +121,7 @@ export default async function ClientPortalPage() {
                 className="flex items-center justify-between rounded-md border border-amber-100 bg-white px-4 py-2.5"
               >
                 <span className="text-sm text-zinc-900">
-                  {p.extracted_fields?.CLIENT_ADDRESS ?? p.id.slice(0, 8)}
+                  {p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8)}
                 </span>
                 <Link
                   href={`/portal/projects/${p.id}`}
@@ -149,11 +150,11 @@ export default async function ClientPortalPage() {
           </Link>
         </div>
       ) : (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+          <table className="w-full min-w-[520px] text-sm">
             <thead className="border-b border-zinc-100">
               <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Submitted</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Expected delivery</th>
@@ -168,7 +169,7 @@ export default async function ClientPortalPage() {
                 return (
                   <ClickableRow key={p.id} href={`/portal/projects/${p.id}`}>
                     <td className="px-5 py-3 font-medium text-zinc-900">
-                      {p.extracted_fields?.CLIENT_ADDRESS ?? p.id.slice(0, 8)}
+                      {p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8)}
                     </td>
                     <td className="px-5 py-3">
                       <span
@@ -177,7 +178,7 @@ export default async function ClientPortalPage() {
                         {STATUS_LABELS[p.status]}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-zinc-500">
+                    <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
                       {new Date(p.created_at).toLocaleDateString("en-AU")}
                     </td>
                     <td className="px-5 py-3 text-zinc-500">

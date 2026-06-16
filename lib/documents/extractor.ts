@@ -3,8 +3,6 @@ import { createRequire } from "module";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 
-// pdf-parse v1.x is CJS-only. Import the inner file directly to skip its self-test
-// (the top-level index.js opens a local test PDF at require()-time, which breaks in Next.js).
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (buf: Buffer) => Promise<{ text: string }>;
 
@@ -15,34 +13,35 @@ export interface ExtractedField {
   confidence: Confidence;
 }
 
-export interface ExtractionResult {
+export interface ExtractToken {
+  token: string;
+  label: string;
+  hint: string;
+}
+
+export interface DynamicExtractionResult {
   po_number: ExtractedField;
-  client_address: ExtractedField;
-  house_type: ExtractedField;
-  site_wd_no: ExtractedField;
-  floor_wd_no: ExtractedField;
-  roof_wd_no: ExtractedField;
-  draw_date: ExtractedField;
-  dev_name: ExtractedField;
+  fields: Record<string, ExtractedField>;
 }
 
 const EMPTY_FIELD: ExtractedField = { value: "", confidence: "low" };
 
-const EMPTY_RESULT: ExtractionResult = {
-  po_number: EMPTY_FIELD,
-  client_address: EMPTY_FIELD,
-  house_type: EMPTY_FIELD,
-  site_wd_no: EMPTY_FIELD,
-  floor_wd_no: EMPTY_FIELD,
-  roof_wd_no: EMPTY_FIELD,
-  draw_date: EMPTY_FIELD,
-  dev_name: EMPTY_FIELD,
-};
-
-function buildPrompt(poText: string | null, plansText: string): string {
+function buildPrompt(
+  poText: string | null,
+  plansText: string,
+  tokens: ExtractToken[]
+): string {
   const poSection = poText
     ? `--- PURCHASE ORDER ---\n${poText}`
     : `--- PURCHASE ORDER ---\n(no purchase order provided)`;
+
+  const tokenLines = tokens
+    .map((t) => `  "${t.token}": { "value": "...", "confidence": "high|medium|low" }`)
+    .join(",\n");
+
+  const tokenRules = tokens
+    .map((t) => `- ${t.token} (${t.label}): ${t.hint}`)
+    .join("\n");
 
   return `You are a document data extractor for an Australian building compliance system.
 
@@ -56,25 +55,13 @@ ${plansText}
 Extract the following fields and return ONLY a JSON object with exactly this structure (no explanation):
 
 {
-  "po_number":      { "value": "...", "confidence": "high|medium|low" },
-  "client_address": { "value": "...", "confidence": "high|medium|low" },
-  "house_type":     { "value": "...", "confidence": "high|medium|low" },
-  "site_wd_no":     { "value": "...", "confidence": "high|medium|low" },
-  "floor_wd_no":    { "value": "...", "confidence": "high|medium|low" },
-  "roof_wd_no":     { "value": "...", "confidence": "high|medium|low" },
-  "draw_date":      { "value": "...", "confidence": "high|medium|low" },
-  "dev_name":       { "value": "...", "confidence": "high|medium|low" }
+  "po_number": { "value": "...", "confidence": "high|medium|low" },
+${tokenLines}
 }
 
 Field extraction rules:
 - po_number: Look for "PO Number", "Purchase Order No", "PO#", or similar in the PO document. If no PO was provided, return "" with "low" confidence.
-- client_address: The site or property address — look in both documents. On building plans it is typically labelled "Address:", "Site Address:", "Property Address:", or appears in the title block near the lot/street details. On the PO it may appear as the delivery/site address.
-- house_type: Look for the EXACT label "House Type:" in the building plans and return the value that follows it. Common values are "Single Storey", "Double Storey", "Split Level". Do not infer or guess — only use the value found after "House Type:".
-- site_wd_no: Working drawing number for the site plan (labelled "WD", "Site Plan", "SP").
-- floor_wd_no: Working drawing number for the floor plan.
-- roof_wd_no: Working drawing number for the roof plan.
-- draw_date: Date printed on the drawings, formatted DD/MM/YYYY.
-- dev_name: The Halcyon development name. Must be one of: Halcyon Promenade, Halcyon Edgebrook, Halcyon Vista, Halcyon Dales, Halcyon Serrata, Halcyon Coves, Halcyon Providence, Halcyon Yandina.
+${tokenRules}
 
 Confidence levels:
 - high: field clearly and unambiguously present
@@ -84,18 +71,41 @@ Confidence levels:
 Use "" with "low" confidence if a field cannot be found.`;
 }
 
+function asExtractedField(v: unknown): ExtractedField {
+  if (v && typeof v === "object" && "value" in (v as object)) {
+    const f = v as Record<string, unknown>;
+    return {
+      value: typeof f.value === "string" ? f.value : "",
+      confidence: (["high", "medium", "low"].includes(f.confidence as string)
+        ? f.confidence
+        : "low") as Confidence,
+    };
+  }
+  return { ...EMPTY_FIELD };
+}
+
+function parseJson(raw: string, tokenNames: string[]): DynamicExtractionResult {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("No JSON object in response");
+  const parsed = JSON.parse(match[0]) as Record<string, unknown>;
+
+  const fields: Record<string, ExtractedField> = {};
+  for (const token of tokenNames) {
+    fields[token] = asExtractedField(parsed[token]);
+  }
+
+  return { po_number: asExtractedField(parsed.po_number), fields };
+}
+
 async function extractPdfText(buffer: Buffer): Promise<string> {
   const data = await pdfParse(buffer);
   return (data.text as string).trim();
 }
 
-function parseExtractionJson(raw: string): ExtractionResult {
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("No JSON object in response");
-  return JSON.parse(match[0]) as ExtractionResult;
-}
-
-async function extractWithOpenAI(prompt: string): Promise<ExtractionResult> {
+async function extractWithOpenAI(
+  prompt: string,
+  tokenNames: string[]
+): Promise<DynamicExtractionResult> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const response = await client.chat.completions.create({
     model: "gpt-4o",
@@ -103,11 +113,13 @@ async function extractWithOpenAI(prompt: string): Promise<ExtractionResult> {
     temperature: 0,
     messages: [{ role: "user", content: prompt }],
   });
-  const text = response.choices[0]?.message?.content ?? "";
-  return parseExtractionJson(text);
+  return parseJson(response.choices[0]?.message?.content ?? "", tokenNames);
 }
 
-async function extractWithAnthropic(prompt: string): Promise<ExtractionResult> {
+async function extractWithAnthropic(
+  prompt: string,
+  tokenNames: string[]
+): Promise<DynamicExtractionResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const response = await client.messages.create({
     model: "claude-haiku-4-5",
@@ -115,35 +127,45 @@ async function extractWithAnthropic(prompt: string): Promise<ExtractionResult> {
     messages: [{ role: "user", content: prompt }],
   });
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
-  return parseExtractionJson(text);
+  return parseJson(text, tokenNames);
 }
 
 export async function extractDocumentFields(
   poBuffer: Buffer | null,
-  plansBuffer: Buffer
-): Promise<ExtractionResult> {
+  plansBuffer: Buffer,
+  extractTokens: ExtractToken[]
+): Promise<DynamicExtractionResult> {
+  const tokenNames = extractTokens.map((t) => t.token);
+
+  const emptyResult: DynamicExtractionResult = {
+    po_number: { ...EMPTY_FIELD },
+    fields: Object.fromEntries(tokenNames.map((t) => [t, { ...EMPTY_FIELD }])),
+  };
+
+  if (extractTokens.length === 0 && !poBuffer) return emptyResult;
+
   const [poText, plansText] = await Promise.all([
     poBuffer ? extractPdfText(poBuffer) : Promise.resolve(null),
     extractPdfText(plansBuffer),
   ]);
 
-  const prompt = buildPrompt(poText, plansText);
+  const prompt = buildPrompt(poText, plansText, extractTokens);
 
   if (process.env.OPENAI_API_KEY) {
     try {
-      return await extractWithOpenAI(prompt);
+      return await extractWithOpenAI(prompt, tokenNames);
     } catch (err) {
-      console.error("[extractor] OpenAI extraction failed, falling back to Anthropic:", err);
+      console.error("[extractor] OpenAI failed, falling back to Anthropic:", err);
     }
   }
 
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      return await extractWithAnthropic(prompt);
+      return await extractWithAnthropic(prompt, tokenNames);
     } catch (err) {
-      console.error("[extractor] Anthropic extraction also failed:", err);
+      console.error("[extractor] Anthropic also failed:", err);
     }
   }
 
-  return EMPTY_RESULT;
+  return emptyResult;
 }
