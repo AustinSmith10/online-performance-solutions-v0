@@ -7,10 +7,10 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
   submitted: "Submitted",
   assigned: "Assigned",
-  in_review: "In review",
-  qa: "QA",
-  approved: "Approved",
-  dispatched: "Dispatched",
+  in_progress: "In Progress",
+  dispatched: "Awaiting Approval",
+  revision_required: "Revision Required",
+  converting: "Converting to PBDR",
   delivered: "Delivered",
   complete: "Complete",
 };
@@ -19,10 +19,10 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   draft: "bg-zinc-100 text-zinc-500",
   submitted: "bg-blue-100 text-blue-700",
   assigned: "bg-yellow-100 text-yellow-700",
-  in_review: "bg-purple-100 text-purple-700",
-  qa: "bg-purple-100 text-purple-700",
-  approved: "bg-green-100 text-green-700",
-  dispatched: "bg-green-100 text-green-700",
+  in_progress: "bg-purple-100 text-purple-700",
+  dispatched: "bg-amber-100 text-amber-700",
+  revision_required: "bg-red-100 text-red-700",
+  converting: "bg-purple-100 text-purple-700",
   delivered: "bg-green-100 text-green-700",
   complete: "bg-zinc-100 text-zinc-500",
 };
@@ -54,10 +54,10 @@ export default async function ConsultantOpsPage() {
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const active = projects.filter((p) =>
-    (["assigned", "in_review", "qa"] as ProjectStatus[]).includes(p.status)
+    (["assigned", "in_progress", "revision_required"] as ProjectStatus[]).includes(p.status)
   );
   const withStakeholders = projects.filter((p) =>
-    (["approved", "dispatched"] as ProjectStatus[]).includes(p.status)
+    (["dispatched", "converting"] as ProjectStatus[]).includes(p.status)
   );
   const done = projects.filter((p) =>
     (["delivered", "complete"] as ProjectStatus[]).includes(p.status)

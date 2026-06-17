@@ -4,10 +4,10 @@ export type ProjectStatus =
   | "draft"
   | "submitted"
   | "assigned"
-  | "in_review"
-  | "qa"
-  | "approved"
+  | "in_progress"
   | "dispatched"
+  | "revision_required"
+  | "converting"
   | "delivered"
   | "complete";
 

@@ -7,13 +7,13 @@ import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
-  submitted: "Submitted",
-  assigned: "Assigned",
-  in_review: "In review",
-  qa: "QA",
-  approved: "Approved",
-  dispatched: "Dispatched",
-  delivered: "Delivered",
+  submitted: "Received",
+  assigned: "Received",
+  in_progress: "In Progress",
+  dispatched: "Awaiting Approval",
+  revision_required: "Changes Requested",
+  converting: "Finalising Report",
+  delivered: "Report Delivered",
   complete: "Complete",
 };
 

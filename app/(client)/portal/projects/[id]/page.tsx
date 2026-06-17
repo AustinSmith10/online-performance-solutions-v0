@@ -9,24 +9,24 @@ import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
-  submitted: "Submitted",
-  assigned: "Assigned",
-  in_review: "In review",
-  qa: "QA",
-  approved: "Approved",
-  dispatched: "Dispatched",
-  delivered: "Delivered",
+  submitted: "Received",
+  assigned: "Received",
+  in_progress: "In Progress",
+  dispatched: "Awaiting Approval",
+  revision_required: "Changes Requested",
+  converting: "Finalising Report",
+  delivered: "Report Delivered",
   complete: "Complete",
 };
 
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
   draft: "bg-zinc-100 text-zinc-500",
   submitted: "bg-blue-100 text-blue-700",
-  assigned: "bg-yellow-100 text-yellow-700",
-  in_review: "bg-purple-100 text-purple-700",
-  qa: "bg-purple-100 text-purple-700",
-  approved: "bg-green-100 text-green-700",
-  dispatched: "bg-green-100 text-green-700",
+  assigned: "bg-blue-100 text-blue-700",
+  in_progress: "bg-purple-100 text-purple-700",
+  dispatched: "bg-amber-100 text-amber-700",
+  revision_required: "bg-red-100 text-red-700",
+  converting: "bg-purple-100 text-purple-700",
   delivered: "bg-green-100 text-green-700",
   complete: "bg-zinc-100 text-zinc-500",
 };
@@ -287,10 +287,19 @@ export default async function ClientProjectDetailPage({
         )}
       </div>
 
-      {!isDeleted && (
+      {!isDeleted && (project.status === "draft" || project.status === "submitted") && (
         <div className="pt-2">
           <DeleteProjectButton projectId={project.id} />
         </div>
+      )}
+      {!isDeleted && !["draft", "submitted"].includes(project.status) && (
+        <p className="pt-2 text-xs text-zinc-400">
+          This report has been assigned to a consultant and can no longer be deleted. Contact{" "}
+          <a href="mailto:support@ddeg.com.au" className="underline hover:text-zinc-600">
+            DDEG
+          </a>{" "}
+          if you need to cancel.
+        </p>
       )}
     </div>
   );

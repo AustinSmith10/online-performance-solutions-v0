@@ -78,7 +78,7 @@ export async function softDeleteProject(projectId: string): Promise<{ error?: st
 
   const { data: project, error: fetchError } = await supabase
     .from("projects")
-    .select("id, org_id, deleted_at")
+    .select("id, org_id, status, deleted_at")
     .eq("id", projectId)
     .eq("org_id", user.org_id as string)
     .is("deleted_at", null)
@@ -86,6 +86,13 @@ export async function softDeleteProject(projectId: string): Promise<{ error?: st
 
   if (fetchError || !project) {
     return { error: "Project not found or already deleted." };
+  }
+
+  if (!["draft", "submitted"].includes(project.status as string)) {
+    return {
+      error:
+        "This report has already been assigned to a consultant and can no longer be deleted. Please contact DDEG if you need to cancel.",
+    };
   }
 
   const { error } = await supabase

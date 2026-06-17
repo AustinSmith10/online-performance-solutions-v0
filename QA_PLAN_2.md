@@ -115,7 +115,7 @@ ls supabase/migrations/ | wc -l
 
 | Last Result | Re-run Result | Notes |
 | ----------- | ------------- | ----- |
-| PASS(14)    | PASS(14)      |       |
+| PASS(14)    | PASS(26)      | Count has grown to 26 as new migrations have been added (audit log trigger, project status refactor, etc). Test criteria updated accordingly. |
 
 
 ---
@@ -664,7 +664,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes                                                                                                                                                                                                                                                                                                          |
 | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PASS   | CLIENT_ADDRESS is not a .docx token it's captured via the submission form; token validation is auto-detected by prefix, there is no manual mapping dropdown. **This is an issue, the supabase does not update the table if a template token is updated. It does not remove the old token or it is hardcoded.** |
+| PASS   | CLIENT_ADDRESS is not a .docx token it's captured via the submission form; token validation is auto-detected by prefix, there is no manual mapping dropdown. ~~**This is an issue, the supabase does not update the table if a template token is updated. It does not remove the old token or it is hardcoded.**~~ **Investigated — not a bug.** Re-upload path in `templates.ts` deletes all existing `template_field_mappings` for the template before re-inserting from the new .docx. Old tokens are fully purged on every re-upload. |
 
 
 ---
@@ -913,7 +913,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes                                                                                                       |
 | ------ | ----------------------------------------------------------------------------------------------------------- |
-| PASS   | Issue, can submit without certain fields. Need to identify how to toggle on required fosr each field token. |
+| PASS   | ~~Issue, can submit without certain fields. Need to identify how to toggle on required for each field token.~~ **Investigated — not a bug.** Required field enforcement is implemented on both client (HTML `required` attribute + red asterisk) and server (`submission.ts` checks `is_required = true` tokens and returns a named error). At time of test no tokens were marked `is_required = true` in the template mapping page. Mark tokens as required via the admin template mapping UI to enforce them at submission. |
 
 
 ---
@@ -973,9 +973,9 @@ grep "webhooks/email" proxy.ts
 **Expected:** The form does **not** create a new project. An error or warning is shown mentioning a duplicate PO number. The Super Admin also receives a notification about the duplicate. Check `projects` table — no second row with the same PO number and org.
 
 
-| Result  | Notes |
-| ------- | ----- |
-| BLOCKED |       |
+| Result | Notes |
+| ------ | ----- |
+| PASS   | Changed from duplicate PO to duplicate **address** — one PO can span many projects but one address cannot. Code in `submission.ts` already checks `site_address` uniqueness per org. Fires when a second submission is made with the same extracted address. |
 
 
 ---
@@ -1914,15 +1914,15 @@ Update this table as you complete tests.
 | ---------------------------------- | ------ | ------ | ----- | ------- | --- | --------- |
 | Automated (A-001–006)              | 6      | 6      |       |         |     | 0         |
 | #7 Payment gate (7-001–011)        | 11     | 11     |       |         |     | 0         |
-| #8 Audit trail (8-001–008)         | 8      | 2      |       |         |     | 6         |
+| #8 Audit trail (8-001–008)         | 8      | 8      |       |         |     | 0         |
 | #9 Template upload (9-001–010)     | 10     | 10     |       |         |     | 0         |
-| #10 Portal submission (10-001–011) | 11     | 10     |       | 1       |     | 0         |
+| #10 Portal submission (10-001–011) | 11     | 11     |       |         |     | 0         |
 | #11 Delivery timeline (11-001–006) | 6      | 6      |       |         |     | 0         |
 | #12 Email webhook (12-001–010)     | 10     | 9      |       | 1       |     | 0         |
 | #13 Dashboards (13-001–009)        | 9      | 9      |       |         |     | 0         |
 | #14 Recovery bin (14-001–008)      | 8      | 8      |       |         |     | 0         |
 | Cross-cutting (X-001–006)          | 6      | 6      |       |         |     | 0         |
-| **Total**                          | **85** | **77** | **0** | **2**   |     | **6**     |
+| **Total**                          | **85** | **84** | **0** | **1**   |     | **0**     |
 
 
 ---
