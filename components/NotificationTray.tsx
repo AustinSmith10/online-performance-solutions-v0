@@ -23,21 +23,19 @@ export function NotificationTray({
   projectBasePath: string;
 }) {
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
-  const [open, setOpen] = useState(false);
+  // Store the pathname at which the tray was opened; open === current pathname matches.
+  // This avoids calling setState inside an effect for navigation-triggered close.
+  const [openAtPathname, setOpenAtPathname] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
-
-  // Close when the route changes (navigation or link click)
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  const open = openAtPathname !== null && openAtPathname === pathname;
 
   // Close when clicking outside the tray
   useEffect(() => {
     if (!open) return;
     function handleMouseDown(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
+        setOpenAtPathname(null);
       }
     }
     document.addEventListener("mousedown", handleMouseDown);
@@ -75,8 +73,12 @@ export function NotificationTray({
   }
 
   function handleToggle() {
-    if (!open) void refresh();
-    setOpen((o) => !o);
+    if (!open) {
+      void refresh();
+      setOpenAtPathname(pathname);
+    } else {
+      setOpenAtPathname(null);
+    }
   }
 
   return (
