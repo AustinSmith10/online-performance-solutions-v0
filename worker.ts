@@ -1,5 +1,6 @@
 import { PgBoss } from "pg-boss";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { generatePbdb } from "@/lib/documents/generator";
 
 async function main() {
   const boss = new PgBoss(process.env.DATABASE_URL!);
@@ -66,9 +67,22 @@ async function main() {
     console.log(`[expire-draft] Expired ${totalExpired} abandoned draft(s)`);
   });
 
-  // Job handlers are registered here as features are built:
-  // e.g. boss.work("generate-pbdb", handlers.generatePbdb)
-  //      boss.work("dispatch-email", handlers.dispatchEmail)
+  // Generate PBDB for a project. Job data: { projectId: string, actorId: string }
+  await boss.work<{ projectId: string; actorId: string }>(
+    "generate-pbdb",
+    async (jobs) => {
+      for (const job of jobs) {
+        const { projectId, actorId } = job.data;
+        try {
+          await generatePbdb(projectId, actorId);
+          console.log(`[generate-pbdb] generated PBDB for project ${projectId}`);
+        } catch (err) {
+          console.error(`[generate-pbdb] failed for project ${projectId}:`, err);
+          throw err; // re-throw so pg-boss marks the job as failed
+        }
+      }
+    }
+  );
 }
 
 main().catch((error) => {

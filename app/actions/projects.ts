@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { performAssignment } from "@/lib/projects/assign";
+import { generatePbdb } from "@/lib/documents/generator";
 
 export type AssignState = { error?: string; success?: boolean };
 
@@ -92,6 +93,63 @@ export async function uploadProjectFile(
   revalidatePath(`/portal/projects/${projectId}`);
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
+  return { success: true };
+}
+
+// ─── Consultant: enter project number and trigger PBDB generation ─────────────
+
+export type ProjectNumberState = { error?: string; success?: boolean };
+
+export async function saveProjectNumber(
+  projectId: string,
+  _prev: ProjectNumberState,
+  formData: FormData
+): Promise<ProjectNumberState> {
+  const actor = await requireRole("consultant", "super_admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select("id, org_id, project_number")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
+  if (project.project_number) return { error: "Project number is already set." };
+
+  const rawNumber = (formData.get("project_number") as string | null)?.trim();
+  if (!rawNumber) return { error: "Project number is required." };
+
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update({ project_number: rawNumber })
+    .eq("id", projectId);
+
+  if (updateError) return { error: updateError.message };
+
+  try {
+    await generatePbdb(projectId, actor.id);
+  } catch (err) {
+    // Roll back the project number so the consultant can retry
+    await supabase.from("projects").update({ project_number: null }).eq("id", projectId);
+    return {
+      error:
+        err instanceof Error ? err.message : "PBDB generation failed. Please try again.",
+    };
+  }
+
+  await auditLog("project.pbdb_generated", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.org_id as string,
+    metadata: { project_number: rawNumber },
+  });
+
+  revalidatePath(`/ops/projects/${projectId}`);
   return { success: true };
 }
 

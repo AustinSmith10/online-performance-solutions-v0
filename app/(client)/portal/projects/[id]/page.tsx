@@ -39,6 +39,11 @@ const FILE_TYPE_LABELS: Record<string, string> = {
 
 const TERMINAL_STATUSES = new Set<ProjectStatus>(["delivered", "complete"]);
 
+// PBDB is visible to the client only once it has been dispatched for acknowledgement
+const PBDB_VISIBLE_STATUSES = new Set<ProjectStatus>([
+  "dispatched", "revision_required", "converting", "delivered", "complete",
+]);
+
 export default async function ClientProjectDetailPage({
   params,
 }: {
@@ -73,14 +78,15 @@ export default async function ClientProjectDetailPage({
 
   const project = data as unknown as ProjectDetail;
   const isDeleted = !!project.deleted_at;
+  const pbdbVisible = PBDB_VISIBLE_STATUSES.has(project.status);
   const todayIso = new Date().toISOString().slice(0, 10);
   const isOverdue =
     !!project.expected_delivery_date &&
     project.expected_delivery_date < todayIso &&
     !TERMINAL_STATUSES.has(project.status);
 
-  // Load template mappings (for display labels) and project files in parallel
-  const [{ data: mappings }, { data: rawFiles }] = await Promise.all([
+  // Load template mappings, submission files, and (conditionally) PBDB in parallel
+  const [{ data: mappings }, { data: rawFiles }, { data: rawPbdbs }] = await Promise.all([
     project.template_id
       ? supabase
           .from("template_field_mappings")
@@ -92,21 +98,38 @@ export default async function ClientProjectDetailPage({
       .from("project_files")
       .select("id, file_type, original_filename, storage_path, created_at")
       .eq("project_id", id)
+      .not("file_type", "eq", "pbdb")
       .order("created_at"),
+    pbdbVisible
+      ? supabase
+          .from("project_files")
+          .select("id, original_filename, storage_path, version, created_at")
+          .eq("project_id", id)
+          .eq("file_type", "pbdb")
+          .order("version", { ascending: false })
+          .limit(1)
+      : Promise.resolve({ data: [] }),
   ]);
 
-  // Generate signed URLs server-side
+  // Submission files — signed URLs from `submissions` bucket
   const files = await Promise.all(
     (rawFiles ?? []).map(async (f) => {
       const { data: signed } = await supabase.storage
         .from("submissions")
         .createSignedUrl(f.storage_path as string, 3600);
-      return {
-        ...f,
-        signedUrl: signed?.signedUrl ?? null,
-      };
+      return { ...f, signedUrl: signed?.signedUrl ?? null };
     })
   );
+
+  // PBDB — signed URL from `documents` bucket
+  const latestPbdb = rawPbdbs?.[0] ?? null;
+  let pbdbSignedUrl: string | null = null;
+  if (latestPbdb) {
+    const { data: signed } = await supabase.storage
+      .from("documents")
+      .createSignedUrl(latestPbdb.storage_path as string, 3600);
+    pbdbSignedUrl = signed?.signedUrl ?? null;
+  }
 
   // Build label map from template mappings
   const labelMap = new Map<string, string>(
@@ -245,10 +268,32 @@ export default async function ClientProjectDetailPage({
         <div className="border-b border-zinc-100 px-5 py-4">
           <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
         </div>
-        {files.length === 0 ? (
+        {files.length === 0 && !latestPbdb ? (
           <p className="px-5 py-6 text-sm text-zinc-500">No documents uploaded yet.</p>
         ) : (
           <div className="divide-y divide-zinc-100">
+            {latestPbdb && (
+              <div className="flex items-center justify-between px-5 py-3">
+                <div>
+                  <p className="text-sm text-zinc-900">
+                    {latestPbdb.original_filename as string}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    Performance Based Design Brief &middot;{" "}
+                    {new Date(latestPbdb.created_at as string).toLocaleDateString("en-AU")}
+                  </p>
+                </div>
+                {pbdbSignedUrl && (
+                  <a
+                    href={pbdbSignedUrl}
+                    download={latestPbdb.original_filename as string}
+                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Download
+                  </a>
+                )}
+              </div>
+            )}
             {files.map((f) => (
               <div
                 key={f.id as string}

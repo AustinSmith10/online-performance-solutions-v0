@@ -12,6 +12,7 @@ import {
   type PostmarkAttachment,
 } from "@/lib/email/parser";
 import { extractDocumentFields } from "@/lib/documents/extractor";
+import { normalizeExtractedFields } from "@/lib/documents/formatters";
 
 // Tokens auto-resolved from halcyon_developments — never sent to AI extraction
 const HALCYON_TOKENS = new Set(["EXTRACT_TRUSTEE", "EXTRACT_RAINFALL_INTENSITY"]);
@@ -224,8 +225,8 @@ async function handleNewSubmission(
       const plansBuffer = pdfBuffers[1] ?? pdfBuffers[0];
       const extracted = await extractDocumentFields(poBuffer, plansBuffer, extractTokens);
 
-      const fieldValues = Object.fromEntries(
-        Object.entries(extracted.fields).map(([k, v]) => [k, v.value])
+      const fieldValues = normalizeExtractedFields(
+        Object.fromEntries(Object.entries(extracted.fields).map(([k, v]) => [k, v.value]))
       );
 
       // Resolve halcyon-derived fields from dev name
@@ -299,9 +300,9 @@ async function handleNewSubmission(
     }
   }
 
-  // Send portal link with threading Reply-To
+  // Send portal link — go directly to step 2 so the client confirms their details
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const portalLink = `${appUrl}/portal/projects/${projectId}`;
+  const portalLink = `${appUrl}/portal/submit/resume/${projectId}`;
   const replyTo = buildInboundReplyTo(projectId);
 
   await sendEmail({
@@ -417,8 +418,8 @@ async function handleThreadReply(
         .eq("id", projectId)
         .single();
 
-      const newFieldValues = Object.fromEntries(
-        Object.entries(extracted.fields).map(([k, v]) => [k, v.value])
+      const newFieldValues = normalizeExtractedFields(
+        Object.fromEntries(Object.entries(extracted.fields).map(([k, v]) => [k, v.value]))
       );
       const merged = { ...(current?.extracted_fields as Record<string, string> ?? {}), ...newFieldValues };
 

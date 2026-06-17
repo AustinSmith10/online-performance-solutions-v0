@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { extractDocumentFields, type ExtractedField, type Confidence } from "@/lib/documents/extractor";
+import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { addWorkingDays } from "@/lib/delivery/working-days";
 
@@ -231,9 +232,9 @@ export async function extractFields(
     }
   }
 
-  // Persist draft — save field values as plain strings so the resume page can read them
-  const draftFields = Object.fromEntries(
-    Object.entries(extraction.fields).map(([k, v]) => [k, v.value])
+  // Persist draft — normalise and save field values as plain strings
+  const draftFields = normalizeExtractedFields(
+    Object.fromEntries(Object.entries(extraction.fields).map(([k, v]) => [k, v.value]))
   );
   const { error: projectError } = await supabase.from("projects").insert({
     id: projectId,
@@ -432,21 +433,26 @@ export async function submitProject(
     console.error("[submitProject] delivery date calculation failed:", err);
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError, count } = await supabase
     .from("projects")
-    .update({
-      status: "submitted",
-      po_number: poNumber,
-      site_address: siteAddress,
-      delivery_recipient_email: deliveryEmail,
-      expected_delivery_date: expectedDeliveryDate,
-      extracted_fields: extractedFields,
-    })
+    .update(
+      {
+        status: "submitted",
+        po_number: poNumber,
+        site_address: siteAddress,
+        delivery_recipient_email: deliveryEmail,
+        expected_delivery_date: expectedDeliveryDate,
+        extracted_fields: extractedFields,
+      },
+      { count: "exact" }
+    )
     .eq("id", projectId)
     .eq("org_id", orgId)
-    .eq("submitted_by", actor.id);
+    .eq("submitted_by", actor.id)
+    .eq("status", "draft");
 
   if (updateError) return { error: `Failed to submit project: ${updateError.message}` };
+  if (!count) return { error: "This project has already been submitted or is no longer a draft." };
 
   try {
     await notify({
