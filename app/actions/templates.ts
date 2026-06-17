@@ -351,6 +351,71 @@ export async function updateTokenLabels(
   return { success: true };
 }
 
+export type AddExtractionTokenState = { error?: string };
+
+export async function addExtractionOnlyToken(
+  templateId: string,
+  _prev: AddExtractionTokenState,
+  formData: FormData
+): Promise<AddExtractionTokenState> {
+  await requireRole("super_admin");
+
+  const token = (formData.get("token") as string | null)?.trim().toUpperCase();
+  const label = (formData.get("label") as string | null)?.trim();
+  const hint = (formData.get("hint") as string | null)?.trim();
+  const is_required = formData.get("is_required") === "on";
+
+  if (!token) return { error: "Token name is required." };
+  if (!token.startsWith("EXTRACT_")) return { error: "Extraction-only tokens must start with EXTRACT_." };
+  if (!/^EXTRACT_[A-Z][A-Z0-9_]*$/.test(token)) return { error: "Token name must be EXTRACT_ followed by uppercase letters, digits, and underscores." };
+  if (!label) return { error: "Display label is required." };
+  if (!hint) return { error: "Extraction hint is required — Claude needs to know what to look for." };
+
+  const supabase = createAdminClient();
+
+  const { error } = await supabase.from("template_field_mappings").insert({
+    template_id: templateId,
+    placeholder_token: token,
+    field_key: "extract",
+    is_mapped: true,
+    in_template: false,
+    display_label: label,
+    extraction_hint: hint,
+    is_required,
+    sort_order: 0,
+  });
+
+  if (error) {
+    if (error.code === "23505") return { error: `Token {${token}} already exists on this template.` };
+    return { error: error.message };
+  }
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return {};
+}
+
+export type DeleteExtractionTokenState = { error?: string };
+
+export async function deleteExtractionToken(
+  templateId: string,
+  token: string
+): Promise<DeleteExtractionTokenState> {
+  await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("template_field_mappings")
+    .delete()
+    .eq("template_id", templateId)
+    .eq("placeholder_token", token)
+    .eq("in_template", false);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return {};
+}
+
 export type ReactivateTemplateState = { error?: string };
 
 export async function reactivateTemplate(

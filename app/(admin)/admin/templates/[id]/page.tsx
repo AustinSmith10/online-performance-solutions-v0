@@ -6,12 +6,14 @@ import { MappingTable } from "./_components/mapping-table";
 import { TemplateStatusActions } from "./_components/status-actions";
 import { DeleteButton } from "./_components/delete-button";
 import { ReuploadForm } from "./_components/reupload-form";
+import { AddExtractionTokenForm } from "./_components/add-extraction-token-form";
 
 type MappingRow = {
   id: string;
   placeholder_token: string;
   field_key: string | null;
   is_mapped: boolean;
+  in_template: boolean;
   display_label: string | null;
   extraction_hint: string | null;
   is_required: boolean;
@@ -44,7 +46,7 @@ export default async function TemplatePage({
       .maybeSingle(),
     supabase
       .from("template_field_mappings")
-      .select("id, placeholder_token, field_key, is_mapped, display_label, extraction_hint, is_required, sort_order")
+      .select("id, placeholder_token, field_key, is_mapped, in_template, display_label, extraction_hint, is_required, sort_order")
       .eq("template_id", id)
       .order("sort_order", { ascending: true })
       .order("placeholder_token", { ascending: true }),
@@ -54,13 +56,15 @@ export default async function TemplatePage({
 
   const template = tmpl as unknown as TemplateDetail;
   const rows = (mappings ?? []) as MappingRow[];
+  const templateRows = rows.filter((r) => r.in_template);
+  const extractionOnlyRows = rows.filter((r) => !r.in_template);
 
   const redFlags = rows.filter((r) => !r.is_mapped);
   const missingLabels = rows.filter((r) => !r.display_label?.trim());
   const missingHints = rows.filter(
     (r) => r.field_key === "extract" && !r.extraction_hint?.trim()
   );
-  const tokenSet = new Set(rows.map((r) => r.placeholder_token));
+  const tokenSet = new Set(templateRows.map((r) => r.placeholder_token));
   const yellowFlags = Object.keys(template.org?.org_config ?? {}).filter(
     (key) => !tokenSet.has(key)
   );
@@ -153,26 +157,41 @@ export default async function TemplatePage({
         <ReuploadForm templateId={id} />
       </div>
 
-      {/* Token table */}
+      {/* Template token table */}
       <div className="rounded-lg border border-zinc-200 bg-white">
         <div className="border-b border-zinc-100 px-5 py-4">
           <h2 className="text-sm font-semibold text-zinc-900">
-            Tokens ({rows.length})
+            Template tokens ({templateRows.length})
           </h2>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Set a display label, extraction hint, and order for each token. Mark fields as required to block submission.
+            Tokens found inside the .docx file. Set a display label, extraction hint, and order for each.
+            Mark fields as required to block submission.
             <code className="ml-1 rounded bg-zinc-100 px-1 font-mono">EXTRACT_ADDRESS</code> is always used for duplicate detection.
             <code className="ml-1 rounded bg-zinc-100 px-1 font-mono">EXTRACT_TRUSTEE</code> and <code className="rounded bg-zinc-100 px-1 font-mono">EXTRACT_RAINFALL_INTENSITY</code> are auto-populated from the Halcyon table.
           </p>
         </div>
 
-        {rows.length === 0 ? (
+        {templateRows.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-zinc-500">
             No placeholders found in this document.
           </p>
         ) : (
-          <MappingTable rows={rows} templateId={id} missingOrgTokens={yellowFlags} />
+          <MappingTable rows={templateRows} templateId={id} missingOrgTokens={yellowFlags} />
         )}
+      </div>
+
+      {/* Extraction-only tokens */}
+      <div className="rounded-lg border border-zinc-200 bg-white">
+        <div className="border-b border-zinc-100 px-5 py-4">
+          <h2 className="text-sm font-semibold text-zinc-900">
+            Extraction-only tokens ({extractionOnlyRows.length})
+          </h2>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Fields extracted from submitted documents but not present as placeholders in the .docx.
+            Used for Halcyon lookups and other system operations. Optionally shown to the client if a display label is set.
+          </p>
+        </div>
+        <AddExtractionTokenForm templateId={id} existingTokens={extractionOnlyRows} />
       </div>
     </div>
   );
