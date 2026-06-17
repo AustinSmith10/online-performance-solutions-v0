@@ -144,6 +144,7 @@ async function handleNewSubmission(
       template_id: templateId,
       submitted_by: user.id,
       status: "draft",
+      source: "email",
     })
     .select("id")
     .single();
@@ -262,7 +263,6 @@ async function handleNewSubmission(
           .eq("org_id", org.id)
           .eq("site_address", siteAddress)
           .is("deleted_at", null)
-          .not("status", "in", '("delivered","complete")')
           .maybeSingle();
 
         if (dupe) {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import type { Notification } from "@/lib/notifications/types";
 
@@ -14,19 +15,34 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function projectHref(n: Notification): string | null {
-  if (!n.project_id) return null;
-  return `/admin/projects/${n.project_id}`;
-}
-
 export function NotificationTray({
   initialNotifications,
+  projectBasePath,
 }: {
   initialNotifications: Notification[];
+  projectBasePath: string;
 }) {
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+
+  // Close when the route changes (navigation or link click)
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  // Close when clicking outside the tray
+  useEffect(() => {
+    if (!open) return;
+    function handleMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [open]);
 
   const unread = notifications.filter((n) => !n.is_read).length;
 
@@ -63,10 +79,6 @@ export function NotificationTray({
     setOpen((o) => !o);
   }
 
-  function handleOutsideClick(e: React.MouseEvent) {
-    if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-  }
-
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <button onClick={handleToggle} aria-label="Notifications" style={bellButton}>
@@ -77,7 +89,7 @@ export function NotificationTray({
       </button>
 
       {open && (
-        <div style={tray} onClick={handleOutsideClick}>
+        <div style={tray}>
           <div style={trayHeader}>
             <span style={trayTitle}>Notifications</span>
             <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
@@ -99,7 +111,7 @@ export function NotificationTray({
               <p style={empty}>No notifications</p>
             ) : (
               notifications.map((n) => {
-                const href = projectHref(n);
+                const href = n.project_id ? `${projectBasePath}/${n.project_id}` : null;
                 return (
                   <div
                     key={n.id}
@@ -117,7 +129,7 @@ export function NotificationTray({
                       <div style={itemMeta}>
                         <span style={itemTime}>{timeAgo(n.created_at)}</span>
                         {href && (
-                          <Link href={href} onClick={() => setOpen(false)} style={viewLink}>
+                          <Link href={href} style={viewLink}>
                             View →
                           </Link>
                         )}

@@ -59,6 +59,7 @@ export default async function ProjectDetailPage({
         deleted_at,
         created_at,
         updated_at,
+        source,
         organisations(id, name),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
       `)
@@ -90,6 +91,7 @@ export default async function ProjectDetailPage({
     deleted_at: string | null;
     created_at: string;
     updated_at: string;
+    source: "portal" | "email";
     organisations: { id: string; name: string } | null;
     assigned: {
       id: string;
@@ -155,7 +157,8 @@ export default async function ProjectDetailPage({
         </Link>
         <div className="mt-2 flex items-center gap-3 flex-wrap">
           <h1 className="text-xl font-semibold text-zinc-900">
-            {project.po_number ? `PO ${project.po_number}` : (project.project_number ?? project.id.slice(0, 8))}
+            {(project.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
+              (project.po_number ? `PO ${project.po_number}` : (project.project_number ?? project.id.slice(0, 8)))}
           </h1>
           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
             {STATUS_LABELS[project.status]}
@@ -181,6 +184,20 @@ export default async function ProjectDetailPage({
       {/* Project details */}
       <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
         <Row label="Organisation" value={project.organisations?.name ?? "—"} />
+        <Row
+          label="Submitted via"
+          value={
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                project.source === "email"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-blue-100 text-blue-700"
+              }`}
+            >
+              {project.source === "email" ? "Email" : "Portal"}
+            </span>
+          }
+        />
         <Row label="PO number" value={project.po_number ?? "—"} />
         <Row label="Delivery recipient" value={project.delivery_recipient_email ?? "—"} />
         <Row

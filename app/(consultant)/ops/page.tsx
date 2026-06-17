@@ -120,7 +120,7 @@ function ProjectSection({
               return (
                 <ClickableRow key={p.id} href={`/ops/projects/${p.id}`}>
                   <td className="px-5 py-3 font-medium text-zinc-900">
-                    {p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8)}
+                    {(p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) || (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))}
                   </td>
                   <td className="px-5 py-3 text-zinc-600">
                     {p.po_number ?? <span className="text-zinc-400">—</span>}

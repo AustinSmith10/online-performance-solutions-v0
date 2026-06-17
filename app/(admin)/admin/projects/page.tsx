@@ -87,7 +87,7 @@ export default async function ProjectsPage() {
               {projects.map((p) => (
                 <ClickableRow key={p.id} href={`/admin/projects/${p.id}`}>
                   <td className="max-w-[200px] truncate px-5 py-3 font-medium text-zinc-900">
-                    {p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8)}
+                    {(p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) || (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))}
                   </td>
                   <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
                     {p.organisations?.name ?? "—"}

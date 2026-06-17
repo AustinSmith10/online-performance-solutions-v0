@@ -289,7 +289,7 @@ export async function logOverride(
 
   const { data: project, error: projErr } = await supabase
     .from("projects")
-    .select("org_id, project_number")
+    .select("org_id, project_number, site_address, extracted_fields")
     .eq("id", projectId)
     .single();
   if (projErr || !project) throw new Error("Project not found.");
@@ -329,7 +329,10 @@ export async function logOverride(
   if (overrideErr) throw new Error(overrideErr.message);
 
   const adminIds = await getSuperAdminIds();
-  const projectRef = (project.project_number as string | null) ?? projectId.slice(0, 8);
+  const address = (project.site_address as string | null) ??
+    ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"]) ??
+    null;
+  const projectRef = address ?? (project.project_number as string | null) ?? projectId.slice(0, 8);
   const safeReason = e(reason);
   const html = `<p style="font-family:sans-serif">A payment gate override has been applied to project <strong>${e(projectRef)}</strong>.</p><p style="font-family:sans-serif"><strong>Reason:</strong> ${safeReason}</p><p style="font-family:sans-serif">This project is flagged <em>Override — Payment Pending</em> until manually reconciled.</p>`;
   await Promise.all(

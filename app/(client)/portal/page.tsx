@@ -121,7 +121,7 @@ export default async function ClientPortalPage() {
                 className="flex items-center justify-between rounded-md border border-amber-100 bg-white px-4 py-2.5"
               >
                 <span className="text-sm text-zinc-900">
-                  {p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8)}
+                  {(p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) || (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))}
                 </span>
                 <Link
                   href={`/portal/projects/${p.id}`}
@@ -169,7 +169,7 @@ export default async function ClientPortalPage() {
                 return (
                   <ClickableRow key={p.id} href={`/portal/projects/${p.id}`}>
                     <td className="px-5 py-3 font-medium text-zinc-900">
-                      {p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8)}
+                      {(p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) || (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))}
                     </td>
                     <td className="px-5 py-3">
                       <span

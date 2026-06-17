@@ -51,7 +51,7 @@ export default async function ClientProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at"
+      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at, source"
     )
     .eq("id", id)
     .eq("org_id", user.org_id as string)
@@ -68,6 +68,7 @@ export default async function ClientProjectDetailPage({
     created_at: string;
     expected_delivery_date: string | null;
     deleted_at: string | null;
+    source: "portal" | "email";
   };
 
   const project = data as unknown as ProjectDetail;
@@ -115,15 +116,19 @@ export default async function ClientProjectDetailPage({
     ])
   );
 
+  const CLIENT_HIDDEN_TOKENS = new Set(["EXTRACT_RAINFALL_INTENSITY"]);
   const extractedFields = project.extracted_fields ?? {};
-  const fieldEntries = Object.entries(extractedFields).map(([token, value]) => ({
-    token,
-    label: labelMap.get(token) ?? prettifyToken(token),
-    value: value as string,
-  }));
+  const fieldEntries = Object.entries(extractedFields)
+    .filter(([token]) => !CLIENT_HIDDEN_TOKENS.has(token))
+    .map(([token, value]) => ({
+      token,
+      label: labelMap.get(token) ?? prettifyToken(token),
+      value: value as string,
+    }));
 
-  // Project title: prefer po_number, fall back to id prefix
-  const title = project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8);
+  const title =
+    (project.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
+    (project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8));
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 space-y-6">
@@ -160,6 +165,20 @@ export default async function ClientProjectDetailPage({
 
       {/* Project summary */}
       <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
+        <Row
+          label="Submitted via"
+          value={
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                project.source === "email"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-blue-100 text-blue-700"
+              }`}
+            >
+              {project.source === "email" ? "Email" : "Portal"}
+            </span>
+          }
+        />
         <Row label="PO number" value={project.po_number ?? "—"} />
         <Row
           label="Submitted"

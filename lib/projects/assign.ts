@@ -16,7 +16,7 @@ export async function performAssignment(
   const [projectResult, consultantResult] = await Promise.all([
     supabase
       .from("projects")
-      .select("id, project_number, org_id, organisations(name)")
+      .select("id, project_number, site_address, extracted_fields, org_id, organisations(name)")
       .eq("id", projectId)
       .single(),
     supabase
@@ -46,7 +46,10 @@ export async function performAssignment(
     [consultant.first_name, consultant.last_name].filter(Boolean).join(" ") ||
     consultant.email;
   const orgName = project.organisations?.name ?? "a client";
-  const projectRef = project.project_number ?? project.id;
+  const address = (project.site_address as string | null) ??
+    ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"]) ??
+    null;
+  const projectRef = address ?? project.project_number ?? project.id.slice(0, 8);
 
   await notify({
     recipientId: consultantId,

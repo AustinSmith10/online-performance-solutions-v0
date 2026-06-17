@@ -19,7 +19,7 @@ export default async function ClientLayout({ children }: { children: React.React
             </nav>
           </div>
           <div className="ml-4 flex shrink-0 items-center gap-3">
-            <NotificationTrayServer />
+            <NotificationTrayServer projectBasePath="/portal/projects" />
             <p className="hidden max-w-[180px] truncate text-xs text-zinc-400 sm:block">
               {user.email}
             </p>

@@ -2,7 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { NotificationTray } from "./NotificationTray";
 import type { Notification } from "@/lib/notifications/types";
 
-export async function NotificationTrayServer() {
+export async function NotificationTrayServer({
+  projectBasePath,
+}: {
+  projectBasePath: string;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -17,5 +21,10 @@ export async function NotificationTrayServer() {
     .order("created_at", { ascending: false })
     .limit(30);
 
-  return <NotificationTray initialNotifications={(data ?? []) as Notification[]} />;
+  return (
+    <NotificationTray
+      initialNotifications={(data ?? []) as Notification[]}
+      projectBasePath={projectBasePath}
+    />
+  );
 }

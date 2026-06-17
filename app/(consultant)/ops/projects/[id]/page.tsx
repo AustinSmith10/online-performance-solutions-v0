@@ -50,7 +50,7 @@ export default async function ConsultantProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, organisations(name)"
+      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, source, organisations(name)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -66,6 +66,7 @@ export default async function ConsultantProjectDetailPage({
     template_id: string | null;
     created_at: string;
     expected_delivery_date: string | null;
+    source: "portal" | "email";
     organisations: { name: string } | null;
   };
 
@@ -115,7 +116,9 @@ export default async function ConsultantProjectDetailPage({
     value: value as string,
   }));
 
-  const title = project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8);
+  const title =
+    (project.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
+    (project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8));
 
   return (
     <div className="space-y-6">
@@ -141,6 +144,20 @@ export default async function ConsultantProjectDetailPage({
       {/* Project summary */}
       <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
         <Row label="Organisation" value={project.organisations?.name ?? "—"} />
+        <Row
+          label="Submitted via"
+          value={
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                project.source === "email"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-blue-100 text-blue-700"
+              }`}
+            >
+              {project.source === "email" ? "Email" : "Portal"}
+            </span>
+          }
+        />
         <Row label="PO number" value={project.po_number ?? "—"} />
         <Row
           label="Submitted"

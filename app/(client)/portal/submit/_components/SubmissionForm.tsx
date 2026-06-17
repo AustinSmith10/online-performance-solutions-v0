@@ -21,20 +21,19 @@ interface Props {
   initialState?: ExtractState;
 }
 
-function resolveDefaultTrustee(
+function resolveDefaultDevName(
   devName: string,
   developments: Development[]
 ): string {
   const needle = devName.trim().toLowerCase();
   if (!needle) return "";
   return (
-    developments.find((d) => d.dev_name.toLowerCase() === needle)
-      ?.trustee_entity ??
+    developments.find((d) => d.dev_name.toLowerCase() === needle)?.dev_name ??
     developments.find(
       (d) =>
         d.dev_name.toLowerCase().includes(needle) ||
         needle.includes(d.dev_name.toLowerCase())
-    )?.trustee_entity ??
+    )?.dev_name ??
     ""
   );
 }
@@ -102,15 +101,19 @@ function ReviewStep({
   const devNameField = tokenGroups.extract.find(
     (t) => t.token === "EXTRACT_DEV_NAME"
   );
-  const [selectedTrustee, setSelectedTrustee] = useState(() => {
-    const trusteeField = tokenGroups.extract.find(
-      (t) => t.token === "EXTRACT_TRUSTEE"
-    );
-    if (trusteeField?.value) return trusteeField.value;
+  const trusteeField = tokenGroups.extract.find(
+    (t) => t.token === "EXTRACT_TRUSTEE"
+  );
+  const trusteeLabel = trusteeField?.label ?? "Trustee";
+  // Track selection by dev_name (unique) so controlled select doesn't snap to
+  // a different development that shares the same trustee_entity value.
+  const [selectedDevName, setSelectedDevName] = useState(() => {
     if (devNameField?.value)
-      return resolveDefaultTrustee(devNameField.value, developments);
+      return resolveDefaultDevName(devNameField.value, developments);
     return "";
   });
+  const selectedTrusteeEntity =
+    developments.find((d) => d.dev_name === selectedDevName)?.trustee_entity ?? "";
 
   // Rainfall: halcyon-resolved, never shown to client — pass as hidden input
   const rainfallField = rainfallToken
@@ -133,7 +136,7 @@ function ReviewStep({
         value={poNumber.value}
       />
       {hasTrustee && (
-        <input type="hidden" name="EXTRACT_TRUSTEE" value={selectedTrustee} />
+        <input type="hidden" name="EXTRACT_TRUSTEE" value={selectedTrusteeEntity} />
       )}
       {rainfallToken && rainfallField && (
         <input type="hidden" name={rainfallToken} value={rainfallField.value} />
@@ -165,26 +168,22 @@ function ReviewStep({
       {hasTrustee && (
         <div className="rounded-lg border border-zinc-200 bg-white p-6">
           <h2 className="mb-1 text-sm font-semibold text-zinc-900">
-            Trustee entity
+            {trusteeLabel}
           </h2>
-          <p className="mb-5 text-sm text-zinc-500">
-            Auto-resolved from the development name. Select the correct trustee
-            if needed.
-          </p>
           <div>
             <label className="block text-xs font-medium text-zinc-700 mb-1">
-              Trustee
+              {trusteeLabel}
             </label>
             <select
-              value={selectedTrustee}
-              onChange={(e) => setSelectedTrustee(e.target.value)}
+              value={selectedDevName}
+              onChange={(e) => setSelectedDevName(e.target.value)}
               className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400"
             >
-              {selectedTrustee === "" && (
+              {selectedDevName === "" && (
                 <option value="">— select trustee —</option>
               )}
               {developments.map((d) => (
-                <option key={d.dev_name} value={d.trustee_entity}>
+                <option key={d.dev_name} value={d.dev_name}>
                   {d.dev_name} — {d.trustee_entity}
                 </option>
               ))}
@@ -199,10 +198,6 @@ function ReviewStep({
           <h2 className="mb-1 text-sm font-semibold text-zinc-900">
             Organisation details
           </h2>
-          <p className="mb-5 text-sm text-zinc-500">
-            Pre-filled from your organisation&apos;s configuration. Edit if
-            anything has changed.
-          </p>
           <div className="space-y-4">
             {tokenGroups.org.map((field) => (
               <TokenInput
@@ -501,9 +496,20 @@ export function SubmissionForm({
         </div>
 
         {extractState.error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
             {extractState.error}
-          </p>
+            {extractState.duplicateProjectId && (
+              <>
+                {" "}
+                <a
+                  href={`/portal/projects/${extractState.duplicateProjectId}`}
+                  className="font-medium underline hover:text-red-900"
+                >
+                  View existing project →
+                </a>
+              </>
+            )}
+          </div>
         )}
 
         <button

@@ -31,7 +31,7 @@ export interface TokenField {
 // ─── Step 1 → 2 state ────────────────────────────────────────────────────────
 
 export type ExtractState =
-  | { step: 1; error?: string }
+  | { step: 1; error?: string; duplicateProjectId?: string }
   | {
       step: 2;
       error?: string;
@@ -197,6 +197,40 @@ export async function extractFields(
     };
   }
 
+  // Duplicate address check — block draft creation if any non-deleted project
+  // for this org already has the same address (submitted or draft).
+  const extractedAddress = extraction.fields["EXTRACT_ADDRESS"]?.value?.trim() ?? "";
+  if (extractedAddress) {
+    const pathsToRemove = [plansPath, ...(hasPoFile ? [poPath] : [])];
+    const [{ data: byAddress }, { data: byDraft }] = await Promise.all([
+      supabase
+        .from("projects")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("site_address", extractedAddress)
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("projects")
+        .select("id")
+        .eq("org_id", orgId)
+        .filter("extracted_fields->>EXTRACT_ADDRESS", "eq", extractedAddress)
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    const existing = byAddress ?? byDraft;
+    if (existing) {
+      await supabase.storage.from("submissions").remove(pathsToRemove);
+      return {
+        step: 1,
+        error: `A project for ${extractedAddress} already exists. Please review the existing project instead of creating a new one.`,
+        duplicateProjectId: (existing as { id: string }).id,
+      };
+    }
+  }
+
   // Persist draft — save field values as plain strings so the resume page can read them
   const draftFields = Object.fromEntries(
     Object.entries(extraction.fields).map(([k, v]) => [k, v.value])
@@ -341,12 +375,11 @@ export async function submitProject(
           .eq("site_address", siteAddress)
           .neq("id", projectId)
           .is("deleted_at", null)
-          .not("status", "in", '("delivered","complete")')
           .maybeSingle()
       : Promise.resolve({ data: null }),
     supabase
       .from("organisations")
-      .select("delivery_working_days, state_territory")
+      .select("name, delivery_working_days, state_territory")
       .eq("id", orgId)
       .single(),
   ]);
@@ -363,7 +396,7 @@ export async function submitProject(
           notify({
             recipientId: admin.id,
             type: "project_submitted",
-            message: `Duplicate address submission: "${siteAddress}" already has an active project for org ${orgId}. No new record was created.`,
+            message: `Duplicate address submission: "${siteAddress}" already has an active project for ${orgData?.name ?? orgId}. No new record was created.`,
             emailSubject: "Duplicate address submission — OPS",
             emailHtml: duplicateSubmissionEmail({ siteAddress, orgId }),
           }).catch((err) =>
@@ -419,7 +452,7 @@ export async function submitProject(
     await notify({
       recipientId: actor.id,
       type: "acknowledgement",
-      message: `Your report request (PO: ${poNumber}) has been received and is being processed.`,
+      message: `Your report request for ${siteAddress ?? "your property"} has been received and is being processed.`,
       projectId,
       emailSubject: "Report request received — OPS",
       emailHtml: submissionConfirmationEmail({ poNumber }),
@@ -438,7 +471,7 @@ export async function submitProject(
         notify({
           recipientId: admin.id,
           type: "project_submitted",
-          message: `New project submission received (PO: ${poNumber}) from org ${orgId}.`,
+          message: `New project submission received for ${siteAddress ?? "unknown address"} from ${orgData?.name ?? orgId}.`,
           projectId,
           emailSubject: "New project submission — OPS",
           emailHtml: adminSubmissionEmail({ poNumber, projectId }),

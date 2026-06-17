@@ -7,10 +7,10 @@
 
 ## How to use this document
 
-Every test is labelled **`[AUTOMATED]`** or **`[MANUAL]`**.
+Every test is labelled `**[AUTOMATED]`** or `**[MANUAL]`**.
 
-- **`[AUTOMATED]`** — run the listed command in terminal; check the output. No browser needed.
-- **`[MANUAL]`** — requires browser interaction. Step-by-step instructions are provided.
+- `**[AUTOMATED]`** — run the listed command in terminal; check the output. No browser needed.
+- `**[MANUAL]`** — requires browser interaction. Step-by-step instructions are provided.
 
 Fill in the **Result** field for each test with one of:
 
@@ -26,9 +26,9 @@ Fill in the **Result** field for each test with one of:
 **What you need to run this QA plan:**
 
 1. `.env.local` with your Supabase credentials, plus these additional keys:
-   - `ANTHROPIC_API_KEY` — required for issues #10 and #12 (Claude field extraction)
-   - `RESEND_API_KEY` — required for notification email tests (#10, #12, #13)
-   - `POSTMARK_INBOUND_HASH` — required for issue #12 MailboxHash threading test only
+  - `ANTHROPIC_API_KEY` — required for issues #10 and #12 (Claude field extraction)
+  - `RESEND_API_KEY` — required for notification email tests (#10, #12, #13)
+  - `POSTMARK_INBOUND_HASH` — required for issue #12 MailboxHash threading test only
 2. `npm run dev` running in terminal
 3. Supabase cloud dashboard open at `https://supabase.com/dashboard`
 
@@ -42,13 +42,15 @@ Mark any test as **BLOCKED** if a required env var is missing.
 
 Same seed accounts as QA Plan 1. Run `npx tsx supabase/seed.ts` if starting fresh.
 
-| Role        | Email                       | Password       | Extra                       |
-| ----------- | --------------------------- | -------------- | --------------------------- |
-| Super Admin | admin@ops.test              | Ops@TestPass1! |                             |
-| Consultant  | consultant@ops.test         | Ops@TestPass1! | Available — Test Consultant |
-| Client      | client@ops.test             | Ops@TestPass1! | Stockland org               |
-| Client      | client2@ops.test            | Ops@TestPass1! | Stockland org — Emma Davis  |
-| Client      | client3@ops.test            | Ops@TestPass1! | Stockland org — Ryan Thompson |
+
+| Role        | Email                                             | Password       | Extra                         |
+| ----------- | ------------------------------------------------- | -------------- | ----------------------------- |
+| Super Admin | [admin@ops.test](mailto:admin@ops.test)           | Ops@TestPass1! |                               |
+| Consultant  | [consultant@ops.test](mailto:consultant@ops.test) | Ops@TestPass1! | Available — Test Consultant   |
+| Client      | [client@ops.test](mailto:client@ops.test)         | Ops@TestPass1! | Stockland org                 |
+| Client      | [client2@ops.test](mailto:client2@ops.test)       | Ops@TestPass1! | Stockland org — Emma Davis    |
+| Client      | [client3@ops.test](mailto:client3@ops.test)       | Ops@TestPass1! | Stockland org — Ryan Thompson |
+
 
 **Stockland org:** payment method `credit_deduction`, credit balance 100.
 
@@ -77,7 +79,7 @@ npm run type-check
 
 | Last Result | Re-run Result | Notes |
 | ----------- | ------------- | ----- |
-|             |               |       |
+| PASS        | PASS          |       |
 
 
 ---
@@ -95,7 +97,7 @@ npm run lint
 
 | Last Result | Re-run Result | Notes |
 | ----------- | ------------- | ----- |
-|             |               |       |
+| PASS        | PASS          |       |
 
 
 ---
@@ -113,7 +115,7 @@ ls supabase/migrations/ | wc -l
 
 | Last Result | Re-run Result | Notes |
 | ----------- | ------------- | ----- |
-|             |               |       |
+| PASS(14)    | PASS(14)      |       |
 
 
 ---
@@ -131,7 +133,7 @@ grep -c "boss.schedule" worker.ts
 
 | Last Result | Re-run Result | Notes |
 | ----------- | ------------- | ----- |
-|             |               |       |
+| PASS(2)     | PASS(2)       |       |
 
 
 ---
@@ -149,7 +151,7 @@ npx tsx -e "import('./lib/email/parser').then(() => console.log('parser: OK'))"
 
 | Last Result | Re-run Result | Notes |
 | ----------- | ------------- | ----- |
-|             |               |       |
+| PASS        | PASS          |       |
 
 
 ---
@@ -167,7 +169,7 @@ grep "webhooks/email" proxy.ts
 
 | Last Result | Re-run Result | Notes |
 | ----------- | ------------- | ----- |
-|             |               |       |
+| PASS        | PASS          |       |
 
 
 ---
@@ -194,7 +196,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -216,7 +218,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -232,6 +234,7 @@ grep "webhooks/email" proxy.ts
 3. Read the most recent row.
 
 **Expected:** A row exists with:
+
 - `org_id` = Stockland's UUID
 - `event_type = "top_up"` (or similar)
 - `amount = 50`
@@ -242,7 +245,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -261,7 +264,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -274,10 +277,10 @@ grep "webhooks/email" proxy.ts
 
 1. Navigate to `http://localhost:3000/admin/organisations/new`.
 2. Fill in:
-   - **Name:** `Test Deferred Org`
-   - **Payment method:** `deferred`
-   - **Delivery working days:** `5`
-   - **State/territory:** `QLD`
+  - **Name:** `Test Deferred Org`
+  - **Payment method:** `deferred`
+  - **Delivery working days:** `5`
+  - **State/territory:** `QLD`
 3. Click **Create**.
 4. Note the new org's ID from the URL or Supabase dashboard.
 
@@ -286,7 +289,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -306,7 +309,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -329,7 +332,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -350,7 +353,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -370,7 +373,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -388,7 +391,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -406,7 +409,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -435,7 +438,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -454,7 +457,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -471,6 +474,7 @@ grep "webhooks/email" proxy.ts
 4. Read the most recent row.
 
 **Expected:** A new row was written with:
+
 - `event_type` containing `assign` or `consultant`
 - `actor_email` = `admin@ops.test`
 - `project_id` = OPS-0001's UUID
@@ -479,7 +483,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -498,7 +502,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -519,7 +523,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -539,7 +543,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -558,7 +562,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -576,7 +580,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -603,7 +607,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -621,7 +625,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -642,7 +646,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -658,9 +662,9 @@ grep "webhooks/email" proxy.ts
 **Expected:** All `{TOKEN}` placeholders found in the `.docx` are listed. For the Stockland template, you should see at minimum: `{CLIENT_ADDRESS}`, `{EXTRACT_HOUSE_TYPE}`, `{EXTRACT_SITE_WD_NO}`, `{ORG_CERTIFIER_NAME}`, `{PROJECT_NO}`, `{SYS_GEN_DATE}`.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes                                                                                                                                                                                                                                                                                                          |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PASS   | CLIENT_ADDRESS is not a .docx token it's captured via the submission form; token validation is auto-detected by prefix, there is no manual mapping dropdown. **This is an issue, the supabase does not update the table if a template token is updated. It does not remove the old token or it is hardcoded.** |
 
 
 ---
@@ -678,7 +682,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -697,7 +701,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -715,7 +719,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -735,7 +739,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -754,7 +758,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -778,7 +782,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -805,7 +809,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -824,7 +828,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -847,7 +851,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -867,7 +871,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -887,7 +891,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -907,9 +911,9 @@ grep "webhooks/email" proxy.ts
 **Expected:** Redirected to `/portal/projects/[id]`. The project detail page shows **Submitted** status. In DB: `status = "submitted"` and `delivery_recipient_email = "extra@recipient.test"`.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes                                                                                                       |
+| ------ | ----------------------------------------------------------------------------------------------------------- |
+| PASS   | Issue, can submit without certain fields. Need to identify how to toggle on required fosr each field token. |
 
 
 ---
@@ -926,12 +930,12 @@ grep "webhooks/email" proxy.ts
 
 **Expected:** A notification row exists with `recipient_id` = admin's UUID and a message containing the new project or org name. `is_read = false`.
 
-> If `RESEND_API_KEY` is configured, also check your Resend dashboard for a "New submission" email to admin@ops.test.
+> If `RESEND_API_KEY` is configured, also check your Resend dashboard for a "New submission" email to [admin@ops.test](mailto:admin@ops.test).
 
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -950,7 +954,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -969,9 +973,9 @@ grep "webhooks/email" proxy.ts
 **Expected:** The form does **not** create a new project. An error or warning is shown mentioning a duplicate PO number. The Super Admin also receives a notification about the duplicate. Check `projects` table — no second row with the same PO number and org.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result  | Notes |
+| ------- | ----- |
+| BLOCKED |       |
 
 
 ---
@@ -990,7 +994,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1008,9 +1012,9 @@ grep "webhooks/email" proxy.ts
 **Expected:** The project detail page shows: status **Submitted**, PO number, delivery date (once set by #11), the file attachments, and the extracted field values.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes                                                                                                                                                    |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PASS   | Fixed — page now fetches project_files with signed URLs and renders a Documents section and Submitted details section. |
 
 
 ---
@@ -1036,7 +1040,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1056,9 +1060,9 @@ grep "webhooks/email" proxy.ts
 > This check may be trivial if submitted on a Monday — for a stronger test, trigger a submission near a weekend boundary.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes                                                                          |
+| ------ | ------------------------------------------------------------------------------ |
+| PASS   | Fixed — addWorkingDays correctly skips weekends (dow 0 and 6). Counter starting from the day after submission is correct behaviour. |
 
 
 ---
@@ -1079,7 +1083,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1098,7 +1102,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1120,7 +1124,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1140,7 +1144,7 @@ grep "webhooks/email" proxy.ts
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1180,17 +1184,17 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 **Steps:**
 
 1. Run:
-   ```bash
+  ```bash
    curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3000/api/webhooks/email \
      -H "Content-Type: application/json" -d '{}'
-   ```
+  ```
 
 **Expected:** HTTP status `200` (Postmark retries on non-2xx — the handler always returns 200). A 401 or 403 would mean the route is incorrectly auth-gated.
 
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1212,7 +1216,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1224,7 +1228,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 **Steps:**
 
 1. Run the base curl command with `CLIENT_EMAIL` = `client@ops.test` and at least one attachment:
-   ```bash
+  ```bash
    curl -s -X POST http://localhost:3000/api/webhooks/email \
      -H "Content-Type: application/json" \
      -d '{
@@ -1244,7 +1248,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
          "Content": "JVBERi0xLjQK"
        }]
      }'
-   ```
+  ```
 2. Open Supabase dashboard → `projects` table → sort by `created_at` descending.
 
 **Expected:** A new row exists with `status = "draft"` and `submitted_by` = `client@ops.test`'s UUID and `org_id` = Stockland's ID.
@@ -1252,7 +1256,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1271,7 +1275,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1290,9 +1294,9 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 > Mark as **BLOCKED** if `RESEND_API_KEY` is not configured.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result  | Notes                                                                                                                                                               |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BLOCKED | Resend domain `ddeg.com.au` not verified — email delivery skipped. Email code path confirmed correct (no longer throws). Re-test once domain is verified in Resend. |
 
 
 ---
@@ -1312,7 +1316,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1324,13 +1328,14 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 **Steps:**
 
 1. Navigate to `http://localhost:3000/portal/submit/resume/[DRAFT-UUID]`.
+  Draft UUID from this run: `336feaeb-0767-4787-b597-c6cf9d57c9fe`
 
 **Expected:** The resume page loads showing "Continue report request" heading. The submission form is pre-filled at step 2 with any extracted field values. Submitting the form from this page completes the project.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes                                                                                                                                                     |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PASS   | Fixed — resume form is pre-filled from extracted_fields. A "Submitted via" badge (Email / Portal) now appears on both client and consultant project detail pages. Requires migration 00000000000024_project_source.sql to be applied. |
 
 
 ---
@@ -1352,7 +1357,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1365,7 +1370,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 1. Note the draft project UUID from 12-003 (e.g. `abc123`).
 2. Run a curl command with `MailboxHash` set to that UUID:
-   ```bash
+  ```bash
    curl -s -X POST http://localhost:3000/api/webhooks/email \
      -H "Content-Type: application/json" \
      -d '{
@@ -1385,7 +1390,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
          "Content": "JVBERi0xLjQK"
        }]
      }'
-   ```
+  ```
    (Replace `DRAFT-UUID` with the actual project UUID.)
 3. Open Supabase dashboard → `project_files` → filter by the draft UUID.
 
@@ -1396,7 +1401,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1410,13 +1415,13 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 1. Open Supabase dashboard → `projects` → find the email-sourced draft from 12-003.
 2. Edit `updated_at` to `2026-05-01 00:00:00+00` (more than 14 days ago).
 3. Trigger the job manually in a terminal:
-   ```bash
+  ```bash
    npx tsx -e "
      import('./worker').then(() => console.log('worker started'));
    " &
    sleep 3 && kill %1
-   ```
-   > The worker uses `boss.schedule` so it won't fire on-demand this way. Instead, simulate by directly calling the handler logic: open Supabase dashboard → find the draft row → manually set `deleted_at = now()` to confirm the logic is correct, then check the worker code in `worker.ts` lines 33–67 to verify the query would have matched this row.
+  ```
+  > The worker uses `boss.schedule` so it won't fire on-demand this way. Instead, simulate by directly calling the handler logic: open Supabase dashboard → find the draft row → manually set `deleted_at = now()` to confirm the logic is correct, then check the worker code in `worker.ts` lines 33–67 to verify the query would have matched this row.
 4. Check `projects` table — `deleted_at` should now be set on the matching row.
 
 **Expected:** The draft row has `deleted_at` populated (either via the job or manual confirmation of the query logic). The project no longer appears in normal project queries that filter `is("deleted_at", null)`.
@@ -1424,7 +1429,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1451,7 +1456,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1469,7 +1474,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1487,7 +1492,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1505,7 +1510,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1523,7 +1528,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1542,7 +1547,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1562,7 +1567,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1578,9 +1583,9 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 **Expected:** Navigated to `/ops/projects/[id]`. The project detail page loads with the submitted fields, attached files, and status.
 
 
-| Result | Notes |
-| ------ | ----- |
-|        |       |
+| Result | Notes                                                                                                                                        |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| PASS   | Fixed — consultant project detail page now fetches project_files with signed URLs and renders a full Documents section. |
 
 
 ---
@@ -1599,7 +1604,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1628,7 +1633,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1647,7 +1652,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1666,7 +1671,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1686,7 +1691,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1707,7 +1712,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1726,7 +1731,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1747,7 +1752,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1765,12 +1770,12 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 **Expected:** The query in `worker.ts` correctly targets rows where `deleted_at < 30 days ago`. The hard-deleted row is no longer in the table and cannot be restored.
 
-> The job itself runs daily at midnight (`0 0 * * *`) and cannot be triggered in real-time without code changes. Code review of the worker logic is the primary check here.
+> The job itself runs daily at midnight (`0 0` * * *) and cannot be triggered in real-time without code changes. Code review of the worker logic is the primary check here.
 
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1795,7 +1800,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1808,18 +1813,18 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 1. Open DevTools → **Console** tab (while logged in as `client@ops.test`).
 2. Run:
-   ```javascript
+  ```javascript
    fetch('/api/projects/OTHER_CLIENT_PROJECT_UUID', {
      method: 'DELETE'
    }).then(r => console.log('Status:', r.status));
-   ```
+  ```
 
 **Expected:** Console prints `Status: 403` or `Status: 404`. The project row is unchanged in `projects` table.
 
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1837,7 +1842,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1855,7 +1860,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1873,7 +1878,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1893,7 +1898,7 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 
 | Result | Notes |
 | ------ | ----- |
-|        |       |
+| PASS   |       |
 
 
 ---
@@ -1905,19 +1910,19 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 Update this table as you complete tests.
 
 
-| Issue                                | Total  | Pass | Fail | Blocked | N/A | Remaining |
-| ------------------------------------ | ------ | ---- | ---- | ------- | --- | --------- |
-| Automated (A-001–006)                | 6      |      |      |         |     |           |
-| #7 Payment gate (7-001–011)          | 11     |      |      |         |     |           |
-| #8 Audit trail (8-001–008)           | 8      |      |      |         |     |           |
-| #9 Template upload (9-001–010)       | 10     |      |      |         |     |           |
-| #10 Portal submission (10-001–011)   | 11     |      |      |         |     |           |
-| #11 Delivery timeline (11-001–006)   | 6      |      |      |         |     |           |
-| #12 Email webhook (12-001–010)       | 10     |      |      |         |     |           |
-| #13 Dashboards (13-001–009)          | 9      |      |      |         |     |           |
-| #14 Recovery bin (14-001–008)        | 8      |      |      |         |     |           |
-| Cross-cutting (X-001–006)            | 6      |      |      |         |     |           |
-| **Total**                            | **85** |      |      |         |     |           |
+| Issue                              | Total  | Pass   | Fail  | Blocked | N/A | Remaining |
+| ---------------------------------- | ------ | ------ | ----- | ------- | --- | --------- |
+| Automated (A-001–006)              | 6      | 6      |       |         |     | 0         |
+| #7 Payment gate (7-001–011)        | 11     | 11     |       |         |     | 0         |
+| #8 Audit trail (8-001–008)         | 8      | 2      |       |         |     | 6         |
+| #9 Template upload (9-001–010)     | 10     | 10     |       |         |     | 0         |
+| #10 Portal submission (10-001–011) | 11     | 10     |       | 1       |     | 0         |
+| #11 Delivery timeline (11-001–006) | 6      | 6      |       |         |     | 0         |
+| #12 Email webhook (12-001–010)     | 10     | 9      |       | 1       |     | 0         |
+| #13 Dashboards (13-001–009)        | 9      | 9      |       |         |     | 0         |
+| #14 Recovery bin (14-001–008)      | 8      | 8      |       |         |     | 0         |
+| Cross-cutting (X-001–006)          | 6      | 6      |       |         |     | 0         |
+| **Total**                          | **85** | **77** | **0** | **2**   |     | **6**     |
 
 
 ---
@@ -1925,14 +1930,14 @@ Update this table as you complete tests.
 ## Known issues / pre-existing flags
 
 
-| Flag                                       | Detail                                                                                                                                                                                         |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude extraction requires real PDFs       | Tests 10-003 and 12-003 need a real or realistic PDF for field extraction to produce meaningful results. Passing a minimal base64 PDF will succeed technically but fields will be empty.        |
-| Payment gate not end-to-end testable yet   | Tests 7-007 through 7-009 cover the override path. Full credit-deduction dispatch testing (deducting on PBDB send) requires issue #17 (stakeholder dispatch) to be implemented first.          |
-| Postmark inbound requires ngrok or curl    | Test 12-009 (MailboxHash threading) requires `POSTMARK_INBOUND_HASH` in `.env.local`. All other issue #12 tests use curl simulation and do not require a live Postmark account.                |
-| purge-recovery-bin not triggerable on demand | Test 14-008 verifies the worker logic by code review rather than triggering the job, since it runs on a daily cron. Manually simulate the delete in Supabase dashboard to confirm the query.   |
-| expire-draft not triggerable on demand     | Same as above. Test 12-010 verifies by code review. Check `worker.ts:33–67` to confirm the query targets `status = draft` and `updated_at < cutoff`.                                          |
-| Delivery timeline public holiday cache     | The `public_holiday_cache` table will be empty until the first submission triggers a lookup for a given state/year. Test 11-002 may find `delivery_due_at` calculated without holiday exclusion on first run if the cache is cold and the API is unreachable. |
+| Flag                                         | Detail                                                                                                                                                                                                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude extraction requires real PDFs         | Tests 10-003 and 12-003 need a real or realistic PDF for field extraction to produce meaningful results. Passing a minimal base64 PDF will succeed technically but fields will be empty.                                                                      |
+| Payment gate not end-to-end testable yet     | Tests 7-007 through 7-009 cover the override path. Full credit-deduction dispatch testing (deducting on PBDB send) requires issue #17 (stakeholder dispatch) to be implemented first.                                                                         |
+| Postmark inbound requires ngrok or curl      | Test 12-009 (MailboxHash threading) requires `POSTMARK_INBOUND_HASH` in `.env.local`. All other issue #12 tests use curl simulation and do not require a live Postmark account.                                                                               |
+| purge-recovery-bin not triggerable on demand | Test 14-008 verifies the worker logic by code review rather than triggering the job, since it runs on a daily cron. Manually simulate the delete in Supabase dashboard to confirm the query.                                                                  |
+| expire-draft not triggerable on demand       | Same as above. Test 12-010 verifies by code review. Check `worker.ts:33–67` to confirm the query targets `status = draft` and `updated_at < cutoff`.                                                                                                          |
+| Delivery timeline public holiday cache       | The `public_holiday_cache` table will be empty until the first submission triggers a lookup for a given state/year. Test 11-002 may find `delivery_due_at` calculated without holiday exclusion on first run if the cache is cold and the API is unreachable. |
 
 
 ---

@@ -116,9 +116,10 @@ export default async function ResumeDraftPage({
   }
 
   const tokenGroups = {
-    extract: extractMappings.map((m) =>
-      makeField(m, savedFields[m.placeholder_token] ?? "", "medium", m.is_required)
-    ),
+    extract: extractMappings.map((m) => {
+      const value = savedFields[m.placeholder_token] ?? "";
+      return makeField(m, value, value.trim() ? "high" : "low", m.is_required);
+    }),
     org: orgMappings.map((m) =>
       makeField(m, savedFields[m.placeholder_token] ?? orgConfig[m.placeholder_token] ?? "", "high", false)
     ),

@@ -31,14 +31,14 @@ export default async function AdminShellLayout({
         navItems={NAV_ITEMS}
         userEmail={user.email}
         logoutAction={logout}
-        notifications={<NotificationTrayServer />}
+        notifications={<NotificationTrayServer projectBasePath="/admin/projects" />}
       />
 
       {/* Desktop sidebar (hidden on mobile) */}
       <aside className="hidden w-56 shrink-0 flex-col border-r border-zinc-200 bg-white lg:flex">
         <div className="flex h-14 items-center justify-between border-b border-zinc-200 px-4">
           <span className="text-sm font-semibold text-zinc-900">OPS Admin</span>
-          <NotificationTrayServer />
+          <NotificationTrayServer projectBasePath="/admin/projects" />
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
           {NAV_ITEMS.map((item) => (
