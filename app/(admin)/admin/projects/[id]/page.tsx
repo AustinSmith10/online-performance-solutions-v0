@@ -5,8 +5,12 @@ import { AssignForm, type ConsultantOption } from "./_components/AssignForm";
 import { OverrideForm } from "./_components/OverrideForm";
 import { FieldsForm } from "./_components/FieldsForm";
 import { FileUploadForm } from "./_components/FileUploadForm";
+import { WaiveForm } from "./_components/WaiveForm";
+import { ResendTokenButton } from "./_components/ResendTokenButton";
+import { UpdateEmailForm } from "./_components/UpdateEmailForm";
+import { ProjectStakeholderSection } from "./_components/ProjectStakeholderSection";
 import { prettifyToken } from "@/lib/tokens/prettify";
-import type { ProjectStatus, ConsultantAvailability } from "@/types";
+import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -108,9 +112,14 @@ export default async function ProjectDetailPage({
   const consultants = (consultantsResult.data ?? []) as ConsultantOption[];
   const currentConsultantId = project.assigned?.id ?? "";
 
-  // Load template mappings, submission files, and PBDB files in parallel
-  const [{ data: mappings }, { data: rawSubmissionFiles }, { data: rawPbdbFiles }] =
-    await Promise.all([
+  // Load template mappings, submission files, PBDB files, and stakeholder reviews in parallel
+  const [
+    { data: mappings },
+    { data: rawSubmissionFiles },
+    { data: rawPbdbFiles },
+    { data: rawReviews },
+    { data: rawProjectStakeholders },
+  ] = await Promise.all([
       project.template_id
         ? supabase
             .from("template_field_mappings")
@@ -130,6 +139,18 @@ export default async function ProjectDetailPage({
         .eq("project_id", id)
         .eq("file_type", "pbdb")
         .order("version", { ascending: true }),
+      supabase
+        .from("stakeholder_reviews")
+        .select("id, review_cycle, stakeholder_email, stakeholder_name, status, comments, responded_at, waive_reason, waived_at")
+        .eq("project_id", id)
+        .order("review_cycle", { ascending: false })
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("stakeholders")
+        .select("id, name, email, company")
+        .eq("scope", "project")
+        .eq("scope_id", id)
+        .order("sort_order", { ascending: true }),
     ]);
 
   const [files, pbdbFiles] = await Promise.all([
@@ -150,6 +171,11 @@ export default async function ProjectDetailPage({
       })
     ),
   ]);
+
+  const reviews = (rawReviews ?? []) as StakeholderReview[];
+  const projectStakeholders = (rawProjectStakeholders ?? []) as {
+    id: string; name: string; email: string; company: string | null;
+  }[];
 
   const labelMap = new Map<string, string>(
     (mappings ?? []).map((m) => [
@@ -370,6 +396,84 @@ export default async function ProjectDetailPage({
           </p>
         )}
       </div>}
+
+      {/* Stakeholder reviews */}
+      {!isDeleted && reviews.length > 0 && (
+        <div className="rounded-lg border border-zinc-200 bg-white">
+          <div className="border-b border-zinc-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-zinc-900">
+              Stakeholder reviews
+            </h2>
+          </div>
+          <div className="divide-y divide-zinc-100">
+            {reviews.map((r) => {
+              const statusConfig = {
+                pending: { label: "Pending", cls: "bg-amber-100 text-amber-700" },
+                approved_without_comments: { label: "Approved", cls: "bg-green-100 text-green-700" },
+                approved_with_comments: { label: "Approved with comments", cls: "bg-green-100 text-green-700" },
+                rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
+                waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
+              }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
+
+              return (
+                <div key={r.id} className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                      <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
+                      {r.comments && (
+                        <p className="mt-1 text-sm text-zinc-600 italic">&ldquo;{r.comments}&rdquo;</p>
+                      )}
+                      {r.waive_reason && (
+                        <p className="mt-1 text-xs text-zinc-400">Waive reason: {r.waive_reason}</p>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}
+                      >
+                        {statusConfig.label}
+                      </span>
+                      {r.responded_at && (
+                        <p className="mt-0.5 text-xs text-zinc-400">
+                          {new Date(r.responded_at).toLocaleDateString("en-AU")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {r.status === "pending" && (
+                    <div className="mt-3 space-y-2 border-t border-zinc-100 pt-3">
+                      <ResendTokenButton reviewId={r.id} projectId={id} />
+                      <UpdateEmailForm
+                        reviewId={r.id}
+                        projectId={id}
+                        currentEmail={r.stakeholder_email}
+                      />
+                      <WaiveForm
+                        reviewId={r.id}
+                        projectId={id}
+                        stakeholderName={r.stakeholder_name}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Project-level stakeholder overrides */}
+      {!isDeleted && (
+        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Project stakeholders</h2>
+          <p className="mb-4 text-xs text-zinc-500">
+            If set, these override the template- and org-level defaults for this project only.
+            Leave empty to use the inherited list.
+          </p>
+          <ProjectStakeholderSection projectId={id} stakeholders={projectStakeholders} />
+        </div>
+      )}
 
       {/* Payment gate — hidden for deleted projects */}
       {!isDeleted && <div className="rounded-lg border border-zinc-200 bg-white p-5">

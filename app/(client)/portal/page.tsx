@@ -52,7 +52,7 @@ export default async function ClientPortalPage() {
   const orgId = user.org_id as string;
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  const [{ data: projectsData }, { data: orgData }] = await Promise.all([
+  const [{ data: projectsData }, { data: orgData }, { data: pendingReviewsData }] = await Promise.all([
     supabase
       .from("projects")
       .select("id, po_number, extracted_fields, status, created_at, expected_delivery_date")
@@ -64,14 +64,23 @@ export default async function ClientPortalPage() {
       .select("payment_method, credit_balance")
       .eq("id", orgId)
       .single(),
+    supabase
+      .from("stakeholder_reviews")
+      .select("project_id, token")
+      .eq("stakeholder_email", user.email as string)
+      .eq("status", "pending"),
   ]);
 
   const projects = (projectsData ?? []) as ProjectRow[];
   const org = orgData as OrgRow | null;
 
-  // Projects in 'dispatched' status are awaiting client acknowledgement.
-  // Tokenised approval links (built in #17) will make these actionable.
-  const pendingApprovals = projects.filter((p) => p.status === "dispatched" || p.status === "revision_required");
+  // Map project_id → approval token for this client's pending reviews
+  const pendingTokenMap = new Map<string, string>(
+    (pendingReviewsData ?? []).map((r) => [r.project_id as string, r.token as string])
+  );
+
+  // Projects awaiting this client's acknowledgement (they have a pending review token)
+  const pendingApprovals = projects.filter((p) => pendingTokenMap.has(p.id));
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 space-y-8">
@@ -125,12 +134,12 @@ export default async function ClientPortalPage() {
                 <span className="text-sm text-zinc-900">
                   {(p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) || (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))}
                 </span>
-                <Link
-                  href={`/portal/projects/${p.id}`}
+                <a
+                  href={`/approve/${pendingTokenMap.get(p.id)}`}
                   className="text-sm font-medium text-amber-700 hover:text-amber-900"
                 >
                   Review →
-                </Link>
+                </a>
               </li>
             ))}
           </ul>

@@ -39,7 +39,12 @@ const templates = [
     element: React.createElement(ModificationsRequestedEmail, {
       consultantName: "Alex Lee",
       projectId: "OPS-2026-001",
-      comments: "Please update the energy star rating on page 3 — it should be 4.5, not 4.0.",
+      modifications: [
+        {
+          stakeholderName: "Jane Smith",
+          comments: "Please update the energy star rating on page 3 — it should be 4.5, not 4.0.",
+        },
+      ],
       projectUrl: "http://localhost:3000/admin/projects/OPS-2026-001",
     }),
   },

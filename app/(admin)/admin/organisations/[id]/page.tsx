@@ -5,6 +5,7 @@ import { setOrgFrozen } from "@/app/actions/organisations";
 import { EditOrgForm } from "./_components/edit-org-form";
 import { OrgConfigForm } from "./_components/org-config-form";
 import { EmailWhitelistCard } from "./_components/email-whitelist-card";
+import { StakeholderList } from "./_components/stakeholder-list";
 import type { Organisation, User } from "@/types";
 
 export default async function OrganisationDetailPage({
@@ -15,19 +16,26 @@ export default async function OrganisationDetailPage({
   const { id } = await params;
   const supabase = createAdminClient();
 
-  const [{ data: org }, { data: users }, { data: templates }] = await Promise.all([
-    supabase.from("organisations").select("*").eq("id", id).maybeSingle(),
-    supabase
-      .from("users")
-      .select("id, email, first_name, last_name, role, is_locked, created_at")
-      .eq("org_id", id)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("templates")
-      .select("id, name, status, created_at")
-      .eq("org_id", id)
-      .order("created_at", { ascending: false }),
-  ]);
+  const [{ data: org }, { data: users }, { data: templates }, { data: orgStakeholders }] =
+    await Promise.all([
+      supabase.from("organisations").select("*").eq("id", id).maybeSingle(),
+      supabase
+        .from("users")
+        .select("id, email, first_name, last_name, role, is_locked, created_at")
+        .eq("org_id", id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("templates")
+        .select("id, name, status, created_at")
+        .eq("org_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("stakeholders")
+        .select("id, name, email, company")
+        .eq("scope", "org")
+        .eq("scope_id", id)
+        .order("sort_order", { ascending: true }),
+    ]);
 
   if (!org) notFound();
 
@@ -38,6 +46,9 @@ export default async function OrganisationDetailPage({
   >[];
   const orgTemplates = (templates ?? []) as {
     id: string; name: string; status: string; created_at: string;
+  }[];
+  const stakeholderRows = (orgStakeholders ?? []) as {
+    id: string; name: string; email: string; company: string | null;
   }[];
 
   // Fetch all unique ORG_ tokens across this org's templates
@@ -199,6 +210,16 @@ export default async function OrganisationDetailPage({
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* Default stakeholders */}
+      <div className="rounded-lg border border-zinc-200 bg-white p-6">
+        <h2 className="mb-1 text-sm font-semibold text-zinc-900">Default stakeholders</h2>
+        <p className="mb-5 text-xs text-zinc-500">
+          These stakeholders receive the PBDB for approval when no project- or template-level
+          override is configured.
+        </p>
+        <StakeholderList orgId={orgData.id} stakeholders={stakeholderRows} />
       </div>
 
       {/* Users */}

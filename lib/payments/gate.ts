@@ -55,18 +55,30 @@ export async function checkDispatchGate(
 
 /**
  * Checks the PBDR conversion hard gate.
- * Stakeholder approval gate is deferred to issue #17.
+ * Requires: credit_deducted (or payment_override) AND all stakeholder reviews acknowledged/waived.
  */
 export async function checkPbdrGate(projectId: string): Promise<PbdrGateResult> {
   const supabase = createAdminClient();
 
   const { data: project, error } = await supabase
     .from("projects")
-    .select("credit_deducted")
+    .select("credit_deducted, payment_override, review_cycle")
     .eq("id", projectId)
     .single();
   if (error || !project) return { allowed: false, creditDeducted: false };
 
-  const creditDeducted = project.credit_deducted as boolean;
-  return { allowed: creditDeducted, creditDeducted };
+  const creditDeducted = (project.credit_deducted as boolean) || (project.payment_override as boolean);
+
+  // Check all stakeholder reviews for current cycle are acknowledged or waived
+  const reviewCycle = (project.review_cycle as number) ?? 1;
+  const { data: pending } = await supabase
+    .from("stakeholder_reviews")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("review_cycle", reviewCycle)
+    .eq("status", "pending");
+
+  const allAcknowledged = !pending || pending.length === 0;
+
+  return { allowed: creditDeducted && allAcknowledged, creditDeducted };
 }

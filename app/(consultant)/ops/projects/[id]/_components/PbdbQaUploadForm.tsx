@@ -3,7 +3,13 @@
 import { useActionState, useRef, useState } from "react";
 import { uploadQaPbdb, type UploadQaPbdbState } from "@/app/actions/projects";
 
-export function PbdbQaUploadForm({ projectId }: { projectId: string }) {
+export function PbdbQaUploadForm({
+  projectId,
+  submitLabel = "Upload completed PBDB",
+}: {
+  projectId: string;
+  submitLabel?: string;
+}) {
   const boundAction = uploadQaPbdb.bind(null, projectId);
   const [state, formAction, pending] = useActionState<UploadQaPbdbState, FormData>(
     boundAction,
@@ -74,7 +80,7 @@ export function PbdbQaUploadForm({ projectId }: { projectId: string }) {
           disabled={pending || !fileName}
           className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
-          {pending ? "Uploading…" : "Upload completed PBDB"}
+          {pending ? "Uploading…" : submitLabel}
         </button>
         {state.error && <p className="text-sm text-red-600">{state.error}</p>}
       </div>

@@ -7,8 +7,10 @@ import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { performAssignment } from "@/lib/projects/assign";
 import { generatePbdb } from "@/lib/documents/generator";
+import { formatAddress } from "@/lib/documents/formatters";
 import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
+import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 
 export type AssignState = { error?: string; success?: boolean };
 
@@ -177,9 +179,9 @@ export async function uploadQaPbdb(
 
   let query = supabase
     .from("projects")
-    .select("id, org_id, status")
+    .select("id, org_id, status, review_cycle, project_number, extracted_fields")
     .eq("id", projectId)
-    .eq("status", "in_progress")
+    .in("status", ["in_progress", "revision_required"])
     .is("deleted_at", null);
 
   if (actor.role === "consultant") {
@@ -208,8 +210,28 @@ export async function uploadQaPbdb(
     .limit(1);
 
   const nextVersion = (existing?.[0]?.version ?? 0) + 1;
+  const isRevision = (project.status as string) === "revision_required";
+  const cycle = (project.review_cycle as number) ?? 1;
+
+  // For revision uploads: update SYS_REV_NO in the doc and use standard filename convention
   const fileBuffer = Buffer.from(await file.arrayBuffer());
-  const storagePath = `${project.org_id}/${projectId}/pbdb/${Date.now()}_qa_v${nextVersion}_${file.name}`;
+  let storedFilename = file.name;
+  if (isRevision) {
+    const projectNum = (project.project_number as string | null) ?? "";
+    const rawAddress = ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? "").trim();
+    const address = formatAddress(rawAddress);
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    storedFilename = [
+      `${projectNum}-S PBDB R${cycle}`,
+      address,
+      `${yyyy} ${mm} ${dd}`,
+    ].filter(Boolean).join(" ") + ".docx";
+  }
+
+  const storagePath = `${project.org_id}/${projectId}/pbdb/${storedFilename}`;
 
   const { error: uploadError } = await supabase.storage
     .from("documents")
@@ -224,7 +246,7 @@ export async function uploadQaPbdb(
     project_id: projectId,
     file_type: "pbdb",
     storage_path: storagePath,
-    original_filename: file.name,
+    original_filename: storedFilename,
     uploaded_by: actor.id,
     version: nextVersion,
   });
@@ -234,11 +256,36 @@ export async function uploadQaPbdb(
     return { error: "Failed to record file. Please try again." };
   }
 
-  await auditLog("project.pbdb_qa_uploaded", actor.id, actor.email as string, {
-    projectId,
-    orgId: project.org_id as string,
-    metadata: { version: nextVersion, filename: file.name },
-  });
+  const now = new Date().toISOString();
+
+  if (isRevision) {
+    await supabase
+      .from("projects")
+      .update({
+        status: "qa_complete",
+        review_cycle: cycle + 1,
+        first_response_at: null,
+        review_buffer_fired_at: null,
+        updated_at: now,
+      })
+      .eq("id", projectId);
+
+    await auditLog("project.revision_complete", actor.id, actor.email as string, {
+      projectId,
+      orgId: project.org_id as string,
+      metadata: { review_cycle: cycle, version: nextVersion, filename: file.name },
+    });
+
+    dispatchPbdb(projectId, actor.id).catch((err) => {
+      console.error(`[uploadQaPbdb] revision auto-dispatch failed for ${projectId}:`, err);
+    });
+  } else {
+    await auditLog("project.pbdb_qa_uploaded", actor.id, actor.email as string, {
+      projectId,
+      orgId: project.org_id as string,
+      metadata: { version: nextVersion, filename: file.name },
+    });
+  }
 
   revalidatePath(`/admin/projects/${projectId}`);
   redirect(`/ops/projects/${projectId}`);
@@ -288,7 +335,7 @@ export async function markQaComplete(
 
   const { error: updateError } = await supabase
     .from("projects")
-    .update({ status: "qa_complete", updated_at: new Date().toISOString() })
+    .update({ status: "qa_complete", qa_completed_by: actor.id, updated_at: new Date().toISOString() })
     .eq("id", projectId);
 
   if (updateError) return { error: updateError.message };
@@ -311,7 +358,7 @@ export async function markQaComplete(
         notify({
           recipientId: admin.id as string,
           type: "qa_complete",
-          message: `QA complete for project ${projectRef}. Ready for stakeholder dispatch.`,
+          message: `QA complete for ${projectRef} — dispatching to stakeholders now.`,
           projectId,
           emailSubject: `QA complete — ${projectRef}`,
           emailHtml: QaCompleteEmail({
@@ -327,6 +374,11 @@ export async function markQaComplete(
     projectId,
     orgId: project.org_id as string,
     metadata: { project_ref: projectRef },
+  });
+
+  // Auto-dispatch — errors are logged but do not block the QA complete transition
+  dispatchPbdb(projectId, actor.id).catch((err) => {
+    console.error(`[markQaComplete] auto-dispatch failed for ${projectId}:`, err);
   });
 
   revalidatePath(`/admin/projects/${projectId}`);

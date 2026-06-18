@@ -87,6 +87,17 @@ export default async function ClientProjectDetailPage({
     project.expected_delivery_date < todayIso &&
     !TERMINAL_STATUSES.has(project.status);
 
+  // Check if this client has a pending approval request for this project
+  const { data: pendingReview } = await supabase
+    .from("stakeholder_reviews")
+    .select("id, token, expires_at, review_cycle")
+    .eq("project_id", id)
+    .eq("stakeholder_email", user.email as string)
+    .eq("status", "pending")
+    .order("review_cycle", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   // Load template mappings, submission files, and (conditionally) PBDB in parallel
   const [{ data: mappings }, { data: rawFiles }, { data: rawPbdbs }] = await Promise.all([
     project.template_id
@@ -187,6 +198,30 @@ export default async function ClientProjectDetailPage({
           </span>
         )}
       </div>
+
+      {/* Approval callout — shown when this client has a pending review */}
+      {pendingReview && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-5">
+          <h2 className="text-sm font-semibold text-amber-900">Your approval is required</h2>
+          <p className="mt-1 text-sm text-amber-800">
+            Please review the document and submit your response. This link expires on{" "}
+            <strong>
+              {new Date(pendingReview.expires_at as string).toLocaleDateString("en-AU", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </strong>
+            .
+          </p>
+          <a
+            href={`/approve/${pendingReview.token}`}
+            className="mt-3 inline-block rounded-md bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800"
+          >
+            Review and respond →
+          </a>
+        </div>
+      )}
 
       {/* Project summary */}
       <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">

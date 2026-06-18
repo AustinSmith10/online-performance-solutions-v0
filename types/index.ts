@@ -30,7 +30,10 @@ export type NotificationType =
   | "project_submitted"
   | "project_approved"
   | "project_dispatched"
-  | "qa_complete";
+  | "qa_complete"
+  | "all_acknowledged"
+  | "modifications_requested"
+  | "stakeholder_waived";
 
 export type CreditEventType =
   | "top_up"
@@ -125,6 +128,9 @@ export interface Project {
   payment_override_reason: string | null;
   payment_override_at: string | null;
   payment_override_by: string | null;
+  review_cycle: number;
+  first_response_at: string | null;
+  review_buffer_fired_at: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -157,9 +163,39 @@ export interface TemplateFieldMapping {
 
 export interface Stakeholder {
   id: string;
+  scope: "org" | "project";
+  scope_id: string;
   name: string;
   email: string;
   company: string | null;
   metadata: Record<string, unknown>;
   is_active: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export type StakeholderReviewStatus =
+  | "pending"
+  | "approved_without_comments"
+  | "approved_with_comments"
+  | "rejected_with_comments"
+  | "waived";
+
+export interface StakeholderReview {
+  id: string;
+  project_id: string;
+  review_cycle: number;
+  stakeholder_email: string;
+  stakeholder_name: string;
+  token: string;
+  dispatched_at: string;
+  expires_at: string;
+  fresh_token_sent_at: string | null;
+  status: StakeholderReviewStatus;
+  comments: string | null;
+  responded_at: string | null;
+  waived_by: string | null;
+  waive_reason: string | null;
+  waived_at: string | null;
+  created_at: string;
 }

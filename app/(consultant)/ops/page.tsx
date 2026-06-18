@@ -55,8 +55,9 @@ export default async function ConsultantOpsPage() {
   const projects = (data ?? []) as ProjectRow[];
   const todayIso = new Date().toISOString().slice(0, 10);
 
+  const revisionRequired = projects.filter((p) => p.status === "revision_required");
   const active = projects.filter((p) =>
-    (["assigned", "in_progress", "qa_complete", "revision_required"] as ProjectStatus[]).includes(p.status)
+    (["assigned", "in_progress", "qa_complete"] as ProjectStatus[]).includes(p.status)
   );
   const withStakeholders = projects.filter((p) =>
     (["dispatched", "converting"] as ProjectStatus[]).includes(p.status)
@@ -77,6 +78,36 @@ export default async function ConsultantOpsPage() {
           <p className="mt-1 text-sm text-zinc-500">
             Projects will appear here once assigned by your account manager.
           </p>
+        </div>
+      )}
+
+      {revisionRequired.length > 0 && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-5">
+          <h2 className="text-sm font-semibold text-red-900">
+            Revision required ({revisionRequired.length})
+          </h2>
+          <p className="mt-0.5 text-xs text-red-700">
+            Stakeholders have rejected the following PBDBs. Review their feedback and upload a corrected version.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {revisionRequired.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between rounded-md border border-red-100 bg-white px-4 py-2.5"
+              >
+                <span className="text-sm text-zinc-900">
+                  {(p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
+                    (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))}
+                </span>
+                <a
+                  href={`/ops/projects/${p.id}`}
+                  className="text-sm font-medium text-red-700 hover:text-red-900"
+                >
+                  View feedback →
+                </a>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

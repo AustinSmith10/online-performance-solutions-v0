@@ -55,7 +55,7 @@ export default async function ConsultantProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, created_at, expected_delivery_date, source, organisations(name)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, organisations(name)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -70,6 +70,7 @@ export default async function ConsultantProjectDetailPage({
     po_number: string | null;
     project_number: string | null;
     template_id: string | null;
+    review_cycle: number;
     created_at: string;
     expected_delivery_date: string | null;
     source: "portal" | "email";
@@ -83,8 +84,8 @@ export default async function ConsultantProjectDetailPage({
     project.expected_delivery_date < todayIso &&
     !TERMINAL_STATUSES.has(project.status);
 
-  // Load template mappings, submission files, and PBDB files in parallel
-  const [{ data: mappings }, { data: rawSubmissionFiles }, { data: rawPbdbFiles }] =
+  // Load template mappings, submission files, PBDB files, and stakeholder reviews
+  const [{ data: mappings }, { data: rawSubmissionFiles }, { data: rawPbdbFiles }, { data: rawReviews }] =
     await Promise.all([
       project.template_id
         ? supabase
@@ -105,6 +106,15 @@ export default async function ConsultantProjectDetailPage({
         .eq("project_id", id)
         .eq("file_type", "pbdb")
         .order("version", { ascending: true }),
+      project.status === "revision_required"
+        ? supabase
+            .from("stakeholder_reviews")
+            .select("id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle")
+            .eq("project_id", id)
+            .eq("review_cycle", project.review_cycle)
+            .eq("status", "rejected_with_comments")
+            .order("responded_at", { ascending: true })
+        : Promise.resolve({ data: [] }),
     ]);
 
   // Generate signed URLs — submission files from `submissions`, PBDB from `documents`
@@ -120,6 +130,10 @@ export default async function ConsultantProjectDetailPage({
   const pbdbFiles = rawPbdbFiles ?? [];
   const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
   const hasQaFile = pbdbFiles.some((f) => (f.version as number) >= 2);
+  const modificationComments = (rawReviews ?? []) as {
+    id: string; stakeholder_name: string; stakeholder_email: string;
+    status: string; comments: string | null; responded_at: string | null; review_cycle: number;
+  }[];
 
   const pbdbWithUrls = await Promise.all(
     pbdbFiles.map(async (f) => {
@@ -277,6 +291,45 @@ export default async function ConsultantProjectDetailPage({
           )}
         </div>
       </div>
+
+      {/* Revision required — stakeholder comments + re-upload */}
+      {project.status === "revision_required" && (
+        <div className="rounded-lg border border-red-200 bg-red-50">
+          <div className="border-b border-red-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-red-800">Rejection feedback</h2>
+            <p className="mt-1 text-xs text-red-600">
+              One or more stakeholders have rejected this PBDB. Review their feedback below,
+              correct the document in Word, upload the revised version, then mark revision complete.
+            </p>
+          </div>
+          <div className="space-y-6 px-5 py-5">
+            {modificationComments.length > 0 && (
+              <div className="space-y-3">
+                {modificationComments.map((r) => (
+                  <div key={r.id} className="rounded-md border border-red-200 bg-white px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium text-zinc-700">
+                        {r.stakeholder_name}{" "}
+                        <span className="font-normal text-zinc-400">&lt;{r.stakeholder_email}&gt;</span>
+                      </p>
+                      <span className="shrink-0 text-xs text-zinc-400">
+                        {r.responded_at
+                          ? new Date(r.responded_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+                          : ""}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-relaxed text-zinc-800">{r.comments}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <PbdbQaUploadForm
+              projectId={id}
+              submitLabel="Upload revised PBDB and re-submit to stakeholders"
+            />
+          </div>
+        </div>
+      )}
 
       {/* QA correction + Documents — side by side */}
       <div className={project.status === "in_progress" && latestPbdb ? "grid grid-cols-1 gap-6 items-start lg:grid-cols-2" : ""}>
