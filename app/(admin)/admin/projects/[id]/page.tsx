@@ -13,6 +13,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   submitted: "Submitted",
   assigned: "Assigned",
   in_progress: "In Progress",
+  qa_complete: "QA Complete",
   dispatched: "Awaiting Approval",
   revision_required: "Revision Required",
   converting: "Converting to PBDR",
@@ -107,30 +108,48 @@ export default async function ProjectDetailPage({
   const consultants = (consultantsResult.data ?? []) as ConsultantOption[];
   const currentConsultantId = project.assigned?.id ?? "";
 
-  // Load template mappings and project files in parallel
-  const [{ data: mappings }, { data: rawFiles }] = await Promise.all([
-    project.template_id
-      ? supabase
-          .from("template_field_mappings")
-          .select("placeholder_token, field_key, display_label")
-          .eq("template_id", project.template_id)
-          .order("placeholder_token")
-      : Promise.resolve({ data: [] }),
-    supabase
-      .from("project_files")
-      .select("id, file_type, original_filename, storage_path, created_at")
-      .eq("project_id", id)
-      .order("created_at"),
-  ]);
+  // Load template mappings, submission files, and PBDB files in parallel
+  const [{ data: mappings }, { data: rawSubmissionFiles }, { data: rawPbdbFiles }] =
+    await Promise.all([
+      project.template_id
+        ? supabase
+            .from("template_field_mappings")
+            .select("placeholder_token, field_key, display_label")
+            .eq("template_id", project.template_id)
+            .order("placeholder_token")
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from("project_files")
+        .select("id, file_type, original_filename, storage_path, created_at")
+        .eq("project_id", id)
+        .in("file_type", ["po", "building_plans", "additional"])
+        .order("created_at"),
+      supabase
+        .from("project_files")
+        .select("id, original_filename, storage_path, version, created_at")
+        .eq("project_id", id)
+        .eq("file_type", "pbdb")
+        .order("version", { ascending: true }),
+    ]);
 
-  const files = await Promise.all(
-    (rawFiles ?? []).map(async (f) => {
-      const { data: signed } = await supabase.storage
-        .from("submissions")
-        .createSignedUrl(f.storage_path as string, 3600);
-      return { ...f, signedUrl: signed?.signedUrl ?? null };
-    })
-  );
+  const [files, pbdbFiles] = await Promise.all([
+    Promise.all(
+      (rawSubmissionFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("submissions")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
+    Promise.all(
+      (rawPbdbFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("documents")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
+  ]);
 
   const labelMap = new Map<string, string>(
     (mappings ?? []).map((m) => [
@@ -219,6 +238,48 @@ export default async function ProjectDetailPage({
         <h2 className="mb-4 text-sm font-semibold text-zinc-900">Field values</h2>
         <FieldsForm projectId={id} fields={fieldEntries} />
       </div>
+
+      {/* PBDB version history */}
+      {pbdbFiles.length > 0 && (
+        <div className="rounded-lg border border-zinc-200 bg-white">
+          <div className="border-b border-zinc-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-zinc-900">PBDB</h2>
+          </div>
+          <div className="divide-y divide-zinc-100">
+            {pbdbFiles.map((f) => {
+              const version = f.version as number;
+              const isQa = version >= 2;
+              return (
+                <div
+                  key={f.id as string}
+                  className="flex items-center justify-between px-5 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900">
+                      {f.original_filename as string}
+                    </p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      Version {version}
+                      {isQa ? " — QA corrected" : " — Generated"}
+                      {" · "}
+                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                    </p>
+                  </div>
+                  {f.signedUrl && (
+                    <a
+                      href={f.signedUrl}
+                      download={f.original_filename as string}
+                      className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Download
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Documents */}
       <div className="rounded-lg border border-zinc-200 bg-white">

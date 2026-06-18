@@ -5,6 +5,7 @@ export type ProjectStatus =
   | "submitted"
   | "assigned"
   | "in_progress"
+  | "qa_complete"
   | "dispatched"
   | "revision_required"
   | "converting"
@@ -28,7 +29,8 @@ export type NotificationType =
   | "consultant_assigned"
   | "project_submitted"
   | "project_approved"
-  | "project_dispatched";
+  | "project_dispatched"
+  | "qa_complete";
 
 export type CreditEventType =
   | "top_up"

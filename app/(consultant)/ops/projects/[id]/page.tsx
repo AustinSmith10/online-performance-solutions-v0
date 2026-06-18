@@ -4,6 +4,8 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { ProjectNumberForm } from "./_components/ProjectNumberForm";
+import { PbdbQaUploadForm } from "./_components/PbdbQaUploadForm";
+import { MarkQaCompleteButton } from "./_components/MarkQaCompleteButton";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import type { ProjectStatus } from "@/types";
 
@@ -12,6 +14,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   submitted: "Submitted",
   assigned: "Assigned",
   in_progress: "In Progress",
+  qa_complete: "QA Complete",
   dispatched: "Awaiting Approval",
   revision_required: "Revision Required",
   converting: "Converting to PBDR",
@@ -24,6 +27,7 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   submitted: "bg-blue-100 text-blue-700",
   assigned: "bg-yellow-100 text-yellow-700",
   in_progress: "bg-purple-100 text-purple-700",
+  qa_complete: "bg-teal-100 text-teal-700",
   dispatched: "bg-amber-100 text-amber-700",
   revision_required: "bg-red-100 text-red-700",
   converting: "bg-purple-100 text-purple-700",
@@ -100,8 +104,7 @@ export default async function ConsultantProjectDetailPage({
         .select("id, original_filename, storage_path, version, created_at")
         .eq("project_id", id)
         .eq("file_type", "pbdb")
-        .order("version", { ascending: false })
-        .limit(1),
+        .order("version", { ascending: true }),
     ]);
 
   // Generate signed URLs — submission files from `submissions`, PBDB from `documents`
@@ -114,14 +117,18 @@ export default async function ConsultantProjectDetailPage({
     })
   );
 
-  const latestPbdb = rawPbdbFiles?.[0] ?? null;
-  let pbdbSignedUrl: string | null = null;
-  if (latestPbdb) {
-    const { data: signed } = await supabase.storage
-      .from("documents")
-      .createSignedUrl(latestPbdb.storage_path as string, 3600);
-    pbdbSignedUrl = signed?.signedUrl ?? null;
-  }
+  const pbdbFiles = rawPbdbFiles ?? [];
+  const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
+  const hasQaFile = pbdbFiles.some((f) => (f.version as number) >= 2);
+
+  const pbdbWithUrls = await Promise.all(
+    pbdbFiles.map(async (f) => {
+      const { data: signed } = await supabase.storage
+        .from("documents")
+        .createSignedUrl(f.storage_path as string, 3600);
+      return { ...f, signedUrl: signed?.signedUrl ?? null };
+    })
+  );
 
   const labelMap = new Map<string, string>(
     (mappings ?? []).map((m) => [
@@ -219,81 +226,115 @@ export default async function ConsultantProjectDetailPage({
         </div>
       )}
 
-      {/* PBDB generation */}
+      {/* PBDB */}
       <div className="rounded-lg border border-zinc-200 bg-white">
         <div className="border-b border-zinc-100 px-5 py-4">
           <h2 className="text-sm font-semibold text-zinc-900">PBDB</h2>
         </div>
-        <div className="px-5 py-4">
-          {project.project_number && latestPbdb ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-zinc-900">
-                  {latestPbdb.original_filename as string}
-                </p>
-                <p className="mt-0.5 text-xs text-zinc-500">
-                  Version {latestPbdb.version as number} &middot; Project no.{" "}
-                  {project.project_number} &middot; Generated{" "}
-                  {new Date(latestPbdb.created_at as string).toLocaleDateString("en-AU")}
-                </p>
-              </div>
-              {pbdbSignedUrl && (
-                <a
-                  href={pbdbSignedUrl}
-                  download={latestPbdb.original_filename as string}
-                  className="ml-4 shrink-0 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-                >
-                  Download PBDB
-                </a>
-              )}
+        <div className="divide-y divide-zinc-100">
+          {!project.project_number ? (
+            <div className="px-5 py-4">
+              <ProjectNumberForm projectId={id} />
             </div>
-          ) : project.project_number && !latestPbdb ? (
-            <p className="text-sm text-zinc-500">
-              PBDB is being generated — refresh in a moment.
-            </p>
+          ) : !latestPbdb ? (
+            <div className="px-5 py-4">
+              <p className="text-sm text-zinc-500">
+                PBDB is being generated — refresh in a moment.
+              </p>
+            </div>
           ) : (
-            <ProjectNumberForm projectId={id} />
+            pbdbWithUrls.map((f) => {
+              const version = f.version as number;
+              const isQa = version >= 2;
+              return (
+                <div
+                  key={f.id as string}
+                  className="flex items-center justify-between px-5 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900">
+                      {f.original_filename as string}
+                    </p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      Version {version}
+                      {isQa ? " — QA corrected" : " — Generated"}
+                      {" · "}
+                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                    </p>
+                  </div>
+                  {f.signedUrl && (
+                    <a
+                      href={f.signedUrl}
+                      download={f.original_filename as string}
+                      className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Download
+                    </a>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
       </div>
 
-      {/* Submission documents */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
-        </div>
-        {submissionFiles.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-zinc-500">No documents uploaded yet.</p>
-        ) : (
-          <div className="divide-y divide-zinc-100">
-            {submissionFiles.map((f) => (
-              <div
-                key={f.id as string}
-                className="flex items-center justify-between px-5 py-3"
-              >
-                <div>
-                  <p className="text-sm text-zinc-900">{f.original_filename as string}</p>
-                  <p className="text-xs text-zinc-500">
-                    {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type} &middot;{" "}
-                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </div>
-                {f.signedUrl && (
-                  <a
-                    href={f.signedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Download
-                  </a>
-                )}
-              </div>
-            ))}
+      {/* QA correction + Documents — side by side */}
+      <div className={project.status === "in_progress" && latestPbdb ? "grid grid-cols-1 gap-6 items-start lg:grid-cols-2" : ""}>
+        {/* QA correction — only shown while in_progress */}
+        {project.status === "in_progress" && latestPbdb && (
+          <div className="rounded-lg border border-zinc-200 bg-white">
+            <div className="border-b border-zinc-100 px-5 py-4">
+              <h2 className="text-sm font-semibold text-zinc-900">Submit completed PBDB</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Open the generated PBDB in Word, insert the plan images at the correct
+                positions, correct any errors, then upload your completed version here.
+              </p>
+            </div>
+            <div className="space-y-4 px-5 py-5">
+              <PbdbQaUploadForm projectId={id} />
+              {hasQaFile && <MarkQaCompleteButton projectId={id} />}
+            </div>
           </div>
         )}
-        <div className="border-t border-zinc-100 px-5 py-4">
-          <FileUploadForm projectId={id} />
+
+        {/* Submission documents */}
+        <div className="rounded-lg border border-zinc-200 bg-white">
+          <div className="border-b border-zinc-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
+          </div>
+          {submissionFiles.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-zinc-500">No documents uploaded yet.</p>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {submissionFiles.map((f) => (
+                <div
+                  key={f.id as string}
+                  className="flex items-center justify-between px-5 py-3"
+                >
+                  <div>
+                    <p className="text-sm text-zinc-900">{f.original_filename as string}</p>
+                    <p className="text-xs text-zinc-500">
+                      {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type} &middot;{" "}
+                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                    </p>
+                  </div>
+                  {f.signedUrl && (
+                    <a
+                      href={f.signedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Download
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="border-t border-zinc-100 px-5 py-4">
+            <FileUploadForm projectId={id} />
+          </div>
         </div>
       </div>
     </div>

@@ -8,6 +8,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   submitted: "Submitted",
   assigned: "Assigned",
   in_progress: "In Progress",
+  qa_complete: "QA Complete",
   dispatched: "Awaiting Approval",
   revision_required: "Revision Required",
   converting: "Converting to PBDR",
@@ -20,6 +21,7 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   submitted: "bg-blue-100 text-blue-700",
   assigned: "bg-yellow-100 text-yellow-700",
   in_progress: "bg-purple-100 text-purple-700",
+  qa_complete: "bg-teal-100 text-teal-700",
   dispatched: "bg-amber-100 text-amber-700",
   revision_required: "bg-red-100 text-red-700",
   converting: "bg-purple-100 text-purple-700",
@@ -54,7 +56,7 @@ export default async function ConsultantOpsPage() {
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const active = projects.filter((p) =>
-    (["assigned", "in_progress", "revision_required"] as ProjectStatus[]).includes(p.status)
+    (["assigned", "in_progress", "qa_complete", "revision_required"] as ProjectStatus[]).includes(p.status)
   );
   const withStakeholders = projects.filter((p) =>
     (["dispatched", "converting"] as ProjectStatus[]).includes(p.status)

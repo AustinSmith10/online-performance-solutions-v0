@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
 import { auditLog } from "@/lib/audit/log";
 import { ConsultantAssignedEmail } from "@/lib/email/templates/ConsultantAssignedEmail";
+import { getPublicHolidays } from "@/lib/delivery/public-holidays";
+import { addWorkingDays } from "@/lib/delivery/working-days";
 
 export async function performAssignment(
   projectId: string,
@@ -16,7 +18,7 @@ export async function performAssignment(
   const [projectResult, consultantResult] = await Promise.all([
     supabase
       .from("projects")
-      .select("id, project_number, site_address, extracted_fields, org_id, organisations(name)")
+      .select("id, project_number, site_address, extracted_fields, org_id, expected_delivery_date, organisations(name, delivery_working_days, state_territory)")
       .eq("id", projectId)
       .single(),
     supabase
@@ -31,13 +33,39 @@ export async function performAssignment(
   if (consultantResult.error || !consultantResult.data) throw new Error("Consultant not found");
 
   const project = projectResult.data as typeof projectResult.data & {
-    organisations: { name: string } | null;
+    expected_delivery_date: string | null;
+    organisations: { name: string; delivery_working_days: number; state_territory: string | null } | null;
   };
   const consultant = consultantResult.data;
 
+  // Calculate delivery date now if it wasn't set during submission (e.g. draft assigned directly)
+  let deliveryDate = project.expected_delivery_date as string | null;
+  if (!deliveryDate) {
+    try {
+      const org = project.organisations;
+      const deliveryDays = org?.delivery_working_days ?? 5;
+      const stateTerritory = org?.state_territory ?? null;
+      const now = new Date();
+      const [hA, hB] = await Promise.all([
+        getPublicHolidays(stateTerritory, now.getUTCFullYear()),
+        getPublicHolidays(stateTerritory, now.getUTCFullYear() + 1),
+      ]);
+      deliveryDate = addWorkingDays(now, deliveryDays, new Set([...hA, ...hB]))
+        .toISOString()
+        .slice(0, 10);
+    } catch {
+      // Non-fatal — proceed without delivery date
+    }
+  }
+
   const { error: updateErr } = await supabase
     .from("projects")
-    .update({ assigned_consultant_id: consultantId, status: "assigned", updated_at: new Date().toISOString() })
+    .update({
+      assigned_consultant_id: consultantId,
+      status: "assigned",
+      updated_at: new Date().toISOString(),
+      ...(deliveryDate && !project.expected_delivery_date ? { expected_delivery_date: deliveryDate } : {}),
+    })
     .eq("id", projectId);
 
   if (updateErr) throw new Error(updateErr.message);
