@@ -246,6 +246,12 @@ export async function deliverPbdr(
       })
       .eq("id", projectId);
 
+    await auditLog("project.complete", actorId, actorEmail, {
+      projectId,
+      orgId: project.org_id as string,
+      metadata: { project_number: (project.project_number as string | null) ?? null },
+    });
+
     await auditLog("pbdr.delivered", actorId, actorEmail, {
       projectId,
       orgId: project.org_id as string,

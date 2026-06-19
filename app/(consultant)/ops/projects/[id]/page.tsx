@@ -135,15 +135,6 @@ export default async function ConsultantProjectDetailPage({
     status: string; comments: string | null; responded_at: string | null; review_cycle: number;
   }[];
 
-  const pbdbWithUrls = await Promise.all(
-    pbdbFiles.map(async (f) => {
-      const { data: signed } = await supabase.storage
-        .from("documents")
-        .createSignedUrl(f.storage_path as string, 3600);
-      return { ...f, signedUrl: signed?.signedUrl ?? null };
-    })
-  );
-
   const labelMap = new Map<string, string>(
     (mappings ?? []).map((m) => [
       m.placeholder_token as string,
@@ -257,7 +248,7 @@ export default async function ConsultantProjectDetailPage({
               </p>
             </div>
           ) : (
-            pbdbWithUrls.map((f) => {
+            pbdbFiles.map((f) => {
               const version = f.version as number;
               const isQa = version >= 2;
               return (
@@ -276,15 +267,12 @@ export default async function ConsultantProjectDetailPage({
                       {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                     </p>
                   </div>
-                  {f.signedUrl && (
-                    <a
-                      href={f.signedUrl}
-                      download={f.original_filename as string}
-                      className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                    >
-                      Download
-                    </a>
-                  )}
+                  <a
+                    href={`/api/download/pbdb/${f.id as string}`}
+                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Download
+                  </a>
                 </div>
               );
             })

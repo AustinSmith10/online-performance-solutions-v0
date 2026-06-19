@@ -163,19 +163,11 @@ export default async function ProjectDetailPage({
         .order("sort_order", { ascending: true }),
     ]);
 
-  const [files, pbdbFiles, pbdrFiles] = await Promise.all([
+  const [files, pbdrFiles] = await Promise.all([
     Promise.all(
       (rawSubmissionFiles ?? []).map(async (f) => {
         const { data: signed } = await supabase.storage
           .from("submissions")
-          .createSignedUrl(f.storage_path as string, 3600);
-        return { ...f, signedUrl: signed?.signedUrl ?? null };
-      })
-    ),
-    Promise.all(
-      (rawPbdbFiles ?? []).map(async (f) => {
-        const { data: signed } = await supabase.storage
-          .from("documents")
           .createSignedUrl(f.storage_path as string, 3600);
         return { ...f, signedUrl: signed?.signedUrl ?? null };
       })
@@ -189,6 +181,7 @@ export default async function ProjectDetailPage({
       })
     ),
   ]);
+  const pbdbFiles = rawPbdbFiles ?? [];
 
   const reviews = (rawReviews ?? []) as StakeholderReview[];
   const projectStakeholders = (rawProjectStakeholders ?? []) as {
@@ -316,15 +309,12 @@ export default async function ProjectDetailPage({
                       {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                     </p>
                   </div>
-                  {f.signedUrl && (
-                    <a
-                      href={f.signedUrl}
-                      download={f.original_filename as string}
-                      className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                    >
-                      Download
-                    </a>
-                  )}
+                  <a
+                    href={`/api/download/pbdb/${f.id as string}`}
+                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Download
+                  </a>
                 </div>
               );
             })}

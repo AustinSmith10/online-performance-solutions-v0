@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateToken } from "@/lib/stakeholders/tokens";
+import { auditLog } from "@/lib/audit/log";
 import { ApprovalForm } from "./_components/ApprovalForm";
 
 export default async function ApprovePage({
@@ -67,7 +68,13 @@ export default async function ApprovePage({
     );
   }
 
-  // Fetch signed PBDB URL and check if stakeholder has a portal account (in parallel)
+  // Log that the stakeholder accessed their approval link
+  await auditLog("stakeholder.token_accessed", null, review.stakeholder_email, {
+    projectId: review.project_id,
+    metadata: { review_id: review.id, review_cycle: review.review_cycle },
+  });
+
+  // Check if stakeholder has a portal account (in parallel with other queries)
   const supabase = createAdminClient();
   const [{ data: pbdbFile }, { data: portalUser }] = await Promise.all([
     supabase
@@ -88,14 +95,6 @@ export default async function ApprovePage({
 
   const hasPortalAccount = !!portalUser;
 
-  let pbdbSignedUrl: string | null = null;
-  if (pbdbFile) {
-    const { data: signed } = await supabase.storage
-      .from("documents")
-      .createSignedUrl(pbdbFile.storage_path as string, 7 * 24 * 3600);
-    pbdbSignedUrl = signed?.signedUrl ?? null;
-  }
-
   return (
     <div style={styles.wrapper}>
       <div style={styles.card}>
@@ -107,12 +106,10 @@ export default async function ApprovePage({
           Please review the document below and submit your response.
         </p>
 
-        {pbdbSignedUrl && (
+        {pbdbFile && (
           <a
-            href={pbdbSignedUrl}
+            href={`/approve/${tokenString}/download`}
             style={styles.downloadLink}
-            target="_blank"
-            rel="noopener noreferrer"
           >
             Download PBDB document
           </a>

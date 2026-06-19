@@ -14,8 +14,6 @@ type DeliveredProject = {
 
 type PbdrFile = {
   project_id: string;
-  storage_path: string;
-  original_filename: string;
 };
 
 export default async function ClientHistoryPage() {
@@ -31,40 +29,20 @@ export default async function ClientHistoryPage() {
 
   const reports = (data ?? []) as DeliveredProject[];
 
-  // Load the latest PBDR file for each delivered project
+  // Determine which projects have a PBDR available
   const projectIds = reports.map((r) => r.id);
-  let pbdrByProject: Map<string, { signedUrl: string; filename: string }> = new Map();
+  const projectsWithPbdr = new Set<string>();
 
   if (projectIds.length > 0) {
     const { data: pbdrFiles } = await supabase
       .from("project_files")
-      .select("project_id, storage_path, original_filename, version")
+      .select("project_id")
       .in("project_id", projectIds)
-      .eq("file_type", "pbdr")
-      .order("version", { ascending: false });
+      .eq("file_type", "pbdr");
 
-    // Keep only the highest-version PBDR per project
-    const latestByProject = new Map<string, PbdrFile>();
-    for (const f of (pbdrFiles ?? []) as (PbdrFile & { version: number })[]) {
-      if (!latestByProject.has(f.project_id)) {
-        latestByProject.set(f.project_id, f);
-      }
+    for (const f of (pbdrFiles ?? []) as PbdrFile[]) {
+      projectsWithPbdr.add(f.project_id);
     }
-
-    // Generate signed URLs (30-day links matching email delivery)
-    const entries = (
-      await Promise.all(
-        [...latestByProject.entries()].map(async ([projId, f]) => {
-          const { data: signed } = await supabase.storage
-            .from("documents")
-            .createSignedUrl(f.storage_path, 30 * 24 * 3600);
-          const url = signed?.signedUrl;
-          if (!url) return null;
-          return [projId, { signedUrl: url, filename: f.original_filename }] as const;
-        })
-      )
-    ).filter((e): e is [string, { signedUrl: string; filename: string }] => e !== null);
-    pbdrByProject = new Map(entries);
   }
 
   return (
@@ -95,7 +73,7 @@ export default async function ClientHistoryPage() {
             </thead>
             <tbody className="divide-y divide-zinc-50">
               {reports.map((r) => {
-                const pbdr = pbdrByProject.get(r.id);
+                const hasPbdr = projectsWithPbdr.has(r.id);
                 const deliveredDate = r.delivered_at ?? r.created_at;
                 return (
                   <tr key={r.id} className="hover:bg-zinc-50">
@@ -111,10 +89,9 @@ export default async function ClientHistoryPage() {
                       })}
                     </td>
                     <td className="px-5 py-3">
-                      {pbdr ? (
+                      {hasPbdr ? (
                         <a
-                          href={pbdr.signedUrl}
-                          download={pbdr.filename}
+                          href={`/api/download/pbdr/${r.id}`}
                           className="inline-flex items-center rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
                         >
                           Download PDF
