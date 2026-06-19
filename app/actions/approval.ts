@@ -5,6 +5,7 @@ import { validateToken } from "@/lib/stakeholders/tokens";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
+import { deliverPbdr } from "@/lib/documents/delivery";
 
 export interface ApprovalState {
   error?: string;
@@ -144,20 +145,10 @@ export async function submitApproval(
       .eq("status", "pending");
 
     if (!pending || pending.length === 0) {
-      const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
-      const html = `<p style="font-family:sans-serif">All stakeholders have approved project <strong>${projectRef}</strong>. PBDR conversion can proceed.</p>`;
-      await Promise.all(
-        (admins ?? []).map((u: { id: string }) =>
-          notify({
-            recipientId: u.id,
-            type: "all_acknowledged",
-            message: `All stakeholders approved ${projectRef}. Ready for PBDR conversion.`,
-            projectId: review.project_id,
-            emailSubject: `All stakeholders approved — ${projectRef}`,
-            emailHtml: html,
-          }).catch(() => {})
-        )
-      );
+      // All stakeholders have acknowledged — auto-trigger PBDR conversion and delivery
+      deliverPbdr(review.project_id, null, null).catch((err) => {
+        console.error(`[submitApproval] auto-deliver-pbdr failed for ${review.project_id}:`, err);
+      });
     }
   }
 

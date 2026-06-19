@@ -113,8 +113,8 @@ ls supabase/migrations/ | wc -l
 **How to interpret:** Output must be `14`.
 
 
-| Last Result | Re-run Result | Notes |
-| ----------- | ------------- | ----- |
+| Last Result | Re-run Result | Notes                                                                                                                                         |
+| ----------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | PASS(14)    | PASS(26)      | Count has grown to 26 as new migrations have been added (audit log trigger, project status refactor, etc). Test criteria updated accordingly. |
 
 
@@ -662,8 +662,8 @@ grep "webhooks/email" proxy.ts
 **Expected:** All `{TOKEN}` placeholders found in the `.docx` are listed. For the Stockland template, you should see at minimum: `{CLIENT_ADDRESS}`, `{EXTRACT_HOUSE_TYPE}`, `{EXTRACT_SITE_WD_NO}`, `{ORG_CERTIFIER_NAME}`, `{PROJECT_NO}`, `{SYS_GEN_DATE}`.
 
 
-| Result | Notes                                                                                                                                                                                                                                                                                                          |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Result | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | PASS   | CLIENT_ADDRESS is not a .docx token it's captured via the submission form; token validation is auto-detected by prefix, there is no manual mapping dropdown. ~~**This is an issue, the supabase does not update the table if a template token is updated. It does not remove the old token or it is hardcoded.**~~ **Investigated — not a bug.** Re-upload path in `templates.ts` deletes all existing `template_field_mappings` for the template before re-inserting from the new .docx. Old tokens are fully purged on every re-upload. |
 
 
@@ -911,8 +911,8 @@ grep "webhooks/email" proxy.ts
 **Expected:** Redirected to `/portal/projects/[id]`. The project detail page shows **Submitted** status. In DB: `status = "submitted"` and `delivery_recipient_email = "extra@recipient.test"`.
 
 
-| Result | Notes                                                                                                       |
-| ------ | ----------------------------------------------------------------------------------------------------------- |
+| Result | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | PASS   | ~~Issue, can submit without certain fields. Need to identify how to toggle on required for each field token.~~ **Investigated — not a bug.** Required field enforcement is implemented on both client (HTML `required` attribute + red asterisk) and server (`submission.ts` checks `is_required = true` tokens and returns a named error). At time of test no tokens were marked `is_required = true` in the template mapping page. Mark tokens as required via the admin template mapping UI to enforce them at submission. |
 
 
@@ -973,8 +973,8 @@ grep "webhooks/email" proxy.ts
 **Expected:** The form does **not** create a new project. An error or warning is shown mentioning a duplicate PO number. The Super Admin also receives a notification about the duplicate. Check `projects` table — no second row with the same PO number and org.
 
 
-| Result | Notes |
-| ------ | ----- |
+| Result | Notes                                                                                                                                                                                                                                                        |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | PASS   | Changed from duplicate PO to duplicate **address** — one PO can span many projects but one address cannot. Code in `submission.ts` already checks `site_address` uniqueness per org. Fires when a second submission is made with the same extracted address. |
 
 
@@ -1012,8 +1012,8 @@ grep "webhooks/email" proxy.ts
 **Expected:** The project detail page shows: status **Submitted**, PO number, delivery date (once set by #11), the file attachments, and the extracted field values.
 
 
-| Result | Notes                                                                                                                                                    |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Result | Notes                                                                                                                  |
+| ------ | ---------------------------------------------------------------------------------------------------------------------- |
 | PASS   | Fixed — page now fetches project_files with signed URLs and renders a Documents section and Submitted details section. |
 
 
@@ -1060,8 +1060,8 @@ grep "webhooks/email" proxy.ts
 > This check may be trivial if submitted on a Monday — for a stronger test, trigger a submission near a weekend boundary.
 
 
-| Result | Notes                                                                          |
-| ------ | ------------------------------------------------------------------------------ |
+| Result | Notes                                                                                                                               |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | PASS   | Fixed — addWorkingDays correctly skips weekends (dow 0 and 6). Counter starting from the day after submission is correct behaviour. |
 
 
@@ -1333,8 +1333,8 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 **Expected:** The resume page loads showing "Continue report request" heading. The submission form is pre-filled at step 2 with any extracted field values. Submitting the form from this page completes the project.
 
 
-| Result | Notes                                                                                                                                                     |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Result | Notes                                                                                                                                                                                                                                 |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | PASS   | Fixed — resume form is pre-filled from extracted_fields. A "Submitted via" badge (Email / Portal) now appears on both client and consultant project detail pages. Requires migration 00000000000024_project_source.sql to be applied. |
 
 
@@ -1583,8 +1583,8 @@ curl -s -X POST http://localhost:3000/api/webhooks/email \
 **Expected:** Navigated to `/ops/projects/[id]`. The project detail page loads with the submitted fields, attached files, and status.
 
 
-| Result | Notes                                                                                                                                        |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Result | Notes                                                                                                                   |
+| ------ | ----------------------------------------------------------------------------------------------------------------------- |
 | PASS   | Fixed — consultant project detail page now fetches project_files with signed URLs and renders a full Documents section. |
 
 

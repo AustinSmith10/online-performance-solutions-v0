@@ -8,6 +8,7 @@ import { addWorkingDays } from "@/lib/delivery/working-days";
 import { sendEmail } from "@/lib/email/sender";
 import { notify } from "@/lib/notifications/notify";
 import { renderStakeholderBufferUpdateEmail } from "@/lib/email/templates/StakeholderBufferUpdateEmail";
+import { deliverPbdr } from "@/lib/documents/delivery";
 
 async function main() {
   const boss = new PgBoss(process.env.DATABASE_URL!);
@@ -246,6 +247,21 @@ async function main() {
       );
     }
   });
+
+  // Deliver PBDR for a project. Job data: { projectId: string, actorId: string, actorEmail: string }
+  await boss.work<{ projectId: string; actorId: string | null; actorEmail: string | null }>(
+    "deliver-pbdr",
+    async (jobs) => {
+      for (const job of jobs) {
+        const { projectId, actorId, actorEmail } = job.data;
+        const result = await deliverPbdr(projectId, actorId, actorEmail);
+        if (!result.success) {
+          console.error(`[deliver-pbdr] failed for ${projectId}: ${result.reason}`);
+          throw new Error(result.reason);
+        }
+      }
+    }
+  );
 }
 
 main().catch((error) => {

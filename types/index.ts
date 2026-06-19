@@ -33,7 +33,8 @@ export type NotificationType =
   | "qa_complete"
   | "all_acknowledged"
   | "modifications_requested"
-  | "stakeholder_waived";
+  | "stakeholder_waived"
+  | "system_error";
 
 export type CreditEventType =
   | "top_up"

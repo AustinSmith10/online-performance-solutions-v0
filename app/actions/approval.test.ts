@@ -6,6 +6,7 @@ vi.mock("@/lib/stakeholders/tokens");
 vi.mock("@/lib/audit/log");
 vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/email/templates/ModificationsRequestedEmail");
+vi.mock("@/lib/documents/delivery", () => ({ deliverPbdr: vi.fn().mockResolvedValue({ success: true }) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { submitApproval } from "./approval";
@@ -13,6 +14,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { validateToken } from "@/lib/stakeholders/tokens";
 import { notify } from "@/lib/notifications/notify";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
+import { deliverPbdr } from "@/lib/documents/delivery";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -174,22 +176,20 @@ describe("submitApproval — approved", () => {
     expect(rejCalls).toHaveLength(0);
   });
 
-  it("notifies admins when all stakeholders have approved", async () => {
+  it("triggers deliverPbdr automatically when all stakeholders have approved", async () => {
     vi.mocked(createAdminClient).mockReturnValue(
       buildMock({ secondaryReviews: [], admins: [{ id: "admin-1" }] }) as never
     );
     await submitApproval("tok", null, {}, makeFormData({ response: "approved" }));
-    const allAck = vi.mocked(notify).mock.calls.filter((c) => c[0].type === "all_acknowledged");
-    expect(allAck.length).toBeGreaterThan(0);
+    expect(vi.mocked(deliverPbdr)).toHaveBeenCalledWith("proj-1", null, null);
   });
 
-  it("does not notify all_acknowledged when other stakeholders are still pending", async () => {
+  it("does not trigger deliverPbdr when other stakeholders are still pending", async () => {
     vi.mocked(createAdminClient).mockReturnValue(
       buildMock({ secondaryReviews: [{ id: "review-2" }] }) as never
     );
     await submitApproval("tok", null, {}, makeFormData({ response: "approved" }));
-    const allAck = vi.mocked(notify).mock.calls.filter((c) => c[0].type === "all_acknowledged");
-    expect(allAck).toHaveLength(0);
+    expect(vi.mocked(deliverPbdr)).not.toHaveBeenCalled();
   });
 });
 

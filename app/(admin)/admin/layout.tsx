@@ -5,6 +5,7 @@ import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { MobileNav } from "@/components/MobileNav";
 
 const NAV_ITEMS = [
+  { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/organisations", label: "Organisations" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/consultants", label: "Consultants" },

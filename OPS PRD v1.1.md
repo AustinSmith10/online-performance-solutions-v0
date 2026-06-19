@@ -412,6 +412,21 @@ Three payment methods, toggled per client account by Super Admin:
 - Conversion must complete within 60 seconds under normal conditions
 - Conversion is atomic — full rollback on any transformation or PDF generation failure
 
+> <span style="color:red">**⚠ FONT DEPENDENCY — ACTION REQUIRED BEFORE PRODUCTION DEPLOY**</span>
+>
+> The PBDB template uses **DINOT** (Bold, Medium, Light variants) for headings/branding — a commercial Linotype/Monotype font. LibreOffice (inside Gotenberg) will silently substitute a generic sans-serif if DINOT is not installed, causing the PDF headings to render in the wrong typeface.
+>
+> **When the DINOT font files are obtained (`.ttf` or `.otf`):**
+> 1. Place the files in `docker/fonts/` (create the directory if it doesn't exist)
+> 2. Add the following to the Gotenberg `Dockerfile` (or Railway's build config):
+>    ```dockerfile
+>    COPY fonts/DINOT*.ttf /usr/share/fonts/truetype/dinot/
+>    RUN fc-cache -fv
+>    ```
+> 3. For local development with LibreOffice (`scripts/deliver-pbdr.ts`): copy the files into `~/Library/Fonts/` on macOS.
+>
+> Calibri (body text) and Aptos are already resolved — they were copied from the local Microsoft Word app bundle into `~/Library/Fonts/` during development (2026-06-19). These must also be added to the Gotenberg Docker image via the same `COPY`/`fc-cache` method.
+
 **File naming convention:**
 ```
 <<ProjectNo>>-S_PBDR_R<<n>>_<<address>>_<<YYYY_MM_DD>>
@@ -1004,5 +1019,42 @@ NEXT_PUBLIC_APP_URL             # public-facing URL for deep links
 ### Business Context
 
 OPS is a separate commercial product from DDEG's premium consultancy. It is deliberately priced at $250–$500 per report to capture volume builder work that has historically been inaccessible due to the cost of bespoke consultancy. DDEG retains its premium positioning for complex, non-templatable work. OPS is the high-volume, low-margin product line that generates cash flow and opens doors to volume builder relationships that subsequently lead to premium work.
+
+---
+
+## Open Issues
+
+### Issue: PBDR PDF Cover Page Formatting — LibreOffice Rendering Fidelity
+
+**Status:** Unresolved — decision pending
+
+**Description:**
+
+The PBDB→PBDR conversion pipeline sends a `.docx` file to Gotenberg (LibreOffice) for PDF rendering. The resulting PDF has two formatting defects compared to the source Word document:
+
+1. **White cover block disappears.** The cover page uses a floating text box with a white fill positioned over the full-bleed background photo. LibreOffice drops the white fill on floating shapes that overlap images. The text (logo, title, address fields) still renders but floats directly over the photo with no background.
+
+2. **Address text wraps.** The single-line address in the cover info block wraps to two lines in the PDF. Caused by font substitution — the Gotenberg container does not have Microsoft fonts installed, so LibreOffice substitutes a metrically different open-source font that is fractionally wider.
+
+The cover page is not static: it contains dynamic fields (`EXTRACT_ADDRESS`, `PROJECT_NO`, `SYS_GEN_DATE`, `SYS_REV_NO`) populated per project by docxtemplater before conversion.
+
+**Options:**
+
+**Option A — Restructure the Word template**
+
+Modify the cover page in the `.docx` template to replace the floating text box with an inline table that has a white cell background. Inline tables with cell background fills render reliably in LibreOffice. The dynamic fields remain in place; only the container element changes. Also embed Microsoft fonts in the template file (*Word → Save Options → Embed fonts in the file*) to eliminate the font substitution issue.
+
+- No code changes required.
+- Requires template maintainer to restructure the cover page in Word.
+- Risk: manual restructuring of a designed cover page may disturb the visual layout; needs careful testing.
+
+**Option B — HTML cover page + PDF merge**
+
+Generate the cover page separately as an HTML template (injecting the same dynamic fields: address, project number, date, revision). Render it to a 1-page PDF via Gotenberg's Chromium endpoint (not LibreOffice), which gives pixel-perfect rendering independent of font availability. Merge the Chromium-rendered cover PDF with the LibreOffice-converted body pages using Gotenberg's `/forms/pdfengines/merge` endpoint. The Word template cover page is removed or left blank so it does not appear in the merged output.
+
+- Requires new code: HTML cover template, updated `pdf.ts` to run two Gotenberg calls + merge.
+- The Word template itself does not need structural changes.
+- Cover fidelity is fully controlled in code; no LibreOffice involvement for that page.
+- Risk: HTML cover must be kept visually in sync with any future cover design changes.
 
 The initial addressable market is Australian volume builders constructing approximately 120,000 homes per year who have never engaged Performance Solution consultants because of cost and friction. Stockland (500 retirement village homes in Year 1) is the entry point. 5,000 jobs per year is the stated upside target.

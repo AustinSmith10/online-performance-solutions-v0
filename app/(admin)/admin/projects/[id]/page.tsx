@@ -9,6 +9,7 @@ import { WaiveForm } from "./_components/WaiveForm";
 import { ResendTokenButton } from "./_components/ResendTokenButton";
 import { UpdateEmailForm } from "./_components/UpdateEmailForm";
 import { ProjectStakeholderSection } from "./_components/ProjectStakeholderSection";
+import { ConvertButton } from "./_components/ConvertButton";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
 
@@ -65,6 +66,7 @@ export default async function ProjectDetailPage({
         created_at,
         updated_at,
         source,
+        review_cycle,
         organisations(id, name),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
       `)
@@ -105,6 +107,7 @@ export default async function ProjectDetailPage({
       email: string;
       availability: ConsultantAvailability;
     } | null;
+    review_cycle: number;
   };
 
   const project = projectResult.data as unknown as ProjectDetail;
@@ -112,11 +115,12 @@ export default async function ProjectDetailPage({
   const consultants = (consultantsResult.data ?? []) as ConsultantOption[];
   const currentConsultantId = project.assigned?.id ?? "";
 
-  // Load template mappings, submission files, PBDB files, and stakeholder reviews in parallel
+  // Load template mappings, submission files, PBDB files, PBDR files, and stakeholder reviews in parallel
   const [
     { data: mappings },
     { data: rawSubmissionFiles },
     { data: rawPbdbFiles },
+    { data: rawPbdrFiles },
     { data: rawReviews },
     { data: rawProjectStakeholders },
   ] = await Promise.all([
@@ -140,6 +144,12 @@ export default async function ProjectDetailPage({
         .eq("file_type", "pbdb")
         .order("version", { ascending: true }),
       supabase
+        .from("project_files")
+        .select("id, original_filename, storage_path, version, created_at")
+        .eq("project_id", id)
+        .eq("file_type", "pbdr")
+        .order("version", { ascending: true }),
+      supabase
         .from("stakeholder_reviews")
         .select("id, review_cycle, stakeholder_email, stakeholder_name, status, comments, responded_at, waive_reason, waived_at")
         .eq("project_id", id)
@@ -153,7 +163,7 @@ export default async function ProjectDetailPage({
         .order("sort_order", { ascending: true }),
     ]);
 
-  const [files, pbdbFiles] = await Promise.all([
+  const [files, pbdbFiles, pbdrFiles] = await Promise.all([
     Promise.all(
       (rawSubmissionFiles ?? []).map(async (f) => {
         const { data: signed } = await supabase.storage
@@ -170,12 +180,27 @@ export default async function ProjectDetailPage({
         return { ...f, signedUrl: signed?.signedUrl ?? null };
       })
     ),
+    Promise.all(
+      (rawPbdrFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("documents")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
   ]);
 
   const reviews = (rawReviews ?? []) as StakeholderReview[];
   const projectStakeholders = (rawProjectStakeholders ?? []) as {
     id: string; name: string; email: string; company: string | null;
   }[];
+
+  const currentCycleReviews = reviews.filter(
+    (r) => r.review_cycle === project.review_cycle
+  );
+  const allCurrentAcknowledged =
+    currentCycleReviews.length > 0 &&
+    currentCycleReviews.every((r) => r.status !== "pending");
 
   const labelMap = new Map<string, string>(
     (mappings ?? []).map((m) => [
@@ -353,7 +378,7 @@ export default async function ProjectDetailPage({
       </div>
 
       {/* Assignment — hidden for deleted projects */}
-      {!isDeleted && <div className="rounded-lg border border-zinc-200 bg-white p-5">
+      {!isDeleted && <div id="assign" className="rounded-lg border border-zinc-200 bg-white p-5">
         <h2 className="mb-1 text-sm font-semibold text-zinc-900">Consultant assignment</h2>
 
         {project.assigned && (
@@ -399,7 +424,7 @@ export default async function ProjectDetailPage({
 
       {/* Stakeholder reviews */}
       {!isDeleted && reviews.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
+        <div id="stakeholders" className="rounded-lg border border-zinc-200 bg-white">
           <div className="border-b border-zinc-100 px-5 py-4">
             <h2 className="text-sm font-semibold text-zinc-900">
               Stakeholder reviews
@@ -460,6 +485,70 @@ export default async function ProjectDetailPage({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* PBDR conversion & delivery */}
+      {!isDeleted && (
+        project.status === "dispatched" ||
+        project.status === "converting" ||
+        project.status === "delivered" ||
+        project.status === "complete"
+      ) && (
+        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <h2 className="mb-1 text-sm font-semibold text-zinc-900">PBDR conversion</h2>
+
+          {/* Delivered PBDRs */}
+          {pbdrFiles.length > 0 && (
+            <div className="mb-4 divide-y divide-zinc-100 rounded-md border border-zinc-100">
+              {pbdrFiles.map((f) => (
+                <div key={f.id as string} className="flex items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      Version {f.version as number} &middot;{" "}
+                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                    </p>
+                  </div>
+                  {f.signedUrl && (
+                    <a
+                      href={f.signedUrl}
+                      download={f.original_filename as string}
+                      className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Download
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {project.status === "converting" && (
+            <p className="text-sm text-zinc-500">Conversion in progress…</p>
+          )}
+
+          {project.status === "complete" && pbdrFiles.length === 0 && (
+            <p className="text-sm text-zinc-500">Delivered — PBDR file not found.</p>
+          )}
+
+          {project.status === "dispatched" && (
+            allCurrentAcknowledged ? (
+              <div>
+                <p className="mb-3 text-sm text-zinc-500">
+                  All stakeholders have acknowledged. Both hard gates must pass before the button
+                  below becomes effective (credit deducted or override applied, and all reviews
+                  acknowledged).
+                </p>
+                <ConvertButton projectId={id} />
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">
+                Awaiting stakeholder responses —{" "}
+                {currentCycleReviews.filter((r) => r.status === "pending").length} pending.
+              </p>
+            )
+          )}
         </div>
       )}
 
