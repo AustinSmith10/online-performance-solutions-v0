@@ -338,6 +338,158 @@ async function seed() {
     }
   }
 
+  // ── Dispatched projects (awaiting stakeholder) ────────────────────────────
+  const { data: existingDispatched } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("project_number", "OPS-0010")
+    .maybeSingle();
+
+  if (existingDispatched) {
+    console.log("Dispatched projects already seeded — skipping");
+  } else {
+    const consultant1Id = seededIds["consultant@ops.test"];
+    const consultant2Id = seededIds["consultant2@ops.test"];
+    const consultant5Id = seededIds["consultant5@ops.test"];
+    const client4Id = seededIds["client4@ops.test"];
+    const client2Id = seededIds["client2@ops.test"];
+
+    const dispatchedProjects = [
+      {
+        project_number: "OPS-0010",
+        po_number: "PO-2025-010",
+        org_id: stockland.id,
+        submitted_by: submittedById,
+        assigned_consultant_id: consultant1Id,
+        status: "dispatched",
+        delivery_recipient_email: "client@ops.test",
+        expected_delivery_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        credit_deducted: true,
+        review_buffer_fired_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        extracted_fields: { CLIENT_ADDRESS: "15 Acacia Court, Halcyon Rise NSW" },
+      },
+      {
+        project_number: "OPS-0011",
+        po_number: "PO-2025-011",
+        org_id: meridian.id,
+        submitted_by: client4Id,
+        assigned_consultant_id: consultant2Id,
+        status: "dispatched",
+        delivery_recipient_email: "client4@ops.test",
+        expected_delivery_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        credit_deducted: false,
+        review_buffer_fired_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        extracted_fields: { CLIENT_ADDRESS: "42 Collins Street, Melbourne VIC" },
+      },
+      {
+        project_number: "OPS-0012",
+        po_number: "PO-2025-012",
+        org_id: stockland.id,
+        submitted_by: client2Id,
+        assigned_consultant_id: consultant5Id,
+        status: "dispatched",
+        delivery_recipient_email: "client2@ops.test",
+        expected_delivery_date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        credit_deducted: true,
+        review_buffer_fired_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        extracted_fields: { CLIENT_ADDRESS: "8 Banksia Ridge, Halcyon Promenade NSW" },
+      },
+    ].filter((p) => p.submitted_by && p.assigned_consultant_id);
+
+    const { data: insertedDispatched, error: dispatchedErr } = await supabase
+      .from("projects")
+      .insert(dispatchedProjects)
+      .select("id, project_number");
+
+    if (dispatchedErr) {
+      console.error("Failed to seed dispatched projects:", dispatchedErr.message);
+    } else {
+      console.log(`Seeded ${dispatchedProjects.length} dispatched projects`);
+
+      const projectMap: Record<string, string> = {};
+      for (const p of (insertedDispatched ?? [])) {
+        projectMap[p.project_number] = p.id;
+      }
+
+      const futureExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const pastExpiry = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+
+      const reviews = [
+        // OPS-0010 — 2 pending (one with expired link)
+        {
+          project_id: projectMap["OPS-0010"],
+          review_cycle: 1,
+          stakeholder_email: "alice.walker@halcyon.com.au",
+          stakeholder_name: "Alice Walker",
+          token: "test-token-ops0010-alice",
+          dispatched_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          expires_at: futureExpiry,
+          status: "pending",
+        },
+        {
+          project_id: projectMap["OPS-0010"],
+          review_cycle: 1,
+          stakeholder_email: "bob.chen@halcyon.com.au",
+          stakeholder_name: "Bob Chen",
+          token: "test-token-ops0010-bob",
+          dispatched_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          expires_at: pastExpiry,
+          status: "pending",
+        },
+        // OPS-0011 — 1 pending stakeholder
+        {
+          project_id: projectMap["OPS-0011"],
+          review_cycle: 1,
+          stakeholder_email: "sarah.mcdonald@meridian.com.au",
+          stakeholder_name: "Sarah McDonald",
+          token: "test-token-ops0011-sarah",
+          dispatched_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+          expires_at: futureExpiry,
+          status: "pending",
+        },
+        // OPS-0012 — 3 pending stakeholders (one already had token resent)
+        {
+          project_id: projectMap["OPS-0012"],
+          review_cycle: 1,
+          stakeholder_email: "james.liu@stockland.com.au",
+          stakeholder_name: "James Liu",
+          token: "test-token-ops0012-james",
+          dispatched_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          expires_at: futureExpiry,
+          status: "pending",
+        },
+        {
+          project_id: projectMap["OPS-0012"],
+          review_cycle: 1,
+          stakeholder_email: "helen.park@stockland.com.au",
+          stakeholder_name: "Helen Park",
+          token: "test-token-ops0012-helen",
+          dispatched_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          expires_at: pastExpiry,
+          status: "pending",
+        },
+        {
+          project_id: projectMap["OPS-0012"],
+          review_cycle: 1,
+          stakeholder_email: "michael.torres@stockland.com.au",
+          stakeholder_name: "Michael Torres",
+          token: "test-token-ops0012-michael",
+          dispatched_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          expires_at: futureExpiry,
+          fresh_token_sent_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+          status: "pending",
+        },
+      ].filter((r) => r.project_id);
+
+      const { error: reviewErr } = await supabase.from("stakeholder_reviews").insert(reviews);
+      if (reviewErr) {
+        console.error("Failed to seed stakeholder reviews:", reviewErr.message);
+      } else {
+        console.log(`Seeded ${reviews.length} stakeholder reviews across 3 dispatched projects`);
+      }
+    }
+  }
+
   // ── Audit log seed data ────────────────────────────────────────────────────
   const adminId = seededIds["admin@ops.test"] ?? null;
   const consultantId = seededIds["consultant@ops.test"] ?? null;
@@ -492,6 +644,10 @@ async function seed() {
   console.log("  client4@ops.test  (Alex Kim)");
   console.log("  client5@ops.test  (Sophie Laurent)");
   console.log("\nDummy project: OPS-0001 (submitted, unassigned) → /admin/projects");
+  console.log("\nDispatched projects (awaiting stakeholder review):");
+  console.log("  OPS-0010 — Stockland,        2 pending (1 expired link)");
+  console.log("  OPS-0011 — Meridian Group,   1 pending");
+  console.log("  OPS-0012 — Stockland,        3 pending (1 expired, 1 resent), overdue");
   console.log("\nRecovery bin entries (soft-deleted):");
   console.log("  OPS-R001 — Stockland/client1,  draft,     deleted 2d ago  (28d left)");
   console.log("  OPS-R002 — Stockland/client2,  submitted, deleted 20d ago (10d left)");

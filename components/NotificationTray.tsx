@@ -15,6 +15,34 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// ── Dismissed-ID persistence (localStorage) ───────────────────────────────────
+// Only read notifications can be dismissed. Unread ones always show through.
+
+const STORAGE_KEY = "ops-dismissed-notif";
+
+function getDismissed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDismissed(ids: string[]) {
+  try {
+    const current = getDismissed();
+    for (const id of ids) current.add(id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...current]));
+  } catch {}
+}
+
+function applyDismissed(notifs: Notification[]): Notification[] {
+  const dismissed = getDismissed();
+  // Unread notifications always show regardless of dismissed state.
+  return notifs.filter((n) => !n.is_read || !dismissed.has(n.id));
+}
+
 export function NotificationTray({
   initialNotifications,
   projectBasePath,
@@ -22,9 +50,11 @@ export function NotificationTray({
   initialNotifications: Notification[];
   projectBasePath: string;
 }) {
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
-  // Store the pathname at which the tray was opened; open === current pathname matches.
-  // This avoids calling setState inside an effect for navigation-triggered close.
+  // Lazy initialiser: filter dismissed IDs on first render so server-passed
+  // notifications that were already cleared don't flash back on mount.
+  const [notifications, setNotifications] = useState<Notification[]>(() =>
+    applyDismissed(initialNotifications)
+  );
   const [openAtPathname, setOpenAtPathname] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
@@ -48,7 +78,8 @@ export function NotificationTray({
     const res = await fetch("/api/notifications");
     if (res.ok) {
       const data = await res.json();
-      setNotifications(data);
+      // Re-apply dismissed filter so cleared notifications don't reappear.
+      setNotifications(applyDismissed(data as Notification[]));
     }
   }
 
@@ -70,6 +101,14 @@ export function NotificationTray({
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
     }
+  }
+
+  function handleClear() {
+    // Persist the IDs of all currently-read notifications so refresh() won't
+    // bring them back. Unread notifications are left untouched.
+    const readIds = notifications.filter((n) => n.is_read).map((n) => n.id);
+    saveDismissed(readIds);
+    setNotifications((prev) => prev.filter((n) => !n.is_read));
   }
 
   function handleToggle() {
@@ -100,8 +139,8 @@ export function NotificationTray({
                   Mark all read
                 </button>
               )}
-              {notifications.length > 0 && (
-                <button onClick={() => setNotifications([])} style={clearBtn}>
+              {notifications.some((n) => n.is_read) && (
+                <button onClick={handleClear} style={clearBtn}>
                   Clear
                 </button>
               )}
@@ -157,7 +196,7 @@ const bellButton: React.CSSProperties = {
   borderRadius: "6px",
   display: "flex",
   alignItems: "center",
-  color: "#52525b",
+  color: "#ca8a04",
 };
 
 const badge: React.CSSProperties = {

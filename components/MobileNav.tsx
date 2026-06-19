@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 interface NavItem {
   href: string;
@@ -11,17 +12,26 @@ interface NavItem {
 export function MobileNav({
   title,
   navItems,
-  userEmail,
+  userName,
+  profileHref,
   logoutAction,
   notifications,
 }: {
   title: string;
   navItems: NavItem[];
-  userEmail: string;
+  userName: string;
+  profileHref?: string;
   logoutAction: () => Promise<void>;
   notifications?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  const activeHref = navItems
+    .filter(({ href }) => pathname === href || pathname.startsWith(href + "/"))
+    .reduce<string | null>((best, { href }) =>
+      best === null || href.length > best.length ? href : best
+    , null);
 
   return (
     <>
@@ -69,19 +79,35 @@ export function MobileNav({
           </button>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              className="block rounded px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const active = item.href === activeHref;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className={
+                  active
+                    ? "block rounded px-3 py-2 text-sm font-medium bg-zinc-100 text-zinc-900"
+                    : "block rounded px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                }
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
         <div className="border-t border-zinc-200 p-3">
-          <p className="mb-2 truncate text-xs text-zinc-500">{userEmail}</p>
+          <p className="mb-2 truncate text-xs text-zinc-500">{userName}</p>
+          {profileHref && (
+            <Link
+              href={profileHref}
+              onClick={() => setOpen(false)}
+              className="mb-1 block rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+            >
+              My profile
+            </Link>
+          )}
           <form action={logoutAction}>
             <button
               type="submit"

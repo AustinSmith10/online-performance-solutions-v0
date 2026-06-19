@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/session";
 import { logout } from "@/app/actions/auth";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { MobileNav } from "@/components/MobileNav";
+import { SidebarNavLinks } from "@/components/NavLinks";
 
 const NAV_ITEMS = [
   { href: "/ops", label: "Workspace" },
@@ -22,7 +23,8 @@ export default async function ConsultantLayout({
       <MobileNav
         title="OPS"
         navItems={NAV_ITEMS}
-        userEmail={user.email}
+        userName={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
+        profileHref="/ops/profile"
         logoutAction={logout}
         notifications={<NotificationTrayServer projectBasePath="/ops/projects" />}
       />
@@ -34,14 +36,16 @@ export default async function ConsultantLayout({
           <NotificationTrayServer projectBasePath="/ops/projects" />
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-          {NAV_ITEMS.map((item) => (
-            <NavLink key={item.href} href={item.href}>
-              {item.label}
-            </NavLink>
-          ))}
+          <SidebarNavLinks items={NAV_ITEMS} />
         </nav>
         <div className="border-t border-zinc-200 p-3">
-          <p className="mb-2 truncate text-xs text-zinc-500">{user.email}</p>
+          <p className="mb-1 truncate text-xs text-zinc-500">{[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}</p>
+          <Link
+            href="/ops/profile"
+            className="mb-1 block rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+          >
+            My profile
+          </Link>
           <form action={logout}>
             <button
               type="submit"
@@ -59,19 +63,3 @@ export default async function ConsultantLayout({
   );
 }
 
-function NavLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className="block rounded px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-    >
-      {children}
-    </Link>
-  );
-}

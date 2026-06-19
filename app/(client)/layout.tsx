@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { logout } from "@/app/actions/auth";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
+import { TopNavLinks } from "@/components/NavLinks";
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   const user = await requireRole("client");
@@ -13,16 +14,21 @@ export default async function ClientLayout({ children }: { children: React.React
           <div className="flex min-w-0 items-center gap-4">
             <span className="shrink-0 text-sm font-semibold text-zinc-900">OPS</span>
             <nav className="flex min-w-0 gap-0.5 overflow-x-auto">
-              <NavLink href="/portal">My Reports</NavLink>
-              <NavLink href="/portal/history">History</NavLink>
-              <NavLink href="/portal/recovery">Recovery</NavLink>
+              <TopNavLinks items={[
+                { href: "/portal", label: "My Reports" },
+                { href: "/portal/history", label: "History" },
+                { href: "/portal/recovery", label: "Recovery" },
+              ]} />
             </nav>
           </div>
           <div className="ml-4 flex shrink-0 items-center gap-3">
             <NotificationTrayServer projectBasePath="/portal/projects" />
-            <p className="hidden max-w-[180px] truncate text-xs text-zinc-400 sm:block">
-              {user.email}
-            </p>
+            <Link
+              href="/portal/profile"
+              className="hidden max-w-[180px] truncate text-xs text-zinc-400 hover:text-zinc-700 sm:block"
+            >
+              {[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
+            </Link>
             <form action={logout}>
               <button
                 type="submit"
@@ -39,13 +45,3 @@ export default async function ClientLayout({ children }: { children: React.React
   );
 }
 
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="shrink-0 rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-    >
-      {children}
-    </Link>
-  );
-}

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Action Required UI Preview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-100 py-12 px-6 font-sans text-sm">
+
+  <div class="mx-auto max-w-5xl space-y-16">
+
+    <div>
+      <h1 class="text-2xl font-bold text-zinc-900">Dashboard UI Preview</h1>
+      <p class="mt-1 text-zinc-500">Three layout options for the "Action required" panels. Sample data matches seeded projects.</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- OPTION A — Cards                                               -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section class="space-y-4">
+      <div class="flex items-center gap-3">
+        <span class="rounded-full bg-zinc-800 px-3 py-0.5 text-xs font-semibold text-white">Option A</span>
+        <h2 class="text-base font-semibold text-zinc-800">Cards</h2>
+        <span class="text-xs text-zinc-400">Each project is a card. Info left, actions right (stacked).</span>
+      </div>
+
+      <!-- Awaiting stakeholder — Card -->
+      <div class="rounded-lg border border-orange-200 bg-white overflow-hidden">
+        <div class="flex items-center gap-2 border-b border-orange-100 bg-orange-50 px-5 py-3">
+          <span class="flex h-5 w-5 items-center justify-center rounded-full bg-orange-600 text-xs font-semibold text-white">2</span>
+          <span class="text-sm font-medium text-orange-900">Awaiting stakeholder response — action required</span>
+        </div>
+        <div class="divide-y divide-zinc-100">
+
+          <div class="flex items-center justify-between gap-6 px-5 py-4">
+            <div class="min-w-0 flex-1">
+              <p class="font-semibold text-zinc-900 truncate">99 Pending Place, Awaitingston NSW 2003</p>
+              <p class="mt-0.5 text-xs text-zinc-500">Stockland &middot; Buffer fired 17/06/2026 &middot; 1 stakeholder pending</p>
+            </div>
+            <div class="flex shrink-0 flex-col items-end gap-1.5">
+              <a href="#" class="w-28 rounded border border-zinc-300 px-3 py-1.5 text-center text-xs font-medium text-zinc-700 hover:bg-zinc-50">Re-send link</a>
+              <a href="#" class="w-28 rounded border border-zinc-300 px-3 py-1.5 text-center text-xs font-medium text-zinc-700 hover:bg-zinc-50">Update email</a>
+              <a href="#" class="w-28 rounded border border-red-200 px-3 py-1.5 text-center text-xs font-medium text-red-600 hover:bg-red-50">Waive</a>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-6 px-5 py-4">
+            <div class="min-w-0 flex-1">
+              <p class="font-semibold text-zinc-900 truncate">14 Silky Oak Street, Halcyon Serrata</p>
+              <p class="mt-0.5 text-xs text-zinc-500">Meridian Group &middot; Buffer fired 15/06/2026 &middot; 2 stakeholders pending</p>
+            </div>
+            <div class="flex shrink-0 flex-col items-end gap-1.5">
+              <a href="#" class="w-28 rounded border border-zinc-300 px-3 py-1.5 text-center text-xs font-medium text-zinc-700 hover:bg-zinc-50">Re-send link</a>
+              <a href="#" class="w-28 rounded border border-zinc-300 px-3 py-1.5 text-center text-xs font-medium text-zinc-700 hover:bg-zinc-50">Update email</a>
+              <a href="#" class="w-28 rounded border border-red-200 px-3 py-1.5 text-center text-xs font-medium text-red-600 hover:bg-red-50">Waive</a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Unassigned — Card -->
+      <div class="rounded-lg border border-blue-200 bg-white overflow-hidden">
+        <div class="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-5 py-3">
+          <span class="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">1</span>
+          <span class="text-sm font-medium text-blue-900">New submission awaiting consultant assignment</span>
+        </div>
+        <div class="divide-y divide-zinc-100">
+
+          <div class="flex items-center justify-between gap-6 px-5 py-4">
+            <div class="min-w-0 flex-1">
+              <p class="font-semibold text-zinc-900 truncate">1 Seed Street, Testville NSW 2000</p>
+              <p class="mt-0.5 text-xs text-zinc-500">Stockland &middot; Submitted 19/06/2026</p>
+            </div>
+            <div class="flex shrink-0 flex-col items-end gap-1.5">
+              <a href="#" class="w-28 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-center text-xs font-medium text-blue-700 hover:bg-blue-100">Assign &rarr;</a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- OPTION B — Table with pill buttons                             -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section class="space-y-4">
+      <div class="flex items-center gap-3">
+        <span class="rounded-full bg-zinc-800 px-3 py-0.5 text-xs font-semibold text-white">Option B</span>
+        <h2 class="text-base font-semibold text-zinc-800">Table with pill buttons</h2>
+        <span class="text-xs text-zinc-400">Familiar table layout. Text links replaced with outlined pill buttons.</span>
+      </div>
+
+      <!-- Awaiting stakeholder — Table pills -->
+      <div class="rounded-lg border border-orange-200 bg-white overflow-hidden">
+        <div class="flex items-center gap-2 border-b border-orange-100 bg-orange-50 px-5 py-3">
+          <span class="flex h-5 w-5 items-center justify-center rounded-full bg-orange-600 text-xs font-semibold text-white">2</span>
+          <span class="text-sm font-medium text-orange-900">Awaiting stakeholder response — action required</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[640px] text-sm">
+            <thead class="border-b border-zinc-100">
+              <tr>
+                <th class="px-5 py-2.5 text-left text-xs font-medium text-zinc-500">Address / Ref</th>
+                <th class="px-5 py-2.5 text-left text-xs font-medium text-zinc-500">Organisation</th>
+                <th class="px-5 py-2.5 text-left text-xs font-medium text-zinc-500">Buffer fired</th>
+                <th class="px-5 py-2.5 text-left text-xs font-medium text-zinc-500">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-50">
+              <tr class="hover:bg-zinc-50">
+                <td class="px-5 py-3 font-medium text-zinc-900 max-w-[200px] truncate">99 Pending Place, Awaitingston</td>
+                <td class="px-5 py-3 text-zinc-600">Stockland</td>
+                <td class="px-5 py-3 text-zinc-500 whitespace-nowrap">17/06/2026</td>
+                <td class="px-5 py-3">
+                  <div class="flex gap-1.5 flex-wrap">
+                    <a href="#" class="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 whitespace-nowrap">Re-send</a>
+                    <a href="#" class="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 whitespace-nowrap">Update email</a>
+                    <a href="#" class="rounded-full border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 whitespace-nowrap">Waive</a>
+                  </div>
+                </td>
+              </tr>
+              <tr class="hover:bg-zinc-50">
+                <td class="px-5 py-3 font-medium text-zinc-900 max-w-[200px] truncate">14 Silky Oak Street, Halcyon</td>
+                <td class="px-5 py-3 text-zinc-600">Meridian Group</td>
+                <td class="px-5 py-3 text-zinc-500 whitespace-nowrap">15/06/2026</td>
+                <td class="px-5 py-3">
+                  <div class="flex gap-1.5 flex-wrap">
+                    <a href="#" class="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 whitespace-nowrap">Re-send</a>
+                    <a href="#" class="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 whitespace-nowrap">Update email</a>
+                    <a href="#" class="rounded-full border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 whitespace-nowrap">Waive</a>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Unassigned — Table pills -->
+      <div class="rounded-lg border border-blue-200 bg-white overflow-hidden">
+        <div class="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-5 py-3">
+          <span class="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">1</span>
+          <span class="text-sm font-medium text-blue-900">New submission awaiting consultant assignment</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[480px] text-sm">
+            <thead class="border-b border-zinc-100">
+              <tr>
+                <th class="px-5 py-2.5 text-left text-xs font-medium text-zinc-500">Address / Ref</th>
+                <th class="px-5 py-2.5 text-left text-xs font-medium text-zinc-500">Organisation</th>
+                <th class="px-5 py-2.5 text-left text-xs font-medium text-zinc-500">Submitted</th>
+                <th class="px-5 py-2.5 text-left text-xs font-medium text-zinc-500">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-50">
+              <tr class="hover:bg-zinc-50">
+                <td class="px-5 py-3 font-medium text-zinc-900">1 Seed Street, Testville NSW</td>
+                <td class="px-5 py-3 text-zinc-600">Stockland</td>
+                <td class="px-5 py-3 text-zinc-500 whitespace-nowrap">19/06/2026</td>
+                <td class="px-5 py-3">
+                  <a href="#" class="rounded-full border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 whitespace-nowrap">Assign &rarr;</a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- OPTION C — Compact row + single CTA                           -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section class="space-y-4">
+      <div class="flex items-center gap-3">
+        <span class="rounded-full bg-zinc-800 px-3 py-0.5 text-xs font-semibold text-white">Option C</span>
+        <h2 class="text-base font-semibold text-zinc-800">Compact row + single CTA</h2>
+        <span class="text-xs text-zinc-400">Two-line row. All metadata inline, one "Manage →" button. Cleanest, fewest clicks to context.</span>
+      </div>
+
+      <!-- Awaiting stakeholder — Compact -->
+      <div class="rounded-lg border border-orange-200 bg-white overflow-hidden">
+        <div class="flex items-center gap-2 border-b border-orange-100 bg-orange-50 px-5 py-3">
+          <span class="flex h-5 w-5 items-center justify-center rounded-full bg-orange-600 text-xs font-semibold text-white">2</span>
+          <span class="text-sm font-medium text-orange-900">Awaiting stakeholder response — action required</span>
+        </div>
+        <div class="divide-y divide-zinc-100">
+
+          <div class="flex items-center justify-between gap-4 px-5 py-3.5">
+            <div class="min-w-0 flex-1">
+              <p class="font-medium text-zinc-900 truncate">99 Pending Place, Awaitingston NSW 2003</p>
+              <p class="mt-0.5 text-xs text-zinc-500">
+                Stockland &nbsp;&middot;&nbsp; <span class="text-orange-600 font-medium">1 stakeholder pending</span> &nbsp;&middot;&nbsp; Buffer fired 17/06/2026
+              </p>
+            </div>
+            <a href="#" class="shrink-0 rounded border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 whitespace-nowrap">Manage &rarr;</a>
+          </div>
+
+          <div class="flex items-center justify-between gap-4 px-5 py-3.5">
+            <div class="min-w-0 flex-1">
+              <p class="font-medium text-zinc-900 truncate">14 Silky Oak Street, Halcyon Serrata</p>
+              <p class="mt-0.5 text-xs text-zinc-500">
+                Meridian Group &nbsp;&middot;&nbsp; <span class="text-orange-600 font-medium">2 stakeholders pending</span> &nbsp;&middot;&nbsp; Buffer fired 15/06/2026
+              </p>
+            </div>
+            <a href="#" class="shrink-0 rounded border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 whitespace-nowrap">Manage &rarr;</a>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Unassigned — Compact -->
+      <div class="rounded-lg border border-blue-200 bg-white overflow-hidden">
+        <div class="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-5 py-3">
+          <span class="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">1</span>
+          <span class="text-sm font-medium text-blue-900">New submission awaiting consultant assignment</span>
+        </div>
+        <div class="divide-y divide-zinc-100">
+
+          <div class="flex items-center justify-between gap-4 px-5 py-3.5">
+            <div class="min-w-0 flex-1">
+              <p class="font-medium text-zinc-900 truncate">1 Seed Street, Testville NSW 2000</p>
+              <p class="mt-0.5 text-xs text-zinc-500">Stockland &nbsp;&middot;&nbsp; Submitted 19/06/2026 &nbsp;&middot;&nbsp; No consultant assigned</p>
+            </div>
+            <a href="#" class="shrink-0 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 whitespace-nowrap">Assign &rarr;</a>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <p class="text-center text-xs text-zinc-400 pb-8">dashboard-ui-preview.html &nbsp;&middot;&nbsp; open in browser, no server needed</p>
+  </div>
+
+</body>
+</html>
