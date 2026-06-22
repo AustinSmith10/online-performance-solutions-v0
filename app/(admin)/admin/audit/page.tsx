@@ -23,6 +23,7 @@ const CATEGORIES: Record<string, { label: string; color: string; events: string[
       "project.purged",
       "project.soft_deleted",
       "project.restored",
+      "project.fields_updated",
       "assignment.created",
       "pbdr.delivered",
       "pbdr.conversion_failed",
@@ -77,6 +78,9 @@ const CATEGORIES: Record<string, { label: string; color: string; events: string[
       "template.deleted",
       "template.reuploaded",
       "template.reactivated",
+      "template.mapping_updated",
+      "template.token_added",
+      "template.token_deleted",
     ],
   },
   org: {
@@ -99,6 +103,7 @@ const EVENT_LABELS: Record<string, string> = {
   "project.purged": "Project permanently deleted",
   "project.soft_deleted": "Project archived",
   "project.restored": "Project restored",
+  "project.fields_updated": "Project fields edited",
   "assignment.created": "Consultant assigned",
   "pbdr.delivered": "PBDR delivered to client",
   "pbdr.conversion_failed": "PBDR conversion failed",
@@ -129,6 +134,9 @@ const EVENT_LABELS: Record<string, string> = {
   "template.deleted": "Template deleted",
   "template.reuploaded": "Template file replaced",
   "template.reactivated": "Template reactivated",
+  "template.mapping_updated": "Template mappings updated",
+  "template.token_added": "Extraction token added",
+  "template.token_deleted": "Extraction token removed",
   "org.created": "Organisation created",
   "org.updated": "Organisation updated",
   "org.config_updated": "Organisation settings changed",
@@ -305,6 +313,25 @@ function formatDetails(
     case "template.reactivated":
       if (s(metadata.name)) parts.push(s(metadata.name));
       break;
+
+    case "template.mapping_updated": {
+      if (s(metadata.name)) parts.push(s(metadata.name));
+      const count = n(metadata.tokenCount);
+      if (count !== null) parts.push(`${count} token${count !== 1 ? "s" : ""}`);
+      break;
+    }
+
+    case "template.token_added":
+    case "template.token_deleted":
+      if (s(metadata.name)) parts.push(s(metadata.name));
+      if (s(metadata.token)) parts.push(`{${s(metadata.token)}}`);
+      break;
+
+    case "project.fields_updated": {
+      const keys = Object.keys(metadata.updated ?? {});
+      if (keys.length > 0) parts.push(keys.join(", "));
+      break;
+    }
 
     case "org.created":
     case "org.updated":

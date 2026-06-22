@@ -315,8 +315,14 @@ export async function updateTokenLabels(
   _prev: UpdateTokenLabelsState,
   formData: FormData
 ): Promise<UpdateTokenLabelsState> {
-  await requireRole("super_admin");
+  const actor = await requireRole("super_admin");
   const supabase = createAdminClient();
+
+  const { data: template } = await supabase
+    .from("templates")
+    .select("org_id, name")
+    .eq("id", templateId)
+    .maybeSingle();
 
   const updates: Array<{
     placeholder_token: string;
@@ -347,6 +353,13 @@ export async function updateTokenLabels(
     if (error) return { error: `Failed to save label for ${placeholder_token}: ${error.message}` };
   }
 
+  if (template) {
+    await auditLog("template.mapping_updated", actor.id, actor.email, {
+      orgId: template.org_id as string,
+      metadata: { templateId, name: template.name, tokenCount: updates.length },
+    });
+  }
+
   revalidatePath(`/admin/templates/${templateId}`);
   return { success: true };
 }
@@ -358,7 +371,7 @@ export async function addExtractionOnlyToken(
   _prev: AddExtractionTokenState,
   formData: FormData
 ): Promise<AddExtractionTokenState> {
-  await requireRole("super_admin");
+  const actor = await requireRole("super_admin");
 
   const token = (formData.get("token") as string | null)?.trim().toUpperCase();
   const label = (formData.get("label") as string | null)?.trim();
@@ -372,6 +385,12 @@ export async function addExtractionOnlyToken(
   if (!hint) return { error: "Extraction hint is required — Claude needs to know what to look for." };
 
   const supabase = createAdminClient();
+
+  const { data: template } = await supabase
+    .from("templates")
+    .select("org_id, name")
+    .eq("id", templateId)
+    .maybeSingle();
 
   const { error } = await supabase.from("template_field_mappings").insert({
     template_id: templateId,
@@ -390,6 +409,13 @@ export async function addExtractionOnlyToken(
     return { error: error.message };
   }
 
+  if (template) {
+    await auditLog("template.token_added", actor.id, actor.email, {
+      orgId: template.org_id as string,
+      metadata: { templateId, name: template.name, token },
+    });
+  }
+
   revalidatePath(`/admin/templates/${templateId}`);
   return {};
 }
@@ -400,8 +426,14 @@ export async function deleteExtractionToken(
   templateId: string,
   token: string
 ): Promise<DeleteExtractionTokenState> {
-  await requireRole("super_admin");
+  const actor = await requireRole("super_admin");
   const supabase = createAdminClient();
+
+  const { data: template } = await supabase
+    .from("templates")
+    .select("org_id, name")
+    .eq("id", templateId)
+    .maybeSingle();
 
   const { error } = await supabase
     .from("template_field_mappings")
@@ -411,6 +443,13 @@ export async function deleteExtractionToken(
     .eq("in_template", false);
 
   if (error) return { error: error.message };
+
+  if (template) {
+    await auditLog("template.token_deleted", actor.id, actor.email, {
+      orgId: template.org_id as string,
+      metadata: { templateId, name: template.name, token },
+    });
+  }
 
   revalidatePath(`/admin/templates/${templateId}`);
   return {};
