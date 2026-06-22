@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useActionState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Drawer } from "./Drawer";
 import { AssignForm } from "@/app/(admin)/admin/projects/[id]/_components/AssignForm";
@@ -361,10 +360,9 @@ function StakeholderDrawerContent({
 }
 
 function OverrideDrawerContent({ project }: { project: DashboardProject }) {
+  const [now] = useState(() => Date.now());
   const daysAgo = project.payment_override_at
-    ? Math.floor(
-        (Date.now() - new Date(project.payment_override_at).getTime()) / (1000 * 60 * 60 * 24)
-      )
+    ? Math.floor((now - new Date(project.payment_override_at).getTime()) / (1000 * 60 * 60 * 24))
     : null;
 
   return (
