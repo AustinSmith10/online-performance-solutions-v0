@@ -124,15 +124,12 @@ export default async function ConsultantProjectDetailPage({
       .eq("project_id", id)
       .eq("file_type", "pbdr")
       .order("version", { ascending: true }),
-    project.status === "revision_required"
-      ? supabase
-          .from("stakeholder_reviews")
-          .select("id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle")
-          .eq("project_id", id)
-          .eq("review_cycle", project.review_cycle)
-          .eq("status", "rejected_with_comments")
-          .order("responded_at", { ascending: true })
-      : Promise.resolve({ data: [] }),
+    supabase
+      .from("stakeholder_reviews")
+      .select("id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle")
+      .eq("project_id", id)
+      .order("review_cycle", { ascending: false })
+      .order("responded_at", { ascending: true }),
   ]);
 
   // Generate signed URLs — submission files from `submissions`, PBDB/PBDR from `documents`
@@ -158,10 +155,17 @@ export default async function ConsultantProjectDetailPage({
   const pbdbFiles = rawPbdbFiles ?? [];
   const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
   const hasQaFile = pbdbFiles.some((f) => (f.version as number) >= 2);
-  const modificationComments = (rawReviews ?? []) as {
+  type ReviewRow = {
     id: string; stakeholder_name: string; stakeholder_email: string;
     status: string; comments: string | null; responded_at: string | null; review_cycle: number;
-  }[];
+  };
+  const allReviews = (rawReviews ?? []) as ReviewRow[];
+  const reviewsByCycle = new Map<number, ReviewRow[]>();
+  for (const r of allReviews) {
+    if (!reviewsByCycle.has(r.review_cycle)) reviewsByCycle.set(r.review_cycle, []);
+    reviewsByCycle.get(r.review_cycle)!.push(r);
+  }
+  const reviewCycles = [...reviewsByCycle.keys()].sort((a, b) => b - a);
 
   const labelMap = new Map<string, string>(
     (mappings ?? []).map((m) => [
@@ -478,37 +482,92 @@ export default async function ConsultantProjectDetailPage({
         </div>
       )}
 
-      {/* Revision required — stakeholder comments + re-upload */}
+      {/* Stakeholder review history — all cycles, always visible when reviews exist */}
+      {allReviews.length > 0 && (
+        <div className="rounded-lg border border-zinc-200 bg-white">
+          <div className="border-b border-zinc-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-zinc-900">Stakeholder reviews</h2>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              All review cycles — each cycle corresponds to one version of the PBDB sent to stakeholders.
+            </p>
+          </div>
+          {reviewCycles.map((cycle) => {
+            const cycleReviews = reviewsByCycle.get(cycle)!;
+            const pbdbForCycle = pbdbFiles.find((f) => (f.version as number) === cycle);
+            const isCurrent = cycle === project.review_cycle;
+            return (
+              <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
+                <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
+                  <span className="text-xs font-semibold text-zinc-700">Cycle {cycle}</span>
+                  {pbdbForCycle ? (
+                    <span className="text-xs text-zinc-400">
+                      · PBDB v{cycle} ({(pbdbForCycle.version as number) >= 2 ? "QA corrected" : "Generated"})
+                      · {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-zinc-400">· PBDB v{cycle}</span>
+                  )}
+                  {isCurrent && (
+                    <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      Current
+                    </span>
+                  )}
+                </div>
+                <div className="divide-y divide-zinc-50">
+                  {cycleReviews.map((r) => {
+                    const statusConfig = {
+                      pending: { label: "Pending", cls: "bg-amber-100 text-amber-700" },
+                      approved_without_comments: { label: "Approved", cls: "bg-green-100 text-green-700" },
+                      approved_with_comments: { label: "Approved with notes", cls: "bg-green-100 text-green-700" },
+                      rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
+                      waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
+                    }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
+                    return (
+                      <div key={r.id} className="px-5 py-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                            <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
+                            {r.comments && (
+                              <p className="mt-2 text-sm leading-relaxed text-zinc-700">{r.comments}</p>
+                            )}
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <span
+                              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}
+                            >
+                              {statusConfig.label}
+                            </span>
+                            {r.responded_at && (
+                              <p className="mt-0.5 text-xs text-zinc-400">
+                                {new Date(r.responded_at).toLocaleDateString("en-AU", {
+                                  day: "numeric", month: "short", year: "numeric",
+                                })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Revision action — re-upload form, shown only when a revision is needed */}
       {project.status === "revision_required" && (
         <div className="rounded-lg border border-red-200 bg-red-50">
           <div className="border-b border-red-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-red-800">Rejection feedback</h2>
+            <h2 className="text-sm font-semibold text-red-800">Upload revised PBDB</h2>
             <p className="mt-1 text-xs text-red-600">
-              One or more stakeholders have rejected this PBDB. Review their feedback below,
-              correct the document in Word, upload the revised version, then mark revision complete.
+              Correct the document in Word using the feedback above, then upload the revised version
+              to re-submit to stakeholders.
             </p>
           </div>
-          <div className="space-y-6 px-5 py-5">
-            {modificationComments.length > 0 && (
-              <div className="space-y-3">
-                {modificationComments.map((r) => (
-                  <div key={r.id} className="rounded-md border border-red-200 bg-white px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-medium text-zinc-700">
-                        {r.stakeholder_name}{" "}
-                        <span className="font-normal text-zinc-400">&lt;{r.stakeholder_email}&gt;</span>
-                      </p>
-                      <span className="shrink-0 text-xs text-zinc-400">
-                        {r.responded_at
-                          ? new Date(r.responded_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
-                          : ""}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm leading-relaxed text-zinc-800">{r.comments}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div className="px-5 py-5">
             <PbdbQaUploadForm
               projectId={id}
               submitLabel="Upload revised PBDB and re-submit to stakeholders"

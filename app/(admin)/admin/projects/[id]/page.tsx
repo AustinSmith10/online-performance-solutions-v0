@@ -140,6 +140,7 @@ export default async function ProjectDetailPage({
     { data: rawPbdrFiles },
     { data: rawReviews },
     { data: rawProjectStakeholders },
+    { data: rawAssignments },
   ] = await Promise.all([
       project.template_id
         ? supabase
@@ -178,6 +179,12 @@ export default async function ProjectDetailPage({
         .eq("scope", "project")
         .eq("scope_id", id)
         .order("sort_order", { ascending: true }),
+      supabase
+        .from("audit_log")
+        .select("metadata, created_at")
+        .eq("project_id", id)
+        .eq("event_type", "assignment.created")
+        .order("created_at", { ascending: true }),
     ]);
 
   const [files, pbdrFiles] = await Promise.all([
@@ -201,6 +208,24 @@ export default async function ProjectDetailPage({
   const pbdbFiles = rawPbdbFiles ?? [];
 
   const reviews = (rawReviews ?? []) as StakeholderReview[];
+
+  type AssignmentEvent = { consultant_id: string; consultant_name: string; project_status?: string };
+  const assignmentHistory = (rawAssignments ?? [])
+    .map((row) => {
+      const meta = row.metadata as AssignmentEvent | null;
+      return meta?.consultant_id
+        ? {
+            consultantId: meta.consultant_id,
+            consultantName: meta.consultant_name,
+            assignedAt: row.created_at as string,
+            projectStatusAtAssignment: meta.project_status ?? null,
+          }
+        : null;
+    })
+    .filter((a): a is NonNullable<typeof a> => a !== null);
+
+  const isTerminal = project.status === "delivered" || project.status === "complete";
+
   const projectStakeholders = (rawProjectStakeholders ?? []) as {
     id: string; name: string; email: string; company: string | null;
   }[];
@@ -213,6 +238,15 @@ export default async function ProjectDetailPage({
     currentCycleReviews.every((r) => r.status !== "pending");
 
   const pendingReviews = currentCycleReviews.filter((r) => r.status === "pending");
+
+  // Group all reviews by cycle for the grouped history display
+  const reviewsByCycle = new Map<number, StakeholderReview[]>();
+  for (const r of reviews) {
+    if (!reviewsByCycle.has(r.review_cycle)) reviewsByCycle.set(r.review_cycle, []);
+    reviewsByCycle.get(r.review_cycle)!.push(r);
+  }
+  const reviewCycles = [...reviewsByCycle.keys()].sort((a, b) => b - a);
+
   const { isOverdue, daysOverdue } = overdueInfo(project.expected_delivery_date, project.status, isDeleted);
 
   const labelMap = new Map<string, string>(
@@ -492,114 +526,212 @@ export default async function ProjectDetailPage({
         )}
       </div>
 
-      {/* Assignment — hidden for deleted projects */}
-      {!isDeleted && <div id="assign" className="rounded-lg border border-zinc-200 bg-white p-5">
-        <h2 className="mb-1 text-sm font-semibold text-zinc-900">Consultant assignment</h2>
+      {/* Assignment — locked once project is delivered/complete */}
+      {!isDeleted && (
+        <div id="assign" className="rounded-lg border border-zinc-200 bg-white p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-zinc-900">Consultant assignment</h2>
+            {isTerminal && (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">
+                Locked
+              </span>
+            )}
+          </div>
 
-        {project.assigned && (
-          <p className="mb-4 text-sm text-zinc-500">
-            Currently assigned to{" "}
-            <strong className="text-zinc-800">
-              {[project.assigned.first_name, project.assigned.last_name]
-                .filter(Boolean)
-                .join(" ") || project.assigned.email}
-            </strong>{" "}
-            &mdash;{" "}
-            <span
-              className={`font-medium ${
-                project.assigned.availability === "available"
-                  ? "text-green-700"
-                  : project.assigned.availability === "on_leave"
-                  ? "text-yellow-700"
-                  : "text-zinc-500"
-              }`}
-            >
-              {AVAILABILITY_LABELS[project.assigned.availability]}
-            </span>
-          </p>
-        )}
+          {isTerminal ? (
+            assignmentHistory.length > 0 ? (
+              <div className="space-y-2">
+                {assignmentHistory.map((a, idx) => {
+                  const isFinal = idx === assignmentHistory.length - 1;
+                  // For previously assigned: the status when the next consultant was assigned
+                  // tells us where this one left off. For the final: the project's current status.
+                  const activeUntilStatus: ProjectStatus | null = isFinal
+                    ? project.status
+                    : (assignmentHistory[idx + 1].projectStatusAtAssignment as ProjectStatus | null);
+                  const activeUntilLabel = activeUntilStatus ? (STATUS_LABELS[activeUntilStatus] ?? activeUntilStatus) : null;
+                  return (
+                    <div
+                      key={`${a.consultantId}-${idx}`}
+                      className="flex items-center justify-between gap-4 rounded-md border border-zinc-100 bg-zinc-50 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-zinc-900">{a.consultantName}</p>
+                        <p className="text-xs text-zinc-500">
+                          {isFinal ? "Final assignee" : "Previously assigned"} &middot;{" "}
+                          {new Date(a.assignedAt).toLocaleDateString("en-AU", {
+                            day: "numeric", month: "short", year: "numeric",
+                          })}
+                          {activeUntilLabel && (
+                            <> &middot; until <span className="font-medium text-zinc-700">{activeUntilLabel}</span></>
+                          )}
+                        </p>
+                      </div>
+                      {isFinal && (
+                        <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                          Completed
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : project.assigned ? (
+              /* Fallback when audit history predates logging */
+              <div className="flex items-center justify-between rounded-md border border-zinc-100 bg-zinc-50 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-900">
+                    {[project.assigned.first_name, project.assigned.last_name].filter(Boolean).join(" ") || project.assigned.email}
+                  </p>
+                  <p className="text-xs text-zinc-500">Final assignee</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                  Completed
+                </span>
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-400">No assignment record found.</p>
+            )
+          ) : (
+            <>
+              {project.assigned && (
+                <p className="mb-4 text-sm text-zinc-500">
+                  Currently assigned to{" "}
+                  <strong className="text-zinc-800">
+                    {[project.assigned.first_name, project.assigned.last_name]
+                      .filter(Boolean)
+                      .join(" ") || project.assigned.email}
+                  </strong>{" "}
+                  &mdash;{" "}
+                  <span
+                    className={`font-medium ${
+                      project.assigned.availability === "available"
+                        ? "text-green-700"
+                        : project.assigned.availability === "on_leave"
+                        ? "text-yellow-700"
+                        : "text-zinc-500"
+                    }`}
+                  >
+                    {AVAILABILITY_LABELS[project.assigned.availability]}
+                  </span>
+                </p>
+              )}
+              <AssignForm
+                projectId={id}
+                consultants={consultants}
+                currentConsultantId={currentConsultantId}
+                isReassign={!!project.assigned}
+              />
+              {consultants.length === 0 && (
+                <p className="mt-3 text-sm text-zinc-400">
+                  No consultants available. Invite a consultant from the{" "}
+                  <Link href="/admin/users/invite" className="underline">
+                    users page
+                  </Link>
+                  .
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
-        <AssignForm
-          projectId={id}
-          consultants={consultants}
-          currentConsultantId={currentConsultantId}
-          isReassign={!!project.assigned}
-        />
-
-        {consultants.length === 0 && (
-          <p className="mt-3 text-sm text-zinc-400">
-            No consultants available. Invite a consultant from the{" "}
-            <Link href="/admin/users/invite" className="underline">
-              users page
-            </Link>
-            .
-          </p>
-        )}
-      </div>}
-
-      {/* Stakeholder reviews */}
+      {/* Stakeholder reviews — grouped by review cycle */}
       {!isDeleted && reviews.length > 0 && (
         <div id="stakeholders" className="rounded-lg border border-zinc-200 bg-white">
           <div className="border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">
-              Stakeholder reviews
-            </h2>
+            <h2 className="text-sm font-semibold text-zinc-900">Stakeholder reviews</h2>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Grouped by review cycle — each cycle corresponds to one version of the PBDB.
+            </p>
           </div>
-          <div className="divide-y divide-zinc-100">
-            {reviews.map((r) => {
-              const statusConfig = {
-                pending: { label: "Pending", cls: "bg-amber-100 text-amber-700" },
-                approved_without_comments: { label: "Approved", cls: "bg-green-100 text-green-700" },
-                approved_with_comments: { label: "Approved with comments", cls: "bg-green-100 text-green-700" },
-                rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
-                waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
-              }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
-
-              return (
-                <div key={r.id} className="px-5 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
-                      <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
-                      {r.comments && (
-                        <p className="mt-1 text-sm text-zinc-600 italic">&ldquo;{r.comments}&rdquo;</p>
-                      )}
-                      {r.waive_reason && (
-                        <p className="mt-1 text-xs text-zinc-400">Waive reason: {r.waive_reason}</p>
-                      )}
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}
-                      >
-                        {statusConfig.label}
-                      </span>
-                      {r.responded_at && (
-                        <p className="mt-0.5 text-xs text-zinc-400">
-                          {new Date(r.responded_at).toLocaleDateString("en-AU")}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {r.status === "pending" && (
-                    <div className="mt-3 space-y-2 border-t border-zinc-100 pt-3">
-                      <ResendTokenButton reviewId={r.id} projectId={id} />
-                      <UpdateEmailForm
-                        reviewId={r.id}
-                        projectId={id}
-                        currentEmail={r.stakeholder_email}
-                      />
-                      <WaiveForm
-                        reviewId={r.id}
-                        projectId={id}
-                        stakeholderName={r.stakeholder_name}
-                      />
-                    </div>
+          {reviewCycles.map((cycle) => {
+            const cycleReviews = reviewsByCycle.get(cycle)!;
+            const pbdbForCycle = pbdbFiles.find((f) => (f.version as number) === cycle);
+            const isCurrent = cycle === project.review_cycle;
+            return (
+              <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
+                {/* Cycle header */}
+                <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
+                  <span className="text-xs font-semibold text-zinc-700">
+                    Cycle {cycle}
+                  </span>
+                  {pbdbForCycle ? (
+                    <span className="text-xs text-zinc-400">
+                      · PBDB v{cycle} ({(pbdbForCycle.version as number) >= 2 ? "QA corrected" : "Generated"})
+                      · {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-zinc-400">· PBDB v{cycle}</span>
+                  )}
+                  {isCurrent && (
+                    <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      Current
+                    </span>
                   )}
                 </div>
-              );
-            })}
-          </div>
+                {/* Reviews in this cycle */}
+                <div className="divide-y divide-zinc-50">
+                  {cycleReviews.map((r) => {
+                    const statusConfig = {
+                      pending: { label: "Pending", cls: "bg-amber-100 text-amber-700" },
+                      approved_without_comments: { label: "Approved", cls: "bg-green-100 text-green-700" },
+                      approved_with_comments: { label: "Approved with comments", cls: "bg-green-100 text-green-700" },
+                      rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
+                      waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
+                    }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
+
+                    return (
+                      <div key={r.id} className="px-5 py-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                            <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
+                            {r.comments && (
+                              <p className="mt-2 text-sm leading-relaxed text-zinc-700 italic">
+                                &ldquo;{r.comments}&rdquo;
+                              </p>
+                            )}
+                            {r.waive_reason && (
+                              <p className="mt-1 text-xs text-zinc-400">Waive reason: {r.waive_reason}</p>
+                            )}
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <span
+                              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}
+                            >
+                              {statusConfig.label}
+                            </span>
+                            {r.responded_at && (
+                              <p className="mt-0.5 text-xs text-zinc-400">
+                                {new Date(r.responded_at).toLocaleDateString("en-AU", {
+                                  day: "numeric", month: "short", year: "numeric",
+                                })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {r.status === "pending" && isCurrent && (
+                          <div className="mt-3 space-y-2 border-t border-zinc-100 pt-3">
+                            <ResendTokenButton reviewId={r.id} projectId={id} />
+                            <UpdateEmailForm
+                              reviewId={r.id}
+                              projectId={id}
+                              currentEmail={r.stakeholder_email}
+                            />
+                            <WaiveForm
+                              reviewId={r.id}
+                              projectId={id}
+                              stakeholderName={r.stakeholder_name}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

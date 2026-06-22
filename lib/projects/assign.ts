@@ -18,7 +18,7 @@ export async function performAssignment(
   const [projectResult, consultantResult] = await Promise.all([
     supabase
       .from("projects")
-      .select("id, project_number, site_address, extracted_fields, org_id, expected_delivery_date, organisations(name, delivery_working_days, state_territory)")
+      .select("id, project_number, site_address, extracted_fields, status, org_id, expected_delivery_date, organisations(name, delivery_working_days, state_territory)")
       .eq("id", projectId)
       .single(),
     supabase
@@ -33,6 +33,7 @@ export async function performAssignment(
   if (consultantResult.error || !consultantResult.data) throw new Error("Consultant not found");
 
   const project = projectResult.data as typeof projectResult.data & {
+    status: string;
     expected_delivery_date: string | null;
     organisations: { name: string; delivery_working_days: number; state_territory: string | null } | null;
   };
@@ -96,7 +97,7 @@ export async function performAssignment(
   await auditLog("assignment.created", actorId ?? null, actorEmail ?? null, {
     projectId,
     orgId: project.org_id as string,
-    metadata: { consultant_id: consultantId, consultant_name: consultantName },
+    metadata: { consultant_id: consultantId, consultant_name: consultantName, project_status: project.status },
   });
 
   revalidatePath(`/admin/projects/${projectId}`);
