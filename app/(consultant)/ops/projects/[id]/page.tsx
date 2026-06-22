@@ -55,7 +55,7 @@ export default async function ConsultantProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, organisations(name, state_territory), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, organisations(name, state_territory, org_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -74,7 +74,7 @@ export default async function ConsultantProjectDetailPage({
     created_at: string;
     expected_delivery_date: string | null;
     source: "portal" | "email";
-    organisations: { name: string; state_territory: string | null } | null;
+    organisations: { name: string; state_territory: string | null; org_config: Record<string, string> } | null;
     submitter: {
       first_name: string | null;
       last_name: string | null;
@@ -91,48 +91,69 @@ export default async function ConsultantProjectDetailPage({
     project.expected_delivery_date < todayIso &&
     !TERMINAL_STATUSES.has(project.status);
 
-  // Load template mappings, submission files, PBDB files, and stakeholder reviews
-  const [{ data: mappings }, { data: rawSubmissionFiles }, { data: rawPbdbFiles }, { data: rawReviews }] =
-    await Promise.all([
-      project.template_id
-        ? supabase
-            .from("template_field_mappings")
-            .select("placeholder_token, field_key, display_label")
-            .eq("template_id", project.template_id)
-            .order("placeholder_token")
-        : Promise.resolve({ data: [] }),
-      supabase
-        .from("project_files")
-        .select("id, file_type, original_filename, storage_path, created_at")
-        .eq("project_id", id)
-        .in("file_type", ["po", "building_plans", "additional"])
-        .order("created_at"),
-      supabase
-        .from("project_files")
-        .select("id, original_filename, storage_path, version, created_at")
-        .eq("project_id", id)
-        .eq("file_type", "pbdb")
-        .order("version", { ascending: true }),
-      project.status === "revision_required"
-        ? supabase
-            .from("stakeholder_reviews")
-            .select("id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle")
-            .eq("project_id", id)
-            .eq("review_cycle", project.review_cycle)
-            .eq("status", "rejected_with_comments")
-            .order("responded_at", { ascending: true })
-        : Promise.resolve({ data: [] }),
-    ]);
+  // Load template mappings, submission files, PBDB/PBDR files, and stakeholder reviews
+  const [
+    { data: mappings },
+    { data: rawSubmissionFiles },
+    { data: rawPbdbFiles },
+    { data: rawPbdrFiles },
+    { data: rawReviews },
+  ] = await Promise.all([
+    project.template_id
+      ? supabase
+          .from("template_field_mappings")
+          .select("placeholder_token, field_key, display_label")
+          .eq("template_id", project.template_id)
+          .order("placeholder_token")
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from("project_files")
+      .select("id, file_type, original_filename, storage_path, created_at")
+      .eq("project_id", id)
+      .in("file_type", ["po", "building_plans", "additional"])
+      .order("created_at"),
+    supabase
+      .from("project_files")
+      .select("id, original_filename, storage_path, version, created_at")
+      .eq("project_id", id)
+      .eq("file_type", "pbdb")
+      .order("version", { ascending: true }),
+    supabase
+      .from("project_files")
+      .select("id, original_filename, storage_path, version, created_at")
+      .eq("project_id", id)
+      .eq("file_type", "pbdr")
+      .order("version", { ascending: true }),
+    project.status === "revision_required"
+      ? supabase
+          .from("stakeholder_reviews")
+          .select("id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle")
+          .eq("project_id", id)
+          .eq("review_cycle", project.review_cycle)
+          .eq("status", "rejected_with_comments")
+          .order("responded_at", { ascending: true })
+      : Promise.resolve({ data: [] }),
+  ]);
 
-  // Generate signed URLs — submission files from `submissions`, PBDB from `documents`
-  const submissionFiles = await Promise.all(
-    (rawSubmissionFiles ?? []).map(async (f) => {
-      const { data: signed } = await supabase.storage
-        .from("submissions")
-        .createSignedUrl(f.storage_path as string, 3600);
-      return { ...f, signedUrl: signed?.signedUrl ?? null };
-    })
-  );
+  // Generate signed URLs — submission files from `submissions`, PBDB/PBDR from `documents`
+  const [submissionFiles, pbdrFiles] = await Promise.all([
+    Promise.all(
+      (rawSubmissionFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("submissions")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
+    Promise.all(
+      (rawPbdrFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("documents")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
+  ]);
 
   const pbdbFiles = rawPbdbFiles ?? [];
   const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
@@ -150,11 +171,50 @@ export default async function ConsultantProjectDetailPage({
   );
 
   const extractedFields = project.extracted_fields ?? {};
-  const fieldEntries = Object.entries(extractedFields).map(([token, value]) => ({
-    token,
-    label: labelMap.get(token) ?? prettifyToken(token),
-    value: value as string,
-  }));
+
+  // EXTRACT_ / CLIENT_ tokens — submitted by the client
+  const clientFieldEntries = Object.entries(extractedFields)
+    .filter(([token]) => token.startsWith("EXTRACT_") || token.startsWith("CLIENT_"))
+    .map(([token, value]) => ({
+      token,
+      label: labelMap.get(token) ?? prettifyToken(token),
+      value: value as string,
+    }));
+
+  // ORG_ tokens — org config, with any extracted overrides applied on top
+  const orgConfig = (project.organisations?.org_config ?? {}) as Record<string, string>;
+  const orgMerged: Record<string, string> = { ...orgConfig };
+  for (const [k, v] of Object.entries(extractedFields)) {
+    if (k.startsWith("ORG_")) orgMerged[k] = v as string;
+  }
+  const orgTokenEntries = Object.entries(orgMerged)
+    .filter(([k]) => k.startsWith("ORG_"))
+    .map(([token, value]) => ({
+      token,
+      label: labelMap.get(token) ?? prettifyToken(token),
+      value: value as string,
+    }));
+
+  // SYS_ / PROJECT_ tokens — auto-populated at generation time
+  const fmtDMY = (d: Date) =>
+    `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  const latestGenDate = latestPbdb ? new Date(latestPbdb.created_at as string) : null;
+  const latestVersion = latestPbdb ? (latestPbdb.version as number) : null;
+  const sysValues: { label: string; value: string }[] = [
+    {
+      label: "Project number",
+      value: project.project_number ? `${project.project_number}-S` : "Not yet set",
+    },
+    { label: "Submission date (SYS_SUB_DATE)", value: fmtDMY(new Date(project.created_at)) },
+    {
+      label: "Generation date (SYS_GEN_DATE)",
+      value: latestGenDate ? fmtDMY(latestGenDate) : "Not yet generated",
+    },
+    {
+      label: "Revision number (SYS_REV_NO)",
+      value: latestVersion !== null ? String(latestVersion - 1) : "0",
+    },
+  ];
 
   const title =
     (project.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
@@ -284,19 +344,54 @@ export default async function ConsultantProjectDetailPage({
         </div>
       </div>
 
-      {/* Submitted field values */}
-      {fieldEntries.length > 0 && (
+      {/* Submitted field values (EXTRACT_ / CLIENT_) */}
+      {clientFieldEntries.length > 0 && (
         <div className="rounded-lg border border-zinc-200 bg-white">
           <div className="border-b border-zinc-100 px-5 py-4">
             <h2 className="text-sm font-semibold text-zinc-900">Submitted details</h2>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Values entered or extracted from documents during client submission.
+            </p>
           </div>
           <div className="divide-y divide-zinc-100">
-            {fieldEntries.map(({ token, label, value }) => (
+            {clientFieldEntries.map(({ token, label, value }) => (
               <Row key={token} label={label} value={value || "—"} />
             ))}
           </div>
         </div>
       )}
+
+      {/* Organisation values (ORG_) */}
+      {orgTokenEntries.length > 0 && (
+        <div className="rounded-lg border border-zinc-200 bg-white">
+          <div className="border-b border-zinc-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-zinc-900">Organisation values</h2>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Configured at organisation level — certifier details, licence numbers, etc.
+            </p>
+          </div>
+          <div className="divide-y divide-zinc-100">
+            {orgTokenEntries.map(({ token, label, value }) => (
+              <Row key={token} label={label} value={value || "—"} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* System values (SYS_ / PROJECT_) */}
+      <div className="rounded-lg border border-zinc-200 bg-white">
+        <div className="border-b border-zinc-100 px-5 py-4">
+          <h2 className="text-sm font-semibold text-zinc-900">System values</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Auto-populated by OPS at generation time — these are the values swapped into the PBDB.
+          </p>
+        </div>
+        <div className="divide-y divide-zinc-100">
+          {sysValues.map(({ label, value }) => (
+            <Row key={label} label={label} value={value} />
+          ))}
+        </div>
+      </div>
 
       {/* PBDB */}
       <div className="rounded-lg border border-zinc-200 bg-white">
@@ -346,6 +441,42 @@ export default async function ConsultantProjectDetailPage({
           )}
         </div>
       </div>
+
+      {/* PBDR */}
+      {pbdrFiles.length > 0 && (
+        <div className="rounded-lg border border-zinc-200 bg-white">
+          <div className="border-b border-zinc-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-zinc-900">PBDR</h2>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Final converted document delivered to the client.
+            </p>
+          </div>
+          <div className="divide-y divide-zinc-100">
+            {pbdrFiles.map((f) => (
+              <div key={f.id as string} className="flex items-center justify-between px-5 py-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-900">
+                    {f.original_filename as string}
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    Version {f.version as number} ·{" "}
+                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                  </p>
+                </div>
+                {f.signedUrl && (
+                  <a
+                    href={f.signedUrl}
+                    download={f.original_filename as string}
+                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Download
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Revision required — stakeholder comments + re-upload */}
       {project.status === "revision_required" && (
