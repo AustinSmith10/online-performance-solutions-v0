@@ -9,7 +9,7 @@ const ROLE_LABELS: Record<string, string> = {
   client: "Client",
 };
 
-const SORT_COLS = ["created_at", "email", "role"] as const;
+const SORT_COLS = ["created_at", "email", "role", "org"] as const;
 type SortCol = (typeof SORT_COLS)[number];
 
 function sortHref(params: Record<string, string | undefined>, col: SortCol): string {
@@ -44,8 +44,11 @@ export default async function UsersPage({
   const supabase = createAdminClient();
   let query = supabase
     .from("users")
-    .select("id, email, first_name, last_name, role, availability, is_locked, created_at, organisations(name)")
-    .order(sortCol, { ascending: sortOrder === "asc" });
+    .select("id, email, first_name, last_name, role, availability, is_locked, created_at, organisations(name)");
+
+  query = sortCol === "org"
+    ? query.order("name", { referencedTable: "organisations", ascending: sortOrder === "asc" })
+    : query.order(sortCol, { ascending: sortOrder === "asc" });
 
   if (q?.trim()) {
     query = query.or(`email.ilike.%${q.trim()}%,first_name.ilike.%${q.trim()}%,last_name.ilike.%${q.trim()}%`);
@@ -134,7 +137,11 @@ export default async function UsersPage({
                     Role <SortIcon active={sortCol === "role"} order={sortOrder} />
                   </a>
                 </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">
+                  <a href={sortHref(params, "org")} className="group inline-flex items-center hover:text-zinc-700">
+                    Organisation <SortIcon active={sortCol === "org"} order={sortOrder} />
+                  </a>
+                </th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">
                   <a href={sortHref(params, "created_at")} className="group inline-flex items-center hover:text-zinc-700">

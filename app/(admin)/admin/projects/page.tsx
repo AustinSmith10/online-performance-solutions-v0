@@ -31,7 +31,7 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
 
 const TERMINAL_STATUSES = new Set<ProjectStatus>(["delivered", "complete"]);
 
-const SORT_COLS = ["created_at", "expected_delivery_date", "status"] as const;
+const SORT_COLS = ["created_at", "expected_delivery_date", "status", "org"] as const;
 type SortCol = (typeof SORT_COLS)[number];
 
 function sortHref(params: Record<string, string | undefined>, col: SortCol): string {
@@ -98,8 +98,11 @@ export default async function ProjectsPage({
       organisations(name),
       consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email)
     `)
-    .is("deleted_at", null)
-    .order(sortCol, { ascending: sortOrder === "asc" });
+    .is("deleted_at", null);
+
+  query = sortCol === "org"
+    ? query.order("name", { referencedTable: "organisations", ascending: sortOrder === "asc" })
+    : query.order(sortCol, { ascending: sortOrder === "asc" });
 
   if (q?.trim()) {
     query = query.or(
@@ -198,7 +201,11 @@ function ProjectsLayout({
             <thead className="border-b border-zinc-100 bg-zinc-50">
               <tr>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">
+                  <a href={sortHref(params, "org")} className="group inline-flex items-center hover:text-zinc-700">
+                    Organisation <SortIcon active={sortCol === "org"} order={sortOrder} />
+                  </a>
+                </th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Consultant</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">
                   <a href={sortHref(params, "status")} className="group inline-flex items-center hover:text-zinc-700">

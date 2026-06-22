@@ -11,7 +11,7 @@ type TemplateRow = {
   org: { id: string; name: string } | null;
 };
 
-const SORT_COLS = ["name", "created_at", "status"] as const;
+const SORT_COLS = ["name", "created_at", "status", "org"] as const;
 type SortCol = (typeof SORT_COLS)[number];
 
 function sortHref(params: Record<string, string | undefined>, col: SortCol): string {
@@ -67,8 +67,10 @@ export default async function TemplatesPage({
 
   let query = supabase
     .from("templates")
-    .select("id, name, status, created_at, org:org_id(id, name)")
-    .order(sortCol, { ascending: sortOrder === "asc" });
+    .select("id, name, status, created_at, org:org_id(id, name)");
+  query = sortCol === "org"
+    ? query.order("name", { referencedTable: "organisations", ascending: sortOrder === "asc" })
+    : query.order(sortCol, { ascending: sortOrder === "asc" });
 
   if (q?.trim()) query = query.ilike("name", `%${q.trim()}%`);
   if (status?.trim()) query = query.eq("status", status.trim());
@@ -169,7 +171,11 @@ function TemplatesLayout({
                     Name <SortIcon active={sortCol === "name"} order={sortOrder} />
                   </a>
                 </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">
+                  <a href={sortHref(params, "org")} className="group inline-flex items-center hover:text-zinc-700">
+                    Organisation <SortIcon active={sortCol === "org"} order={sortOrder} />
+                  </a>
+                </th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">
                   <a href={sortHref(params, "status")} className="group inline-flex items-center hover:text-zinc-700">
                     Status <SortIcon active={sortCol === "status"} order={sortOrder} />
