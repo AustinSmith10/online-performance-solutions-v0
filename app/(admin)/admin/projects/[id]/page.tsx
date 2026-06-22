@@ -10,6 +10,7 @@ import { ResendTokenButton } from "./_components/ResendTokenButton";
 import { UpdateEmailForm } from "./_components/UpdateEmailForm";
 import { ProjectStakeholderSection } from "./_components/ProjectStakeholderSection";
 import { ConvertButton } from "./_components/ConvertButton";
+import { DispatchButton } from "./_components/DispatchButton";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
 
@@ -37,6 +38,22 @@ const FILE_TYPE_LABELS: Record<string, string> = {
   po: "Purchase Order",
   additional: "Additional",
 };
+
+const LIVE_STATUSES: readonly ProjectStatus[] = [
+  "submitted", "assigned", "in_progress", "qa_complete", "dispatched", "revision_required",
+];
+
+function overdueInfo(
+  deliveryDate: string | null,
+  status: ProjectStatus,
+  isDeleted: boolean,
+): { isOverdue: boolean; daysOverdue: number } {
+  if (isDeleted || !deliveryDate || !LIVE_STATUSES.includes(status))
+    return { isOverdue: false, daysOverdue: 0 };
+  const ms = Date.now() - new Date(deliveryDate).getTime();
+  if (ms <= 0) return { isOverdue: false, daysOverdue: 0 };
+  return { isOverdue: true, daysOverdue: Math.ceil(ms / (1000 * 60 * 60 * 24)) };
+}
 
 export default async function ProjectDetailPage({
   params,
@@ -195,6 +212,9 @@ export default async function ProjectDetailPage({
     currentCycleReviews.length > 0 &&
     currentCycleReviews.every((r) => r.status !== "pending");
 
+  const pendingReviews = currentCycleReviews.filter((r) => r.status === "pending");
+  const { isOverdue, daysOverdue } = overdueInfo(project.expected_delivery_date, project.status, isDeleted);
+
   const labelMap = new Map<string, string>(
     (mappings ?? []).map((m) => [
       m.placeholder_token as string,
@@ -241,6 +261,111 @@ export default async function ProjectDetailPage({
           <Link href="/admin/recovery" className="font-medium underline hover:text-amber-900">
             Go to recovery bin →
           </Link>
+        </div>
+      )}
+
+      {/* Overdue action banner */}
+      {isOverdue && (
+        <div className="rounded-lg border border-red-200 bg-red-50">
+          <div className="flex items-start gap-3 border-b border-red-100 px-5 py-4">
+            <span className="mt-0.5 shrink-0 text-red-500">⚠</span>
+            <div>
+              <p className="text-sm font-semibold text-red-900">
+                Overdue by {daysOverdue} day{daysOverdue !== 1 ? "s" : ""} — action required
+              </p>
+              <p className="mt-0.5 text-xs text-red-700">
+                {project.status === "submitted"
+                  ? "No consultant has been assigned. Assign one below to continue."
+                  : project.status === "dispatched" && pendingReviews.length > 0
+                  ? `${pendingReviews.length} stakeholder${pendingReviews.length !== 1 ? "s" : ""} yet to respond.`
+                  : project.status === "dispatched" && !project.credit_deducted && !project.payment_override
+                  ? "All stakeholders have acknowledged but payment has not been settled."
+                  : project.status === "qa_complete"
+                  ? "QA is complete. The PBDB is ready to dispatch to stakeholders."
+                  : project.status === "revision_required"
+                  ? "A revision has been requested. The assigned consultant must update the document."
+                  : `Project is ${STATUS_LABELS[project.status].toLowerCase()} — expected delivery date has passed.`}
+              </p>
+            </div>
+          </div>
+
+          {/* Action: assign consultant */}
+          {project.status === "submitted" && (
+            <div className="px-5 py-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-red-700">
+                Assign a consultant
+              </p>
+              <AssignForm
+                projectId={id}
+                consultants={consultants}
+                currentConsultantId={currentConsultantId}
+                isReassign={false}
+              />
+              {consultants.length === 0 && (
+                <p className="mt-3 text-sm text-zinc-500">
+                  No consultants available.{" "}
+                  <Link href="/admin/users/invite" className="underline hover:text-zinc-700">
+                    Invite a consultant →
+                  </Link>
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Action: pending stakeholder responses */}
+          {project.status === "dispatched" && pendingReviews.length > 0 && (
+            <div className="divide-y divide-red-100">
+              {pendingReviews.map((r) => (
+                <div key={r.id} className="px-5 py-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                      <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      Pending
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <ResendTokenButton reviewId={r.id} projectId={id} />
+                    <UpdateEmailForm
+                      reviewId={r.id}
+                      projectId={id}
+                      currentEmail={r.stakeholder_email}
+                    />
+                    <WaiveForm
+                      reviewId={r.id}
+                      projectId={id}
+                      stakeholderName={r.stakeholder_name}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Action: payment override (dispatched, all acknowledged, payment pending) */}
+          {project.status === "dispatched" &&
+            pendingReviews.length === 0 &&
+            !project.credit_deducted &&
+            !project.payment_override && (
+              <div className="px-5 py-4">
+                <p className="mb-3 text-xs font-medium uppercase tracking-wide text-red-700">
+                  Apply payment override
+                </p>
+                <OverrideForm projectId={id} alreadyOverridden={false} />
+              </div>
+            )}
+
+          {/* Action: dispatch to stakeholders (qa_complete) */}
+          {project.status === "qa_complete" && (
+            <div className="px-5 py-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-red-700">
+                Dispatch to stakeholders
+              </p>
+              <DispatchButton projectId={id} />
+            </div>
+          )}
         </div>
       )}
 
