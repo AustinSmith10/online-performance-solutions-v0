@@ -7,6 +7,7 @@ import { AssignForm } from "@/app/(admin)/admin/projects/[id]/_components/Assign
 import { ResendTokenButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendTokenButton";
 import { UpdateEmailForm } from "@/app/(admin)/admin/projects/[id]/_components/UpdateEmailForm";
 import { WaiveForm } from "@/app/(admin)/admin/projects/[id]/_components/WaiveForm";
+import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/DispatchButton";
 import { reconcileOverrideAction, type ReconcileState } from "@/app/actions/credits";
 import { triggerPbdrConversion, type ConvertState } from "@/app/actions/conversion";
 import type { ConsultantAvailability, ProjectStatus } from "@/types";
@@ -191,12 +192,19 @@ function AssignDrawerContent({
 function OverdueDrawerContent({
   project,
   todayIso,
-  onAssign,
+  pendingReviews,
+  consultants,
 }: {
   project: DashboardProject;
   todayIso: string;
-  onAssign: () => void;
+  pendingReviews: PendingReview[];
+  consultants: ConsultantOption[];
 }) {
+  const [expanded, setExpanded] = useState<Record<string, "resend" | "email" | "waive" | null>>({});
+  function toggle(id: string, action: "resend" | "email" | "waive") {
+    setExpanded((prev) => ({ ...prev, [id]: prev[id] === action ? null : action }));
+  }
+
   const daysOverdue = project.expected_delivery_date
     ? Math.floor(
         (new Date(todayIso).getTime() - new Date(project.expected_delivery_date).getTime()) /
@@ -204,10 +212,11 @@ function OverdueDrawerContent({
       )
     : 0;
 
-  const hasConsultant = !!project.assigned_consultant_id;
+  const projectReviews = pendingReviews.filter((r) => r.project_id === project.id);
 
   return (
     <div className="space-y-5">
+      {/* Project summary */}
       <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
         <p className="text-sm font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
@@ -215,6 +224,7 @@ function OverdueDrawerContent({
         </p>
       </div>
 
+      {/* Overdue badge */}
       <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
         <p className="text-sm font-medium text-red-900">
           {daysOverdue} day{daysOverdue !== 1 ? "s" : ""} overdue
@@ -226,28 +236,152 @@ function OverdueDrawerContent({
         )}
       </div>
 
-      {hasConsultant ? (
-        <div className="rounded-lg border border-zinc-200 px-4 py-3">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
-            Assigned consultant
+      {/* Action: assign consultant (submitted, unassigned) */}
+      {project.status === "submitted" && (
+        <div className="space-y-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+            Assign a consultant
           </p>
-          <p className="text-sm font-medium text-zinc-900">{consultantName(project.consultant)}</p>
-          <p className="mt-0.5 text-xs text-zinc-600">{project.consultant?.email}</p>
-          {project.consultant?.phone && (
-            <p className="mt-0.5 text-xs text-zinc-600">{project.consultant.phone}</p>
+          <AssignForm
+            projectId={project.id}
+            consultants={consultants}
+            currentConsultantId={project.assigned_consultant_id ?? ""}
+            isReassign={false}
+          />
+          {consultants.length === 0 && (
+            <p className="text-xs text-zinc-400">
+              No consultants available — invite one from the users page.
+            </p>
           )}
         </div>
-      ) : (
-        <div className="rounded-lg border border-zinc-200 px-4 py-3 space-y-3">
-          <p className="text-sm text-zinc-600">No consultant assigned to this project.</p>
-          <button
-            type="button"
-            onClick={onAssign}
-            className="w-full rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
-          >
-            Assign consultant →
-          </button>
+      )}
+
+      {/* Action: dispatch to stakeholders (qa_complete) */}
+      {project.status === "qa_complete" && (
+        <div className="space-y-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+            Dispatch to stakeholders
+          </p>
+          <p className="text-xs text-zinc-500">
+            QA is complete. The PBDB is ready to send to stakeholders.
+          </p>
+          <DispatchButton projectId={project.id} />
         </div>
+      )}
+
+      {/* Action: pending stakeholder responses (dispatched) */}
+      {project.status === "dispatched" && projectReviews.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+            Pending responses ({projectReviews.length})
+          </p>
+          <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
+            {projectReviews.map((r) => {
+              const isExpired = r.expires_at && r.expires_at < new Date().toISOString();
+              return (
+                <li key={r.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                      <p className="truncate text-xs text-zinc-500">{r.stakeholder_email}</p>
+                      {isExpired && (
+                        <span className="mt-0.5 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                          Link expired
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-1">
+                      <button
+                        type="button"
+                        onClick={() => toggle(r.id, "resend")}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          expanded[r.id] === "resend"
+                            ? "border-zinc-700 bg-zinc-800 text-white"
+                            : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                        }`}
+                      >
+                        Re-send
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggle(r.id, "email")}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          expanded[r.id] === "email"
+                            ? "border-zinc-700 bg-zinc-800 text-white"
+                            : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                        }`}
+                      >
+                        Update email
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggle(r.id, "waive")}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          expanded[r.id] === "waive"
+                            ? "border-red-600 bg-red-600 text-white"
+                            : "border-red-200 text-red-600 hover:bg-red-50"
+                        }`}
+                      >
+                        Waive
+                      </button>
+                    </div>
+                  </div>
+                  {expanded[r.id] === "resend" && (
+                    <div className="mt-3">
+                      <ResendTokenButton reviewId={r.id} projectId={project.id} />
+                    </div>
+                  )}
+                  {expanded[r.id] === "email" && (
+                    <div className="mt-3">
+                      <UpdateEmailForm
+                        reviewId={r.id}
+                        projectId={project.id}
+                        currentEmail={r.stakeholder_email}
+                      />
+                    </div>
+                  )}
+                  {expanded[r.id] === "waive" && (
+                    <div className="mt-3">
+                      <WaiveForm
+                        reviewId={r.id}
+                        projectId={project.id}
+                        stakeholderName={r.stakeholder_name}
+                      />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* Dispatched — all acknowledged, ready to convert */}
+      {project.status === "dispatched" && projectReviews.length === 0 && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+          <p className="text-sm font-medium text-green-900">All stakeholders have responded</p>
+          <p className="mt-0.5 text-xs text-green-700">
+            Open the full project to trigger PBDR conversion.
+          </p>
+        </div>
+      )}
+
+      {/* Fallback: in_progress / assigned / revision_required — show consultant info */}
+      {!["submitted", "dispatched", "qa_complete"].includes(project.status) && (
+        project.assigned_consultant_id ? (
+          <div className="rounded-lg border border-zinc-200 px-4 py-3">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+              Assigned consultant
+            </p>
+            <p className="text-sm font-medium text-zinc-900">{consultantName(project.consultant)}</p>
+            <p className="mt-0.5 text-xs text-zinc-600">{project.consultant?.email}</p>
+            {project.consultant?.phone && (
+              <p className="mt-0.5 text-xs text-zinc-600">{project.consultant.phone}</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-zinc-500">No consultant assigned.</p>
+        )
       )}
     </div>
   );
@@ -712,7 +846,8 @@ export function ActionPanel({
           <OverdueDrawerContent
             project={drawer.project}
             todayIso={todayIso}
-            onAssign={() => setDrawer({ type: "assign", project: drawer.project })}
+            pendingReviews={pendingReviews}
+            consultants={consultants}
           />
         )}
         {drawer?.type === "stakeholder" && (
