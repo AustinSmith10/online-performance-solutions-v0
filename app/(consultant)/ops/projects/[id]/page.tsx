@@ -55,7 +55,7 @@ export default async function ConsultantProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, organisations(name)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, organisations(name, state_territory), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -74,7 +74,14 @@ export default async function ConsultantProjectDetailPage({
     created_at: string;
     expected_delivery_date: string | null;
     source: "portal" | "email";
-    organisations: { name: string } | null;
+    organisations: { name: string; state_territory: string | null } | null;
+    submitter: {
+      first_name: string | null;
+      last_name: string | null;
+      email: string;
+      phone: string | null;
+      company_role: string | null;
+    } | null;
   };
 
   const project = data as unknown as ProjectDetail;
@@ -215,6 +222,66 @@ export default async function ConsultantProjectDetailPage({
             )
           }
         />
+      </div>
+
+      {/* Client contact */}
+      <div className="rounded-lg border border-zinc-200 bg-white">
+        <div className="border-b border-zinc-100 px-5 py-4">
+          <h2 className="text-sm font-semibold text-zinc-900">Client contact</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            The person who submitted this project — your point of contact for any queries.
+          </p>
+        </div>
+        <div className="divide-y divide-zinc-100">
+          {project.submitter ? (
+            <>
+              <Row
+                label="Name"
+                value={
+                  [project.submitter.first_name, project.submitter.last_name]
+                    .filter(Boolean)
+                    .join(" ") || "—"
+                }
+              />
+              <Row
+                label="Email"
+                value={
+                  <a
+                    href={`mailto:${project.submitter.email}`}
+                    className="text-blue-600 hover:underline"
+                  >
+                    {project.submitter.email}
+                  </a>
+                }
+              />
+              {project.submitter.phone && (
+                <Row
+                  label="Phone"
+                  value={
+                    <a href={`tel:${project.submitter.phone}`} className="text-blue-600 hover:underline">
+                      {project.submitter.phone}
+                    </a>
+                  }
+                />
+              )}
+              {project.submitter.company_role && (
+                <Row label="Role" value={project.submitter.company_role} />
+              )}
+              {project.organisations && (
+                <>
+                  <Row label="Organisation" value={project.organisations.name} />
+                  {project.organisations.state_territory && (
+                    <Row label="State / Territory" value={project.organisations.state_territory} />
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            <div className="px-5 py-4 text-sm text-zinc-400">
+              No submitter on record — project may have been submitted via email.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Submitted field values */}
