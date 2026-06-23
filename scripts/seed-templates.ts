@@ -94,14 +94,6 @@ const SHARED_TOKENS: TokenDef[] = [
     sort_order: 70,
     in_template: true,
   },
-  {
-    placeholder_token: "ORG_CERTIFIER_LICENCE",
-    field_key: "org",
-    display_label: "Certifier licence number",
-    is_required: true,
-    sort_order: 80,
-    in_template: true,
-  },
   // ── System — auto-filled by OPS ──────────────────────────────────────────
   {
     placeholder_token: "SYS_GEN_DATE",

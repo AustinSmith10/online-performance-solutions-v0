@@ -14,7 +14,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("id, org_id, template_id, project_number, extracted_fields, created_at")
+    .select("id, org_id, template_id, project_number, extracted_fields, created_at, review_cycle")
     .eq("id", projectId)
     .is("deleted_at", null)
     .single();
@@ -87,8 +87,9 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     return `${dd}/${mm}/${d.getFullYear()}`;
   };
 
-  // Revision is 0-indexed in both the document and filename (R0, R1, R2…)
-  const revision = version - 1;
+  // R[n] counts completed stakeholder revision cycles, not file uploads.
+  // review_cycle starts at 1 (initial dispatch), so R0 on first generation, R1 after one revision, etc.
+  const revision = (project.review_cycle as number) - 1;
 
   const context: Record<string, string> = {
     ...orgValues,

@@ -53,7 +53,7 @@ export async function deliverPbdr(
   // Load project
   const { data: project, error: projErr } = await supabase
     .from("projects")
-    .select("id, org_id, status, project_number, extracted_fields, delivery_recipient_email, submitted_by, assigned_consultant_id")
+    .select("id, org_id, status, project_number, extracted_fields, delivery_recipient_email, submitted_by, assigned_consultant_id, review_cycle")
     .eq("id", projectId)
     .is("deleted_at", null)
     .single();
@@ -137,12 +137,10 @@ export async function deliverPbdr(
       (project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? "";
     const address = formatAddress(rawAddress);
 
-    const { data: existingPbdrs } = await supabase
-      .from("project_files")
-      .select("id")
-      .eq("project_id", projectId)
-      .eq("file_type", "pbdr");
-    const revisionIndex = (existingPbdrs ?? []).length;
+    // R[n] on the PBDR mirrors the PBDB: counts completed stakeholder revision cycles.
+    // review_cycle starts at 1 and increments only when a revision is submitted, so
+    // review_cycle - 1 gives the correct R[n] at the point of approval.
+    const revisionIndex = (project.review_cycle as number) - 1;
     pbdrVersion = revisionIndex + 1;
 
     const pbdrFilename = buildPbdrFilename(

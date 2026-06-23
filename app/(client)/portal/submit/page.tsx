@@ -2,13 +2,23 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SubmissionForm } from "./_components/SubmissionForm";
 
+type FileRequirement = {
+  id: string;
+  name: string;
+  slug: string;
+  max_count: number;
+  required: boolean;
+  no_duplicates: boolean;
+  extraction: boolean;
+  template_id: string;
+};
+
 export default async function SubmitPage() {
   const user = await requireRole("client");
   const supabase = createAdminClient();
 
   const orgId = user.org_id as string;
 
-  // Load active templates for this org
   const { data: templates } = await supabase
     .from("templates")
     .select("id, name")
@@ -29,6 +39,21 @@ export default async function SubmitPage() {
     );
   }
 
+  const templateIds = activeTemplates.map((t) => t.id);
+  const { data: allRequirements } = await supabase
+    .from("file_requirements")
+    .select("id, name, slug, max_count, required, no_duplicates, extraction, template_id")
+    .in("template_id", templateIds)
+    .order("sort_order", { ascending: true });
+
+  const requirementsByTemplate: Record<string, FileRequirement[]> = {};
+  for (const req of (allRequirements ?? []) as FileRequirement[]) {
+    if (!requirementsByTemplate[req.template_id]) {
+      requirementsByTemplate[req.template_id] = [];
+    }
+    requirementsByTemplate[req.template_id].push(req);
+  }
+
   const defaultTemplateId = activeTemplates.length === 1 ? activeTemplates[0].id : null;
 
   return (
@@ -36,12 +61,13 @@ export default async function SubmitPage() {
       <div className="mb-8">
         <h1 className="text-xl font-semibold text-zinc-900">New report request</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Upload your purchase order and building plans. We&apos;ll extract the details automatically.
+          Upload the required documents. We&apos;ll extract the details automatically.
         </p>
       </div>
       <SubmissionForm
         templates={activeTemplates}
         defaultTemplateId={defaultTemplateId}
+        requirementsByTemplate={requirementsByTemplate}
       />
     </div>
   );

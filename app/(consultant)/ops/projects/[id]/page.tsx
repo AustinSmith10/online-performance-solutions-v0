@@ -563,10 +563,39 @@ export default async function ConsultantProjectDetailPage({
           <div className="border-b border-red-100 px-5 py-4">
             <h2 className="text-sm font-semibold text-red-800">Upload revised PBDB</h2>
             <p className="mt-1 text-xs text-red-600">
-              Correct the document in Word using the feedback above, then upload the revised version
-              to re-submit to stakeholders.
+              Review the feedback below, correct the document in Word, then upload the revised
+              version to re-submit to stakeholders.
             </p>
           </div>
+          {(() => {
+            const currentReviews = reviewsByCycle.get(project.review_cycle) ?? [];
+            const reviewsWithComments = currentReviews.filter((r) => r.comments);
+            if (reviewsWithComments.length === 0) return null;
+            return (
+              <div className="border-b border-red-100 divide-y divide-red-100">
+                {reviewsWithComments.map((r) => (
+                  <div key={r.id} className="px-5 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-red-900">{r.stakeholder_name}</p>
+                        <p className="text-xs text-red-500">{r.stakeholder_email}</p>
+                        <p className="mt-2 text-sm leading-relaxed text-red-800">{r.comments}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {r.responded_at && (
+                          <p className="text-xs text-red-400">
+                            {new Date(r.responded_at).toLocaleDateString("en-AU", {
+                              day: "numeric", month: "short", year: "numeric",
+                            })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           <div className="px-5 py-5">
             <PbdbQaUploadForm
               projectId={id}

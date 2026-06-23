@@ -455,6 +455,38 @@ export async function deleteExtractionToken(
   return {};
 }
 
+export type UpdateExtractionTokenState = { error?: string; success?: boolean };
+
+export async function updateExtractionToken(
+  templateId: string,
+  rowId: string,
+  _prev: UpdateExtractionTokenState,
+  formData: FormData
+): Promise<UpdateExtractionTokenState> {
+  await requireRole("super_admin");
+
+  const label = (formData.get("label") as string | null)?.trim();
+  const hint = (formData.get("hint") as string | null)?.trim();
+  const is_required = formData.get("is_required") === "on";
+
+  if (!label) return { error: "Display label is required." };
+  if (!hint) return { error: "Extraction hint is required." };
+
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("template_field_mappings")
+    .update({ display_label: label, extraction_hint: hint, is_required })
+    .eq("id", rowId)
+    .eq("template_id", templateId)
+    .eq("in_template", false);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return { success: true };
+}
+
 export type ReactivateTemplateState = { error?: string };
 
 export async function reactivateTemplate(

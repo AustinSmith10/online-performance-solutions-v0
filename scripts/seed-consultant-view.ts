@@ -55,7 +55,6 @@ async function main() {
     .update({
       org_config: {
         ORG_CERTIFIER_NAME: "Jane Smith",
-        ORG_CERTIFIER_LICENCE: "BPB-12345",
         ORG_CERTIFIER_COMPANY: "Certified Building Practitioners Pty Ltd",
         ORG_CERTIFIER_EMAIL: "jane.smith@cbp.com.au",
       },

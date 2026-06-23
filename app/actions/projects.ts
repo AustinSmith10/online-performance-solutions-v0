@@ -213,25 +213,31 @@ export async function uploadQaPbdb(
   const isRevision = (project.status as string) === "revision_required";
   const cycle = (project.review_cycle as number) ?? 1;
 
-  // For revision uploads: update SYS_REV_NO in the doc and use standard filename convention
   const fileBuffer = Buffer.from(await file.arrayBuffer());
-  let storedFilename = file.name;
-  if (isRevision) {
-    const projectNum = (project.project_number as string | null) ?? "";
-    const rawAddress = ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? "").trim();
-    const address = formatAddress(rawAddress);
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    storedFilename = [
-      `${projectNum}-S PBDB R${cycle}`,
-      address,
-      `${yyyy} ${mm} ${dd}`,
-    ].filter(Boolean).join(" ") + ".docx";
-  }
 
-  const storagePath = `${project.org_id}/${projectId}/pbdb/${storedFilename}`;
+  const projectNum = (project.project_number as string | null) ?? "";
+  const rawAddress = ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? "").trim();
+  const address = formatAddress(rawAddress);
+  const uploadDate = new Date();
+  const yyyy = uploadDate.getFullYear();
+  const mm = String(uploadDate.getMonth() + 1).padStart(2, "0");
+  const dd = String(uploadDate.getDate()).padStart(2, "0");
+
+  // R[n] only increments when a stakeholder revision cycle completes.
+  // QA corrections stay on the same R[n] as the generated file (review_cycle - 1).
+  // Revision uploads advance to the next R[n] (review_cycle), matching the cycle just rejected.
+  const rIndex = isRevision ? cycle : cycle - 1;
+  const storedFilename = [
+    `${projectNum}-S PBDB R${rIndex}`,
+    address,
+    `${yyyy} ${mm} ${dd}`,
+  ].filter(Boolean).join(" ") + ".docx";
+
+  // Revision filenames are unique per cycle (different R[n]); QA correction filenames may
+  // collide with the previously generated file, so prefix the storage object with the version
+  // counter to guarantee a unique path while keeping original_filename canonical.
+  const storageFilename = isRevision ? storedFilename : `v${nextVersion}_${storedFilename}`;
+  const storagePath = `${project.org_id}/${projectId}/pbdb/${storageFilename}`;
 
   const { error: uploadError } = await supabase.storage
     .from("documents")

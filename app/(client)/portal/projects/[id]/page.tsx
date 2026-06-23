@@ -98,8 +98,8 @@ export default async function ClientProjectDetailPage({
     .limit(1)
     .maybeSingle();
 
-  // Load template mappings, submission files, and (conditionally) PBDB in parallel
-  const [{ data: mappings }, { data: rawFiles }, { data: rawPbdbs }] = await Promise.all([
+  // Load template mappings, submission files, latest PBDB, and latest PBDR in parallel
+  const [{ data: mappings }, { data: rawFiles }, { data: rawPbdbs }, { data: rawPbdrs }] = await Promise.all([
     project.template_id
       ? supabase
           .from("template_field_mappings")
@@ -111,7 +111,7 @@ export default async function ClientProjectDetailPage({
       .from("project_files")
       .select("id, file_type, original_filename, storage_path, created_at")
       .eq("project_id", id)
-      .not("file_type", "eq", "pbdb")
+      .not("file_type", "in", '("pbdb","pbdr")')
       .order("created_at"),
     pbdbVisible
       ? supabase
@@ -122,6 +122,13 @@ export default async function ClientProjectDetailPage({
           .order("version", { ascending: false })
           .limit(1)
       : Promise.resolve({ data: [] }),
+    supabase
+      .from("project_files")
+      .select("id, original_filename, storage_path, version, created_at")
+      .eq("project_id", id)
+      .eq("file_type", "pbdr")
+      .order("version", { ascending: false })
+      .limit(1),
   ]);
 
   // Submission files — signed URLs from `submissions` bucket
@@ -142,6 +149,16 @@ export default async function ClientProjectDetailPage({
       .from("documents")
       .createSignedUrl(latestPbdb.storage_path as string, 3600);
     pbdbSignedUrl = signed?.signedUrl ?? null;
+  }
+
+  // PBDR — latest version only, signed URL from `documents` bucket
+  const latestPbdr = rawPbdrs?.[0] ?? null;
+  let pbdrSignedUrl: string | null = null;
+  if (latestPbdr) {
+    const { data: signed } = await supabase.storage
+      .from("documents")
+      .createSignedUrl(latestPbdr.storage_path as string, 3600);
+    pbdrSignedUrl = signed?.signedUrl ?? null;
   }
 
   // Build label map from template mappings
@@ -305,14 +322,36 @@ export default async function ClientProjectDetailPage({
         <div className="border-b border-zinc-100 px-5 py-4">
           <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
         </div>
-        {files.length === 0 && !latestPbdb ? (
+        {files.length === 0 && !latestPbdb && !latestPbdr ? (
           <p className="px-5 py-6 text-sm text-zinc-500">No documents uploaded yet.</p>
         ) : (
           <div className="divide-y divide-zinc-100">
+            {latestPbdr && (
+              <div className="flex items-center gap-4 px-5 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-zinc-900">
+                    {latestPbdr.original_filename as string}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    Performance Based Design Report &middot;{" "}
+                    {new Date(latestPbdr.created_at as string).toLocaleDateString("en-AU")}
+                  </p>
+                </div>
+                {pbdrSignedUrl && (
+                  <a
+                    href={pbdrSignedUrl}
+                    download={latestPbdr.original_filename as string}
+                    className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Download
+                  </a>
+                )}
+              </div>
+            )}
             {latestPbdb && (
-              <div className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <p className="text-sm text-zinc-900">
+              <div className="flex items-center gap-4 px-5 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-zinc-900">
                     {latestPbdb.original_filename as string}
                   </p>
                   <p className="text-xs text-zinc-500">
@@ -324,7 +363,7 @@ export default async function ClientProjectDetailPage({
                   <a
                     href={pbdbSignedUrl}
                     download={latestPbdb.original_filename as string}
-                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
                   >
                     Download
                   </a>
@@ -334,18 +373,16 @@ export default async function ClientProjectDetailPage({
             {files.map((f) => (
               <div
                 key={f.id as string}
-                className="flex items-center justify-between px-5 py-3"
+                className="flex items-center gap-4 px-5 py-3"
               >
-                <div>
-                  <p className="text-sm text-zinc-900">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-zinc-900">
                     {f.original_filename as string}
                   </p>
                   <p className="text-xs text-zinc-500">
                     {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}{" "}
                     &middot;{" "}
-                    {new Date(f.created_at as string).toLocaleDateString(
-                      "en-AU"
-                    )}
+                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                   </p>
                 </div>
                 {f.signedUrl && (
@@ -353,7 +390,7 @@ export default async function ClientProjectDetailPage({
                     href={f.signedUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
                   >
                     Download
                   </a>

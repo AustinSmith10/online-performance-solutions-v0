@@ -221,9 +221,10 @@ async function handleNewSubmission(
           }));
       }
 
-      const poBuffer = pdfBuffers[0];
-      const plansBuffer = pdfBuffers[1] ?? pdfBuffers[0];
-      const extracted = await extractDocumentFields(poBuffer, plansBuffer, extractTokens);
+      const extracted = await extractDocumentFields(
+        pdfBuffers.map((buf, i) => ({ label: `Attachment ${i + 1}`, buffer: buf })),
+        extractTokens
+      );
 
       const fieldValues = normalizeExtractedFields(
         Object.fromEntries(Object.entries(extracted.fields).map(([k, v]) => [k, v.value]))
@@ -407,9 +408,10 @@ async function handleThreadReply(
         }));
       }
 
-      const poBuffer = pdfBuffers[0];
-      const plansBuffer = pdfBuffers[1] ?? pdfBuffers[0];
-      const extracted = await extractDocumentFields(poBuffer, plansBuffer, extractTokens);
+      const extracted = await extractDocumentFields(
+        pdfBuffers.map((buf, i) => ({ label: `Attachment ${i + 1}`, buffer: buf })),
+        extractTokens
+      );
 
       // Fetch current extracted_fields to merge
       const { data: current } = await supabase

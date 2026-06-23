@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useTransition } from "react";
+import { useActionState, useTransition, useState } from "react";
 import {
   addExtractionOnlyToken,
   deleteExtractionToken,
+  updateExtractionToken,
   type AddExtractionTokenState,
 } from "@/app/actions/templates";
 
@@ -123,16 +124,95 @@ export function AddExtractionTokenForm({ templateId, existingTokens }: Props) {
 }
 
 function ExtractionOnlyRow({ templateId, row }: { templateId: string; row: Row }) {
-  const [isPending, startTransition] = useTransition();
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDeletePending, startDeleteTransition] = useTransition();
+  const [isSavePending, startSaveTransition] = useTransition();
+  const [saveError, setSaveError] = useState<string | undefined>();
+
+  function handleSave(fd: FormData) {
+    startSaveTransition(async () => {
+      const result = await updateExtractionToken(templateId, row.id, {}, fd);
+      if (result.error) {
+        setSaveError(result.error);
+      } else {
+        setSaveError(undefined);
+        setIsEditing(false);
+      }
+    });
+  }
 
   function handleDelete() {
-    startTransition(async () => {
+    startDeleteTransition(async () => {
       await deleteExtractionToken(templateId, row.placeholder_token);
     });
   }
 
+  if (isEditing) {
+    return (
+      <tr className="bg-zinc-50/60">
+        <td colSpan={5} className="px-5 py-4">
+          <form action={handleSave} className="space-y-3">
+            <p className="text-xs font-medium text-zinc-700 font-mono">{"{" + row.placeholder_token + "}"}</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-zinc-500">Display label <span className="text-red-400">*</span></label>
+                <input
+                  name="label"
+                  type="text"
+                  required
+                  defaultValue={row.display_label ?? ""}
+                  className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                />
+              </div>
+              <div className="flex items-end gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-zinc-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="is_required"
+                    defaultChecked={row.is_required}
+                    className="h-4 w-4 rounded border-zinc-300 accent-zinc-900"
+                  />
+                  Required
+                </label>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-zinc-500">Extraction hint <span className="text-red-400">*</span></label>
+              <textarea
+                name="hint"
+                required
+                rows={3}
+                defaultValue={row.extraction_hint ?? ""}
+                className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-y"
+              />
+            </div>
+            {saveError && (
+              <p className="text-xs text-red-600">{saveError}</p>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={isSavePending}
+                className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {isSavePending ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="text-xs text-zinc-500 hover:text-zinc-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </td>
+      </tr>
+    );
+  }
+
   return (
-    <tr className={isPending ? "opacity-40" : ""}>
+    <tr className={isDeletePending ? "opacity-40" : ""}>
       <td className="px-5 py-3 font-mono text-xs text-zinc-800">
         {"{"}
         {row.placeholder_token}
@@ -152,13 +232,21 @@ function ExtractionOnlyRow({ templateId, row }: { templateId: string; row: Row }
         )}
       </td>
       <td className="px-5 py-3 text-right">
-        <button
-          onClick={handleDelete}
-          disabled={isPending}
-          className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
-        >
-          Remove
-        </button>
+        <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-xs text-zinc-500 hover:text-zinc-800"
+          >
+            Edit
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={isDeletePending}
+            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
+          >
+            Remove
+          </button>
+        </div>
       </td>
     </tr>
   );

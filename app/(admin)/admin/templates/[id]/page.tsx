@@ -7,6 +7,7 @@ import { TemplateStatusActions } from "./_components/status-actions";
 import { DeleteButton } from "./_components/delete-button";
 import { ReuploadForm } from "./_components/reupload-form";
 import { AddExtractionTokenForm } from "./_components/add-extraction-token-form";
+import { FileRequirementsSection } from "./_components/FileRequirementsSection";
 
 type MappingRow = {
   id: string;
@@ -38,7 +39,7 @@ export default async function TemplatePage({
   const { id } = await params;
   const supabase = createAdminClient();
 
-  const [{ data: tmpl }, { data: mappings }] = await Promise.all([
+  const [{ data: tmpl }, { data: mappings }, { data: fileReqs }] = await Promise.all([
     supabase
       .from("templates")
       .select("id, name, status, storage_path, created_at, org:org_id(id, name, org_config)")
@@ -50,12 +51,21 @@ export default async function TemplatePage({
       .eq("template_id", id)
       .order("sort_order", { ascending: true })
       .order("placeholder_token", { ascending: true }),
+    supabase
+      .from("file_requirements")
+      .select("id, name, slug, max_count, required, no_duplicates, extraction")
+      .eq("template_id", id)
+      .order("sort_order", { ascending: true }),
   ]);
 
   if (!tmpl) notFound();
 
   const template = tmpl as unknown as TemplateDetail;
   const rows = (mappings ?? []) as MappingRow[];
+  const requirements = (fileReqs ?? []) as {
+    id: string; name: string; slug: string;
+    max_count: number; required: boolean; no_duplicates: boolean; extraction: boolean;
+  }[];
   const templateRows = rows.filter((r) => r.in_template);
   const extractionOnlyRows = rows.filter((r) => !r.in_template);
 
@@ -192,6 +202,20 @@ export default async function TemplatePage({
           </p>
         </div>
         <AddExtractionTokenForm templateId={id} existingTokens={extractionOnlyRows} />
+      </div>
+
+      {/* File requirements */}
+      <div className="rounded-lg border border-zinc-200 bg-white">
+        <div className="border-b border-zinc-100 px-5 py-4">
+          <h2 className="text-sm font-semibold text-zinc-900">
+            File requirements ({requirements.length})
+          </h2>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Files the client must attach when submitting a project using this template.
+            Set a name, identifier, upload limit, and whether the field is required or must be unique.
+          </p>
+        </div>
+        <FileRequirementsSection templateId={id} requirements={requirements} />
       </div>
     </div>
   );

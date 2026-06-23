@@ -24,16 +24,23 @@ export interface DynamicExtractionResult {
   fields: Record<string, ExtractedField>;
 }
 
+export interface ExtractionDocument {
+  label: string;
+  buffer: Buffer;
+}
+
 const EMPTY_FIELD: ExtractedField = { value: "", confidence: "low" };
 
 function buildPrompt(
-  poText: string | null,
-  plansText: string,
+  documents: { label: string; text: string }[],
   tokens: ExtractToken[]
 ): string {
-  const poSection = poText
-    ? `--- PURCHASE ORDER ---\n${poText}`
-    : `--- PURCHASE ORDER ---\n(no purchase order provided)`;
+  const docSections =
+    documents.length > 0
+      ? documents
+          .map((d) => `--- ${d.label.toUpperCase()} ---\n${d.text}`)
+          .join("\n\n")
+      : "(no documents provided)";
 
   const tokenLines = tokens
     .map((t) => `  "${t.token}": { "value": "...", "confidence": "high|medium|low" }`)
@@ -43,14 +50,16 @@ function buildPrompt(
     .map((t) => `- ${t.token} (${t.label}): ${t.hint}`)
     .join("\n");
 
+  const poRule =
+    documents.length > 0
+      ? `- po_number: Look for "PO Number", "Purchase Order No", "PO#", or similar across all documents. Return "" with "low" confidence if not found.`
+      : `- po_number: No documents provided — return "" with "low" confidence.`;
+
   return `You are a document data extractor for an Australian building compliance system.
 
 Below is text extracted from the submitted documents:
 
-${poSection}
-
---- BUILDING PLANS ---
-${plansText}
+${docSections}
 
 Extract the following fields and return ONLY a JSON object with exactly this structure (no explanation):
 
@@ -60,7 +69,7 @@ ${tokenLines}
 }
 
 Field extraction rules:
-- po_number: Look for "PO Number", "Purchase Order No", "PO#", or similar in the PO document. If no PO was provided, return "" with "low" confidence.
+${poRule}
 ${tokenRules}
 
 Confidence levels:
@@ -131,8 +140,7 @@ async function extractWithAnthropic(
 }
 
 export async function extractDocumentFields(
-  poBuffer: Buffer | null,
-  plansBuffer: Buffer,
+  documents: ExtractionDocument[],
   extractTokens: ExtractToken[]
 ): Promise<DynamicExtractionResult> {
   const tokenNames = extractTokens.map((t) => t.token);
@@ -142,14 +150,16 @@ export async function extractDocumentFields(
     fields: Object.fromEntries(tokenNames.map((t) => [t, { ...EMPTY_FIELD }])),
   };
 
-  if (extractTokens.length === 0 && !poBuffer) return emptyResult;
+  if (documents.length === 0 && extractTokens.length === 0) return emptyResult;
 
-  const [poText, plansText] = await Promise.all([
-    poBuffer ? extractPdfText(poBuffer) : Promise.resolve(null),
-    extractPdfText(plansBuffer),
-  ]);
+  const docTexts = await Promise.all(
+    documents.map(async (d) => ({
+      label: d.label,
+      text: await extractPdfText(d.buffer),
+    }))
+  );
 
-  const prompt = buildPrompt(poText, plansText, extractTokens);
+  const prompt = buildPrompt(docTexts, extractTokens);
 
   if (process.env.OPENAI_API_KEY) {
     try {

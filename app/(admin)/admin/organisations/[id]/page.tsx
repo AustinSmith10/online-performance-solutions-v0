@@ -51,7 +51,8 @@ export default async function OrganisationDetailPage({
     id: string; name: string; email: string; company: string | null;
   }[];
 
-  // Fetch all unique ORG_ tokens across this org's templates
+  // Only tokens that are genuinely present in the template file (in_template = true)
+  // so the config fields always match what will actually be substituted in generated docs.
   const templateIds = orgTemplates.map((t) => t.id);
   let orgConfigTokens: string[] = [];
   if (templateIds.length > 0) {
@@ -59,7 +60,8 @@ export default async function OrganisationDetailPage({
       .from("template_field_mappings")
       .select("placeholder_token")
       .in("template_id", templateIds)
-      .eq("field_key", "org");
+      .eq("field_key", "org")
+      .eq("in_template", true);
     const seen = new Set<string>();
     for (const row of tokenRows ?? []) {
       seen.add((row as { placeholder_token: string }).placeholder_token);

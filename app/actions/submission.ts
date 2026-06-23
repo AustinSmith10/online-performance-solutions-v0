@@ -20,6 +20,7 @@ export interface Development {
 // Tokens auto-resolved from halcyon_developments — never sent to AI extraction
 const TRUSTEE_TOKEN = "EXTRACT_TRUSTEE";
 const RAINFALL_TOKEN = "EXTRACT_RAINFALL_INTENSITY";
+const HALCYON_LOOKUP_TOKEN = "EXTRACT_DEV_NAME";
 
 export interface TokenField {
   token: string;
@@ -61,51 +62,92 @@ export async function extractFields(
   const templateId = (formData.get("template_id") as string | null)?.trim();
   if (!templateId) return { step: 1, error: "No template selected." };
 
-  const poFile = formData.get("po_file") as File | null;
-  const plansFile = formData.get("plans_file") as File | null;
-
-  if (!plansFile || plansFile.size === 0)
-    return { step: 1, error: "Building plans document is required." };
-  if (plansFile.size > 50 * 1024 * 1024)
-    return { step: 1, error: "Building plans must be under 50 MB." };
-  if (poFile && poFile.size > 50 * 1024 * 1024)
-    return { step: 1, error: "Purchase order must be under 50 MB." };
-
   const orgId = actor.org_id as string;
   const projectId = crypto.randomUUID();
 
-  const hasPoFile = !!poFile && poFile.size > 0;
-  const poBuffer = hasPoFile ? Buffer.from(await poFile.arrayBuffer()) : null;
-  const plansBuffer = Buffer.from(await plansFile.arrayBuffer());
+  // Load file requirements for this template
+  const { data: fileReqsData } = await supabase
+    .from("file_requirements")
+    .select("id, name, slug, max_count, required, no_duplicates, extraction")
+    .eq("template_id", templateId)
+    .order("sort_order");
 
-  const poPath = hasPoFile ? `${orgId}/${projectId}/po/${poFile.name}` : "";
-  const plansPath = `${orgId}/${projectId}/plans/${plansFile.name}`;
+  type FileReq = {
+    id: string; name: string; slug: string;
+    max_count: number; required: boolean; no_duplicates: boolean; extraction: boolean;
+  };
+  const fileReqs = (fileReqsData ?? []) as FileReq[];
 
-  const uploadsToRun: Promise<{ error: { message: string } | null }>[] = [
-    supabase.storage
-      .from("submissions")
-      .upload(plansPath, plansBuffer, { contentType: plansFile.type || "application/pdf" }),
-  ];
-  if (hasPoFile && poBuffer) {
-    uploadsToRun.unshift(
-      supabase.storage
-        .from("submissions")
-        .upload(poPath, poBuffer, { contentType: poFile.type || "application/pdf" })
-    );
+  // Collect uploaded files per requirement slot
+  const filesBySlug: Record<string, File[]> = {};
+  for (const req of fileReqs) {
+    const all = formData.getAll(req.slug) as (File | string)[];
+    filesBySlug[req.slug] = all
+      .filter((f): f is File => f instanceof File && f.size > 0)
+      .slice(0, req.max_count);
   }
 
-  const uploadResults = await Promise.all(uploadsToRun);
-  for (const result of uploadResults) {
-    if (result.error) {
-      const uploaded = uploadResults
-        .filter((r) => !r.error)
-        .map((_, i) => (i === 0 && hasPoFile ? poPath : plansPath));
-      await supabase.storage.from("submissions").remove(uploaded);
-      return { step: 1, error: `Failed to upload document: ${result.error.message}` };
+  // Validate required slots
+  for (const req of fileReqs) {
+    if (req.required && !filesBySlug[req.slug]?.length) {
+      return { step: 1, error: `"${req.name}" is required. Please attach a file.` };
     }
   }
 
-  // Load template mappings + org config + run extraction in parallel
+  // Validate file sizes (50 MB per file)
+  for (const req of fileReqs) {
+    for (const file of filesBySlug[req.slug] ?? []) {
+      if (file.size > 50 * 1024 * 1024) {
+        return { step: 1, error: `"${req.name}" — "${file.name}" exceeds the 50 MB limit.` };
+      }
+    }
+  }
+
+  // Validate no_duplicates within each slot
+  for (const req of fileReqs) {
+    if (req.no_duplicates) {
+      const names = (filesBySlug[req.slug] ?? []).map((f) => f.name);
+      if (new Set(names).size < names.length) {
+        return { step: 1, error: `"${req.name}" cannot contain files with duplicate names.` };
+      }
+    }
+  }
+
+  // Read all file buffers and build upload manifest
+  type UploadItem = { req: FileReq; file: File; path: string; buffer: Buffer };
+  const uploadItems: UploadItem[] = await Promise.all(
+    fileReqs.flatMap((req) =>
+      (filesBySlug[req.slug] ?? []).map(async (file) => ({
+        req,
+        file,
+        path: `${orgId}/${projectId}/${req.slug}/${file.name}`,
+        buffer: Buffer.from(await file.arrayBuffer()),
+      }))
+    )
+  );
+
+  // Upload all files in parallel
+  const uploadResults = await Promise.all(
+    uploadItems.map(({ buffer, file, path }) =>
+      supabase.storage
+        .from("submissions")
+        .upload(path, buffer, { contentType: file.type || "application/pdf" })
+    )
+  );
+
+  const failedIdx = uploadResults.findIndex((r) => r.error);
+  if (failedIdx >= 0) {
+    const successPaths = uploadResults.slice(0, failedIdx).map((_, i) => uploadItems[i].path);
+    if (successPaths.length) await supabase.storage.from("submissions").remove(successPaths);
+    return { step: 1, error: `Failed to upload "${uploadItems[failedIdx].file.name}". Please try again.` };
+  }
+
+  // Collect extraction documents (only slots with extraction = true)
+  const extractionDocs = uploadItems
+    .filter((item) => item.req.extraction)
+    .map((item) => ({ label: item.req.name, buffer: item.buffer }));
+
+  // Load template mappings + org config in parallel
   const [mappingsResult, orgResult] = await Promise.all([
     supabase
       .from("template_field_mappings")
@@ -133,7 +175,7 @@ export async function extractFields(
   const rainfallToken = rainfallMapping ? RAINFALL_TOKEN : null;
   const needsHalcyon = hasTrustee || rainfallToken !== null;
 
-  // Exclude halcyon-resolved tokens from AI extraction
+  // Exclude halcyon-resolved tokens from AI extraction (HOUSE_TYPE is extracted by AI, used as lookup key)
   const halcyonTokens = new Set([TRUSTEE_TOKEN, RAINFALL_TOKEN]);
   const extractTokens = extractMappings
     .filter((m) => !halcyonTokens.has(m.placeholder_token))
@@ -148,7 +190,7 @@ export async function extractFields(
 
   try {
     const [extractionResult, devsResult] = await Promise.all([
-      extractDocumentFields(poBuffer, plansBuffer, extractTokens),
+      extractDocumentFields(extractionDocs, extractTokens),
       needsHalcyon
         ? supabase
             .from("halcyon_developments")
@@ -159,9 +201,10 @@ export async function extractFields(
     extraction = extractionResult;
     developments = (devsResult.data ?? []) as Development[];
 
-    // Auto-resolve trustee and rainfall intensity from Halcyon using the extracted dev name
+    // Auto-resolve trustee and rainfall intensity from the Halcyon developments table
+    // using the extracted development name.
     if (needsHalcyon && developments.length > 0) {
-      const devName = extraction.fields["EXTRACT_DEV_NAME"]?.value?.trim() ?? "";
+      const devName = extraction.fields[HALCYON_LOOKUP_TOKEN]?.value?.trim() ?? "";
       if (devName) {
         const needle = devName.toLowerCase();
         const matchedDev =
@@ -188,8 +231,8 @@ export async function extractFields(
       }
     }
   } catch (err) {
-    const pathsToRemove = [plansPath, ...(hasPoFile ? [poPath] : [])];
-    await supabase.storage.from("submissions").remove(pathsToRemove);
+    const pathsToRemove = uploadItems.map((i) => i.path);
+    if (pathsToRemove.length) await supabase.storage.from("submissions").remove(pathsToRemove);
     console.error("[extractFields] extraction failed:", err);
     return {
       step: 1,
@@ -202,7 +245,7 @@ export async function extractFields(
   // for this org already has the same address (submitted or draft).
   const extractedAddress = extraction.fields["EXTRACT_ADDRESS"]?.value?.trim() ?? "";
   if (extractedAddress) {
-    const pathsToRemove = [plansPath, ...(hasPoFile ? [poPath] : [])];
+    const pathsToRemove = uploadItems.map((i) => i.path);
     const [{ data: byAddress }, { data: byDraft }] = await Promise.all([
       supabase
         .from("projects")
@@ -223,7 +266,7 @@ export async function extractFields(
     ]);
     const existing = byAddress ?? byDraft;
     if (existing) {
-      await supabase.storage.from("submissions").remove(pathsToRemove);
+      if (pathsToRemove.length) await supabase.storage.from("submissions").remove(pathsToRemove);
       return {
         step: 1,
         error: `A project for ${extractedAddress} already exists. Please review the existing project instead of creating a new one.`,
@@ -247,33 +290,22 @@ export async function extractFields(
   });
 
   if (projectError) {
-    const pathsToRemove = [plansPath, ...(hasPoFile ? [poPath] : [])];
-    await supabase.storage.from("submissions").remove(pathsToRemove);
+    const pathsToRemove = uploadItems.map((i) => i.path);
+    if (pathsToRemove.length) await supabase.storage.from("submissions").remove(pathsToRemove);
     console.error("[extractFields] draft project insert failed:", projectError);
     return { step: 1, error: "Failed to save your draft. Please try again." };
   }
 
-  const fileRecords = [
-    {
+  if (uploadItems.length > 0) {
+    const fileRecords = uploadItems.map(({ req, file, path }) => ({
       project_id: projectId,
-      file_type: "building_plans",
-      storage_path: plansPath,
-      original_filename: plansFile.name,
+      file_type: req.slug,
+      storage_path: path,
+      original_filename: file.name,
       uploaded_by: actor.id,
-    },
-    ...(hasPoFile
-      ? [
-          {
-            project_id: projectId,
-            file_type: "po",
-            storage_path: poPath,
-            original_filename: poFile.name,
-            uploaded_by: actor.id,
-          },
-        ]
-      : []),
-  ];
-  await supabase.from("project_files").insert(fileRecords);
+    }));
+    await supabase.from("project_files").insert(fileRecords);
+  }
 
   const tokenGroups = {
     extract: extractMappings.map((m) => ({
