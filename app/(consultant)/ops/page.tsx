@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ClickableRow } from "@/components/ClickableRow";
+import { RevisionRequiredPanel, type ReviewRow } from "./_components/RevisionRequiredPanel";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -39,6 +40,7 @@ type ProjectRow = {
   po_number: string | null;
   expected_delivery_date: string | null;
   created_at: string;
+  review_cycle: number;
   organisations: { name: string } | null;
   submitter: { first_name: string | null; last_name: string | null; email: string } | null;
 };
@@ -62,7 +64,7 @@ export default async function ConsultantOpsPage({
   const { data } = await supabase
     .from("projects")
     .select(`
-      id, extracted_fields, status, po_number, expected_delivery_date, created_at,
+      id, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle,
       organisations(name),
       submitter:users!projects_submitted_by_fkey(first_name, last_name, email)
     `)
@@ -75,6 +77,21 @@ export default async function ConsultantOpsPage({
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const revisionRequired = projects.filter((p) => p.status === "revision_required");
+
+  // Fetch stakeholder reviews for all revision-required projects
+  const reviewsByProject: Record<string, ReviewRow[]> = {};
+  if (revisionRequired.length > 0) {
+    const { data: rawRevisionReviews } = await supabase
+      .from("stakeholder_reviews")
+      .select("id, project_id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle")
+      .in("project_id", revisionRequired.map((p) => p.id))
+      .order("review_cycle", { ascending: false })
+      .order("responded_at", { ascending: true });
+    for (const r of (rawRevisionReviews ?? []) as ReviewRow[]) {
+      if (!reviewsByProject[r.project_id]) reviewsByProject[r.project_id] = [];
+      reviewsByProject[r.project_id].push(r);
+    }
+  }
   const active = projects.filter((p) =>
     (["assigned", "in_progress", "qa_complete"] as ProjectStatus[]).includes(p.status)
   );
@@ -126,41 +143,7 @@ export default async function ConsultantOpsPage({
             </div>
           )}
 
-          {revisionRequired.length > 0 && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-5">
-              <h2 className="text-sm font-semibold text-red-900">
-                Revision required ({revisionRequired.length})
-              </h2>
-              <p className="mt-0.5 text-xs text-red-700">
-                Stakeholders have rejected the following PBDBs. Review their feedback and upload a
-                corrected version.
-              </p>
-              <ul className="mt-3 space-y-2">
-                {revisionRequired.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex items-center justify-between rounded-md border border-red-100 bg-white px-4 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <span className="block truncate text-sm text-zinc-900">
-                        {(p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
-                          (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))}
-                      </span>
-                      {p.organisations?.name && (
-                        <span className="text-xs text-zinc-500">{p.organisations.name}</span>
-                      )}
-                    </div>
-                    <Link
-                      href={`/ops/projects/${p.id}`}
-                      className="ml-4 shrink-0 text-sm font-medium text-red-700 hover:text-red-900"
-                    >
-                      View feedback →
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <RevisionRequiredPanel projects={revisionRequired} reviewsByProject={reviewsByProject} />
 
           <ProjectSection title="Active" projects={active} todayIso={todayIso} />
           <ProjectSection
