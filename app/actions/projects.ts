@@ -588,3 +588,25 @@ export async function resumeProject(
   revalidatePath(`/admin/projects/${projectId}`);
   return { success: true };
 }
+
+export type SetStripTokenColorState = { error?: string };
+
+export async function setProjectStripTokenColor(
+  projectId: string,
+  strip: boolean
+): Promise<SetStripTokenColorState> {
+  const actor = await requireRole("consultant", "super_admin");
+  const supabase = createAdminClient();
+
+  let query = supabase.from("projects").update({ strip_token_color: strip }).eq("id", projectId);
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { error } = await query;
+  if (error) return { error: error.message };
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return {};
+}

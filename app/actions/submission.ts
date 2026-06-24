@@ -312,7 +312,7 @@ export async function extractFields(
     extract: extractMappings.map((m) => ({
       token: m.placeholder_token,
       label: m.display_label ?? m.placeholder_token,
-      value: extraction.fields[m.placeholder_token]?.value ?? "",
+      value: draftFields[m.placeholder_token] ?? extraction.fields[m.placeholder_token]?.value ?? "",
       confidence: extraction.fields[m.placeholder_token]?.confidence ?? ("low" as Confidence),
       required: m.is_required ?? false,
     })),
@@ -368,16 +368,17 @@ export async function submitProject(
     (formData.get("delivery_recipient_email") as string | null)?.trim() || null;
 
   // Collect all token values from form (EXTRACT_, ORG_, CLIENT_)
-  const extractedFields: Record<string, string> = {};
+  const rawFields: Record<string, string> = {};
   for (const [key, rawVal] of formData.entries()) {
     if (
       key.startsWith("EXTRACT_") ||
       key.startsWith("ORG_") ||
       key.startsWith("CLIENT_")
     ) {
-      extractedFields[key] = (rawVal as string).trim();
+      rawFields[key] = (rawVal as string).trim();
     }
   }
+  const extractedFields = normalizeExtractedFields(rawFields);
 
   const siteAddress = (extractedFields["EXTRACT_ADDRESS"] ?? "").trim() || null;
 

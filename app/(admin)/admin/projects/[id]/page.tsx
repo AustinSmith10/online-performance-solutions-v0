@@ -15,6 +15,7 @@ import { PauseForm } from "./_components/PauseForm";
 import { ResumeButton } from "./_components/ResumeButton";
 import { AdminDeleteButton } from "./_components/AdminDeleteButton";
 import { prettifyToken } from "@/lib/tokens/prettify";
+import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -93,6 +94,7 @@ export default async function ProjectDetailPage({
         updated_at,
         source,
         review_cycle,
+        strip_token_color,
         organisations(id, name),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
       `)
@@ -125,6 +127,7 @@ export default async function ProjectDetailPage({
     created_at: string;
     updated_at: string;
     source: "portal" | "email";
+    strip_token_color: boolean;
     organisations: { id: string; name: string } | null;
     assigned: {
       id: string;
@@ -519,6 +522,18 @@ export default async function ProjectDetailPage({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Client document colour */}
+      {pbdbFiles.length > 0 && (
+        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Client document colour</h2>
+          <p className="mb-4 text-xs text-zinc-500">
+            Controls whether the client receives a version with black text or the original red
+            token colour when they download the PBDB via their review link.
+          </p>
+          <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
         </div>
       )}
 

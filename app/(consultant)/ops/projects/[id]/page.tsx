@@ -7,6 +7,7 @@ import { ProjectNumberForm } from "./_components/ProjectNumberForm";
 import { PbdbQaUploadForm } from "./_components/PbdbQaUploadForm";
 import { MarkQaCompleteButton } from "./_components/MarkQaCompleteButton";
 import { prettifyToken } from "@/lib/tokens/prettify";
+import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -57,7 +58,7 @@ export default async function ConsultantProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, organisations(name, state_territory, org_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, organisations(name, state_territory, org_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -76,6 +77,7 @@ export default async function ConsultantProjectDetailPage({
     created_at: string;
     expected_delivery_date: string | null;
     source: "portal" | "email";
+    strip_token_color: boolean;
     organisations: { name: string; state_territory: string | null; org_config: Record<string, string> } | null;
     submitter: {
       first_name: string | null;
@@ -447,6 +449,18 @@ export default async function ConsultantProjectDetailPage({
           )}
         </div>
       </div>
+
+      {/* Client document colour */}
+      {latestPbdb && (
+        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Client document colour</h2>
+          <p className="mb-4 text-xs text-zinc-500">
+            Controls whether the client receives a version with black text or the original red
+            token colour when they download the PBDB via their review link.
+          </p>
+          <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
+        </div>
+      )}
 
       {/* PBDR */}
       {pbdrFiles.length > 0 && (

@@ -47,6 +47,7 @@ export function MappingTable({ rows, templateId, missingOrgTokens = [] }: Props)
   );
 
   const [orderedRows, setOrderedRows] = useState<Row[]>(rows);
+  const [redTokens, setRedTokens] = useState(true);
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
@@ -98,7 +99,20 @@ export function MappingTable({ rows, templateId, missingOrgTokens = [] }: Props)
         <thead className="border-b border-zinc-100">
           <tr>
             <th className="w-10 px-3 py-3"></th>
-            <th className="w-52 px-5 py-3 text-left font-medium text-zinc-500">Token</th>
+            <th className="w-52 px-5 py-3 text-left font-medium text-zinc-500">
+          <span className="flex items-center gap-2">
+            Token
+            <button
+              type="button"
+              onClick={() => setRedTokens((v) => !v)}
+              className="rounded px-1.5 py-0.5 text-xs font-normal transition-colors"
+              style={{ color: redTokens ? "#dc2626" : "#71717a", border: "1px solid currentColor" }}
+              title="Toggle token colour"
+            >
+              {redTokens ? "red" : "black"}
+            </button>
+          </span>
+        </th>
             <th className="w-44 px-5 py-3 text-left font-medium text-zinc-500">
               Display label <span className="text-red-400">*</span>
             </th>
@@ -129,7 +143,10 @@ export function MappingTable({ rows, templateId, missingOrgTokens = [] }: Props)
                 <td className="px-3 py-3 align-top cursor-grab text-zinc-300 hover:text-zinc-500 select-none" title="Drag to reorder">
                   ⠿
                 </td>
-                <td className="px-5 py-3 font-mono text-xs text-zinc-800 align-top">
+                <td
+                  className="px-5 py-3 font-mono text-xs align-top transition-colors"
+                  style={{ color: redTokens ? "#dc2626" : "#27272a" }}
+                >
                   {"{"}
                   {row.placeholder_token}
                   {"}"}
