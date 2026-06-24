@@ -23,7 +23,6 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   submitted: "Submitted",
   assigned: "Assigned",
   in_progress: "In Progress",
-  qa_complete: "QA Complete",
   dispatched: "Awaiting Approval",
   revision_required: "Revision Required",
   converting: "Converting to PBDR",
@@ -45,7 +44,7 @@ const FILE_TYPE_LABELS: Record<string, string> = {
 };
 
 const LIVE_STATUSES: readonly ProjectStatus[] = [
-  "submitted", "assigned", "in_progress", "qa_complete", "dispatched", "revision_required",
+  "submitted", "assigned", "in_progress", "dispatched", "revision_required",
 ];
 
 function overdueInfo(
@@ -95,6 +94,7 @@ export default async function ProjectDetailPage({
         source,
         review_cycle,
         strip_token_color,
+        qa_completed_by,
         organisations(id, name),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
       `)
@@ -137,6 +137,7 @@ export default async function ProjectDetailPage({
       availability: ConsultantAvailability;
     } | null;
     review_cycle: number;
+    qa_completed_by: string | null;
   };
 
   const project = projectResult.data as unknown as ProjectDetail;
@@ -358,8 +359,6 @@ export default async function ProjectDetailPage({
                   ? `${pendingReviews.length} stakeholder${pendingReviews.length !== 1 ? "s" : ""} yet to respond.`
                   : project.status === "dispatched" && !project.credit_deducted && !project.payment_override
                   ? "All stakeholders have acknowledged but payment has not been settled."
-                  : project.status === "qa_complete"
-                  ? "QA is complete. The PBDB is ready to dispatch to stakeholders."
                   : project.status === "revision_required"
                   ? "A revision has been requested. The assigned consultant must update the document."
                   : `Project is ${STATUS_LABELS[project.status].toLowerCase()} — expected delivery date has passed.`}
@@ -435,8 +434,8 @@ export default async function ProjectDetailPage({
               </div>
             )}
 
-          {/* Action: dispatch to stakeholders (qa_complete) */}
-          {project.status === "qa_complete" && (
+          {/* Action: dispatch to stakeholders (in_progress, dispatch failed) */}
+          {project.status === "in_progress" && !!project.qa_completed_by && (
             <div className="px-5 py-4">
               <p className="mb-3 text-xs font-medium uppercase tracking-wide text-red-700">
                 Dispatch to stakeholders
@@ -538,12 +537,11 @@ export default async function ProjectDetailPage({
       )}
 
       {/* Dispatch — standalone card when QA complete, regardless of overdue state */}
-      {!isDeleted && project.status === "qa_complete" && (
+      {!isDeleted && project.status === "in_progress" && !!project.qa_completed_by && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-5">
-          <h2 className="text-sm font-semibold text-amber-900">Ready to dispatch</h2>
+          <h2 className="text-sm font-semibold text-amber-900">Dispatch failed — retry required</h2>
           <p className="mt-1 mb-4 text-sm text-amber-800">
-            QA is complete. Dispatch the PBDB to stakeholders for approval — this will move the project to{" "}
-            <strong>Awaiting Approval</strong> and send approval request emails.
+            QA was marked complete but dispatch did not succeed. Retry to send approval requests to stakeholders.
           </p>
           <DispatchButton projectId={id} />
         </div>

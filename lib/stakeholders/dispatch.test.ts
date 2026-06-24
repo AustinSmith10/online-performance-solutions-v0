@@ -32,7 +32,7 @@ const BASE_PROJECT = {
   org_id: ORG_ID,
   template_id: "tmpl-1",
   submitted_by: SUBMITTER_ID,
-  status: "qa_complete",
+  status: "in_progress",
   review_cycle: 1,
   credit_deducted: false,
   project_number: "OPS-001",

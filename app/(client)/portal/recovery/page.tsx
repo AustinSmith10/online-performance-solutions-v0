@@ -10,7 +10,6 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   submitted: "Received",
   assigned: "Received",
   in_progress: "In Progress",
-  qa_complete: "In Progress",
   dispatched: "Awaiting Approval",
   revision_required: "Changes Requested",
   converting: "Finalising Report",

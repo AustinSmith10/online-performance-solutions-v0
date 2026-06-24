@@ -268,7 +268,6 @@ export async function uploadQaPbdb(
     await supabase
       .from("projects")
       .update({
-        status: "qa_complete",
         review_cycle: cycle + 1,
         first_response_at: null,
         review_buffer_fired_at: null,
@@ -341,7 +340,7 @@ export async function markQaComplete(
 
   const { error: updateError } = await supabase
     .from("projects")
-    .update({ status: "qa_complete", qa_completed_by: actor.id, updated_at: new Date().toISOString() })
+    .update({ qa_completed_by: actor.id, updated_at: new Date().toISOString() })
     .eq("id", projectId);
 
   if (updateError) return { error: updateError.message };
@@ -382,10 +381,11 @@ export async function markQaComplete(
     metadata: { project_ref: projectRef },
   });
 
-  // Auto-dispatch — errors are logged but do not block the QA complete transition
-  dispatchPbdb(projectId, actor.id).catch((err) => {
-    console.error(`[markQaComplete] auto-dispatch failed for ${projectId}:`, err);
-  });
+  try {
+    await dispatchPbdb(projectId, actor.id);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Dispatch failed. An admin can retry from the project page." };
+  }
 
   revalidatePath(`/admin/projects/${projectId}`);
   redirect(`/ops/projects/${projectId}`);

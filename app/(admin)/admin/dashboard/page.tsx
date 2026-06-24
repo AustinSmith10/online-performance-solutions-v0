@@ -10,7 +10,6 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   submitted: "Submitted",
   assigned: "Assigned",
   in_progress: "In Progress",
-  qa_complete: "QA Complete",
   dispatched: "Awaiting Approval",
   revision_required: "Revision Required",
   converting: "Converting to PBDR",
@@ -24,7 +23,6 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   submitted: "bg-blue-100 text-blue-700",
   assigned: "bg-yellow-100 text-yellow-700",
   in_progress: "bg-purple-100 text-purple-700",
-  qa_complete: "bg-teal-100 text-teal-700",
   dispatched: "bg-amber-100 text-amber-700",
   revision_required: "bg-red-100 text-red-700",
   converting: "bg-purple-100 text-purple-700",
@@ -37,7 +35,6 @@ const IN_FLIGHT_STATUSES: ProjectStatus[] = [
   "submitted",
   "assigned",
   "in_progress",
-  "qa_complete",
   "dispatched",
   "revision_required",
   "converting",
@@ -54,6 +51,7 @@ type ProjectRow = {
   payment_override_reason: string | null;
   assigned_consultant_id: string | null;
   review_buffer_fired_at: string | null;
+  qa_completed_by: string | null;
   created_at: string;
   organisations: { name: string } | null;
   consultant: { first_name: string | null; last_name: string | null; email: string; phone: string | null } | null;
@@ -92,7 +90,7 @@ export default async function AdminDashboardPage() {
       .select(`
         id, po_number, site_address, status, expected_delivery_date,
         payment_override, payment_override_at, payment_override_reason, assigned_consultant_id,
-        review_buffer_fired_at, created_at,
+        review_buffer_fired_at, qa_completed_by, created_at,
         organisations(name),
         consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email, phone)
       `)

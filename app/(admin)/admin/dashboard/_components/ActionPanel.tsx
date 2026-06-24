@@ -26,6 +26,7 @@ export interface DashboardProject {
   payment_override_reason: string | null;
   assigned_consultant_id: string | null;
   review_buffer_fired_at: string | null;
+  qa_completed_by: string | null;
   organisations: { name: string } | null;
   consultant: { first_name: string | null; last_name: string | null; email: string; phone: string | null } | null;
 }
@@ -66,7 +67,6 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   submitted: "Submitted",
   assigned: "Assigned",
   in_progress: "In Progress",
-  qa_complete: "QA Complete",
   dispatched: "Awaiting Approval",
   revision_required: "Revision Required",
   converting: "Converting to PBDR",
@@ -257,14 +257,14 @@ function OverdueDrawerContent({
         </div>
       )}
 
-      {/* Action: dispatch to stakeholders (qa_complete) */}
-      {project.status === "qa_complete" && (
+      {/* Action: dispatch failed — retry (in_progress with qa_completed_by set) */}
+      {project.status === "in_progress" && !!project.qa_completed_by && (
         <div className="space-y-3">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
             Dispatch to stakeholders
           </p>
           <p className="text-xs text-zinc-500">
-            QA is complete. The PBDB is ready to send to stakeholders.
+            QA was marked complete but dispatch did not succeed. Retry below.
           </p>
           <DispatchButton projectId={project.id} />
         </div>
@@ -368,7 +368,7 @@ function OverdueDrawerContent({
       )}
 
       {/* Fallback: in_progress / assigned / revision_required — show consultant info */}
-      {!["submitted", "dispatched", "qa_complete"].includes(project.status) && (
+      {!["submitted", "dispatched"].includes(project.status) && (
         project.assigned_consultant_id ? (
           <div className="rounded-lg border border-zinc-200 px-4 py-3">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">

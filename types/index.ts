@@ -5,7 +5,6 @@ export type ProjectStatus =
   | "submitted"
   | "assigned"
   | "in_progress"
-  | "qa_complete"
   | "dispatched"
   | "revision_required"
   | "converting"

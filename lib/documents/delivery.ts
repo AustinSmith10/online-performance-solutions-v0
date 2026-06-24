@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkPbdrGate } from "@/lib/payments/gate";
 import { convertPbdbToPbdr } from "@/lib/documents/converter";
+import { stripRedTokenColor } from "@/lib/documents/color-strip";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { buildPbdrFilename } from "@/lib/documents/naming";
 import { formatAddress } from "@/lib/documents/formatters";
@@ -53,7 +54,7 @@ export async function deliverPbdr(
   // Load project
   const { data: project, error: projErr } = await supabase
     .from("projects")
-    .select("id, org_id, status, project_number, extracted_fields, delivery_recipient_email, submitted_by, assigned_consultant_id, review_cycle")
+    .select("id, org_id, status, project_number, extracted_fields, delivery_recipient_email, submitted_by, assigned_consultant_id, review_cycle, strip_token_color")
     .eq("id", projectId)
     .is("deleted_at", null)
     .single();
@@ -127,7 +128,12 @@ export async function deliverPbdr(
     const pbdbBuffer = Buffer.from(await docxBlob.arrayBuffer());
 
     // Apply 8 text transformations + strip watermarks from headers
-    const transformedDocx = convertPbdbToPbdr(pbdbBuffer);
+    let transformedDocx = convertPbdbToPbdr(pbdbBuffer);
+
+    // Strip red token colour if enabled (default on)
+    if (project.strip_token_color as boolean) {
+      transformedDocx = stripRedTokenColor(transformedDocx);
+    }
 
     // Generate PDF via Gotenberg (60 s hard timeout enforced inside)
     const pdfBuffer = await convertDocxToPdf(transformedDocx);
@@ -238,13 +244,13 @@ export async function deliverPbdr(
     await supabase
       .from("projects")
       .update({
-        status: "complete",
+        status: "delivered",
         delivered_at: conversionEnd.toISOString(),
         updated_at: conversionEnd.toISOString(),
       })
       .eq("id", projectId);
 
-    await auditLog("project.complete", actorId, actorEmail, {
+    await auditLog("project.delivered", actorId, actorEmail, {
       projectId,
       orgId: project.org_id as string,
       metadata: { project_number: (project.project_number as string | null) ?? null },

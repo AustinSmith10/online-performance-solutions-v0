@@ -26,11 +26,11 @@ function Spinner({ className = "" }: { className?: string }) {
 interface Props {
   reviewId: string;
   projectId: string;
-  pbdbSignedUrl: string | null;
+  pbdbDownloadUrl: string | null;
   expiresAt: string;
 }
 
-export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbSignedUrl, expiresAt }: Props) {
+export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownloadUrl, expiresAt }: Props) {
   const router = useRouter();
   const boundAction = submitPortalApproval.bind(null, reviewId);
   const [state, formAction, pending] = useActionState<PortalApprovalState, FormData>(
@@ -59,10 +59,9 @@ export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbSigned
         <strong>{expiryLabel}</strong>.
       </p>
 
-      {pbdbSignedUrl && (
+      {pbdbDownloadUrl && (
         <a
-          href={pbdbSignedUrl}
-          download
+          href={pbdbDownloadUrl}
           className="mt-3 inline-flex items-center gap-2 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-50"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>

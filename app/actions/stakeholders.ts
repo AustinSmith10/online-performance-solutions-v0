@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
-import { notify } from "@/lib/notifications/notify";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
+import { deliverPbdr } from "@/lib/documents/delivery";
 import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
 import { sendEmail } from "@/lib/email/sender";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
@@ -173,12 +173,12 @@ export async function dispatchToStakeholders(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("status")
+    .select("status, qa_completed_by")
     .eq("id", projectId)
     .maybeSingle();
 
-  if (!project || project.status !== "qa_complete") {
-    return { error: "Project must be in QA Complete status before dispatch." };
+  if (!project || project.status !== "in_progress" || !project.qa_completed_by) {
+    return { error: "Project is not ready for dispatch." };
   }
 
   try {
@@ -238,31 +238,18 @@ export async function waiveStakeholderResponse(
 
   if (project) {
     const cycle = project.review_cycle as number;
-    const { data: remaining } = await supabase
+    const { data: outstanding } = await supabase
       .from("stakeholder_reviews")
       .select("id")
       .eq("project_id", projectId)
       .eq("review_cycle", cycle)
-      .eq("status", "pending");
+      .in("status", ["pending", "rejected_with_comments", "rejected_without_comments"]);
 
-    if (!remaining || remaining.length === 0) {
-      const { data: admins } = await supabase
-        .from("users")
-        .select("id")
-        .eq("role", "super_admin");
-      const adminIds = (admins ?? []).map((u: { id: string }) => u.id);
-      await Promise.all(
-        adminIds.map((id) =>
-          notify({
-            recipientId: id,
-            type: "all_acknowledged",
-            message: `All stakeholders have responded for project ${projectId.slice(0, 8)}.`,
-            projectId,
-            emailSubject: "All stakeholder reviews complete",
-            emailHtml: `<p style="font-family:sans-serif">All stakeholder reviews for project <strong>${projectId.slice(0, 8)}</strong> are complete. PBDR conversion can now proceed (subject to payment gate).</p>`,
-          }).catch(() => {})
-        )
-      );
+    if (!outstanding || outstanding.length === 0) {
+      // All stakeholders approved or waived — auto-trigger PBDR conversion and delivery
+      deliverPbdr(projectId, actor.id, actor.email as string).catch((err) => {
+        console.error(`[waiveStakeholderResponse] auto-deliver-pbdr failed for ${projectId}:`, err);
+      });
     }
   }
 

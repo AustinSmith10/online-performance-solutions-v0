@@ -1,0 +1,9 @@
+FROM gotenberg/gotenberg:8
+
+USER root
+
+COPY fonts/DINOT/ /usr/local/share/fonts/DINOT/
+
+RUN fc-cache -fv
+
+USER gotenberg

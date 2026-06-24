@@ -135,17 +135,17 @@ export async function submitApproval(
       })
     );
   } else {
-    // Approved — check if all stakeholders for this cycle have now responded
+    // Approved — check if all stakeholders for this cycle have approved (none pending, none rejected)
     const cycle = project.review_cycle as number;
-    const { data: pending } = await supabase
+    const { data: outstanding } = await supabase
       .from("stakeholder_reviews")
       .select("id")
       .eq("project_id", review.project_id)
       .eq("review_cycle", cycle)
-      .eq("status", "pending");
+      .in("status", ["pending", "rejected_with_comments", "rejected_without_comments"]);
 
-    if (!pending || pending.length === 0) {
-      // All stakeholders have acknowledged — auto-trigger PBDR conversion and delivery
+    if (!outstanding || outstanding.length === 0) {
+      // All stakeholders approved — auto-trigger PBDR conversion and delivery
       deliverPbdr(review.project_id, null, null).catch((err) => {
         console.error(`[submitApproval] auto-deliver-pbdr failed for ${review.project_id}:`, err);
       });

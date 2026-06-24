@@ -4,6 +4,7 @@ import { logout } from "@/app/actions/auth";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { MobileNav } from "@/components/MobileNav";
 import { SidebarNavLinks } from "@/components/NavLinks";
+import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 
 const NAV_ITEMS = [
   { href: "/ops", label: "Workspace" },
@@ -59,6 +60,7 @@ export default async function ConsultantLayout({
 
       {/* Main — min-w-0 prevents flex children from overflowing */}
       <main className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-8">{children}</main>
+      <RealtimeRefresh userId={user.id as string} />
     </div>
   );
 }

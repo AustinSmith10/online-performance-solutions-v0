@@ -10,6 +10,7 @@ import { join } from "path";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkPbdrGate } from "@/lib/payments/gate";
 import { convertPbdbToPbdr } from "@/lib/documents/converter";
+import { stripRedTokenColor } from "@/lib/documents/color-strip";
 import { buildPbdrFilename } from "@/lib/documents/naming";
 import { formatAddress } from "@/lib/documents/formatters";
 import { auditLog } from "@/lib/audit/log";
@@ -72,7 +73,7 @@ async function main() {
   // Load project
   const { data: project } = await supabase
     .from("projects")
-    .select("id, org_id, status, project_number, extracted_fields, delivery_recipient_email, submitted_by")
+    .select("id, org_id, status, project_number, extracted_fields, delivery_recipient_email, submitted_by, strip_token_color")
     .eq("id", projectId)
     .is("deleted_at", null)
     .single();
@@ -124,7 +125,10 @@ async function main() {
 
     // Transform DOCX
     console.log("[deliver-pbdr] applying PBDB→PBDR transformations…");
-    const transformedDocx = convertPbdbToPbdr(pbdbBuffer);
+    let transformedDocx = convertPbdbToPbdr(pbdbBuffer);
+    if (project.strip_token_color as boolean) {
+      transformedDocx = stripRedTokenColor(transformedDocx);
+    }
 
     // Convert to PDF via soffice
     console.log("[deliver-pbdr] converting to PDF via LibreOffice…");
@@ -207,7 +211,7 @@ async function main() {
 
     const conversionEnd = new Date();
     await supabase.from("projects").update({
-      status: "complete",
+      status: "delivered",
       delivered_at: conversionEnd.toISOString(),
       updated_at: conversionEnd.toISOString(),
     }).eq("id", projectId);

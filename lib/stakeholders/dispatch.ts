@@ -77,7 +77,7 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
 
   const { data: submitter } = await supabase
     .from("users")
-    .select("email, first_name, last_name")
+    .select("id, email, role, first_name, last_name")
     .eq("id", project.submitted_by as string)
     .maybeSingle();
 
@@ -125,6 +125,10 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
       .in("email", stakeholderEmails),
   ]);
 
+  if (portalUsersResult.error) {
+    console.error("[dispatch-pbdb] portal user lookup failed:", portalUsersResult.error);
+  }
+
   const pbdbFile = pbdbFileResult.data;
   const pbdbUrl = pbdbFile
     ? await supabase.storage
@@ -133,13 +137,25 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
         .then((r) => r.data?.signedUrl ?? null)
     : null;
 
-  // Map email → portal user so we can use notify() for users with accounts
+  // Map email → portal user so we can use notify() for users with accounts.
+  // Seed with the submitter directly (already fetched above) so they are always
+  // identified as a portal user even if the bulk .in() query returns nothing.
   const portalUserMap = new Map(
     (portalUsersResult.data ?? []).map((u) => [
       (u.email as string).toLowerCase(),
       u as { id: string; email: string; role: string },
     ])
   );
+  if (submitter && (submitter.role as string) === "client") {
+    const submitterKey = (submitter.email as string).toLowerCase();
+    if (!portalUserMap.has(submitterKey)) {
+      portalUserMap.set(submitterKey, {
+        id: project.submitted_by as string,
+        email: submitter.email as string,
+        role: "client",
+      });
+    }
+  }
 
   // On revision cycles, notify stakeholders who previously approved that the document changed
   if (reviewCycle > 1) {
@@ -180,7 +196,7 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
       {
         project_id: projectId,
         review_cycle: reviewCycle,
-        stakeholder_email: stakeholder.email,
+        stakeholder_email: stakeholder.email.toLowerCase(),
         stakeholder_name: stakeholder.name,
         token,
         dispatched_at: now.toISOString(),

@@ -20,9 +20,12 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
 [services.ops-pdf]
-# Gotenberg with LibreOffice — handles .docx → PDF conversion
-# Deploy as a Docker image service in the Railway dashboard (not a Nixpacks build)
-# Image: gotenberg/gotenberg:8
+# Gotenberg with LibreOffice + DINOT fonts — handles .docx → PDF conversion
+# Deploy as a custom Docker image (not stock gotenberg/gotenberg:8).
+# Build Dockerfile.gotenberg locally and push to a registry, then point Railway
+# to that image. Example:
+#   docker build -f Dockerfile.gotenberg -t <registry>/ops-pdf:latest .
+#   docker push <registry>/ops-pdf:latest
 # Start command: gotenberg --api-timeout=60s --libreoffice-restart-after=10
 # Internal port: 3000
 # No public domain required — accessed internally via $RAILWAY_PRIVATE_DOMAIN

@@ -14,7 +14,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("id, org_id, template_id, project_number, extracted_fields, created_at, review_cycle")
+    .select("id, org_id, template_id, project_number, extracted_fields, created_at, review_cycle, submitted_by")
     .eq("id", projectId)
     .is("deleted_at", null)
     .single();
@@ -23,7 +23,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   if (!project.project_number) throw new Error("Project number must be set before generating PBDB");
   if (!project.template_id) throw new Error("No template assigned to this project");
 
-  const [{ data: template, error: templateError }, { data: orgData }] = await Promise.all([
+  const [{ data: template, error: templateError }, { data: orgData }, { data: submitter }] = await Promise.all([
     supabase
       .from("templates")
       .select("id, storage_path, name")
@@ -35,6 +35,11 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
       .select("org_config")
       .eq("id", project.org_id as string)
       .single(),
+    supabase
+      .from("users")
+      .select("first_name, last_name")
+      .eq("id", project.submitted_by as string)
+      .maybeSingle(),
   ]);
 
   if (templateError || !template) {
@@ -91,6 +96,11 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   // review_cycle starts at 1 (initial dispatch), so R0 on first generation, R1 after one revision, etc.
   const revision = (project.review_cycle as number) - 1;
 
+  const submitterName = [
+    (submitter?.first_name as string | null) ?? "",
+    (submitter?.last_name as string | null) ?? "",
+  ].filter(Boolean).join(" ");
+
   const context: Record<string, string> = {
     ...orgValues,
     ...extractedFields,
@@ -99,6 +109,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     SYS_GEN_DATE: fmtDate(genDate),
     SYS_SUB_DATE: fmtDate(subDate),
     SYS_REV_NO: String(revision),
+    SYS_USER_NAME: submitterName,
   };
 
   // Run docxtemplater — nullGetter returns "" for any token missing from context

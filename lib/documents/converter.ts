@@ -103,8 +103,14 @@ function removeWatermarks(xml: string): string {
   let result = xml.replace(/<w:pict[^>]*>[\s\S]*?<\/w:pict>/g, (block) =>
     /<v:textpath/i.test(block) ? "" : block
   );
-  // Modern DrawingML watermarks wrapped in mc:AlternateContent
-  result = result.replace(/<mc:AlternateContent[\s\S]*?<\/mc:AlternateContent>/g, "");
+  // Modern DrawingML watermarks wrapped in mc:AlternateContent.
+  // Blocks with <v:textpath> are WordArt text watermarks — strip entirely.
+  // All other blocks (logos, connectors) are left untouched; swapping to the
+  // VML mc:Fallback was found to crop the Building Solutions logo.
+  result = result.replace(/<mc:AlternateContent[\s\S]*?<\/mc:AlternateContent>/g, (block) => {
+    if (/<v:textpath/i.test(block)) return "";
+    return block;
+  });
   return result;
 }
 

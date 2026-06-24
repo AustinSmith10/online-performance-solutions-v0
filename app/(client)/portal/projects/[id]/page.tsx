@@ -13,7 +13,6 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   submitted: "Received",
   assigned: "Received",
   in_progress: "In Progress",
-  qa_complete: "In Progress",
   dispatched: "Awaiting Approval",
   revision_required: "Changes Requested",
   converting: "Finalising Report",
@@ -27,7 +26,6 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   submitted: "bg-blue-100 text-blue-700",
   assigned: "bg-blue-100 text-blue-700",
   in_progress: "bg-purple-100 text-purple-700",
-  qa_complete: "bg-purple-100 text-purple-700",
   dispatched: "bg-amber-100 text-amber-700",
   revision_required: "bg-red-100 text-red-700",
   converting: "bg-purple-100 text-purple-700",
@@ -118,7 +116,7 @@ export default async function ClientProjectDetailPage({
     pbdbVisible
       ? supabase
           .from("project_files")
-          .select("id, original_filename, storage_path, version, created_at")
+          .select("original_filename, created_at")
           .eq("project_id", id)
           .eq("file_type", "pbdb")
           .order("version", { ascending: false })
@@ -143,15 +141,9 @@ export default async function ClientProjectDetailPage({
     })
   );
 
-  // PBDB — signed URL from `documents` bucket
+  // PBDB — served via the client download route (applies colour stripping if enabled)
   const latestPbdb = rawPbdbs?.[0] ?? null;
-  let pbdbSignedUrl: string | null = null;
-  if (latestPbdb) {
-    const { data: signed } = await supabase.storage
-      .from("documents")
-      .createSignedUrl(latestPbdb.storage_path as string, 3600);
-    pbdbSignedUrl = signed?.signedUrl ?? null;
-  }
+  const pbdbDownloadUrl = latestPbdb ? `/api/download/pbdb-client/${id}` : null;
 
   // PBDR — latest version only, signed URL from `documents` bucket
   const latestPbdr = rawPbdrs?.[0] ?? null;
@@ -223,7 +215,7 @@ export default async function ClientProjectDetailPage({
         <PortalApprovalForm
           reviewId={clientReview.id as string}
           projectId={id}
-          pbdbSignedUrl={pbdbSignedUrl}
+          pbdbDownloadUrl={pbdbDownloadUrl}
           expiresAt={clientReview.expires_at as string}
         />
       )}
@@ -372,10 +364,9 @@ export default async function ClientProjectDetailPage({
                     {new Date(latestPbdb.created_at as string).toLocaleDateString("en-AU")}
                   </p>
                 </div>
-                {pbdbSignedUrl && (
+                {pbdbDownloadUrl && (
                   <a
-                    href={pbdbSignedUrl}
-                    download={latestPbdb.original_filename as string}
+                    href={pbdbDownloadUrl}
                     className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
                   >
                     Download

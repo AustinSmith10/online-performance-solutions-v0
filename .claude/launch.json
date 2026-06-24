@@ -4,7 +4,7 @@
     {
       "name": "cover-preview",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["/tmp/cover-server.js"],
+      "runtimeArgs": ["scripts/cover-server.js"],
       "port": 7788
     }
   ]
