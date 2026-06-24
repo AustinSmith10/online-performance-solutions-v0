@@ -72,6 +72,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   converting: "Converting to PBDR",
   delivered: "Delivered",
   complete: "Complete",
+  paused: "Paused",
 };
 
 function projectLabel(p: { site_address: string | null; po_number: string | null; id: string }) {

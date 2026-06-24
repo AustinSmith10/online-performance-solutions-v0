@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   extractFields,
   submitProject,
@@ -30,6 +30,32 @@ interface Props {
   defaultTemplateId: string | null;
   requirementsByTemplate?: Record<string, FileRequirement[]>;
   initialState?: ExtractState;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 22 6.477 22 12h-4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      />
+    </svg>
+  );
 }
 
 // ── Confidence badge (step 2) ─────────────────────────────────────────────────
@@ -66,7 +92,17 @@ function fieldClass(modified: Set<string>, fieldKey: string, confidence: Confide
 
 // ── Step 2 review form ────────────────────────────────────────────────────────
 
-function TokenInput({ field, modified, onMark }: { field: TokenField; modified: Set<string>; onMark: (k: string) => void }) {
+function TokenInput({
+  field,
+  modified,
+  onMark,
+  disabled,
+}: {
+  field: TokenField;
+  modified: Set<string>;
+  onMark: (k: string) => void;
+  disabled?: boolean;
+}) {
   return (
     <div>
       <label className="mb-1 block text-xs font-medium text-zinc-700">
@@ -79,8 +115,9 @@ function TokenInput({ field, modified, onMark }: { field: TokenField; modified: 
         name={field.token}
         defaultValue={field.value}
         required={field.required}
+        disabled={disabled}
         onChange={() => onMark(field.token)}
-        className={`w-full rounded-md border px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 ${fieldClass(modified, field.token, field.confidence)}`}
+        className={`w-full rounded-md border px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${fieldClass(modified, field.token, field.confidence)}`}
       />
     </div>
   );
@@ -127,120 +164,151 @@ function ReviewStep({ state, submitAction, submitPending, submitState }: ReviewS
     : null;
 
   const halcyonTokens = new Set(["EXTRACT_TRUSTEE", rainfallToken].filter(Boolean));
-  const extractFields = tokenGroups.extract.filter((t) => !halcyonTokens.has(t.token));
+  const extractFieldsList = tokenGroups.extract.filter((t) => !halcyonTokens.has(t.token));
+
+  // Warn before unload while submitting
+  useEffect(() => {
+    if (!submitPending) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [submitPending]);
 
   return (
-    <form action={submitAction} className="space-y-6">
-      <input type="hidden" name="project_id" value={projectId} />
-      <input type="hidden" name="template_id" value={templateId} />
-      <input type="hidden" name="extracted_po_number" value={poNumber.value} />
-      {hasTrustee && (
-        <input type="hidden" name="EXTRACT_TRUSTEE" value={selectedTrusteeEntity} />
-      )}
-      {rainfallToken && rainfallField && (
-        <input type="hidden" name={rainfallToken} value={rainfallField.value} />
-      )}
-
-      {extractFields.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Extracted from your documents</h2>
-          <p className="mb-5 text-sm text-zinc-500">Review and correct any fields marked below before submitting.</p>
-          <div className="space-y-4">
-            {extractFields.map((field) => (
-              <TokenInput key={field.token} field={field} modified={modified} onMark={mark} />
-            ))}
-          </div>
+    <div className="relative">
+      {submitPending && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-lg bg-white/80 backdrop-blur-sm">
+          <Spinner className="h-8 w-8 text-zinc-400" />
+          <p className="text-sm font-medium text-zinc-700">Submitting your request…</p>
         </div>
       )}
 
-      {hasTrustee && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-900">{trusteeLabel}</h2>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">{trusteeLabel}</label>
-            <select
-              value={selectedDevName}
-              onChange={(e) => setSelectedDevName(e.target.value)}
-              className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400"
-            >
-              {selectedDevName === "" && <option value="">— select trustee —</option>}
-              {developments.map((d) => (
-                <option key={d.dev_name} value={d.dev_name}>
-                  {d.dev_name} — {d.trustee_entity}
-                </option>
+      <form action={submitAction} className="space-y-6">
+        <input type="hidden" name="project_id" value={projectId} />
+        <input type="hidden" name="template_id" value={templateId} />
+        <input type="hidden" name="extracted_po_number" value={poNumber.value} />
+        {hasTrustee && (
+          <input type="hidden" name="EXTRACT_TRUSTEE" value={selectedTrusteeEntity} />
+        )}
+        {rainfallToken && rainfallField && (
+          <input type="hidden" name={rainfallToken} value={rainfallField.value} />
+        )}
+
+        {extractFieldsList.length > 0 && (
+          <div className="rounded-lg border border-zinc-200 bg-white p-6">
+            <h2 className="mb-1 text-sm font-semibold text-zinc-900">Extracted from your documents</h2>
+            <p className="mb-5 text-sm text-zinc-500">Review and correct any fields marked below before submitting.</p>
+            <div className="space-y-4">
+              {extractFieldsList.map((field) => (
+                <TokenInput
+                  key={field.token}
+                  field={field}
+                  modified={modified}
+                  onMark={mark}
+                  disabled={submitPending}
+                />
               ))}
-            </select>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {tokenGroups.org.length > 0 && (
+        {hasTrustee && (
+          <div className="rounded-lg border border-zinc-200 bg-white p-6">
+            <h2 className="mb-1 text-sm font-semibold text-zinc-900">{trusteeLabel}</h2>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-700">{trusteeLabel}</label>
+              <select
+                value={selectedDevName}
+                onChange={(e) => setSelectedDevName(e.target.value)}
+                disabled={submitPending}
+                className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {selectedDevName === "" && <option value="">— select trustee —</option>}
+                {developments.map((d) => (
+                  <option key={d.dev_name} value={d.dev_name}>
+                    {d.dev_name} — {d.trustee_entity}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {tokenGroups.org.length > 0 && (
+          <div className="rounded-lg border border-zinc-200 bg-white p-6">
+            <h2 className="mb-1 text-sm font-semibold text-zinc-900">Organisation details</h2>
+            <div className="space-y-4">
+              {tokenGroups.org.map((field) => (
+                <TokenInput key={field.token} field={field} modified={modified} onMark={mark} disabled={submitPending} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tokenGroups.client.length > 0 && (
+          <div className="rounded-lg border border-zinc-200 bg-white p-6">
+            <h2 className="mb-1 text-sm font-semibold text-zinc-900">Additional information</h2>
+            <div className="space-y-4">
+              {tokenGroups.client.map((field) => (
+                <TokenInput key={field.token} field={field} modified={modified} onMark={mark} disabled={submitPending} />
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="rounded-lg border border-zinc-200 bg-white p-6">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Organisation details</h2>
-          <div className="space-y-4">
-            {tokenGroups.org.map((field) => (
-              <TokenInput key={field.token} field={field} modified={modified} onMark={mark} />
-            ))}
+          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Delivery</h2>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700">
+              Also send final report to (optional)
+            </label>
+            <input
+              type="email"
+              name="delivery_recipient_email"
+              placeholder="additional@example.com"
+              disabled={submitPending}
+              className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
+            />
           </div>
         </div>
-      )}
 
-      {tokenGroups.client.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Additional information</h2>
-          <div className="space-y-4">
-            {tokenGroups.client.map((field) => (
-              <TokenInput key={field.token} field={field} modified={modified} onMark={mark} />
-            ))}
+        {submitState.duplicateProjectId ? (
+          <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {submitState.error}{" "}
+            <a
+              href={`/portal/projects/${submitState.duplicateProjectId}`}
+              className="font-medium underline hover:text-red-900"
+            >
+              View existing project →
+            </a>
           </div>
-        </div>
-      )}
+        ) : submitState.error ? (
+          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{submitState.error}</p>
+        ) : null}
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-6">
-        <h2 className="mb-1 text-sm font-semibold text-zinc-900">Delivery</h2>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700">
-            Also send final report to (optional)
-          </label>
-          <input
-            type="email"
-            name="delivery_recipient_email"
-            placeholder="additional@example.com"
-            className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400"
-          />
-        </div>
-      </div>
-
-      {submitState.duplicateProjectId ? (
-        <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {submitState.error}{" "}
-          <a
-            href={`/portal/projects/${submitState.duplicateProjectId}`}
-            className="font-medium underline hover:text-red-900"
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={submitPending}
+            className="flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
-            View existing project →
-          </a>
+            {submitPending && <Spinner className="h-4 w-4" />}
+            {submitPending ? "Submitting…" : "Submit report request"}
+          </button>
+          {!submitPending && (
+            <a href="/portal/submit" className="text-sm text-zinc-500 hover:text-zinc-700">
+              Start over
+            </a>
+          )}
         </div>
-      ) : submitState.error ? (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{submitState.error}</p>
-      ) : null}
-
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={submitPending}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
-        >
-          {submitPending ? "Submitting…" : "Submit report request"}
-        </button>
-        <a href="/portal/submit" className="text-sm text-zinc-500 hover:text-zinc-700">
-          Start over
-        </a>
-      </div>
-      <p className="text-xs text-zinc-400">
-        Fields marked <span className="text-red-500">*</span> are required before submitting.
-      </p>
-    </form>
+        <p className="text-xs text-zinc-400">
+          Fields marked <span className="text-red-500">*</span> are required before submitting.
+        </p>
+      </form>
+    </div>
   );
 }
 
@@ -249,31 +317,52 @@ function ReviewStep({ state, submitAction, submitPending, submitState }: ReviewS
 function FileSlot({
   requirement,
   onHasFile,
+  disabled,
 }: {
   requirement: FileRequirement;
   onHasFile: (slug: string, has: boolean) => void;
+  disabled?: boolean;
 }) {
-  const [fileNames, setFileNames] = useState<string[]>([]);
+  const [fileInfos, setFileInfos] = useState<{ name: string; size: number }[]>([]);
+  const [slotError, setSlotError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function applyFiles(list: FileList | null) {
-    if (!list) return;
+    if (!list || disabled) return;
     const arr = Array.from(list).slice(0, requirement.max_count);
     if (arr.length === 0) return;
 
-    // Sync back to the real input so FormData picks them up
+    // Client-side type check
+    const nonPdf = arr.find(
+      (f) => f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")
+    );
+    if (nonPdf) {
+      setSlotError(`"${nonPdf.name}" is not a PDF. Only PDF files are accepted.`);
+      return;
+    }
+
+    // Client-side size check (50 MB per file)
+    const oversized = arr.find((f) => f.size > 50 * 1024 * 1024);
+    if (oversized) {
+      setSlotError(`"${oversized.name}" exceeds the 50 MB limit (${formatFileSize(oversized.size)}).`);
+      return;
+    }
+
+    setSlotError(null);
+
     if (inputRef.current) {
       const dt = new DataTransfer();
       arr.forEach((f) => dt.items.add(f));
       inputRef.current.files = dt.files;
     }
-    setFileNames(arr.map((f) => f.name));
+    setFileInfos(arr.map((f) => ({ name: f.name, size: f.size })));
     onHasFile(requirement.slug, arr.length > 0);
   }
 
   const multi = requirement.max_count > 1;
   const countLabel = multi ? ` (up to ${requirement.max_count})` : "";
+  const hasFiles = fileInfos.length > 0;
 
   return (
     <div>
@@ -288,13 +377,17 @@ function FileSlot({
       </label>
 
       <div
-        className={`flex min-h-[88px] cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed px-4 py-6 text-center transition-colors ${
-          isDragging
-            ? "border-zinc-500 bg-zinc-100"
-            : "border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100"
+        className={`flex min-h-[88px] flex-col items-center justify-center rounded-md border-2 border-dashed px-4 py-6 text-center transition-colors ${
+          disabled
+            ? "cursor-default border-zinc-100 bg-zinc-50"
+            : isDragging
+            ? "cursor-pointer border-zinc-500 bg-zinc-100"
+            : hasFiles
+            ? "cursor-pointer border-zinc-300 bg-white hover:border-zinc-400"
+            : "cursor-pointer border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100"
         }`}
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onClick={() => !disabled && inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); if (!disabled) setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={(e) => {
           e.preventDefault();
@@ -308,19 +401,26 @@ function FileSlot({
           name={requirement.slug}
           accept="application/pdf"
           multiple={multi}
+          disabled={disabled}
           className="sr-only"
           onChange={(e) => applyFiles(e.target.files)}
         />
 
-        {fileNames.length > 0 ? (
-          <div className="space-y-0.5 text-center">
-            {fileNames.map((n) => (
-              <p key={n} className="text-sm font-medium text-zinc-800 break-all">{n}</p>
+        {hasFiles ? (
+          <div className="w-full space-y-1 text-center">
+            {fileInfos.map((f) => (
+              <div key={f.name}>
+                <p className="break-all text-sm font-medium text-zinc-800">{f.name}</p>
+                <p className="text-xs text-zinc-400">{formatFileSize(f.size)}</p>
+              </div>
             ))}
             {multi && (
-              <p className="text-xs text-zinc-400">
-                {fileNames.length} of {requirement.max_count} — click to change
+              <p className="mt-1 text-xs text-zinc-400">
+                {fileInfos.length} of {requirement.max_count} — click to change
               </p>
+            )}
+            {!disabled && (
+              <p className="mt-1 text-xs text-zinc-400">Click to change</p>
             )}
           </div>
         ) : (
@@ -334,6 +434,10 @@ function FileSlot({
           </>
         )}
       </div>
+
+      {slotError && (
+        <p className="mt-1 text-xs text-red-600">{slotError}</p>
+      )}
     </div>
   );
 }
@@ -373,6 +477,36 @@ export function SubmissionForm({
       const base = prev.forTemplate === selectedTemplateId ? prev.slots : {};
       return { forTemplate: selectedTemplateId, slots: { ...base, [slug]: has } };
     });
+  }
+
+  // Warn before unload while uploading/processing
+  useEffect(() => {
+    if (!extractPending) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [extractPending]);
+
+  // Loading overlay — shown while files are being uploaded and analysed
+  if (extractPending) {
+    return (
+      <div className="rounded-lg border border-zinc-200 bg-white">
+        <div className="flex flex-col items-center gap-5 px-6 py-16">
+          <Spinner className="h-9 w-9 text-zinc-400" />
+          <div className="text-center">
+            <p className="text-sm font-semibold text-zinc-900">
+              Uploading and analysing your documents
+            </p>
+            <p className="mt-2 max-w-xs text-sm text-zinc-500">
+              Please keep this window open. This can take up to a minute for large files.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (extractState.step === 2) {
@@ -427,6 +561,7 @@ export function SubmissionForm({
                   key={req.id}
                   requirement={req}
                   onHasFile={handleHasFile}
+                  disabled={false}
                 />
               ))
             )}
@@ -452,13 +587,13 @@ export function SubmissionForm({
 
         <button
           type="submit"
-          disabled={extractPending || !selectedTemplateId || requiredUnfilled}
-          className="w-full rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          disabled={!selectedTemplateId || requiredUnfilled}
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
-          {extractPending ? "Uploading and extracting…" : "Continue"}
+          Continue
         </button>
 
-        {requiredUnfilled && !extractPending && (
+        {requiredUnfilled && (
           <p className="text-center text-xs text-zinc-400">
             Upload all required files to continue.
           </p>

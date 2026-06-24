@@ -446,3 +446,145 @@ export async function updateProjectFields(
   revalidatePath(`/admin/projects/${projectId}`);
   return { success: true };
 }
+
+// ─── Admin: soft-delete any project ──────────────────────────────────────────
+
+export async function adminDeleteProject(
+  projectId: string
+): Promise<{ error?: string }> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, org_id, status, deleted_at")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (!project) return { error: "Project not found." };
+  if (project.deleted_at) return { error: "Project is already in the recovery bin." };
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", projectId);
+
+  if (error) return { error: error.message };
+
+  await auditLog("project.admin_deleted", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.org_id as string,
+    metadata: { status_at_deletion: project.status },
+  });
+
+  revalidatePath(`/admin/projects/${projectId}`);
+  revalidatePath("/admin/projects");
+  revalidatePath("/admin/recovery");
+  return {};
+}
+
+// ─── Admin: pause / resume ────────────────────────────────────────────────────
+
+export type PauseState = { error?: string; success?: boolean };
+
+export async function pauseProject(
+  projectId: string,
+  _prev: PauseState,
+  formData: FormData
+): Promise<PauseState> {
+  const actor = await requireRole("super_admin");
+  const reason = (formData.get("reason") as string | null)?.trim() ?? "";
+  if (!reason) return { error: "A reason is required to pause a project." };
+
+  const supabase = createAdminClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, org_id, status, deleted_at")
+    .eq("id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!project) return { error: "Project not found." };
+  if (project.status === "paused") return { error: "Project is already paused." };
+  if (["delivered", "complete"].includes(project.status as string))
+    return { error: "Delivered and completed projects cannot be paused." };
+
+  const { error } = await supabase
+    .from("projects")
+    .update({
+      status: "paused",
+      paused_at: new Date().toISOString(),
+      paused_previous_status: project.status,
+      pause_reason: reason,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", projectId);
+
+  if (error) return { error: error.message };
+
+  await auditLog("project.paused", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.org_id as string,
+    metadata: { previous_status: project.status, reason },
+  });
+
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { success: true };
+}
+
+export async function resumeProject(
+  projectId: string,
+  _prev: PauseState,
+  _formData: FormData
+): Promise<PauseState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, org_id, status, paused_at, paused_previous_status, expected_delivery_date")
+    .eq("id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!project) return { error: "Project not found." };
+  if (project.status !== "paused") return { error: "Project is not currently paused." };
+
+  const previousStatus = (project.paused_previous_status as string | null) ?? "submitted";
+
+  // Push the delivery date forward by the number of calendar days spent paused
+  let newDeliveryDate: string | null = project.expected_delivery_date as string | null;
+  if (newDeliveryDate && project.paused_at) {
+    const pausedMs = Date.now() - new Date(project.paused_at as string).getTime();
+    const pausedDays = Math.ceil(pausedMs / (1000 * 60 * 60 * 24));
+    const current = new Date(newDeliveryDate);
+    current.setDate(current.getDate() + pausedDays);
+    newDeliveryDate = current.toISOString().slice(0, 10);
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({
+      status: previousStatus,
+      paused_at: null,
+      paused_previous_status: null,
+      ...(newDeliveryDate ? { expected_delivery_date: newDeliveryDate } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", projectId);
+
+  if (error) return { error: error.message };
+
+  await auditLog("project.resumed", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.org_id as string,
+    metadata: {
+      restored_to_status: previousStatus,
+      delivery_date_extended_to: newDeliveryDate,
+    },
+  });
+
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { success: true };
+}

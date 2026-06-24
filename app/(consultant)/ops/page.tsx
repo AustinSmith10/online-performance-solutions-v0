@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ClickableRow } from "@/components/ClickableRow";
 import { RevisionRequiredPanel, type ReviewRow } from "./_components/RevisionRequiredPanel";
+import { RealtimeProjectRefresher } from "./_components/RealtimeProjectRefresher";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -16,6 +17,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   converting: "Converting to PBDR",
   delivered: "Delivered",
   complete: "Complete",
+  paused: "Paused",
 };
 
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
@@ -29,6 +31,7 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   converting: "bg-purple-100 text-purple-700",
   delivered: "bg-green-100 text-green-700",
   complete: "bg-zinc-100 text-zinc-500",
+  paused: "bg-amber-100 text-amber-700",
 };
 
 const TERMINAL_STATUSES = new Set<ProjectStatus>(["delivered", "complete"]);
@@ -78,18 +81,37 @@ export default async function ConsultantOpsPage({
 
   const revisionRequired = projects.filter((p) => p.status === "revision_required");
 
-  // Fetch stakeholder reviews for all revision-required projects
+  // Fetch stakeholder reviews and dispatched PBDB files for all revision-required projects
   const reviewsByProject: Record<string, ReviewRow[]> = {};
+  const pbdbFileByProject: Record<string, { id: string; original_filename: string | null; version: number }> = {};
   if (revisionRequired.length > 0) {
-    const { data: rawRevisionReviews } = await supabase
-      .from("stakeholder_reviews")
-      .select("id, project_id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle")
-      .in("project_id", revisionRequired.map((p) => p.id))
-      .order("review_cycle", { ascending: false })
-      .order("responded_at", { ascending: true });
+    const revisionIds = revisionRequired.map((p) => p.id);
+
+    const [{ data: rawRevisionReviews }, { data: rawPbdbFiles }] = await Promise.all([
+      supabase
+        .from("stakeholder_reviews")
+        .select("id, project_id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle")
+        .in("project_id", revisionIds)
+        .order("review_cycle", { ascending: false })
+        .order("responded_at", { ascending: true }),
+      supabase
+        .from("project_files")
+        .select("id, project_id, original_filename, version")
+        .in("project_id", revisionIds)
+        .eq("file_type", "pbdb")
+        .order("version", { ascending: false }),
+    ]);
+
     for (const r of (rawRevisionReviews ?? []) as ReviewRow[]) {
       if (!reviewsByProject[r.project_id]) reviewsByProject[r.project_id] = [];
       reviewsByProject[r.project_id].push(r);
+    }
+
+    // Keep only the highest-version PBDB per project (first row after DESC ordering)
+    for (const f of (rawPbdbFiles ?? []) as { id: string; project_id: string; original_filename: string | null; version: number }[]) {
+      if (!pbdbFileByProject[f.project_id]) {
+        pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version };
+      }
     }
   }
   const active = projects.filter((p) =>
@@ -104,6 +126,7 @@ export default async function ConsultantOpsPage({
 
   return (
     <div className="space-y-8">
+      <RealtimeProjectRefresher userId={user.id as string} />
       {/* Header + tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-zinc-900">My projects</h1>
@@ -143,7 +166,7 @@ export default async function ConsultantOpsPage({
             </div>
           )}
 
-          <RevisionRequiredPanel projects={revisionRequired} reviewsByProject={reviewsByProject} />
+          <RevisionRequiredPanel projects={revisionRequired} reviewsByProject={reviewsByProject} pbdbFileByProject={pbdbFileByProject} />
 
           <ProjectSection title="Active" projects={active} todayIso={todayIso} />
           <ProjectSection

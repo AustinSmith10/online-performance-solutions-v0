@@ -13,6 +13,12 @@ export interface RevisionProject {
   organisations: { name: string } | null;
 }
 
+export interface PbdbFile {
+  id: string;
+  original_filename: string | null;
+  version: number;
+}
+
 export interface ReviewRow {
   id: string;
   project_id: string;
@@ -42,9 +48,11 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
 function DrawerContent({
   project,
   reviews,
+  pbdbFile,
 }: {
   project: RevisionProject;
   reviews: ReviewRow[];
+  pbdbFile: PbdbFile | null;
 }) {
   const currentReviews = reviews.filter((r) => r.review_cycle === project.review_cycle);
   const rejections = currentReviews.filter((r) => r.status === "rejected_with_comments");
@@ -102,6 +110,31 @@ function DrawerContent({
         </div>
       )}
 
+      {/* PBDB sent to stakeholders — download to make edits against */}
+      <div>
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+          PBDB sent to stakeholders
+        </p>
+        {pbdbFile ? (
+          <a
+            href={`/api/download/pbdb/${pbdbFile.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 hover:bg-zinc-50"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-zinc-900">
+                {pbdbFile.original_filename ?? "PBDB document"}
+              </p>
+              <p className="text-xs text-zinc-500">Version {pbdbFile.version}</p>
+            </div>
+            <span className="ml-3 shrink-0 text-xs font-medium text-zinc-500">Download ↓</span>
+          </a>
+        ) : (
+          <p className="text-xs text-zinc-400">No PBDB file found for this project.</p>
+        )}
+      </div>
+
       {/* Upload revised PBDB */}
       <div>
         <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
@@ -126,9 +159,11 @@ function DrawerContent({
 export function RevisionRequiredPanel({
   projects,
   reviewsByProject,
+  pbdbFileByProject,
 }: {
   projects: RevisionProject[];
   reviewsByProject: Record<string, ReviewRow[]>;
+  pbdbFileByProject: Record<string, PbdbFile>;
 }) {
   const [active, setActive] = useState<RevisionProject | null>(null);
   const close = useCallback(() => setActive(null), []);
@@ -184,6 +219,7 @@ export function RevisionRequiredPanel({
           <DrawerContent
             project={active}
             reviews={reviewsByProject[active.id] ?? []}
+            pbdbFile={pbdbFileByProject[active.id] ?? null}
           />
         )}
       </Drawer>

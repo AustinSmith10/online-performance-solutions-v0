@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DeleteProjectButton } from "./_components/DeleteProjectButton";
 import { FileUploadForm } from "./_components/FileUploadForm";
+import { PortalApprovalForm } from "./_components/PortalApprovalForm";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import type { ProjectStatus } from "@/types";
 
@@ -18,6 +19,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   converting: "Finalising Report",
   delivered: "Report Delivered",
   complete: "Complete",
+  paused: "On Hold",
 };
 
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
@@ -31,6 +33,7 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   converting: "bg-purple-100 text-purple-700",
   delivered: "bg-green-100 text-green-700",
   complete: "bg-zinc-100 text-zinc-500",
+  paused: "bg-amber-100 text-amber-700",
 };
 
 const FILE_TYPE_LABELS: Record<string, string> = {
@@ -87,13 +90,12 @@ export default async function ClientProjectDetailPage({
     project.expected_delivery_date < todayIso &&
     !TERMINAL_STATUSES.has(project.status);
 
-  // Check if this client has a pending approval request for this project
-  const { data: pendingReview } = await supabase
+  // Fetch this client's most recent review for this project (any status)
+  const { data: clientReview } = await supabase
     .from("stakeholder_reviews")
-    .select("id, token, expires_at, review_cycle")
+    .select("id, token, expires_at, review_cycle, status, comments, responded_at")
     .eq("project_id", id)
     .eq("stakeholder_email", user.email as string)
-    .eq("status", "pending")
     .order("review_cycle", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -216,27 +218,38 @@ export default async function ClientProjectDetailPage({
         )}
       </div>
 
-      {/* Approval callout — shown when this client has a pending review */}
-      {pendingReview && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-5">
-          <h2 className="text-sm font-semibold text-amber-900">Your approval is required</h2>
-          <p className="mt-1 text-sm text-amber-800">
-            Please review the document and submit your response. This link expires on{" "}
-            <strong>
-              {new Date(pendingReview.expires_at as string).toLocaleDateString("en-AU", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </strong>
+      {/* PBDB review — inline form when pending, locked card when responded */}
+      {clientReview && clientReview.status === "pending" && (
+        <PortalApprovalForm
+          reviewId={clientReview.id as string}
+          projectId={id}
+          pbdbSignedUrl={pbdbSignedUrl}
+          expiresAt={clientReview.expires_at as string}
+        />
+      )}
+      {clientReview && clientReview.status !== "pending" && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-5">
+          <h2 className="text-sm font-semibold text-green-900">Your PBDB review has been recorded</h2>
+          <p className="mt-1 text-sm text-green-800">
+            You{" "}
+            {(clientReview.status as string).startsWith("approved")
+              ? "approved"
+              : "requested changes to"}{" "}
+            this PBDB
+            {clientReview.responded_at
+              ? ` on ${new Date(clientReview.responded_at as string).toLocaleDateString("en-AU", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}`
+              : ""}
             .
           </p>
-          <a
-            href={`/approve/${pendingReview.token}`}
-            className="mt-3 inline-block rounded-md bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800"
-          >
-            Review and respond →
-          </a>
+          {clientReview.comments && (
+            <p className="mt-2 text-sm italic text-green-800">
+              &ldquo;{clientReview.comments as string}&rdquo;
+            </p>
+          )}
         </div>
       )}
 

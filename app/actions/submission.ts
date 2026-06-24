@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
@@ -378,28 +379,20 @@ export async function submitProject(
     }
   }
 
-  // Check required fields are populated
-  const { data: requiredMappings } = await supabase
-    .from("template_field_mappings")
-    .select("placeholder_token, display_label")
-    .eq("template_id", templateId)
-    .eq("is_required", true)
-    .eq("is_mapped", true);
-
-  const missingRequired = (requiredMappings ?? []).filter(
-    (m) => !extractedFields[m.placeholder_token as string]?.trim()
-  );
-  if (missingRequired.length > 0) {
-    const labels = missingRequired
-      .map((m) => m.display_label ?? m.placeholder_token)
-      .join(", ");
-    return { error: `Please fill in all required fields before submitting: ${labels}.` };
-  }
-
   const siteAddress = (extractedFields["EXTRACT_ADDRESS"] ?? "").trim() || null;
 
-  // Duplicate address check and org delivery config in parallel
-  const [duplicateResult, { data: orgData }] = await Promise.all([
+  // Required-fields check, duplicate check, and org config all in parallel
+  const [
+    { data: requiredMappings },
+    duplicateResult,
+    { data: orgData },
+  ] = await Promise.all([
+    supabase
+      .from("template_field_mappings")
+      .select("placeholder_token, display_label")
+      .eq("template_id", templateId)
+      .eq("is_required", true)
+      .eq("is_mapped", true),
     siteAddress
       ? supabase
           .from("projects")
@@ -417,29 +410,41 @@ export async function submitProject(
       .single(),
   ]);
 
+  const missingRequired = (requiredMappings ?? []).filter(
+    (m) => !extractedFields[m.placeholder_token as string]?.trim()
+  );
+  if (missingRequired.length > 0) {
+    const labels = missingRequired
+      .map((m) => m.display_label ?? m.placeholder_token)
+      .join(", ");
+    return { error: `Please fill in all required fields before submitting: ${labels}.` };
+  }
+
   if (duplicateResult.data) {
     const existingId = (duplicateResult.data as { id: string }).id;
-    try {
-      const { data: admins } = await supabase
-        .from("users")
-        .select("id")
-        .eq("role", "super_admin");
-      await Promise.all(
-        (admins ?? []).map((admin: { id: string }) =>
-          notify({
-            recipientId: admin.id,
-            type: "project_submitted",
-            message: `Duplicate address submission: "${siteAddress}" already has an active project for ${orgData?.name ?? orgId}. No new record was created.`,
-            emailSubject: "Duplicate address submission — OPS",
-            emailHtml: duplicateSubmissionEmail({ siteAddress, orgId }),
-          }).catch((err) =>
-            console.error("[submitProject] duplicate admin notify failed:", err)
+    after(async () => {
+      try {
+        const { data: admins } = await supabase
+          .from("users")
+          .select("id")
+          .eq("role", "super_admin");
+        await Promise.all(
+          (admins ?? []).map((admin: { id: string }) =>
+            notify({
+              recipientId: admin.id,
+              type: "project_submitted",
+              message: `Duplicate address submission: "${siteAddress}" already has an active project for ${orgData?.name ?? orgId}. No new record was created.`,
+              emailSubject: "Duplicate address submission — OPS",
+              emailHtml: duplicateSubmissionEmail({ siteAddress, orgId }),
+            }).catch((err) =>
+              console.error("[submitProject] duplicate admin notify failed:", err)
+            )
           )
-        )
-      );
-    } catch (err) {
-      console.error("[submitProject] duplicate notify setup failed:", err);
-    }
+        );
+      } catch (err) {
+        console.error("[submitProject] duplicate notify setup failed:", err);
+      }
+    });
     return {
       error: `A project for this address is already active for your organisation.`,
       duplicateProjectId: existingId,
@@ -486,46 +491,47 @@ export async function submitProject(
   if (updateError) return { error: `Failed to submit project: ${updateError.message}` };
   if (!count) return { error: "This project has already been submitted or is no longer a draft." };
 
-  try {
-    await notify({
-      recipientId: actor.id,
-      type: "acknowledgement",
-      message: `Your report request for ${siteAddress ?? "your property"} has been received and is being processed.`,
-      projectId,
-      emailSubject: "Report request received — OPS",
-      emailHtml: submissionConfirmationEmail({ poNumber }),
-    });
-  } catch (err) {
-    console.error("[submitProject] client notify failed:", err);
-  }
+  // Defer all post-success side effects so they don't block the redirect
+  after(async () => {
+    await Promise.all([
+      notify({
+        recipientId: actor.id,
+        type: "acknowledgement",
+        message: `Your report request for ${siteAddress ?? "your property"} has been received and is being processed.`,
+        projectId,
+        emailSubject: "Report request received — OPS",
+        emailHtml: submissionConfirmationEmail({ poNumber }),
+      }).catch((err) => console.error("[submitProject] client notify failed:", err)),
 
-  try {
-    const { data: admins } = await supabase
-      .from("users")
-      .select("id")
-      .eq("role", "super_admin");
-    await Promise.all(
-      (admins ?? []).map((admin: { id: string }) =>
-        notify({
-          recipientId: admin.id,
-          type: "project_submitted",
-          message: `New project submission received for ${siteAddress ?? "unknown address"} from ${orgData?.name ?? orgId}.`,
-          projectId,
-          emailSubject: "New project submission — OPS",
-          emailHtml: adminSubmissionEmail({ poNumber, projectId }),
-        }).catch((err) =>
-          console.error("[submitProject] admin notify failed:", err)
-        )
-      )
-    );
-  } catch (err) {
-    console.error("[submitProject] admin notify setup failed:", err);
-  }
+      (async () => {
+        try {
+          const { data: admins } = await supabase
+            .from("users")
+            .select("id")
+            .eq("role", "super_admin");
+          await Promise.all(
+            (admins ?? []).map((admin: { id: string }) =>
+              notify({
+                recipientId: admin.id,
+                type: "project_submitted",
+                message: `New project submission received for ${siteAddress ?? "unknown address"} from ${orgData?.name ?? orgId}.`,
+                projectId,
+                emailSubject: "New project submission — OPS",
+                emailHtml: adminSubmissionEmail({ poNumber, projectId }),
+              }).catch((err: unknown) => console.error("[submitProject] admin notify failed:", err))
+            )
+          );
+        } catch (err) {
+          console.error("[submitProject] admin notify setup failed:", err);
+        }
+      })(),
 
-  await auditLog("project.submitted", actor.id, actor.email as string, {
-    orgId,
-    projectId,
-    metadata: { poNumber, templateId },
+      auditLog("project.submitted", actor.id, actor.email as string, {
+        orgId,
+        projectId,
+        metadata: { poNumber, templateId },
+      }),
+    ]);
   });
 
   revalidatePath("/portal");

@@ -16,6 +16,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   converting: "Finalising Report",
   delivered: "Report Delivered",
   complete: "Complete",
+  paused: "On Hold",
 };
 
 type DeletedProject = {

@@ -11,6 +11,9 @@ import { UpdateEmailForm } from "./_components/UpdateEmailForm";
 import { ProjectStakeholderSection } from "./_components/ProjectStakeholderSection";
 import { ConvertButton } from "./_components/ConvertButton";
 import { DispatchButton } from "./_components/DispatchButton";
+import { PauseForm } from "./_components/PauseForm";
+import { ResumeButton } from "./_components/ResumeButton";
+import { AdminDeleteButton } from "./_components/AdminDeleteButton";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
 
@@ -25,6 +28,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   converting: "Converting to PBDR",
   delivered: "Delivered",
   complete: "Complete",
+  paused: "Paused",
 };
 
 const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
@@ -53,6 +57,11 @@ function overdueInfo(
   const ms = Date.now() - new Date(deliveryDate).getTime();
   if (ms <= 0) return { isOverdue: false, daysOverdue: 0 };
   return { isOverdue: true, daysOverdue: Math.ceil(ms / (1000 * 60 * 60 * 24)) };
+}
+
+function calcDaysPaused(pausedAt: string | null): number {
+  if (!pausedAt) return 0;
+  return Math.ceil((Date.now() - new Date(pausedAt).getTime()) / (1000 * 60 * 60 * 24));
 }
 
 export default async function ProjectDetailPage({
@@ -130,6 +139,19 @@ export default async function ProjectDetailPage({
   const project = projectResult.data as unknown as ProjectDetail;
   const isDeleted = !!project.deleted_at;
   const consultants = (consultantsResult.data ?? []) as ConsultantOption[];
+
+  // Fetch pause-specific columns separately — these only exist after migration 039.
+  // If the migration hasn't been applied yet the query fails gracefully and we fall back to nulls.
+  type PauseData = { paused_at: string | null; paused_previous_status: string | null; pause_reason: string | null };
+  let pauseData: PauseData = { paused_at: null, paused_previous_status: null, pause_reason: null };
+  if (project.status === "paused") {
+    const { data: pd } = await supabase
+      .from("projects")
+      .select("paused_at, paused_previous_status, pause_reason")
+      .eq("id", id)
+      .maybeSingle();
+    if (pd) pauseData = pd as unknown as PauseData;
+  }
   const currentConsultantId = project.assigned?.id ?? "";
 
   // Load template mappings, submission files, PBDB files, PBDR files, and stakeholder reviews in parallel
@@ -248,6 +270,7 @@ export default async function ProjectDetailPage({
   const reviewCycles = [...reviewsByCycle.keys()].sort((a, b) => b - a);
 
   const { isOverdue, daysOverdue } = overdueInfo(project.expected_delivery_date, project.status, isDeleted);
+  const daysPaused = calcDaysPaused(pauseData.paused_at);
 
   const labelMap = new Map<string, string>(
     (mappings ?? []).map((m) => [
@@ -277,7 +300,11 @@ export default async function ProjectDetailPage({
             {(project.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
               (project.po_number ? `PO ${project.po_number}` : (project.project_number ?? project.id.slice(0, 8)))}
           </h1>
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+            project.status === "paused"
+              ? "bg-amber-100 text-amber-700"
+              : "bg-zinc-100 text-zinc-600"
+          }`}>
             {STATUS_LABELS[project.status]}
           </span>
           {project.payment_override && (
@@ -295,6 +322,20 @@ export default async function ProjectDetailPage({
           <Link href="/admin/recovery" className="font-medium underline hover:text-amber-900">
             Go to recovery bin →
           </Link>
+        </div>
+      )}
+
+      {project.status === "paused" && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Project paused.</span>
+          {pauseData.pause_reason && (
+            <>{" "}<span className="text-amber-700">{pauseData.pause_reason}</span></>
+          )}
+          {pauseData.paused_previous_status && (
+            <span className="ml-1 text-amber-600">
+              — was {STATUS_LABELS[pauseData.paused_previous_status as ProjectStatus] ?? pauseData.paused_previous_status}.
+            </span>
+          )}
         </div>
       )}
 
@@ -478,6 +519,18 @@ export default async function ProjectDetailPage({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Dispatch — standalone card when QA complete, regardless of overdue state */}
+      {!isDeleted && project.status === "qa_complete" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-5">
+          <h2 className="text-sm font-semibold text-amber-900">Ready to dispatch</h2>
+          <p className="mt-1 mb-4 text-sm text-amber-800">
+            QA is complete. Dispatch the PBDB to stakeholders for approval — this will move the project to{" "}
+            <strong>Awaiting Approval</strong> and send approval request emails.
+          </p>
+          <DispatchButton projectId={id} />
         </div>
       )}
 
@@ -808,6 +861,50 @@ export default async function ProjectDetailPage({
             Leave empty to use the inherited list.
           </p>
           <ProjectStakeholderSection projectId={id} stakeholders={projectStakeholders} />
+        </div>
+      )}
+
+      {/* Project controls — pause / delete */}
+      {!isDeleted && (
+        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <h2 className="mb-4 text-sm font-semibold text-zinc-900">Project controls</h2>
+
+          {project.status === "paused" ? (
+            <div>
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                Resume project
+              </p>
+              <ResumeButton
+                projectId={id}
+                daysPaused={daysPaused}
+              />
+            </div>
+          ) : !isTerminal && (
+            <div className="mb-5">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                Pause project
+              </p>
+              <p className="mb-3 text-xs text-zinc-500">
+                Freezes the project at its current stage. The delivery date will be
+                pushed forward by the number of days paused when resumed.
+              </p>
+              <PauseForm projectId={id} />
+            </div>
+          )}
+
+          {project.status !== "paused" && !isTerminal && (
+            <div className="mt-5 border-t border-zinc-100 pt-5" />
+          )}
+
+          <div className={project.status === "paused" ? "mt-5 border-t border-zinc-100 pt-5" : ""}>
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">
+              Delete project
+            </p>
+            <p className="mb-3 text-xs text-zinc-500">
+              Moves the project to the recovery bin. Permanently purged after 30 days.
+            </p>
+            <AdminDeleteButton projectId={id} />
+          </div>
         </div>
       )}
 

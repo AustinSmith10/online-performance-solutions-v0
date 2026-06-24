@@ -1,15 +1,14 @@
 import "server-only";
+import { spawn } from "child_process";
+import { writeFile, readFile, unlink, mkdtemp } from "fs/promises";
+import { join } from "path";
+import { tmpdir } from "os";
 
 /**
  * Sends a .docx buffer to Gotenberg's LibreOffice convert endpoint and
- * returns the resulting PDF as a Buffer. Enforces a 60-second hard timeout
- * per the issue specification.
+ * returns the resulting PDF as a Buffer. Enforces a 60-second hard timeout.
  */
-export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
-  const gotenbergUrl = process.env.GOTENBERG_URL;
-  if (!gotenbergUrl) throw new Error("GOTENBERG_URL is not configured");
-
-  // Use a Uint8Array view so TypeScript resolves to ArrayBuffer (not SharedArrayBuffer).
+async function convertViaGotenberg(docxBuffer: Buffer, gotenbergUrl: string): Promise<Buffer> {
   const form = new FormData();
   form.append(
     "files",
@@ -43,4 +42,66 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+/**
+ * Converts a .docx buffer to PDF using a local LibreOffice headless subprocess.
+ * Fallback for development environments where Gotenberg is not running.
+ */
+async function convertViaLibreOffice(docxBuffer: Buffer): Promise<Buffer> {
+  const dir = await mkdtemp(join(tmpdir(), "ops-pdf-"));
+  const inputPath = join(dir, "document.docx");
+  const outputPath = join(dir, "document.pdf");
+
+  try {
+    await writeFile(inputPath, docxBuffer);
+
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn("soffice", [
+        "--headless",
+        "--convert-to", "pdf",
+        "--outdir", dir,
+        inputPath,
+      ]);
+      let stderr = "";
+      proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
+      proc.on("close", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`LibreOffice exited with code ${code}: ${stderr.trim()}`));
+      });
+      proc.on("error", (err) => reject(new Error(`Failed to spawn soffice: ${err.message}`)));
+    });
+
+    return await readFile(outputPath);
+  } finally {
+    await unlink(inputPath).catch(() => {});
+    await unlink(outputPath).catch(() => {});
+  }
+}
+
+function isConnectionRefused(err: unknown): boolean {
+  if (!(err instanceof TypeError)) return false;
+  const cause = (err as { cause?: unknown }).cause;
+  if (!cause || typeof cause !== "object") return false;
+  return (cause as { code?: string }).code === "ECONNREFUSED";
+}
+
+/**
+ * Converts a .docx buffer to PDF.
+ * Uses Gotenberg if GOTENBERG_URL is set and reachable; falls back to a local
+ * LibreOffice subprocess (soffice --headless) if the connection is refused.
+ */
+export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
+  const gotenbergUrl = process.env.GOTENBERG_URL;
+
+  if (gotenbergUrl) {
+    try {
+      return await convertViaGotenberg(docxBuffer, gotenbergUrl);
+    } catch (err) {
+      if (!isConnectionRefused(err)) throw err;
+      console.warn("[pdf] Gotenberg unreachable — falling back to local LibreOffice");
+    }
+  }
+
+  return convertViaLibreOffice(docxBuffer);
 }

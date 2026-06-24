@@ -16,6 +16,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   converting: "Converting to PBDR",
   delivered: "Delivered",
   complete: "Complete",
+  paused: "Paused",
 };
 
 type DeletedProject = {

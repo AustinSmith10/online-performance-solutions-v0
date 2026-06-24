@@ -15,6 +15,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   converting: "Finalising Report",
   delivered: "Report Delivered",
   complete: "Complete",
+  paused: "On Hold",
 };
 
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
@@ -28,6 +29,7 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   converting: "bg-purple-100 text-purple-700",
   delivered: "bg-green-100 text-green-700",
   complete: "bg-zinc-100 text-zinc-500",
+  paused: "bg-amber-100 text-amber-700",
 };
 
 const READY_WINDOW_DAYS = 8;

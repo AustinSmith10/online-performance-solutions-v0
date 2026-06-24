@@ -10,7 +10,8 @@ export type ProjectStatus =
   | "revision_required"
   | "converting"
   | "delivered"
-  | "complete";
+  | "complete"
+  | "paused";
 
 export type PaymentMethod = "upfront" | "credit_deduction" | "deferred";
 
@@ -34,6 +35,7 @@ export type NotificationType =
   | "all_acknowledged"
   | "modifications_requested"
   | "stakeholder_waived"
+  | "review_response_recorded"
   | "system_error";
 
 export type CreditEventType =
@@ -133,6 +135,9 @@ export interface Project {
   first_response_at: string | null;
   review_buffer_fired_at: string | null;
   deleted_at: string | null;
+  paused_at: string | null;
+  paused_previous_status: string | null;
+  pause_reason: string | null;
   created_at: string;
   updated_at: string;
 }

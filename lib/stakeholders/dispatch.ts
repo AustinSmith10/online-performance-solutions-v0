@@ -94,6 +94,12 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
 
   if (stakeholders.length === 0) throw new Error("No stakeholders configured for this project.");
 
+  const fields = project.extracted_fields as Record<string, string> | null;
+  const projectRef =
+    fields?.["EXTRACT_ADDRESS"] ??
+    (project.project_number as string | null) ??
+    projectId.slice(0, 8);
+
   const now = new Date();
   const expiresAt = await computeTokenExpiry(now, stateTerritory);
   const expiresFormatted = expiresAt.toLocaleDateString("en-AU", {
@@ -102,22 +108,38 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
     year: "numeric",
   });
 
-  // Fetch signed PBDB URL
-  const { data: pbdbFile } = await supabase
-    .from("project_files")
-    .select("storage_path, original_filename")
-    .eq("project_id", projectId)
-    .eq("file_type", "pbdb")
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Fetch signed PBDB URL and portal user map in parallel
+  const stakeholderEmails = stakeholders.map((s) => s.email.toLowerCase());
+  const [pbdbFileResult, portalUsersResult] = await Promise.all([
+    supabase
+      .from("project_files")
+      .select("storage_path, original_filename")
+      .eq("project_id", projectId)
+      .eq("file_type", "pbdb")
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("users")
+      .select("id, email, role")
+      .in("email", stakeholderEmails),
+  ]);
 
+  const pbdbFile = pbdbFileResult.data;
   const pbdbUrl = pbdbFile
     ? await supabase.storage
         .from("documents")
         .createSignedUrl(pbdbFile.storage_path as string, 7 * 24 * 3600)
         .then((r) => r.data?.signedUrl ?? null)
     : null;
+
+  // Map email → portal user so we can use notify() for users with accounts
+  const portalUserMap = new Map(
+    (portalUsersResult.data ?? []).map((u) => [
+      (u.email as string).toLowerCase(),
+      u as { id: string; email: string; role: string },
+    ])
+  );
 
   // On revision cycles, notify stakeholders who previously approved that the document changed
   if (reviewCycle > 1) {
@@ -146,7 +168,13 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
   // Create one stakeholder_reviews row per stakeholder (token embedded)
   for (const stakeholder of stakeholders) {
     const token = generateTokenString();
-    const approvalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
+    const portalUser = portalUserMap.get(stakeholder.email.toLowerCase());
+
+    // Clients with portal accounts go to the inline approval form; everyone else uses the token URL
+    const approvalUrl =
+      portalUser?.role === "client"
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/portal/projects/${projectId}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
 
     await supabase.from("stakeholder_reviews").upsert(
       {
@@ -173,13 +201,26 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
       pbdbUrl,
     });
 
-    await sendEmail({
-      to: stakeholder.email,
-      subject: `Approval required — PBDB review (ref: ${projectId.slice(0, 8)})`,
-      html: emailHtml,
-    }).catch((err) => {
-      console.error(`[dispatch-pbdb] email to ${stakeholder.email} failed:`, err);
-    });
+    if (portalUser) {
+      // Portal user — in-app notification + email via notify()
+      await notify({
+        recipientId: portalUser.id,
+        type: "approval_request",
+        message: `Your PBDB review is ready for ${projectRef} — please submit your response.`,
+        projectId,
+        emailSubject: `Approval required — PBDB review (ref: ${projectId.slice(0, 8)})`,
+        emailHtml,
+      }).catch(() => {});
+    } else {
+      // External stakeholder — email only
+      await sendEmail({
+        to: stakeholder.email,
+        subject: `Approval required — PBDB review (ref: ${projectId.slice(0, 8)})`,
+        html: emailHtml,
+      }).catch((err) => {
+        console.error(`[dispatch-pbdb] email to ${stakeholder.email} failed:`, err);
+      });
+    }
   }
 
   // Transition project to dispatched
