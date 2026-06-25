@@ -11,6 +11,9 @@ import { formatAddress } from "@/lib/documents/formatters";
 import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
+import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
+import { sendEmail } from "@/lib/email/sender";
+import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 
 export type AssignState = { error?: string; success?: boolean };
 
@@ -386,6 +389,196 @@ export async function markQaComplete(
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Dispatch failed. An admin can retry from the project page." };
   }
+
+  revalidatePath(`/admin/projects/${projectId}`);
+  redirect(`/ops/projects/${projectId}`);
+}
+
+// ─── Consultant: resend updated PBDB while dispatched ────────────────────────
+
+export type ResendPbdbState = { error?: string; success?: boolean };
+
+export async function resendPbdb(
+  projectId: string,
+  _prev: ResendPbdbState,
+  formData: FormData
+): Promise<ResendPbdbState> {
+  const actor = await requireRole("consultant", "super_admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select(
+      "id, org_id, status, review_cycle, project_number, extracted_fields, organisations(state_territory)"
+    )
+    .eq("id", projectId)
+    .eq("status", "dispatched")
+    .is("deleted_at", null);
+
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or not currently dispatched." };
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "Please select a file." };
+  if (file.size > 100 * 1024 * 1024) return { error: "File must be under 100 MB." };
+  if (
+    !file.name.toLowerCase().endsWith(".docx") &&
+    file.type !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  ) {
+    return { error: "Only .docx files are accepted." };
+  }
+
+  const cycle = (project.review_cycle as number) ?? 1;
+
+  const { data: existing } = await supabase
+    .from("project_files")
+    .select("version")
+    .eq("project_id", projectId)
+    .eq("file_type", "pbdb")
+    .order("version", { ascending: false })
+    .limit(1);
+
+  const nextVersion = ((existing?.[0]?.version as number | null | undefined) ?? 0) + 1;
+
+  const projectNum = (project.project_number as string | null) ?? "";
+  const rawAddress = (
+    (project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? ""
+  ).trim();
+  const address = formatAddress(rawAddress);
+  const uploadDate = new Date();
+  const yyyy = uploadDate.getFullYear();
+  const mm = String(uploadDate.getMonth() + 1).padStart(2, "0");
+  const dd = String(uploadDate.getDate()).padStart(2, "0");
+  const rIndex = cycle - 1;
+  const storedFilename =
+    [`${projectNum}-S PBDB R${rIndex}`, address, `${yyyy} ${mm} ${dd}`]
+      .filter(Boolean)
+      .join(" ") + ".docx";
+  const storagePath = `${project.org_id as string}/${projectId}/pbdb/v${nextVersion}_${storedFilename}`;
+
+  const fileBuffer = Buffer.from(await file.arrayBuffer());
+  const { error: uploadError } = await supabase.storage
+    .from("documents")
+    .upload(storagePath, fileBuffer, {
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+  if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
+
+  const { error: insertError } = await supabase.from("project_files").insert({
+    project_id: projectId,
+    file_type: "pbdb",
+    storage_path: storagePath,
+    original_filename: storedFilename,
+    uploaded_by: actor.id,
+    version: nextVersion,
+  });
+  if (insertError) {
+    await supabase.storage.from("documents").remove([storagePath]);
+    return { error: "Failed to record file. Please try again." };
+  }
+
+  const { data: reviews } = await supabase
+    .from("stakeholder_reviews")
+    .select("id, stakeholder_email, stakeholder_name")
+    .eq("project_id", projectId)
+    .eq("review_cycle", cycle);
+
+  if (!reviews || reviews.length === 0) {
+    return { error: "No stakeholder reviews found for this dispatch cycle." };
+  }
+
+  const pbdbUrl = await supabase.storage
+    .from("documents")
+    .createSignedUrl(storagePath, 7 * 24 * 3600)
+    .then((r) => r.data?.signedUrl ?? null);
+
+  const stateTerritory =
+    (
+      project.organisations as unknown as { state_territory: string | null } | null
+    )?.state_territory ?? null;
+  const now = new Date();
+  const expiresAt = await computeTokenExpiry(now, stateTerritory);
+  const expiresFormatted = expiresAt.toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  const stakeholderEmails = reviews.map((r) => (r.stakeholder_email as string).toLowerCase());
+  const { data: portalUsers } = await supabase
+    .from("users")
+    .select("id, email, role")
+    .in("email", stakeholderEmails);
+  const portalUserMap = new Map(
+    (portalUsers ?? []).map((u) => [(u.email as string).toLowerCase(), u])
+  );
+
+  for (const review of reviews) {
+    const token = generateTokenString();
+    const email = (review.stakeholder_email as string).toLowerCase();
+    const portalUser = portalUserMap.get(email) as
+      | { id: string; email: string; role: string }
+      | undefined;
+    const approvalUrl =
+      portalUser?.role === "client"
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/portal/projects/${projectId}`
+        : `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
+
+    await supabase
+      .from("stakeholder_reviews")
+      .update({
+        token,
+        expires_at: expiresAt.toISOString(),
+        dispatched_at: now.toISOString(),
+        fresh_token_sent_at: null,
+        status: "pending",
+        comments: null,
+        responded_at: null,
+      })
+      .eq("id", review.id as string);
+
+    const emailHtml = renderApprovalRequestEmail({
+      stakeholderName: review.stakeholder_name as string,
+      projectId: projectId.slice(0, 8),
+      approvalUrl,
+      expiresAt: expiresFormatted,
+      pbdbUrl,
+    });
+
+    if (portalUser) {
+      await notify({
+        recipientId: portalUser.id,
+        type: "approval_request",
+        message: `An updated PBDB is ready for your review.`,
+        projectId,
+        emailSubject: `Updated PBDB — approval required (ref: ${projectId.slice(0, 8)})`,
+        emailHtml,
+      }).catch(() => {});
+    } else {
+      await sendEmail({
+        to: review.stakeholder_email as string,
+        subject: `Updated PBDB — approval required (ref: ${projectId.slice(0, 8)})`,
+        html: emailHtml,
+      }).catch((err) => {
+        console.error(`[resend-pbdb] email to ${review.stakeholder_email as string} failed:`, err);
+      });
+    }
+  }
+
+  await auditLog("project.pbdb_resent", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.org_id as string,
+    metadata: {
+      review_cycle: cycle,
+      version: nextVersion,
+      stakeholder_count: reviews.length,
+    },
+  });
 
   revalidatePath(`/admin/projects/${projectId}`);
   redirect(`/ops/projects/${projectId}`);

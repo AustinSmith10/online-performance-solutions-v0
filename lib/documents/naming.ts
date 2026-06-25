@@ -2,13 +2,13 @@
  * Builds the PBDR filename per the naming convention:
  *   <<ProjectNo>>-S_PBDR_R<<n>>_<<address>>_<<YYYY_MM_DD>>.pdf
  *
- * Sanitisation rules (applied to each segment):
+ * Sanitisation rules:
  *   - Spaces → underscores
  *   - Commas / periods / apostrophes / quotes → removed
  *   - Slashes → hyphens
  *   - Any remaining non-alphanumeric (except _ and -) → removed
- *   - Entire filename → uppercase
- *   - Address segment capped at 80 chars
+ *   - Project number → uppercased
+ *   - Address segment preserves the casing from formatAddress; capped at 80 chars
  *   - Full filename capped at 200 chars
  */
 export function buildPbdrFilename(
@@ -26,12 +26,11 @@ export function buildPbdrFilename(
       .replace(/\s+/g, "_")
       .replace(/[,.'"""''`]/g, "")
       .replace(/\//g, "-")
-      .replace(/[^A-Za-z0-9_\-]/g, "")
-      .toUpperCase();
+      .replace(/[^A-Za-z0-9_\-]/g, "");
     return maxLen ? r.slice(0, maxLen) : r;
   }
 
-  const projPart = sanitize(projectNumber);
+  const projPart = sanitize(projectNumber).toUpperCase();
   const addrPart = sanitize(address, 80);
   const datePart = `${yyyy}_${mm}_${dd}`;
 

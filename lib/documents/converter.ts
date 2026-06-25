@@ -97,16 +97,30 @@ function applyTextReplacements(xml: string): string {
  * intact but clears the floating shape content.
  */
 function removeWatermarks(xml: string): string {
-  // Remove <w:pict> blocks that contain <v:textpath> — that element is
-  // exclusive to VML WordArt watermarks. Blocks without it (logos, line art
-  // stored as <v:group> image data) are left untouched.
-  let result = xml.replace(/<w:pict[^>]*>[\s\S]*?<\/w:pict>/g, (block) =>
-    /<v:textpath/i.test(block) ? "" : block
-  );
+  // Remove <w:pict> blocks that contain <v:textpath> (VML WordArt watermarks).
+  // Instead of deleting the entire <w:pict> block, surgically remove only the
+  // watermark-specific content: the <v:textpath> shapetype and the <v:shape>
+  // that references it. Any other <v:shapetype> definitions inside the same
+  // <w:pict> (e.g. _x0000_t75 image type used by nearby logo shapes) are
+  // preserved so the logo renderer can still find its shapetype.
+  let result = xml.replace(/<w:pict[^>]*>[\s\S]*?<\/w:pict>/g, (block) => {
+    if (!/<v:textpath/i.test(block)) return block;
+    // Strip <v:shapetype> blocks whose contained <v:textpath> marks them as
+    // the WordArt type definition (spt="136").
+    let cleaned = block.replace(/<v:shapetype[\s\S]*?<\/v:shapetype>/g, (st) =>
+      /<v:textpath/i.test(st) ? "" : st
+    );
+    // Strip the watermark <v:shape> itself (the one with <v:textpath>).
+    cleaned = cleaned.replace(/<v:shape[\s\S]*?<\/v:shape>/g, (sh) =>
+      /<v:textpath/i.test(sh) ? "" : sh
+    );
+    // If the pict now has no meaningful content, collapse it entirely.
+    const inner = cleaned.replace(/<w:pict[^>]*>|<\/w:pict>/g, "").trim();
+    return inner ? cleaned : "";
+  });
   // Modern DrawingML watermarks wrapped in mc:AlternateContent.
   // Blocks with <v:textpath> are WordArt text watermarks — strip entirely.
-  // All other blocks (logos, connectors) are left untouched; swapping to the
-  // VML mc:Fallback was found to crop the Building Solutions logo.
+  // All other blocks (logos, connectors) are left untouched.
   result = result.replace(/<mc:AlternateContent[\s\S]*?<\/mc:AlternateContent>/g, (block) => {
     if (/<v:textpath/i.test(block)) return "";
     return block;
@@ -115,9 +129,45 @@ function removeWatermarks(xml: string): string {
 }
 
 /**
+ * Overrides line spacing on header paragraphs that contain inline drawings.
+ *
+ * The "Header" paragraph style sets w:line="204" w:lineRule="auto" (85% line
+ * height). Microsoft Word expands the line to fit inline drawings regardless of
+ * this factor; Gotenberg's LibreOffice applies the 85% multiplier to the
+ * drawing height too, clipping the top 2.7pt of the 18.14pt Building Solutions
+ * icon. Adding a paragraph-level w:spacing override with lineRule="atLeast" and
+ * a value that comfortably exceeds the drawing height forces LibreOffice to
+ * render the full drawing.
+ *
+ * 400 twips = 20pt > 18.14pt (drawing cy=230400 EMU ≈ 18.14pt = 363 twips).
+ */
+function fixInlineDrawingLineHeight(xml: string): string {
+  return xml.replace(/<w:p[ >][\s\S]*?<\/w:p>/g, (para) => {
+    if (
+      !/<w:pStyle\b[^>]*w:val="Header"[^>]*\/>/.test(para) ||
+      !/<wp:inline\b/.test(para)
+    ) {
+      return para;
+    }
+    if (/<w:spacing\b/.test(para)) {
+      return para.replace(
+        /<w:spacing\b[^/]*\/>/,
+        '<w:spacing w:line="400" w:lineRule="atLeast"/>'
+      );
+    }
+    return para.replace(
+      /<\/w:pPr>/,
+      '<w:spacing w:line="400" w:lineRule="atLeast"/></w:pPr>'
+    );
+  });
+}
+
+/**
  * Transforms a QA'd PBDB .docx buffer into a PBDR .docx buffer by:
  *   1. Applying 8 text replacements to the document body.
  *   2. Stripping watermarks from all header XML files.
+ *   3. Fixing inline-drawing line height in headers so Gotenberg renders the
+ *      full Building Solutions logo without clipping the top.
  *
  * The returned buffer is a valid .docx ready to be sent to Gotenberg for PDF
  * rendering. No storage I/O happens here — callers handle that.
@@ -139,6 +189,7 @@ export function convertPbdbToPbdr(docxBuffer: Buffer): Buffer {
     let xml = file.asText();
     xml = applyTextReplacements(xml);
     xml = removeWatermarks(xml);
+    xml = fixInlineDrawingLineHeight(xml);
     zip.file(key, xml);
   }
 

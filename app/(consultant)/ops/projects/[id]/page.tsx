@@ -6,6 +6,7 @@ import { FileUploadForm } from "./_components/FileUploadForm";
 import { ProjectNumberForm } from "./_components/ProjectNumberForm";
 import { PbdbQaUploadForm } from "./_components/PbdbQaUploadForm";
 import { MarkQaCompleteButton } from "./_components/MarkQaCompleteButton";
+import { ResendPbdbForm } from "./_components/ResendPbdbForm";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import type { ProjectStatus } from "@/types";
@@ -614,6 +615,26 @@ export default async function ConsultantProjectDetailPage({
             <PbdbQaUploadForm
               projectId={id}
               submitLabel="Upload revised PBDB and re-submit to stakeholders"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Resend PBDB — shown while dispatched and awaiting stakeholder responses */}
+      {project.status === "dispatched" && latestPbdb && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50">
+          <div className="border-b border-amber-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-amber-900">Resend updated PBDB</h2>
+            <p className="mt-1 text-xs text-amber-700">
+              Upload a corrected version to replace the current PBDB and resend approval
+              emails to all stakeholders. Use this if you spotted an error or the email
+              failed to deliver.
+            </p>
+          </div>
+          <div className="px-5 py-5">
+            <ResendPbdbForm
+              projectId={id}
+              stakeholderCount={(reviewsByCycle.get(project.review_cycle) ?? []).length}
             />
           </div>
         </div>

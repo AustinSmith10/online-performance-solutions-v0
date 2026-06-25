@@ -11,6 +11,7 @@ import { UpdateEmailForm } from "./_components/UpdateEmailForm";
 import { ProjectStakeholderSection } from "./_components/ProjectStakeholderSection";
 import { ConvertButton } from "./_components/ConvertButton";
 import { DispatchButton } from "./_components/DispatchButton";
+import { ResendPbdrButton } from "./_components/ResendPbdrButton";
 import { PauseForm } from "./_components/PauseForm";
 import { ResumeButton } from "./_components/ResumeButton";
 import { AdminDeleteButton } from "./_components/AdminDeleteButton";
@@ -836,6 +837,18 @@ export default async function ProjectDetailPage({
               ))}
             </div>
           )}
+
+          {/* Resend delivery email — available once delivered */}
+          {pbdrFiles.length > 0 &&
+            (project.status === "delivered" || project.status === "complete") && (
+              <div className="mt-2">
+                <p className="mb-2 text-xs text-zinc-500">
+                  Resends a fresh 30-day download link to the submitter
+                  {project.delivery_recipient_email ? " and the delivery recipient" : ""}.
+                </p>
+                <ResendPbdrButton projectId={id} />
+              </div>
+            )}
 
           {project.status === "converting" && (
             <p className="text-sm text-zinc-500">Conversion in progress…</p>

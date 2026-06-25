@@ -6,7 +6,7 @@
   those panels are hidden on the first hot-reload scan. @source inline pins
   them into the bundle permanently.
 */
-@source inline("bg-blue-50 bg-blue-100 bg-blue-600 border-blue-100 border-blue-200 border-blue-300 text-blue-700 text-blue-900 hover:bg-blue-100 bg-orange-50 bg-orange-100 bg-orange-600 border-orange-100 border-orange-200 text-orange-600 text-orange-900 hover:bg-orange-50");
+@source inline("bg-blue-50 bg-blue-100 bg-blue-600 border-blue-100 border-blue-200 border-blue-300 text-blue-700 text-blue-900 hover:bg-blue-100 bg-orange-50 bg-orange-100 bg-orange-600 border-orange-100 border-orange-200 text-orange-600 text-orange-900 hover:bg-orange-50 animate-spin border-t-transparent");
 @source inline("bg-indigo-100 text-indigo-700 bg-emerald-100 text-emerald-700 bg-zinc-200 text-zinc-700");
 
 :root {
