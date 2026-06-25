@@ -100,7 +100,7 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, anchorId, 
           <Link
             href={projectHref}
             onClick={onClose}
-            className="text-xs text-zinc-400 hover:text-zinc-700 hover:underline"
+            className="inline-flex items-center gap-1.5 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
           >
             Open full project profile →
           </Link>

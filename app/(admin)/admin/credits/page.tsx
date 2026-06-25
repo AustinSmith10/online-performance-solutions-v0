@@ -57,7 +57,10 @@ export default async function CreditsPage({
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">Credits</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-zinc-900">Credits</h1>
+          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{orgs.length}</span>
+        </div>
         <p className="mt-1 text-sm text-zinc-500">Credit balances and ledger across all organisations.</p>
       </div>
 
@@ -163,7 +166,6 @@ export default async function CreditsPage({
               ))}
             </tbody>
           </table>
-          <p className="px-5 py-3 text-xs text-zinc-400">{orgs.length} organisation{orgs.length !== 1 ? "s" : ""}</p>
         </div>
       )}
     </div>

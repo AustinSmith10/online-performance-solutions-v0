@@ -685,7 +685,7 @@ export default async function AuditPage({
                 const projectNumber = entry.project?.project_number;
 
                 return (
-                  <tr key={entry.id} className="hover:bg-zinc-50/60">
+                  <tr key={entry.id} className="hover:bg-blue-50">
                     <td className="whitespace-nowrap px-5 py-3 text-xs text-zinc-500">
                       {new Date(entry.created_at).toLocaleString("en-AU", {
                         day: "2-digit",

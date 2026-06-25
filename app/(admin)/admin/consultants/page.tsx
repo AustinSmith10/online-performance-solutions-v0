@@ -68,7 +68,10 @@ export default async function ConsultantsPage({
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">Consultants</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-zinc-900">Consultants</h1>
+          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{consultants.length}</span>
+        </div>
         <p className="mt-1 text-sm text-zinc-500">
           Availability state is set by each consultant from their workspace. Super Admins can also update it from the user detail page.
         </p>
@@ -166,7 +169,6 @@ export default async function ConsultantsPage({
               ))}
             </tbody>
           </table>
-          <p className="px-5 py-3 text-xs text-zinc-400">{consultants.length} consultant{consultants.length !== 1 ? "s" : ""}</p>
         </div>
       )}
     </div>

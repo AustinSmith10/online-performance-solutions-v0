@@ -87,7 +87,10 @@ function ClientsLayout({
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-zinc-900">Clients</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-zinc-900">Clients</h1>
+          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{clients.length}</span>
+        </div>
       </div>
 
       <form method="GET" className="rounded-lg border border-zinc-200 bg-white p-4">
@@ -181,7 +184,6 @@ function ClientsLayout({
               ))}
             </tbody>
           </table>
-          <p className="px-5 py-3 text-xs text-zinc-400">{clients.length} client{clients.length !== 1 ? "s" : ""}</p>
         </div>
       )}
     </div>

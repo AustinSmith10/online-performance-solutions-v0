@@ -27,7 +27,7 @@ export default async function ConsultantLayout({
         userName={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
         profileHref="/ops/profile"
         logoutAction={logout}
-        notifications={<NotificationTrayServer projectBasePath="/ops/projects" />}
+        notifications={<NotificationTrayServer projectBasePath="/ops/projects" align="right" />}
       />
 
       {/* Desktop sidebar (hidden on mobile) */}

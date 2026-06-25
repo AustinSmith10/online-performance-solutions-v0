@@ -263,7 +263,7 @@ export default async function ClientPortalPage() {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
           <table className="w-full min-w-[520px] text-sm">
-            <thead className="border-b border-zinc-100">
+            <thead className="border-b border-zinc-100 bg-zinc-50">
               <tr>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>

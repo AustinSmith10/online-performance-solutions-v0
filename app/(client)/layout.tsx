@@ -23,7 +23,7 @@ export default async function ClientLayout({ children }: { children: React.React
             </nav>
           </div>
           <div className="ml-4 flex shrink-0 items-center gap-3">
-            <NotificationTrayServer projectBasePath="/portal/projects" />
+            <NotificationTrayServer projectBasePath="/portal/projects" align="right" />
             <Link
               href="/portal/profile"
               className="hidden max-w-[180px] truncate text-xs text-zinc-400 hover:text-zinc-700 sm:block"

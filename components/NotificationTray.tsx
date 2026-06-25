@@ -46,9 +46,11 @@ function applyDismissed(notifs: Notification[]): Notification[] {
 export function NotificationTray({
   initialNotifications,
   projectBasePath,
+  align = "left",
 }: {
   initialNotifications: Notification[];
   projectBasePath: string;
+  align?: "left" | "right";
 }) {
   // Lazy initialiser: filter dismissed IDs on first render so server-passed
   // notifications that were already cleared don't flash back on mount.
@@ -130,7 +132,7 @@ export function NotificationTray({
       </button>
 
       {open && (
-        <div style={tray}>
+        <div style={{ ...tray, ...(align === "right" ? { right: 0, left: "auto" } : { left: 0 }) }}>
           <div style={trayHeader}>
             <span style={trayTitle}>Notifications</span>
             <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>

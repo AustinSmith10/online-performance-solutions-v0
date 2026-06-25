@@ -64,7 +64,7 @@ export default async function ClientHistoryPage() {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
           <table className="w-full min-w-[400px] text-sm">
-            <thead className="border-b border-zinc-100">
+            <thead className="border-b border-zinc-100 bg-zinc-50">
               <tr>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Delivered</th>
@@ -76,7 +76,7 @@ export default async function ClientHistoryPage() {
                 const hasPbdr = projectsWithPbdr.has(r.id);
                 const deliveredDate = r.delivered_at ?? r.created_at;
                 return (
-                  <tr key={r.id} className="hover:bg-zinc-50">
+                  <tr key={r.id} className="hover:bg-blue-50">
                     <td className="px-5 py-3 font-medium text-zinc-900">
                       {r.extracted_fields?.["EXTRACT_ADDRESS"] ??
                         (r.po_number ? `PO ${r.po_number}` : r.id.slice(0, 8))}

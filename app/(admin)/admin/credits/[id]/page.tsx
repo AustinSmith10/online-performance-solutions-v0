@@ -151,7 +151,7 @@ export default async function OrgCreditsPage({
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {entries.map((entry) => (
-                <tr key={entry.id} className="hover:bg-zinc-50">
+                <tr key={entry.id} className="hover:bg-blue-50">
                   <td className="px-4 py-3 text-xs text-zinc-500">
                     {new Date(entry.created_at).toLocaleString("en-AU", {
                       day: "2-digit",

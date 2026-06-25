@@ -743,7 +743,7 @@ export function ActionPanel({
                       <button
                         type="button"
                         onClick={() => setDrawer({ type: "stakeholder", project: p })}
-                        className="shrink-0 rounded border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                        className="shrink-0 rounded border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
                       >
                         Manage →
                       </button>

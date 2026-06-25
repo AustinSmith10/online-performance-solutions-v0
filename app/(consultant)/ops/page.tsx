@@ -123,7 +123,7 @@ export default async function ConsultantOpsPage({
   );
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-5xl space-y-8">
       <RealtimeProjectRefresher userId={user.id as string} />
       {/* Header + tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -210,7 +210,7 @@ function ProjectSection({
       </h2>
       <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
         <table className="w-full min-w-[700px] text-sm">
-          <thead className="border-b border-zinc-100">
+          <thead className="border-b border-zinc-100 bg-zinc-50">
             <tr>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>

@@ -55,7 +55,10 @@ export default async function OrganisationsPage({
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-zinc-900">Organisations</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-zinc-900">Organisations</h1>
+          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{rows.length}</span>
+        </div>
         <Link
           href="/admin/organisations/new"
           className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
@@ -158,7 +161,6 @@ export default async function OrganisationsPage({
               ))}
             </tbody>
           </table>
-          <p className="px-5 py-3 text-xs text-zinc-400">{rows.length} organisation{rows.length !== 1 ? "s" : ""}</p>
         </div>
       )}
     </div>

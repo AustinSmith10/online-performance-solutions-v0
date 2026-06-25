@@ -35,7 +35,7 @@ export default async function AdminShellLayout({
         userName={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
         profileHref="/admin/profile"
         logoutAction={logout}
-        notifications={<NotificationTrayServer projectBasePath="/admin/projects" />}
+        notifications={<NotificationTrayServer projectBasePath="/admin/projects" align="right" />}
       />
 
       {/* Desktop sidebar (hidden on mobile) */}

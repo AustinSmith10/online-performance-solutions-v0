@@ -12,7 +12,7 @@ export function ClickableRow({ href, children }: Props) {
   return (
     <tr
       onClick={() => router.push(href)}
-      className="cursor-pointer hover:bg-zinc-50"
+      className="cursor-pointer hover:bg-blue-50"
     >
       {children}
     </tr>

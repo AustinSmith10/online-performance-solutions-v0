@@ -4,8 +4,10 @@ import type { Notification } from "@/lib/notifications/types";
 
 export async function NotificationTrayServer({
   projectBasePath,
+  align,
 }: {
   projectBasePath: string;
+  align?: "left" | "right";
 }) {
   const supabase = await createClient();
   const {
@@ -25,6 +27,7 @@ export async function NotificationTrayServer({
     <NotificationTray
       initialNotifications={(data ?? []) as Notification[]}
       projectBasePath={projectBasePath}
+      align={align}
     />
   );
 }

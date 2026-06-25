@@ -87,7 +87,7 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }
             <Link
               href={`/ops/projects/${projectId}`}
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+              className="inline-flex items-center gap-1.5 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
             >
               Open full project profile →
             </Link>
