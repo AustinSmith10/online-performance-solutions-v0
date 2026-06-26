@@ -111,15 +111,27 @@ BEGIN
     DELETE FROM templates WHERE org_id = ANY(_org_ids);
   END IF;
 
-  -- ── Delete project_files uploaded by seeded users on non-seeded projects ──────
-  -- uploaded_by is NOT NULL so we can't null it; any file a seeded user
-  -- uploaded is test data and safe to remove from the DB record
-  -- (the storage object may remain but that's an acceptable orphan).
+  -- ── Clean up seeded-user references on non-seeded rows ──────────────────────
+  -- Seeded users may have interacted with real projects during QA; clear those
+  -- references before deleting the users to avoid FK violations.
 
   IF _user_ids IS NOT NULL THEN
+    -- project_files.uploaded_by — NOT NULL, must delete the row
     DELETE FROM project_files
      WHERE uploaded_by = ANY(_user_ids)
        AND (_project_ids IS NULL OR project_id != ALL(_project_ids));
+
+    -- stakeholder_reviews.waived_by — nullable
+    UPDATE stakeholder_reviews
+       SET waived_by = NULL
+     WHERE waived_by = ANY(_user_ids)
+       AND (_project_ids IS NULL OR project_id != ALL(_project_ids));
+
+    -- credit_ledger.performed_by — nullable
+    UPDATE credit_ledger
+       SET performed_by = NULL
+     WHERE performed_by = ANY(_user_ids)
+       AND (_org_ids IS NULL OR org_id != ALL(_org_ids));
   END IF;
 
   -- ── public.users ─────────────────────────────────────────────────────────────

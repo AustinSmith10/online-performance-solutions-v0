@@ -76,11 +76,21 @@ BEGIN
   -- ── Templates (cascades to file_requirements, stakeholder_configs, mappings) ─
   DELETE FROM templates WHERE org_id = ANY(_org_ids);
 
-  -- ── Delete project_files uploaded by these users on non-test projects ──────────
+  -- ── Clean up user references on non-test rows ───────────────────────────────
   IF _user_ids IS NOT NULL THEN
     DELETE FROM project_files
      WHERE uploaded_by = ANY(_user_ids)
        AND (_project_ids IS NULL OR project_id != ALL(_project_ids));
+
+    UPDATE stakeholder_reviews
+       SET waived_by = NULL
+     WHERE waived_by = ANY(_user_ids)
+       AND (_project_ids IS NULL OR project_id != ALL(_project_ids));
+
+    UPDATE credit_ledger
+       SET performed_by = NULL
+     WHERE performed_by = ANY(_user_ids)
+       AND (_org_ids IS NULL OR org_id != ALL(_org_ids));
   END IF;
 
   -- ── Users ────────────────────────────────────────────────────────────────────
