@@ -10,7 +10,7 @@ export async function GET(
   const { fileId } = await params;
 
   const user = await getSessionUser();
-  if (!user || (user.role !== "consultant" && user.role !== "super_admin")) {
+  if (!user || (user.role !== "consultant" && user.role !== "super_admin" && user.role !== "admin")) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 

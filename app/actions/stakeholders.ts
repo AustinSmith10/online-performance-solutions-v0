@@ -29,7 +29,7 @@ export async function addOrgStakeholder(
   _prevState: StakeholderActionState,
   formData: FormData
 ): Promise<StakeholderActionState> {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const name = (formData.get("name") as string | null)?.trim();
@@ -76,7 +76,7 @@ export async function removeOrgStakeholder(
   orgId: string,
   stakeholderId: string
 ): Promise<void> {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   await supabase
@@ -96,7 +96,7 @@ export async function addProjectStakeholder(
   _prevState: StakeholderActionState,
   formData: FormData
 ): Promise<StakeholderActionState> {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const name = (formData.get("name") as string | null)?.trim();
@@ -143,7 +143,7 @@ export async function removeProjectStakeholder(
   projectId: string,
   stakeholderId: string
 ): Promise<void> {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   await supabase
@@ -168,7 +168,7 @@ export async function dispatchToStakeholders(
   _prevState: DispatchState,
   _formData: FormData
 ): Promise<DispatchState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: project } = await supabase
@@ -199,7 +199,7 @@ export async function waiveStakeholderResponse(
   _prevState: WaiveState,
   formData: FormData
 ): Promise<WaiveState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const reason = (formData.get("reason") as string | null)?.trim();
@@ -270,7 +270,7 @@ export async function resendFreshToken(
   _prevState: ResendTokenState,
   _formData: FormData
 ): Promise<ResendTokenState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: review } = await supabase
@@ -368,7 +368,7 @@ export async function updateStakeholderEmail(
   _prevState: UpdateEmailState,
   formData: FormData
 ): Promise<UpdateEmailState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const newEmail = (formData.get("email") as string | null)?.trim().toLowerCase();

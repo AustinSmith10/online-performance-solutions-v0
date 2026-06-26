@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/auth/session";
 import { ProfileForm } from "@/components/ProfileForm";
 
 export default async function AdminProfilePage() {
-  const user = await requireRole("super_admin");
+  const user = await requireRole("super_admin", "admin");
   return (
     <ProfileForm
       profile={{

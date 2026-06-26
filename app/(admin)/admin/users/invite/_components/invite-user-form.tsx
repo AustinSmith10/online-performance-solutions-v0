@@ -7,9 +7,11 @@ import type { Organisation } from "@/types";
 export function InviteUserForm({
   orgs,
   preselectedOrgId,
+  callerRole,
 }: {
   orgs: Pick<Organisation, "id" | "name">[];
   preselectedOrgId?: string;
+  callerRole: string;
 }) {
   const [state, action, pending] = useActionState<InviteUserState, FormData>(
     inviteUser,
@@ -45,6 +47,7 @@ export function InviteUserForm({
         >
           <option value="client">Client</option>
           <option value="consultant">Consultant</option>
+          {callerRole === "super_admin" && <option value="admin">Admin</option>}
         </select>
         {state.errors?.role?.map((e) => (
           <p key={e} className="mt-1 text-xs text-red-600">{e}</p>

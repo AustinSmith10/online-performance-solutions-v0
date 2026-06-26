@@ -43,12 +43,12 @@ export async function deliverPbdr(
     const { data: admins } = await supabase
       .from("users")
       .select("id")
-      .eq("role", "super_admin")
+      .in("role", ["super_admin", "admin"])
       .limit(1);
     fileUploadedBy = (admins?.[0]?.id as string | undefined) ?? null;
   }
   if (!fileUploadedBy) {
-    return { success: false, reason: "No super admin user found for system delivery." };
+    return { success: false, reason: "No admin user found for system delivery." };
   }
 
   // Load project
@@ -71,7 +71,7 @@ export async function deliverPbdr(
       ? "Credit has not been deducted (or payment override applied)."
       : "Not all stakeholders have acknowledged.";
     const html = `<p style="font-family:sans-serif">PBDR conversion blocked for project <strong>${projectId.slice(0, 8)}</strong>: ${reason}</p>`;
-    const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
+    const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
     await Promise.all(
       (admins ?? []).map((u: { id: string }) =>
         notify({
@@ -275,7 +275,7 @@ export async function deliverPbdr(
     const completionMessage = `PBDR delivered for project ${projectRef}. Close the project record in the legacy database.`;
     const completionHtml = `<p style="font-family:sans-serif">The PBDR for project <strong>${projectRef}</strong> has been successfully converted and delivered to the client. Please close the corresponding project record in the legacy database.</p>`;
 
-    const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
+    const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
     const consultantId = project.assigned_consultant_id as string | null;
 
     const recipientIds: string[] = [
@@ -326,7 +326,7 @@ export async function deliverPbdr(
 
     const errorMsg = err instanceof Error ? err.message : "Unknown error";
     const html = `<p style="font-family:sans-serif">PBDR conversion failed for project <strong>${projectId.slice(0, 8)}</strong>: ${errorMsg}. Status has been reset to dispatched.</p>`;
-    const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
+    const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
     await Promise.all(
       (admins ?? []).map((u: { id: string }) =>
         notify({

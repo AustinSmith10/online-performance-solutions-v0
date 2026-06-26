@@ -224,7 +224,7 @@ async function main() {
         const { data: admins } = await supabase
           .from("users")
           .select("id")
-          .eq("role", "super_admin");
+          .in("role", ["super_admin", "admin"]);
         const adminIds = (admins ?? []).map((u: { id: string }) => u.id);
         const names = nonResponding.map((r) => r.stakeholder_name as string).join(", ");
         const html = `<p style="font-family:sans-serif">${nonResponding.length} stakeholder(s) have not responded to the approval request for project <strong>${projectId.slice(0, 8)}</strong>: ${names}. Fresh links have been sent. If they do not respond, use the admin dashboard to waive their response.</p>`;

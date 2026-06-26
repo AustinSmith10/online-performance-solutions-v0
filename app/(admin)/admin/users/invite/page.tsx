@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { InviteUserForm } from "./_components/invite-user-form";
 import type { Organisation } from "@/types";
@@ -8,6 +9,7 @@ export default async function InviteUserPage({
 }: {
   searchParams: Promise<{ org_id?: string }>;
 }) {
+  const caller = await requireRole("super_admin", "admin");
   const { org_id } = await searchParams;
   const supabase = createAdminClient();
   const { data } = await supabase
@@ -35,7 +37,7 @@ export default async function InviteUserPage({
       </div>
 
       <div className="rounded-lg border border-zinc-200 bg-white p-6">
-        <InviteUserForm orgs={orgs} preselectedOrgId={org_id} />
+        <InviteUserForm orgs={orgs} preselectedOrgId={org_id} callerRole={caller.role as string} />
       </div>
     </div>
   );

@@ -21,7 +21,7 @@ export async function triggerPbdrConversion(
   _prev: ConvertState,
   _formData: FormData
 ): Promise<ConvertState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const result = await deliverPbdr(projectId, actor.id, actor.email as string);
 
@@ -42,7 +42,7 @@ export async function resendPbdrEmail(
   _prev: ResendPbdrEmailState,
   _formData: FormData
 ): Promise<ResendPbdrEmailState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: project } = await supabase

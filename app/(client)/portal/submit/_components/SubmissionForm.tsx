@@ -7,6 +7,7 @@ import {
   type ExtractState,
   type TokenField,
   type Development,
+  type SectionLabels,
 } from "@/app/actions/submission";
 import type { Confidence } from "@/lib/documents/extractor";
 
@@ -152,7 +153,7 @@ interface ReviewStepProps {
 }
 
 function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgId, adminClientId, projectBasePath, startOverHref }: ReviewStepProps) {
-  const { poNumber, tokenGroups, hasTrustee, rainfallToken, developments, projectId, templateId } = state;
+  const { poNumber, tokenGroups, sectionLabels, hasTrustee, rainfallToken, developments, projectId, templateId } = state;
 
   const [modified, setModified] = useState<Set<string>>(new Set());
   const mark = (key: string) => setModified((prev) => new Set(prev).add(key));
@@ -208,7 +209,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
 
         {extractFieldsList.length > 0 && (
           <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h2 className="mb-1 text-sm font-semibold text-zinc-900">Extracted from your documents</h2>
+            <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.extract}</h2>
             <p className="mb-5 text-sm text-zinc-500">Review and correct any fields marked below before submitting.</p>
             <div className="space-y-4">
               {extractFieldsList.map((field) => (
@@ -248,7 +249,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
 
         {tokenGroups.org.length > 0 && (
           <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h2 className="mb-1 text-sm font-semibold text-zinc-900">Organisation details</h2>
+            <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.org}</h2>
             <div className="space-y-4">
               {tokenGroups.org.map((field) => (
                 <TokenInput key={field.token} field={field} modified={modified} onMark={mark} disabled={submitPending} />
@@ -259,7 +260,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
 
         {tokenGroups.client.length > 0 && (
           <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h2 className="mb-1 text-sm font-semibold text-zinc-900">Additional information</h2>
+            <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.client}</h2>
             <div className="space-y-4">
               {tokenGroups.client.map((field) => (
                 <TokenInput key={field.token} field={field} modified={modified} onMark={mark} disabled={submitPending} />
@@ -335,10 +336,11 @@ function FileSlot({
   const [fileInfos, setFileInfos] = useState<{ name: string; size: number }[]>([]);
   const [slotError, setSlotError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function applyFiles(list: FileList | null) {
-    if (!list || disabled) return;
+    if (!list || disabled || isLoading) return;
     const arr = Array.from(list).slice(0, requirement.max_count);
     if (arr.length === 0) return;
 
@@ -359,19 +361,49 @@ function FileSlot({
     }
 
     setSlotError(null);
+    setIsLoading(true);
+    onHasFile(requirement.slug, false);
 
-    if (inputRef.current) {
-      const dt = new DataTransfer();
-      arr.forEach((f) => dt.items.add(f));
-      inputRef.current.files = dt.files;
-    }
-    setFileInfos(arr.map((f) => ({ name: f.name, size: f.size })));
-    onHasFile(requirement.slug, arr.length > 0);
+    // Read the first 5 bytes of each file to confirm they are loaded and are real PDFs
+    Promise.all(
+      arr.map(
+        (f) =>
+          new Promise<void>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const bytes = new Uint8Array(e.target?.result as ArrayBuffer);
+              const header = String.fromCharCode(...bytes);
+              if (!header.startsWith("%PDF")) {
+                reject(new Error(`"${f.name}" does not appear to be a valid PDF.`));
+              } else {
+                resolve();
+              }
+            };
+            reader.onerror = () => reject(new Error(`Could not read "${f.name}".`));
+            reader.readAsArrayBuffer(f.slice(0, 5));
+          })
+      )
+    )
+      .then(() => {
+        if (inputRef.current) {
+          const dt = new DataTransfer();
+          arr.forEach((f) => dt.items.add(f));
+          inputRef.current.files = dt.files;
+        }
+        setFileInfos(arr.map((f) => ({ name: f.name, size: f.size })));
+        onHasFile(requirement.slug, true);
+      })
+      .catch((err: Error) => {
+        setSlotError(err.message);
+        if (inputRef.current) inputRef.current.value = "";
+      })
+      .finally(() => setIsLoading(false));
   }
 
   const multi = requirement.max_count > 1;
   const countLabel = multi ? ` (up to ${requirement.max_count})` : "";
   const hasFiles = fileInfos.length > 0;
+  const isBlocked = disabled || isLoading;
 
   return (
     <div>
@@ -387,7 +419,7 @@ function FileSlot({
 
       <div
         className={`flex min-h-[88px] flex-col items-center justify-center rounded-md border-2 border-dashed px-4 py-6 text-center transition-colors ${
-          disabled
+          isBlocked
             ? "cursor-default border-zinc-100 bg-zinc-50"
             : isDragging
             ? "cursor-pointer border-zinc-500 bg-zinc-100"
@@ -395,8 +427,8 @@ function FileSlot({
             ? "cursor-pointer border-zinc-300 bg-white hover:border-zinc-400"
             : "cursor-pointer border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100"
         }`}
-        onClick={() => !disabled && inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); if (!disabled) setIsDragging(true); }}
+        onClick={() => !isBlocked && inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); if (!isBlocked) setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={(e) => {
           e.preventDefault();
@@ -410,12 +442,17 @@ function FileSlot({
           name={requirement.slug}
           accept="application/pdf"
           multiple={multi}
-          disabled={disabled}
+          disabled={isBlocked}
           className="sr-only"
           onChange={(e) => applyFiles(e.target.files)}
         />
 
-        {hasFiles ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center gap-2">
+            <Spinner className="h-5 w-5 text-zinc-400" />
+            <p className="text-xs text-zinc-400">Checking file…</p>
+          </div>
+        ) : hasFiles ? (
           <div className="w-full space-y-1 text-center">
             {fileInfos.map((f) => (
               <div key={f.name}>
@@ -503,25 +540,6 @@ export function SubmissionForm({
     return () => window.removeEventListener("beforeunload", handler);
   }, [extractPending]);
 
-  // Loading overlay — shown while files are being uploaded and analysed
-  if (extractPending) {
-    return (
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="flex flex-col items-center gap-5 px-6 py-16">
-          <Spinner className="h-9 w-9 text-zinc-400" />
-          <div className="text-center">
-            <p className="text-sm font-semibold text-zinc-900">
-              Uploading and analysing your documents
-            </p>
-            <p className="mt-2 max-w-xs text-sm text-zinc-500">
-              Please keep this window open. This can take up to a minute for large files.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (extractState.step === 2) {
     return (
       <ReviewStep
@@ -554,7 +572,8 @@ export function SubmissionForm({
               name="template_id"
               value={selectedTemplateId}
               onChange={(e) => setSelectedTemplateId(e.target.value)}
-              className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              disabled={extractPending}
+              className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-50"
               required
             >
               <option value="">Select a report type…</option>
@@ -580,7 +599,7 @@ export function SubmissionForm({
                   key={req.id}
                   requirement={req}
                   onHasFile={handleHasFile}
-                  disabled={false}
+                  disabled={extractPending}
                 />
               ))
             )}
@@ -606,15 +625,21 @@ export function SubmissionForm({
 
         <button
           type="submit"
-          disabled={!selectedTemplateId || requiredUnfilled}
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          disabled={!selectedTemplateId || requiredUnfilled || extractPending}
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Continue
+          {extractPending && <Spinner className="h-4 w-4" />}
+          {extractPending ? "Uploading…" : "Continue"}
         </button>
 
-        {requiredUnfilled && (
+        {!extractPending && requiredUnfilled && (
           <p className="text-center text-xs text-zinc-400">
             Upload all required files to continue.
+          </p>
+        )}
+        {extractPending && (
+          <p className="text-center text-xs text-zinc-400">
+            Please keep this window open. This can take up to a minute for large files.
           </p>
         )}
       </form>

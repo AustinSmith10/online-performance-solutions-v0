@@ -56,7 +56,7 @@ export default async function AdminRecoveryPage({
 }: {
   searchParams: Promise<{ q?: string; org?: string; status?: string; sort?: string; order?: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const { q, org, status, sort, order } = await searchParams;
 

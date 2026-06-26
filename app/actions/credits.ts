@@ -15,7 +15,7 @@ export async function setOrgFrozenFromCredits(
   _prev: FreezeState,
   _formData: FormData
 ): Promise<FreezeState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const supabase = createAdminClient();
   const { error } = await supabase
@@ -46,7 +46,7 @@ export async function topUpCreditAction(
   _prev: TopUpState,
   formData: FormData
 ): Promise<TopUpState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const rawAmount = formData.get("amount");
   const amount = parseInt(String(rawAmount ?? ""), 10);

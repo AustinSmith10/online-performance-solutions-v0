@@ -256,6 +256,7 @@ describe("dispatchPbdb — payment gate", () => {
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockResolvedValue({ data: [], error: null }),
         maybeSingle: vi.fn().mockResolvedValue({ data: [], error: null }),
       };
     });

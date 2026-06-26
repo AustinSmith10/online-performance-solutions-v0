@@ -113,7 +113,7 @@ export async function submitPortalApproval(
       (project.qa_completed_by as string | null) ??
       (project.assigned_consultant_id as string | null);
     const recipientIds: string[] = [...(consultantId ? [consultantId] : [])];
-    const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
+    const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
     for (const a of admins ?? []) recipientIds.push(a.id as string);
 
     const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/ops/projects/${review.project_id}`;

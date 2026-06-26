@@ -8,7 +8,7 @@ export default async function UploadTemplatePage({
 }: {
   searchParams: Promise<{ org_id?: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
   const { org_id } = await searchParams;
 
   const supabase = createAdminClient();

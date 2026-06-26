@@ -6,17 +6,17 @@ import { MobileNav } from "@/components/MobileNav";
 import { SidebarNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 
-const NAV_ITEMS = [
-  { href: "/admin/dashboard", label: "Dashboard" },
-  { href: "/admin/organisations", label: "Organisations" },
-  { href: "/admin/users", label: "Users" },
-  { href: "/admin/consultants", label: "Consultants" },
-  { href: "/admin/clients", label: "Clients" },
-  { href: "/admin/projects", label: "Projects" },
-  { href: "/admin/templates", label: "Templates" },
-  { href: "/admin/credits", label: "Credits" },
-  { href: "/admin/audit", label: "Audit" },
-  { href: "/admin/recovery", label: "Recovery Bin" },
+const ALL_NAV_ITEMS = [
+  { href: "/admin/dashboard", label: "Dashboard", superAdminOnly: false },
+  { href: "/admin/organisations", label: "Organisations", superAdminOnly: false },
+  { href: "/admin/users", label: "Users", superAdminOnly: false },
+  { href: "/admin/consultants", label: "Consultants", superAdminOnly: false },
+  { href: "/admin/clients", label: "Clients", superAdminOnly: false },
+  { href: "/admin/projects", label: "Projects", superAdminOnly: false },
+  { href: "/admin/templates", label: "Templates", superAdminOnly: false },
+  { href: "/admin/credits", label: "Credits", superAdminOnly: false },
+  { href: "/admin/audit", label: "Audit", superAdminOnly: true },
+  { href: "/admin/recovery", label: "Recovery Bin", superAdminOnly: false },
 ];
 
 export default async function AdminShellLayout({
@@ -24,7 +24,10 @@ export default async function AdminShellLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireRole("super_admin");
+  const user = await requireRole("super_admin", "admin");
+  const NAV_ITEMS = user.role === "super_admin"
+    ? ALL_NAV_ITEMS
+    : ALL_NAV_ITEMS.filter((item) => !item.superAdminOnly);
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 lg:h-screen lg:flex-row lg:overflow-hidden">

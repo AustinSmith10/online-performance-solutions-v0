@@ -46,7 +46,7 @@ export default async function TemplatesPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; org?: string; sort?: string; order?: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const { q, status, org, sort, order } = await searchParams;
 

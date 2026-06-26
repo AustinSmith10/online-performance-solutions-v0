@@ -46,7 +46,7 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
   if (!(project.credit_deducted as boolean)) {
     const gate = await checkDispatchGate(orgId, projectId);
     if (!gate.allowed) {
-      const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
+      const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
       const html = `<p style="font-family:sans-serif">Dispatch blocked for project <strong>${e(projectId.slice(0, 8))}</strong>: ${e(gate.reason ?? "Unknown reason")}</p>`;
       await Promise.all(
         (admins ?? []).map((u: { id: string }) =>

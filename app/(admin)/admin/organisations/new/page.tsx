@@ -1,7 +1,11 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
+import { requireRole } from "@/lib/auth/session";
 import { CreateOrgForm } from "./_components/create-org-form";
 
-export default function NewOrganisationPage() {
+export default async function NewOrganisationPage() {
+  const user = await requireRole("super_admin", "admin");
+  if (user.role !== "super_admin") redirect("/admin/organisations");
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-6">

@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SubmissionForm } from "../../_components/SubmissionForm";
-import type { ExtractState, Development, TokenField } from "@/app/actions/submission";
+import type { ExtractState, Development, TokenField, SectionLabels } from "@/app/actions/submission";
 
 const RAINFALL_TOKEN = "EXTRACT_RAINFALL_INTENSITY";
 import type { Confidence } from "@/lib/documents/extractor";
@@ -44,7 +44,7 @@ export default async function ResumeDraftPage({
     (project.template_id as string | null) ?? templates?.[0]?.id ?? "";
 
   // Load mappings and org config for this template
-  const [{ data: mappings }, { data: orgData }, { data: devsData }] =
+  const [{ data: mappings }, { data: orgData }, { data: devsData }, { data: tmplData }] =
     await Promise.all([
       supabase
         .from("template_field_mappings")
@@ -62,6 +62,11 @@ export default async function ResumeDraftPage({
         .from("halcyon_developments")
         .select("dev_name, trustee_entity, aep")
         .order("dev_name"),
+      supabase
+        .from("templates")
+        .select("section_labels")
+        .eq("id", templateId)
+        .single(),
     ]);
 
   const allMappings = mappings ?? [];
@@ -132,6 +137,13 @@ export default async function ResumeDraftPage({
   const defaultTemplateId =
     activeTemplates.length === 1 ? activeTemplates[0].id : null;
 
+  const rawLabels = (tmplData?.section_labels ?? {}) as Record<string, string>;
+  const sectionLabels: SectionLabels = {
+    extract: rawLabels.extract || "Extracted from your documents",
+    org: rawLabels.org || "Organisation details",
+    client: rawLabels.client || "Additional information",
+  };
+
   const initialState: ExtractState = {
     step: 2,
     poNumber: {
@@ -139,6 +151,7 @@ export default async function ResumeDraftPage({
       confidence: "medium",
     },
     tokenGroups,
+    sectionLabels,
     hasTrustee,
     rainfallToken,
     developments,

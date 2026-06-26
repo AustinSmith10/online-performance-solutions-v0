@@ -17,7 +17,7 @@ async function getSuperAdminIds(): Promise<string[]> {
   const { data } = await supabase
     .from("users")
     .select("id")
-    .eq("role", "super_admin");
+    .in("role", ["super_admin", "admin"]);
   return (data ?? []).map((u: { id: string }) => u.id);
 }
 

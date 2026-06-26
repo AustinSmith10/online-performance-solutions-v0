@@ -40,7 +40,7 @@ export async function createFileRequirement(
   _prev: FileRequirementState,
   formData: FormData
 ): Promise<FileRequirementState> {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const name = (formData.get("name") as string | null)?.trim() ?? "";
   const slug = (formData.get("slug") as string | null)?.trim() ?? "";
@@ -104,7 +104,7 @@ export async function updateFileRequirement(
   _prev: FileRequirementState,
   formData: FormData
 ): Promise<FileRequirementState> {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const name = (formData.get("name") as string | null)?.trim() ?? "";
   const maxRaw = formData.get("max_count") as string;
@@ -142,7 +142,7 @@ export async function deleteFileRequirement(
   templateId: string,
   id: string
 ): Promise<void> {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const supabase = createAdminClient();
   const { error } = await supabase

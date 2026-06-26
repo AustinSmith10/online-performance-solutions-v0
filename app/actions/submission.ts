@@ -33,6 +33,12 @@ export interface TokenField {
 
 // ─── Step 1 → 2 state ────────────────────────────────────────────────────────
 
+export interface SectionLabels {
+  extract: string;
+  org: string;
+  client: string;
+}
+
 export type ExtractState =
   | { step: 1; error?: string; duplicateProjectId?: string }
   | {
@@ -44,6 +50,7 @@ export type ExtractState =
         org: TokenField[];
         client: TokenField[];
       };
+      sectionLabels: SectionLabels;
       hasTrustee: boolean;
       rainfallToken: string | null;
       developments: Development[];
@@ -57,7 +64,7 @@ export async function extractFields(
   _prev: ExtractState,
   formData: FormData
 ): Promise<ExtractState> {
-  const actor = await requireRole("client", "super_admin");
+  const actor = await requireRole("client", "super_admin", "admin");
   const supabase = createAdminClient();
 
   const templateId = (formData.get("template_id") as string | null)?.trim();
@@ -156,8 +163,8 @@ export async function extractFields(
     .filter((item) => item.req.extraction)
     .map((item) => ({ label: item.req.name, buffer: item.buffer }));
 
-  // Load template mappings + org config in parallel
-  const [mappingsResult, orgResult] = await Promise.all([
+  // Load template mappings, section labels, and org config in parallel
+  const [mappingsResult, orgResult, templateResult] = await Promise.all([
     supabase
       .from("template_field_mappings")
       .select("placeholder_token, field_key, display_label, extraction_hint, is_required")
@@ -166,10 +173,17 @@ export async function extractFields(
       .order("sort_order")
       .order("placeholder_token"),
     supabase.from("organisations").select("org_config").eq("id", orgId).single(),
+    supabase.from("templates").select("section_labels").eq("id", templateId).single(),
   ]);
 
   const allMappings = mappingsResult.data ?? [];
   const orgConfig = (orgResult.data?.org_config ?? {}) as Record<string, string>;
+  const rawLabels = (templateResult.data?.section_labels ?? {}) as Record<string, string>;
+  const sectionLabels: SectionLabels = {
+    extract: rawLabels.extract || "Extracted from your documents",
+    org: rawLabels.org || "Organisation details",
+    client: rawLabels.client || "Additional information",
+  };
 
   const extractMappings = allMappings.filter((m) => m.field_key === "extract");
   const orgMappings = allMappings.filter((m) => m.field_key === "org");
@@ -344,6 +358,7 @@ export async function extractFields(
     step: 2,
     poNumber: extraction.po_number,
     tokenGroups,
+    sectionLabels,
     hasTrustee,
     rainfallToken,
     developments,
@@ -360,7 +375,7 @@ export async function submitProject(
   _prev: SubmitState,
   formData: FormData
 ): Promise<SubmitState> {
-  const actor = await requireRole("client", "super_admin");
+  const actor = await requireRole("client", "super_admin", "admin");
   const supabase = createAdminClient();
 
   const isAdmin = actor.role === "super_admin";

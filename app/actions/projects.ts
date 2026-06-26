@@ -21,7 +21,7 @@ export async function assignConsultant(
   projectId: string,
   consultantId: string
 ) {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   await performAssignment(projectId, consultantId, actor.id, actor.email);
 }
 
@@ -30,7 +30,7 @@ export async function assignConsultantFromForm(
   _prev: AssignState,
   formData: FormData
 ): Promise<AssignState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const consultantId = formData.get("consultant_id") as string | null;
   if (!consultantId) return { error: "Please select a consultant." };
   try {
@@ -56,7 +56,7 @@ export async function uploadProjectFile(
   _prev: UploadFileState,
   formData: FormData
 ): Promise<UploadFileState> {
-  const actor = await requireRole("client", "consultant", "super_admin");
+  const actor = await requireRole("client", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   // Verify access based on role
@@ -113,7 +113,7 @@ export async function adminSetProjectNumber(
   _prev: AdminProjectNumberState,
   formData: FormData
 ): Promise<AdminProjectNumberState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const rawNumber = (formData.get("project_number") as string | null)?.trim();
@@ -185,7 +185,7 @@ export async function saveProjectNumber(
   _prev: ProjectNumberState,
   formData: FormData
 ): Promise<ProjectNumberState> {
-  const actor = await requireRole("consultant", "super_admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   let query = supabase
@@ -249,7 +249,7 @@ export async function uploadQaPbdb(
   _prev: UploadQaPbdbState,
   formData: FormData
 ): Promise<UploadQaPbdbState> {
-  const actor = await requireRole("consultant", "super_admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   let query = supabase
@@ -380,7 +380,7 @@ export async function markQaComplete(
   _prev: MarkQaCompleteState,
   _formData: FormData
 ): Promise<MarkQaCompleteState> {
-  const actor = await requireRole("consultant", "super_admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   let query = supabase
@@ -475,7 +475,7 @@ export async function resendPbdb(
   _prev: ResendPbdbState,
   formData: FormData
 ): Promise<ResendPbdbState> {
-  const actor = await requireRole("consultant", "super_admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   let query = supabase
@@ -665,7 +665,7 @@ export async function updateProjectFields(
   _prev: UpdateFieldsState,
   formData: FormData
 ): Promise<UpdateFieldsState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: project } = await supabase
@@ -717,7 +717,7 @@ export async function updateProjectFields(
 export async function adminDeleteProject(
   projectId: string
 ): Promise<{ error?: string }> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: project } = await supabase
@@ -757,7 +757,7 @@ export async function pauseProject(
   _prev: PauseState,
   formData: FormData
 ): Promise<PauseState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const reason = (formData.get("reason") as string | null)?.trim() ?? "";
   if (!reason) return { error: "A reason is required to pause a project." };
 
@@ -803,7 +803,7 @@ export async function resumeProject(
   _prev: PauseState,
   _formData: FormData
 ): Promise<PauseState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: project } = await supabase
@@ -860,7 +860,7 @@ export async function setProjectStripTokenColor(
   projectId: string,
   strip: boolean
 ): Promise<SetStripTokenColorState> {
-  const actor = await requireRole("consultant", "super_admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   let query = supabase.from("projects").update({ strip_token_color: strip }).eq("id", projectId);

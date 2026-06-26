@@ -174,15 +174,15 @@ export default async function UserDetailPage({
       )}
 
       {/* Edit profile */}
-      {(u.role === "consultant" || u.role === "client") && (
+      {(u.role === "consultant" || u.role === "client" || u.role === "admin") && (
         <div className="rounded-lg border border-zinc-200 bg-white p-6">
           <h2 className="mb-5 text-sm font-semibold text-zinc-900">Edit profile</h2>
           <EditUserForm user={u} organisations={organisations} />
         </div>
       )}
 
-      {/* Danger zone — not shown for super_admin accounts */}
-      {u.role !== "super_admin" && (
+      {/* Danger zone — not shown for super_admin or admin accounts */}
+      {u.role !== "super_admin" && u.role !== "admin" && (
         <DangerZone user={{ id: u.id, email: u.email!, role: u.role }} />
       )}
     </div>

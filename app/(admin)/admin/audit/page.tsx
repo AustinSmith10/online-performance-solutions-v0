@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const PAGE_SIZE = 50;
@@ -427,6 +428,8 @@ export default async function AuditPage({
     page?: string;
   }>;
 }) {
+  await requireRole("super_admin");
+
   const { email, category, event_type, org_name, from, to, sort, order, page } =
     await searchParams;
 

@@ -5,6 +5,7 @@ import type { User } from "@/types";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
+  admin: "Admin",
   consultant: "Consultant",
   client: "Client",
 };
@@ -92,6 +93,7 @@ export default async function UsersPage({
           >
             <option value="">All roles</option>
             <option value="super_admin">Super Admin</option>
+            <option value="admin">Admin</option>
             <option value="consultant">Consultant</option>
             <option value="client">Client</option>
           </select>

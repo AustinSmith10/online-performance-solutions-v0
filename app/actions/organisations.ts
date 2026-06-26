@@ -103,7 +103,7 @@ export async function updateOrganisation(
   _prev: OrgFormState,
   formData: FormData
 ): Promise<OrgFormState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const validated = OrgSchema.safeParse({
     name: formData.get("name"),
@@ -143,7 +143,7 @@ export async function updateOrgConfig(
   _prev: OrgConfigState,
   formData: FormData
 ): Promise<OrgConfigState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const config: Record<string, string> = {};
   for (const [key, value] of formData.entries()) {
@@ -184,7 +184,7 @@ export async function addEmailDomain(
   _prev: WhitelistState,
   formData: FormData
 ): Promise<WhitelistState> {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const parsed = DomainSchema.safeParse(formData.get("domain"));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -213,7 +213,7 @@ export async function addEmailDomain(
 }
 
 export async function removeEmailDomain(orgId: string, domain: string) {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const supabase = createAdminClient();
 
@@ -270,7 +270,7 @@ export async function deleteOrganisation(
 }
 
 export async function setOrgFrozen(id: string, frozen: boolean) {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const supabase = createAdminClient();
   const { error } = await supabase

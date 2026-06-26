@@ -16,7 +16,7 @@ export async function deleteUser(
   _prev: DeleteUserState,
   _formData: FormData
 ): Promise<DeleteUserState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   // Read email/role before deletion for the audit entry
@@ -27,6 +27,10 @@ export async function deleteUser(
     .single();
 
   if (!user) return { error: "User not found." };
+
+  if (actor.role === "admin" && (user.role === "super_admin" || user.role === "admin")) {
+    return { error: "Insufficient permissions to delete this account." };
+  }
 
   // Delegate to the SQL function — it validates, handles audit_log trigger, and deletes
   const { error } = await supabase.rpc("admin_delete_user", { p_user_id: userId });
@@ -52,7 +56,7 @@ export async function resetUserPassword(
   _prev: ResetPasswordState,
   _formData: FormData
 ): Promise<ResetPasswordState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: authUser, error: fetchError } = await supabase.auth.admin.getUserById(userId);
@@ -77,7 +81,7 @@ export async function resetUserPassword(
 
 const InviteSchema = z.object({
   email: z.string().email({ error: "Valid email required" }).trim().toLowerCase(),
-  role: z.enum(["client", "consultant"], { error: "Invalid role" }),
+  role: z.enum(["client", "consultant", "admin"], { error: "Invalid role" }),
   org_id: z.string().uuid({ error: "Invalid organisation" }).optional().or(z.literal("")),
 });
 
@@ -94,7 +98,7 @@ export async function inviteUser(
   _prev: InviteUserState,
   formData: FormData
 ): Promise<InviteUserState> {
-  await requireRole("super_admin");
+  const caller = await requireRole("super_admin", "admin");
 
   const rawOrgId = formData.get("org_id") as string | null;
   const validated = InviteSchema.safeParse({
@@ -109,6 +113,10 @@ export async function inviteUser(
 
   const { email, role, org_id } = validated.data;
 
+  if (role === "admin" && caller.role !== "super_admin") {
+    return { errors: { role: ["Only a Super Admin can invite Admin users"] } };
+  }
+
   if (role === "client" && !org_id) {
     return { errors: { org_id: ["Organisation required for client users"] } };
   }
@@ -121,9 +129,13 @@ export async function inviteUser(
 }
 
 export async function unlockUser(userId: string) {
-  await requireRole("super_admin");
-
+  const caller = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
+  const { data: target } = await supabase.from("users").select("role").eq("id", userId).single();
+  if (caller.role === "admin" && target && (target.role === "super_admin" || target.role === "admin")) {
+    throw new Error("Insufficient permissions.");
+  }
+
   const { error } = await supabase
     .from("users")
     .update({ is_locked: false, failed_login_count: 0 })
@@ -139,7 +151,7 @@ export async function setConsultantAvailability(
   userId: string,
   availability: ConsultantAvailability
 ) {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const supabase = createAdminClient();
   const { error } = await supabase
@@ -180,7 +192,7 @@ export type EditUserState = {
 };
 
 export async function resetUserTotp(userId: string) {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const supabase = createAdminClient();
 
@@ -202,7 +214,7 @@ export async function resetUserTotp(userId: string) {
 }
 
 export async function requireUserTotp(userId: string) {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const supabase = createAdminClient();
 
@@ -229,7 +241,7 @@ export async function updateUserProfile(
   _prev: EditUserState,
   formData: FormData
 ): Promise<EditUserState> {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const rawOrgId = formData.get("org_id") as string | null;
   const validated = EditUserSchema.safeParse({

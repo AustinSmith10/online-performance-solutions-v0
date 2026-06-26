@@ -1,4 +1,4 @@
-export type UserRole = "super_admin" | "consultant" | "client";
+export type UserRole = "super_admin" | "admin" | "consultant" | "client";
 
 export type ProjectStatus =
   | "draft"

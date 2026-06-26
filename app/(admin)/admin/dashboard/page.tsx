@@ -78,7 +78,7 @@ function consultantName(c: { first_name: string | null; last_name: string | null
 }
 
 export default async function AdminDashboardPage() {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
   const todayIso = new Date().toISOString().slice(0, 10);
 

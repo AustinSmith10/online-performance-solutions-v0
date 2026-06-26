@@ -9,7 +9,7 @@ export default async function EditFileRequirementPage({
 }: {
   params: Promise<{ id: string; reqId: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
   const { id: templateId, reqId } = await params;
 
   const supabase = createAdminClient();

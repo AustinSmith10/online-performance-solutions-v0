@@ -27,7 +27,7 @@ export default async function AdminSubmitPage({
 }: {
   searchParams: Promise<{ org_id?: string; client_id?: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
   const { org_id: orgId, client_id: clientId } = await searchParams;
   const supabase = createAdminClient();
 

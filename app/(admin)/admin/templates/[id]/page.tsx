@@ -8,6 +8,7 @@ import { DeleteButton } from "./_components/delete-button";
 import { ReuploadForm } from "./_components/reupload-form";
 import { AddExtractionTokenForm } from "./_components/add-extraction-token-form";
 import { FileRequirementsSection } from "./_components/FileRequirementsSection";
+import { SectionLabelsForm } from "./_components/SectionLabelsForm";
 
 type MappingRow = {
   id: string;
@@ -27,6 +28,7 @@ type TemplateDetail = {
   status: string;
   storage_path: string;
   created_at: string;
+  section_labels: { extract: string; org: string; client: string };
   org: { id: string; name: string; org_config: Record<string, string> } | null;
 };
 
@@ -35,14 +37,14 @@ export default async function TemplatePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
   const { id } = await params;
   const supabase = createAdminClient();
 
   const [{ data: tmpl }, { data: mappings }, { data: fileReqs }] = await Promise.all([
     supabase
       .from("templates")
-      .select("id, name, status, storage_path, created_at, org:org_id(id, name, org_config)")
+      .select("id, name, status, storage_path, created_at, section_labels, org:org_id(id, name, org_config)")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -165,6 +167,22 @@ export default async function TemplatePage({
           template reset to draft. Labels and hints will need to be re-entered.
         </p>
         <ReuploadForm templateId={id} />
+      </div>
+
+      {/* Section labels */}
+      <div className="rounded-lg border border-zinc-200 bg-white p-5">
+        <h2 className="mb-1 text-sm font-semibold text-zinc-900">Step 2 section headings</h2>
+        <p className="mb-4 text-xs text-zinc-500">
+          Labels shown to the client above each group of fields in the review step.
+        </p>
+        <SectionLabelsForm
+          templateId={id}
+          labels={template.section_labels ?? {
+            extract: "Extracted from your documents",
+            org: "Organisation details",
+            client: "Additional information",
+          }}
+        />
       </div>
 
       {/* Template token table */}

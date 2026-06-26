@@ -12,7 +12,7 @@ export async function purgeProject(
   _formData: FormData
 ): Promise<{ error?: string }> {
   const user = await getSessionUser();
-  if (!user || (user.role !== "client" && user.role !== "super_admin")) {
+  if (!user || (user.role !== "client" && user.role !== "super_admin" && user.role !== "admin")) {
     return { error: "Unauthorized." };
   }
 
@@ -120,7 +120,7 @@ export async function restoreProject(
   _formData: FormData
 ): Promise<{ error?: string }> {
   const user = await getSessionUser();
-  if (!user || (user.role !== "client" && user.role !== "super_admin")) {
+  if (!user || (user.role !== "client" && user.role !== "super_admin" && user.role !== "admin")) {
     return { error: "Unauthorized." };
   }
 

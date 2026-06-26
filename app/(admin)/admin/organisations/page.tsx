@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ClickableRow } from "@/components/ClickableRow";
 import type { Organisation } from "@/types";
@@ -37,6 +38,7 @@ export default async function OrganisationsPage({
   const sortOrder: "asc" | "desc" = order === "desc" ? "desc" : "asc";
   const params = { name, payment, status, sort, order };
 
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
   let query = supabase
     .from("organisations")
@@ -59,12 +61,14 @@ export default async function OrganisationsPage({
           <h1 className="text-xl font-semibold text-zinc-900">Organisations</h1>
           <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{rows.length}</span>
         </div>
-        <Link
-          href="/admin/organisations/new"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-        >
-          + New organisation
-        </Link>
+        {actor.role === "super_admin" && (
+          <Link
+            href="/admin/organisations/new"
+            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          >
+            + New organisation
+          </Link>
+        )}
       </div>
 
       <form method="GET" className="rounded-lg border border-zinc-200 bg-white p-4">

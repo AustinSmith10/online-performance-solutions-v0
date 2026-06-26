@@ -14,7 +14,7 @@ export async function uploadTemplate(
   _prev: UploadTemplateState,
   formData: FormData
 ): Promise<UploadTemplateState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const orgId = (formData.get("org_id") as string | null)?.trim();
   if (!orgId) return { error: "Organisation is required." };
@@ -92,7 +92,7 @@ export type ActivateTemplateState = { error?: string };
 export async function activateTemplate(
   templateId: string
 ): Promise<ActivateTemplateState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: mappings, error: mapErr } = await supabase
@@ -156,7 +156,7 @@ export type DeactivateTemplateState = { error?: string };
 export async function deactivateTemplate(
   templateId: string
 ): Promise<DeactivateTemplateState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: template, error: tmplErr } = await supabase
@@ -190,7 +190,7 @@ export type DeleteTemplateState = { error?: string };
 export async function deleteTemplate(
   templateId: string
 ): Promise<DeleteTemplateState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: template, error: tmplErr } = await supabase
@@ -231,7 +231,7 @@ export async function reuploadTemplate(
   _prev: ReuploadTemplateState,
   formData: FormData
 ): Promise<ReuploadTemplateState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "A .docx file is required." };
@@ -315,7 +315,7 @@ export async function updateTokenLabels(
   _prev: UpdateTokenLabelsState,
   formData: FormData
 ): Promise<UpdateTokenLabelsState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: template } = await supabase
@@ -371,7 +371,7 @@ export async function addExtractionOnlyToken(
   _prev: AddExtractionTokenState,
   formData: FormData
 ): Promise<AddExtractionTokenState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const token = (formData.get("token") as string | null)?.trim().toUpperCase();
   const label = (formData.get("label") as string | null)?.trim();
@@ -426,7 +426,7 @@ export async function deleteExtractionToken(
   templateId: string,
   token: string
 ): Promise<DeleteExtractionTokenState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: template } = await supabase
@@ -463,7 +463,7 @@ export async function updateExtractionToken(
   _prev: UpdateExtractionTokenState,
   formData: FormData
 ): Promise<UpdateExtractionTokenState> {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const label = (formData.get("label") as string | null)?.trim();
   const hint = (formData.get("hint") as string | null)?.trim();
@@ -489,10 +489,37 @@ export async function updateExtractionToken(
 
 export type ReactivateTemplateState = { error?: string };
 
+export type UpdateSectionLabelsState = { error?: string; success?: boolean };
+
+export async function updateSectionLabels(
+  templateId: string,
+  _prev: UpdateSectionLabelsState,
+  formData: FormData
+): Promise<UpdateSectionLabelsState> {
+  await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const labels = {
+    extract: (formData.get("label_extract") as string | null)?.trim() || "Extracted from your documents",
+    org: (formData.get("label_org") as string | null)?.trim() || "Organisation details",
+    client: (formData.get("label_client") as string | null)?.trim() || "Additional information",
+  };
+
+  const { error } = await supabase
+    .from("templates")
+    .update({ section_labels: labels })
+    .eq("id", templateId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return { success: true };
+}
+
 export async function reactivateTemplate(
   templateId: string
 ): Promise<ReactivateTemplateState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: template, error: tmplErr } = await supabase

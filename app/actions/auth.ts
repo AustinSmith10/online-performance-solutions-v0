@@ -45,6 +45,14 @@ const VerifyTotpSchema = z.object({
     .regex(/^\d+$/, { error: "Digits only" }),
 });
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function roleHomePath(role: string): string {
+  if (role === "super_admin" || role === "admin") return "/admin/dashboard";
+  if (role === "consultant") return "/ops";
+  return "/portal";
+}
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 
 export type LoginState = {
@@ -151,7 +159,7 @@ export async function login(
   });
 
   const next = formData.get("next") as string | null;
-  redirect(next || "/");
+  redirect(next || roleHomePath(role));
 }
 
 // ─── Logout ───────────────────────────────────────────────────────────────────
@@ -258,8 +266,14 @@ export async function verifyTotp(
     return { errors: { form: ["Invalid code. Please try again."] } };
   }
 
+  const { data: { user: authedUser } } = await supabase.auth.getUser();
+  const adminClient = createAdminClient();
+  const { data: userRow } = authedUser
+    ? await adminClient.from("users").select("role").eq("id", authedUser.id).maybeSingle()
+    : { data: null };
+
   const next = formData.get("next") as string | null;
-  redirect(next || "/");
+  redirect(next || roleHomePath((userRow?.role as string | null) ?? "client"));
 }
 
 // ─── TOTP enrollment confirmation ─────────────────────────────────────────────
@@ -293,12 +307,17 @@ export async function confirmTotpEnrollment(
     return { errors: { form: ["Invalid code. Scan the QR code again and retry."] } };
   }
 
-  // Mark TOTP as enabled in the users table
+  // Mark TOTP as enabled in the users table and fetch role for redirect
   const { data: { user } } = await supabase.auth.getUser();
+  let userRole = "client";
   if (user) {
     const adminClient = createAdminClient();
-    await adminClient.from("users").update({ totp_enabled: true }).eq("id", user.id);
+    const [, roleRow] = await Promise.all([
+      adminClient.from("users").update({ totp_enabled: true }).eq("id", user.id),
+      adminClient.from("users").select("role").eq("id", user.id).maybeSingle(),
+    ]);
+    userRole = (roleRow.data?.role as string | null) ?? "client";
   }
 
-  redirect("/");
+  redirect(roleHomePath(userRole));
 }
