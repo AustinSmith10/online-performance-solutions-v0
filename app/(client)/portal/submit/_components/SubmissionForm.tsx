@@ -7,7 +7,6 @@ import {
   type ExtractState,
   type TokenField,
   type Development,
-  type SectionLabels,
 } from "@/app/actions/submission";
 import type { Confidence } from "@/lib/documents/extractor";
 
