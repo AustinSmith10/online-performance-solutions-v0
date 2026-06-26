@@ -111,6 +111,16 @@ BEGIN
     DELETE FROM templates WHERE org_id = ANY(_org_ids);
   END IF;
 
+  -- ── Null uploaded_by on non-seeded project_files referencing seeded users ─────
+  -- (project_files_uploaded_by_fkey blocks user deletion otherwise)
+
+  IF _user_ids IS NOT NULL THEN
+    UPDATE project_files
+       SET uploaded_by = NULL
+     WHERE uploaded_by = ANY(_user_ids)
+       AND (_project_ids IS NULL OR project_id != ALL(_project_ids));
+  END IF;
+
   -- ── public.users ─────────────────────────────────────────────────────────────
 
   IF _user_ids IS NOT NULL THEN
