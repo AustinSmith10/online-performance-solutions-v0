@@ -76,10 +76,9 @@ BEGIN
   -- ── Templates (cascades to file_requirements, stakeholder_configs, mappings) ─
   DELETE FROM templates WHERE org_id = ANY(_org_ids);
 
-  -- ── Null uploaded_by on non-test project_files referencing these users ─────────
+  -- ── Delete project_files uploaded by these users on non-test projects ──────────
   IF _user_ids IS NOT NULL THEN
-    UPDATE project_files
-       SET uploaded_by = NULL
+    DELETE FROM project_files
      WHERE uploaded_by = ANY(_user_ids)
        AND (_project_ids IS NULL OR project_id != ALL(_project_ids));
   END IF;
