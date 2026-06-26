@@ -9,17 +9,7 @@ DECLARE
   _org_ids       uuid[];
 BEGIN
 
-  -- ── Resolve seeded IDs ──────────────────────────────────────────────────────
-
-  SELECT array_agg(id) INTO _project_ids
-  FROM projects
-  WHERE project_number = ANY(ARRAY[
-    'OPS-0001','OPS-0002','OPS-0003','OPS-0004','OPS-0005',
-    'OPS-0010','OPS-0011','OPS-0012',
-    'OPS-R001','OPS-R002','OPS-R003','OPS-R004','OPS-R005',
-    'OPS-D001','OPS-D002','OPS-D003',
-    'SEED-CV-01','SEED-CV-02','SEED-CV-03'
-  ]);
+  -- ── Resolve seeded IDs (users + orgs first so project query can use them) ────
 
   SELECT array_agg(id) INTO _user_ids
   FROM users
@@ -34,6 +24,21 @@ BEGIN
   SELECT array_agg(id) INTO _org_ids
   FROM organisations
   WHERE slug = ANY(ARRAY['stockland','meridian-group']);
+
+  -- Include named seed projects + any project submitted by a seeded user
+  -- or belonging to a seeded org (submitted_by is NOT NULL so we must cover
+  -- all seeded-user submissions to avoid FK violations on user deletion).
+  SELECT array_agg(DISTINCT id) INTO _project_ids
+  FROM projects
+  WHERE project_number = ANY(ARRAY[
+    'OPS-0001','OPS-0002','OPS-0003','OPS-0004','OPS-0005',
+    'OPS-0010','OPS-0011','OPS-0012',
+    'OPS-R001','OPS-R002','OPS-R003','OPS-R004','OPS-R005',
+    'OPS-D001','OPS-D002','OPS-D003',
+    'SEED-CV-01','SEED-CV-02','SEED-CV-03'
+  ])
+  OR (_user_ids IS NOT NULL AND submitted_by = ANY(_user_ids))
+  OR (_org_ids  IS NOT NULL AND org_id       = ANY(_org_ids));
 
   -- Nothing to do if seed was never applied
   IF _project_ids IS NULL AND _user_ids IS NULL AND _org_ids IS NULL THEN
