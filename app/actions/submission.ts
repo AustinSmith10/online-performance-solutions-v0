@@ -57,13 +57,21 @@ export async function extractFields(
   _prev: ExtractState,
   formData: FormData
 ): Promise<ExtractState> {
-  const actor = await requireRole("client");
+  const actor = await requireRole("client", "super_admin");
   const supabase = createAdminClient();
 
   const templateId = (formData.get("template_id") as string | null)?.trim();
   if (!templateId) return { step: 1, error: "No template selected." };
 
-  const orgId = actor.org_id as string;
+  const isAdmin = actor.role === "super_admin";
+  const orgId = isAdmin
+    ? ((formData.get("admin_org_id") as string | null)?.trim() ?? "")
+    : (actor.org_id as string);
+  if (!orgId) return { step: 1, error: "Organisation is required." };
+  const adminClientId = isAdmin
+    ? ((formData.get("admin_client_id") as string | null)?.trim() ?? "")
+    : "";
+  if (isAdmin && !adminClientId) return { step: 1, error: "Client account is required." };
   const projectId = crypto.randomUUID();
 
   // Load file requirements for this template
@@ -284,7 +292,7 @@ export async function extractFields(
     id: projectId,
     org_id: orgId,
     template_id: templateId,
-    submitted_by: actor.id,
+    submitted_by: isAdmin ? adminClientId : actor.id,
     status: "draft",
     po_number: extraction.po_number.value || null,
     extracted_fields: draftFields,
@@ -352,10 +360,19 @@ export async function submitProject(
   _prev: SubmitState,
   formData: FormData
 ): Promise<SubmitState> {
-  const actor = await requireRole("client");
+  const actor = await requireRole("client", "super_admin");
   const supabase = createAdminClient();
 
-  const orgId = actor.org_id as string;
+  const isAdmin = actor.role === "super_admin";
+  const orgId = isAdmin
+    ? ((formData.get("admin_org_id") as string | null)?.trim() ?? "")
+    : (actor.org_id as string);
+  if (!orgId) return { error: "Organisation is required." };
+  const adminClientId = isAdmin
+    ? ((formData.get("admin_client_id") as string | null)?.trim() ?? "")
+    : "";
+  if (isAdmin && !adminClientId) return { error: "Client account is required." };
+
   const projectId = (formData.get("project_id") as string | null)?.trim();
   const templateId = (formData.get("template_id") as string | null)?.trim();
 
@@ -471,7 +488,7 @@ export async function submitProject(
     console.error("[submitProject] delivery date calculation failed:", err);
   }
 
-  const { error: updateError, count } = await supabase
+  let updateQuery = supabase
     .from("projects")
     .update(
       {
@@ -486,8 +503,10 @@ export async function submitProject(
     )
     .eq("id", projectId)
     .eq("org_id", orgId)
-    .eq("submitted_by", actor.id)
     .eq("status", "draft");
+  // Clients can only finalise their own draft; admins scoped by id+org is sufficient.
+  if (!isAdmin) updateQuery = updateQuery.eq("submitted_by", actor.id);
+  const { error: updateError, count } = await updateQuery;
 
   if (updateError) return { error: `Failed to submit project: ${updateError.message}` };
   if (!count) return { error: "This project has already been submitted or is no longer a draft." };
@@ -496,7 +515,7 @@ export async function submitProject(
   after(async () => {
     await Promise.all([
       notify({
-        recipientId: actor.id,
+        recipientId: isAdmin ? adminClientId : actor.id,
         type: "acknowledgement",
         message: `Your report request for ${siteAddress ?? "your property"} has been received and is being processed.`,
         projectId,
@@ -535,9 +554,15 @@ export async function submitProject(
     ]);
   });
 
-  revalidatePath("/portal");
-  revalidatePath(`/portal/projects/${projectId}`);
-  redirect(`/portal/projects/${projectId}`);
+  if (isAdmin) {
+    revalidatePath("/admin/projects");
+    revalidatePath(`/admin/projects/${projectId}`);
+    redirect(`/admin/projects/${projectId}`);
+  } else {
+    revalidatePath("/portal");
+    revalidatePath(`/portal/projects/${projectId}`);
+    redirect(`/portal/projects/${projectId}`);
+  }
 }
 
 // ─── Email templates ─────────────────────────────────────────────────────────

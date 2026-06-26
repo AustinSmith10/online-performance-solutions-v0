@@ -30,6 +30,10 @@ interface Props {
   defaultTemplateId: string | null;
   requirementsByTemplate?: Record<string, FileRequirement[]>;
   initialState?: ExtractState;
+  adminOrgId?: string;
+  adminClientId?: string;
+  projectBasePath?: string;
+  startOverHref?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -141,9 +145,13 @@ interface ReviewStepProps {
   submitAction: (payload: FormData) => void;
   submitPending: boolean;
   submitState: { error?: string; duplicateProjectId?: string };
+  adminOrgId?: string;
+  adminClientId?: string;
+  projectBasePath: string;
+  startOverHref: string;
 }
 
-function ReviewStep({ state, submitAction, submitPending, submitState }: ReviewStepProps) {
+function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgId, adminClientId, projectBasePath, startOverHref }: ReviewStepProps) {
   const { poNumber, tokenGroups, hasTrustee, rainfallToken, developments, projectId, templateId } = state;
 
   const [modified, setModified] = useState<Set<string>>(new Set());
@@ -189,6 +197,8 @@ function ReviewStep({ state, submitAction, submitPending, submitState }: ReviewS
         <input type="hidden" name="project_id" value={projectId} />
         <input type="hidden" name="template_id" value={templateId} />
         <input type="hidden" name="extracted_po_number" value={poNumber.value} />
+        {adminOrgId && <input type="hidden" name="admin_org_id" value={adminOrgId} />}
+        {adminClientId && <input type="hidden" name="admin_client_id" value={adminClientId} />}
         {hasTrustee && (
           <input type="hidden" name="EXTRACT_TRUSTEE" value={selectedTrusteeEntity} />
         )}
@@ -278,7 +288,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState }: ReviewS
           <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
             {submitState.error}{" "}
             <a
-              href={`/portal/projects/${submitState.duplicateProjectId}`}
+              href={`${projectBasePath}/${submitState.duplicateProjectId}`}
               className="font-medium underline hover:text-red-900"
             >
               View existing project →
@@ -298,7 +308,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState }: ReviewS
             {submitPending ? "Submitting…" : "Submit report request"}
           </button>
           {!submitPending && (
-            <a href="/portal/submit" className="text-sm text-zinc-500 hover:text-zinc-700">
+            <a href={startOverHref} className="text-sm text-zinc-500 hover:text-zinc-700">
               Start over
             </a>
           )}
@@ -448,6 +458,10 @@ export function SubmissionForm({
   defaultTemplateId,
   requirementsByTemplate = {},
   initialState,
+  adminOrgId,
+  adminClientId,
+  projectBasePath = "/portal/projects",
+  startOverHref = "/portal/submit",
 }: Props) {
   const [extractState, extractAction, extractPending] = useActionState<ExtractState, FormData>(
     extractFields,
@@ -515,6 +529,10 @@ export function SubmissionForm({
         submitAction={submitAction}
         submitPending={submitPending}
         submitState={submitState}
+        adminOrgId={adminOrgId}
+        adminClientId={adminClientId}
+        projectBasePath={projectBasePath}
+        startOverHref={startOverHref}
       />
     );
   }
@@ -524,6 +542,8 @@ export function SubmissionForm({
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-6">
       <form action={extractAction} className="space-y-6">
+        {adminOrgId && <input type="hidden" name="admin_org_id" value={adminOrgId} />}
+        {adminClientId && <input type="hidden" name="admin_client_id" value={adminClientId} />}
         {/* Template selector */}
         {showTemplateDropdown ? (
           <div>
@@ -574,7 +594,7 @@ export function SubmissionForm({
               <>
                 {" "}
                 <a
-                  href={`/portal/projects/${extractState.duplicateProjectId}`}
+                  href={`${projectBasePath}/${extractState.duplicateProjectId}`}
                   className="font-medium underline hover:text-red-900"
                 >
                   View existing project →

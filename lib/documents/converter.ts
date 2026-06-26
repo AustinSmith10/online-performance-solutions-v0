@@ -97,13 +97,30 @@ function applyTextReplacements(xml: string): string {
  * intact but clears the floating shape content.
  */
 function removeWatermarks(xml: string): string {
+  // Modern DrawingML watermarks wrapped in mc:AlternateContent.
+  // Checked FIRST so <v:textpath> detection fires on the original block before
+  // the <w:pict> pass below strips it from the VML fallback.
+  // Blocks with <v:textpath> are WordArt text watermarks — strip entirely.
+  // Non-watermark blocks (DDEG logo + connector group) are kept but patched:
+  // behindDoc="1" prevents Gotenberg's LibreOffice from clipping the inline
+  // Building Solutions logo — the anchor is positioned at page y=0, above the
+  // header content area, and rendering it in front (behindDoc="0") causes
+  // Gotenberg to treat its bounding box as a foreground clip over the logo in
+  // Para[0]. Behind-text shapes remain visible because header paragraphs have
+  // no background fill. The VML fallback z-index is mirrored to negative.
+  let result = xml.replace(/<mc:AlternateContent[\s\S]*?<\/mc:AlternateContent>/g, (block) => {
+    if (/<v:textpath/i.test(block)) return "";
+    return block
+      .replace(/\bbehindDoc="0"/g, 'behindDoc="1"')
+      .replace(/\bz-index:251742208\b/g, "z-index:-251742208");
+  });
   // Remove <w:pict> blocks that contain <v:textpath> (VML WordArt watermarks).
   // Instead of deleting the entire <w:pict> block, surgically remove only the
   // watermark-specific content: the <v:textpath> shapetype and the <v:shape>
   // that references it. Any other <v:shapetype> definitions inside the same
   // <w:pict> (e.g. _x0000_t75 image type used by nearby logo shapes) are
   // preserved so the logo renderer can still find its shapetype.
-  let result = xml.replace(/<w:pict[^>]*>[\s\S]*?<\/w:pict>/g, (block) => {
+  result = result.replace(/<w:pict[^>]*>[\s\S]*?<\/w:pict>/g, (block) => {
     if (!/<v:textpath/i.test(block)) return block;
     // Strip <v:shapetype> blocks whose contained <v:textpath> marks them as
     // the WordArt type definition (spt="136").
@@ -114,24 +131,11 @@ function removeWatermarks(xml: string): string {
     cleaned = cleaned.replace(/<v:shape[\s\S]*?<\/v:shape>/g, (sh) =>
       /<v:textpath/i.test(sh) ? "" : sh
     );
-    // If the pict now has no meaningful content, collapse it entirely.
+    // If the pict now has no meaningful content, or still contains a
+    // <v:textpath> that the shape/shapetype cleaning didn't reach (e.g. a
+    // bare <v:textpath> directly inside <w:pict>), collapse the block entirely.
     const inner = cleaned.replace(/<w:pict[^>]*>|<\/w:pict>/g, "").trim();
-    return inner ? cleaned : "";
-  });
-  // Modern DrawingML watermarks wrapped in mc:AlternateContent.
-  // Blocks with <v:textpath> are WordArt text watermarks — strip entirely.
-  // Non-watermark blocks (DDEG logo + connector group) are kept but patched:
-  // behindDoc="1" prevents Gotenberg's LibreOffice from clipping the inline
-  // Building Solutions logo — the anchor is positioned at page y=0, above the
-  // header content area, and rendering it in front (behindDoc="0") causes
-  // Gotenberg to treat its bounding box as a foreground clip over the logo in
-  // Para[0]. Behind-text shapes remain visible because header paragraphs have
-  // no background fill. The VML fallback z-index is mirrored to negative.
-  result = result.replace(/<mc:AlternateContent[\s\S]*?<\/mc:AlternateContent>/g, (block) => {
-    if (/<v:textpath/i.test(block)) return "";
-    return block
-      .replace(/\bbehindDoc="0"/g, 'behindDoc="1"')
-      .replace(/\bz-index:251742208\b/g, "z-index:-251742208");
+    return (inner && !/<v:textpath/i.test(inner)) ? cleaned : "";
   });
   return result;
 }

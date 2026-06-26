@@ -84,7 +84,10 @@ function buildSupabaseMock(priorAcknowledged: unknown[] = []) {
       }
 
       if (table === "users") {
-        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: SUBMITTER_USER, error: null }) };
+        // n=1: submitter lookup via .eq("id", ...).maybeSingle()
+        // n=2: portal user map lookup via .in("email", [...]) — returns empty list by default
+        if (n === 1) return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: SUBMITTER_USER, error: null }) };
+        return chain([]);
       }
 
       if (table === "project_files") return chain(null);
@@ -205,7 +208,10 @@ describe("dispatchPbdb — revision cycle notice", () => {
             ? { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: cycle2Project, error: null }) }
             : { update: vi.fn().mockReturnValue(chain(null)) };
         }
-        if (table === "users") return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: SUBMITTER_USER, error: null }) };
+        if (table === "users") {
+          if (n === 1) return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: SUBMITTER_USER, error: null }) };
+          return chain([]);
+        }
         if (table === "project_files") return chain(null);
         if (table === "stakeholder_reviews") {
           // n=1: select prior-cycle acknowledged rows
@@ -264,13 +270,18 @@ describe("dispatchPbdb — payment gate", () => {
     const mock = buildSupabaseMock();
     const origFrom = mock.from as ReturnType<typeof vi.fn>;
     let projCalls = 0;
+    let usersCalls = 0;
     origFrom.mockImplementation((table: string) => {
       if (table === "projects") {
         projCalls++;
         if (projCalls === 1) return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: alreadyDeducted, error: null }) };
         return { update: vi.fn().mockReturnValue(chain(null)) };
       }
-      if (table === "users") return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: SUBMITTER_USER, error: null }) };
+      if (table === "users") {
+        usersCalls++;
+        if (usersCalls === 1) return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: SUBMITTER_USER, error: null }) };
+        return chain([]);
+      }
       if (table === "project_files") return chain(null);
       if (table === "stakeholder_reviews") return { upsert: mock.upsertFn };
       return chain(null);

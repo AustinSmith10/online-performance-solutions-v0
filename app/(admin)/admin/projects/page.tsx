@@ -149,6 +149,12 @@ function ProjectsLayout({
           <h1 className="text-xl font-semibold text-zinc-900">Projects</h1>
           <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{projects.length}</span>
         </div>
+        <Link
+          href="/admin/projects/submit"
+          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+        >
+          Submit project
+        </Link>
       </div>
 
       <form method="GET" className="rounded-lg border border-zinc-200 bg-white p-4">
