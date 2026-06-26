@@ -9,6 +9,72 @@ import { sendInvite } from "@/lib/auth/invite";
 import { auditLog } from "@/lib/audit/log";
 import type { ConsultantAvailability } from "@/types";
 
+export type DeleteUserState = { error?: string };
+
+export async function deleteUser(
+  userId: string,
+  _prev: DeleteUserState,
+  _formData: FormData
+): Promise<DeleteUserState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  // Read email/role before deletion for the audit entry
+  const { data: user } = await supabase
+    .from("users")
+    .select("email, role")
+    .eq("id", userId)
+    .single();
+
+  if (!user) return { error: "User not found." };
+
+  // Delegate to the SQL function — it validates, handles audit_log trigger, and deletes
+  const { error } = await supabase.rpc("admin_delete_user", { p_user_id: userId });
+  if (error) {
+    // The SQL function raises human-readable exceptions for blocking conditions
+    return { error: error.message };
+  }
+
+  await auditLog("user.deleted", actor.id, actor.email, {
+    metadata: { target_user_id: userId, target_email: user.email, role: user.role },
+  });
+
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin/consultants");
+  redirect("/admin/users");
+}
+
+export type ResetPasswordState = { link?: string; error?: string };
+
+export async function resetUserPassword(
+  userId: string,
+  _prev: ResetPasswordState,
+  _formData: FormData
+): Promise<ResetPasswordState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const { data: authUser, error: fetchError } = await supabase.auth.admin.getUserById(userId);
+  if (fetchError || !authUser.user?.email) return { error: "User not found." };
+
+  const email = authUser.user.email;
+
+  const { data, error } = await supabase.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/update-password` },
+  });
+
+  if (error) return { error: error.message };
+
+  await auditLog("auth.password_reset_generated", actor.id, actor.email, {
+    metadata: { target_user_id: userId, target_email: email },
+  });
+
+  return { link: data.properties.action_link };
+}
+
 const InviteSchema = z.object({
   email: z.string().email({ error: "Valid email required" }).trim().toLowerCase(),
   role: z.enum(["client", "consultant"], { error: "Invalid role" }),

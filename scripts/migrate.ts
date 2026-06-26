@@ -1,20 +1,42 @@
 /**
  * Applies all pending migrations to the Supabase cloud database.
- * Requires DATABASE_URL in .env.local (get from Supabase dashboard → Settings → Database).
+ *
+ * Connection options (in priority order):
+ *   1. DATABASE_URL — full Postgres URI (Supabase dashboard → Settings → Database → URI)
+ *   2. SUPABASE_DB_PASSWORD — just the database password; the host is derived from
+ *      NEXT_PUBLIC_SUPABASE_URL automatically (format: db.[ref].supabase.co)
  */
 import { readFileSync } from "fs";
 import { join } from "path";
 import { Client } from "pg";
 
-const url = process.env.DATABASE_URL;
-if (!url) {
+function resolveConnectionUrl(): string {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const dbPassword  = process.env.SUPABASE_DB_PASSWORD;
+
+  if (supabaseUrl && dbPassword) {
+    // https://[ref].supabase.co  →  db.[ref].supabase.co
+    const ref  = supabaseUrl.replace(/^https?:\/\//, "").replace(/\.supabase\.co.*$/, "");
+    const host = `db.${ref}.supabase.co`;
+    const pw   = encodeURIComponent(dbPassword);
+    console.log(`Using derived connection: db.${ref}.supabase.co:5432`);
+    return `postgresql://postgres:${pw}@${host}:5432/postgres`;
+  }
+
   console.error(
-    "DATABASE_URL is not set.\n\n" +
-    "Get it from: Supabase dashboard → your project → Settings → Database → Connection string → URI\n" +
-    "Then add it to .env.local:\n  DATABASE_URL=postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres"
+    "No database connection configured.\n\n" +
+    "Option A — add the full URI to .env.local:\n" +
+    "  DATABASE_URL=postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres\n\n" +
+    "Option B — add just the database password (host is auto-derived from NEXT_PUBLIC_SUPABASE_URL):\n" +
+    "  SUPABASE_DB_PASSWORD=[password]\n\n" +
+    "Find the password: Supabase dashboard → your project → Settings → Database → Database password"
   );
   process.exit(1);
 }
+
+const url = resolveConnectionUrl();
 
 async function run() {
   const client = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });

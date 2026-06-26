@@ -42,6 +42,7 @@ const IN_FLIGHT_STATUSES: ProjectStatus[] = [
 
 type ProjectRow = {
   id: string;
+  project_number: string | null;
   po_number: string | null;
   site_address: string | null;
   status: ProjectStatus;
@@ -64,8 +65,11 @@ type SystemError = {
   created_at: string;
 };
 
-function projectLabel(p: { site_address: string | null; po_number: string | null; id: string }) {
-  return p.site_address ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
+function projectLabel(p: { project_number: string | null; site_address: string | null; po_number: string | null; id: string }) {
+  const addr = p.site_address;
+  if (p.project_number && addr) return `${p.project_number} — ${addr}`;
+  if (addr) return addr;
+  return p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8);
 }
 
 function consultantName(c: { first_name: string | null; last_name: string | null; email: string } | null) {
@@ -88,7 +92,7 @@ export default async function AdminDashboardPage() {
     supabase
       .from("projects")
       .select(`
-        id, po_number, site_address, status, expected_delivery_date,
+        id, project_number, po_number, site_address, status, expected_delivery_date,
         payment_override, payment_override_at, payment_override_reason, assigned_consultant_id,
         review_buffer_fired_at, qa_completed_by, created_at,
         organisations(name),
@@ -101,7 +105,7 @@ export default async function AdminDashboardPage() {
     supabase
       .from("projects")
       .select(`
-        id, po_number, site_address, status, payment_override_at, payment_override_reason,
+        id, project_number, po_number, site_address, status, payment_override_at, payment_override_reason,
         organisations(name)
       `)
       .is("deleted_at", null)
@@ -203,7 +207,7 @@ export default async function AdminDashboardPage() {
             <table className="w-full min-w-[640px] text-sm">
               <thead className="border-b border-zinc-100 bg-zinc-50">
                 <tr>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Address / Ref</th>
+                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
                   <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
                   <th className="px-5 py-3 text-left font-medium text-zinc-500">Consultant</th>
                   <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>

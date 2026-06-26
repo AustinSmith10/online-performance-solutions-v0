@@ -20,6 +20,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 
 type DeletedProject = {
   id: string;
+  project_number: string | null;
   po_number: string | null;
   site_address: string | null;
   status: ProjectStatus;
@@ -76,7 +77,7 @@ export default async function AdminRecoveryPage({
 
   let query = supabase
     .from("projects")
-    .select("id, po_number, site_address, status, deleted_at, organisations(name)")
+    .select("id, project_number, po_number, site_address, status, deleted_at, organisations(name)")
     .not("deleted_at", "is", null)
     .order(sortCol, { ascending: sortOrder === "asc" });
 
@@ -191,7 +192,10 @@ function RecoveryLayout({
             <tbody className="divide-y divide-zinc-50">
               {projects.map((p) => {
                 const days = daysRemaining(p.deleted_at);
-                const label = p.site_address ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
+                const addr = p.site_address;
+                const label = (p.project_number && addr)
+                  ? `${p.project_number} — ${addr}`
+                  : addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
                 return (
                   <tr key={p.id}>
                     <td className="px-5 py-3 font-medium text-zinc-900">

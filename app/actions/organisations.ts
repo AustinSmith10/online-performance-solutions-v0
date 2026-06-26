@@ -235,6 +235,40 @@ export async function removeEmailDomain(orgId: string, domain: string) {
   revalidatePath(`/admin/organisations/${orgId}`);
 }
 
+export type DeleteOrgState = { error?: string };
+
+export async function deleteOrganisation(
+  orgId: string,
+  _prev: DeleteOrgState,
+  _formData: FormData
+): Promise<DeleteOrgState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  // Read name before deletion for the audit entry
+  const { data: org } = await supabase
+    .from("organisations")
+    .select("name")
+    .eq("id", orgId)
+    .single();
+
+  if (!org) return { error: "Organisation not found." };
+
+  // Delegate to the SQL function — it validates, handles audit_log trigger, and deletes
+  const { error } = await supabase.rpc("admin_delete_organisation", { p_org_id: orgId });
+  if (error) {
+    return { error: error.message };
+  }
+
+  await auditLog("org.deleted", actor.id, actor.email, {
+    orgId,
+    metadata: { name: org.name },
+  });
+
+  revalidatePath("/admin/organisations");
+  redirect("/admin/organisations");
+}
+
 export async function setOrgFrozen(id: string, frozen: boolean) {
   const actor = await requireRole("super_admin");
 

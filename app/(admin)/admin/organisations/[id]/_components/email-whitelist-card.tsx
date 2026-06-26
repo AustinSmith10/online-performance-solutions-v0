@@ -52,7 +52,8 @@ export function EmailWhitelistCard({ orgId, domains }: Props) {
           No domains added — all senders allowed.
         </p>
       ) : (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[280px] text-sm">
           <thead className="border-b border-zinc-100">
             <tr>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Domain</th>
@@ -80,6 +81,7 @@ export function EmailWhitelistCard({ orgId, domains }: Props) {
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

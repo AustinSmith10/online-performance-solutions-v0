@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { unlockUser, setConsultantAvailability, resetUserTotp, requireUserTotp } from "@/app/actions/admin-users";
 import { EditUserForm } from "./_components/edit-user-form";
+import { DangerZone } from "./_components/danger-zone";
 import type { User, Organisation, ConsultantAvailability } from "@/types";
 
 const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
@@ -178,6 +179,11 @@ export default async function UserDetailPage({
           <h2 className="mb-5 text-sm font-semibold text-zinc-900">Edit profile</h2>
           <EditUserForm user={u} organisations={organisations} />
         </div>
+      )}
+
+      {/* Danger zone — not shown for super_admin accounts */}
+      {u.role !== "super_admin" && (
+        <DangerZone user={{ id: u.id, email: u.email!, role: u.role }} />
       )}
     </div>
   );

@@ -64,7 +64,9 @@ export async function GET(
 
   const { data: signed } = await supabase.storage
     .from("documents")
-    .createSignedUrl(pbdbFile.storage_path as string, 300);
+    .createSignedUrl(pbdbFile.storage_path as string, 300, {
+      download: (pbdbFile.original_filename as string) || true,
+    });
 
   if (!signed?.signedUrl) {
     return new NextResponse("Could not generate download link", { status: 500 });

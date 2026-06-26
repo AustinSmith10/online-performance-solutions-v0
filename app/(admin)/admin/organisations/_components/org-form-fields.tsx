@@ -35,7 +35,7 @@ export function OrgFormFields({ state, defaults }: Props) {
         </select>
       </Field>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="State / territory" error={state.errors?.state_territory}>
           <select
             name="state_territory"
@@ -66,7 +66,7 @@ export function OrgFormFields({ state, defaults }: Props) {
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
           label="Abandoned draft days"
           error={state.errors?.abandoned_draft_days}

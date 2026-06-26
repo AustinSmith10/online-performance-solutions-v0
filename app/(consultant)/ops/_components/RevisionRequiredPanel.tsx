@@ -6,6 +6,7 @@ import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_componen
 
 export interface RevisionProject {
   id: string;
+  project_number: string | null;
   extracted_fields: Record<string, string> | null;
   po_number: string | null;
   review_cycle: number;
@@ -30,11 +31,10 @@ export interface ReviewRow {
   review_cycle: number;
 }
 
-function projectLabel(p: Pick<RevisionProject, "extracted_fields" | "po_number" | "id">) {
-  return (
-    (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
-    (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))
-  );
+function projectLabel(p: Pick<RevisionProject, "project_number" | "extracted_fields" | "po_number" | "id">) {
+  const addr = (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ?? null;
+  if (p.project_number && addr) return `${p.project_number} — ${addr}`;
+  return addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
 }
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {

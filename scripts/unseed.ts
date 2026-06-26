@@ -12,19 +12,37 @@
 import { Client } from "pg";
 import { createClient } from "@supabase/supabase-js";
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.error(
-    "DATABASE_URL is not set.\n" +
-      "Get it from: Supabase dashboard → Settings → Database → Connection string → URI\n" +
-      "Then add it to .env.local:  DATABASE_URL=postgresql://postgres:[pw]@db.[ref].supabase.co:5432/postgres"
-  );
-  process.exit(1);
-}
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env.local");
   process.exit(1);
 }
+
+function resolveConnectionUrl(): string {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const dbPassword  = process.env.SUPABASE_DB_PASSWORD;
+
+  if (supabaseUrl && dbPassword) {
+    const ref  = supabaseUrl.replace(/^https?:\/\//, "").replace(/\.supabase\.co.*$/, "");
+    const host = `db.${ref}.supabase.co`;
+    const pw   = encodeURIComponent(dbPassword);
+    console.log(`Using derived connection: db.${ref}.supabase.co:5432`);
+    return `postgresql://postgres:${pw}@${host}:5432/postgres`;
+  }
+
+  console.error(
+    "No database connection configured.\n\n" +
+    "Option A — add the full URI:\n" +
+    "  DATABASE_URL=postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres\n\n" +
+    "Option B — add just the password (host is auto-derived from NEXT_PUBLIC_SUPABASE_URL):\n" +
+    "  SUPABASE_DB_PASSWORD=[password]\n\n" +
+    "Find it: Supabase dashboard → your project → Settings → Database → Database password"
+  );
+  process.exit(1);
+}
+
+const DATABASE_URL = resolveConnectionUrl();
 
 // ── Seed manifests ────────────────────────────────────────────────────────────
 

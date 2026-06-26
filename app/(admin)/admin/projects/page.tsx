@@ -50,6 +50,7 @@ function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" })
 
 type ProjectRow = {
   id: string;
+  project_number: string | null;
   po_number: string | null;
   site_address: string | null;
   extracted_fields: Record<string, string> | null;
@@ -88,6 +89,7 @@ export default async function ProjectsPage({
     .from("projects")
     .select(`
       id,
+      project_number,
       po_number,
       site_address,
       extracted_fields,
@@ -209,7 +211,7 @@ function ProjectsLayout({
           <table className="w-full min-w-[600px] text-sm">
             <thead className="border-b border-zinc-100 bg-zinc-50">
               <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">
                   <a href={sortHref(params, "org")} className="group inline-flex items-center hover:text-zinc-700">
                     Organisation <SortIcon active={sortCol === "org"} order={sortOrder} />
@@ -232,9 +234,12 @@ function ProjectsLayout({
               {projects.map((p) => (
                 <ClickableRow key={p.id} href={`/admin/projects/${p.id}`}>
                   <td className="max-w-[200px] truncate px-5 py-3 font-medium text-zinc-900">
-                    {p.site_address ||
-                      (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
-                      (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))}
+                    {(() => {
+                        const addr = p.site_address || (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) || null;
+                        if (p.project_number && addr) return `${p.project_number} — ${addr}`;
+                        if (addr) return addr;
+                        return p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8);
+                      })()}
                   </td>
                   <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
                     {p.organisations?.name ?? "—"}

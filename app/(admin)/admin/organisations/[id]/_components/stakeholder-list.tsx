@@ -21,7 +21,8 @@ export function StakeholderList({ orgId, stakeholders }: Props) {
           No default stakeholders configured. Add at least one below.
         </p>
       ) : (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[420px] text-sm">
           <thead className="border-b border-zinc-100">
             <tr>
               <th className="pb-2 text-left font-medium text-zinc-500">Name</th>
@@ -53,6 +54,7 @@ export function StakeholderList({ orgId, stakeholders }: Props) {
             })}
           </tbody>
         </table>
+        </div>
       )}
 
       <AddStakeholderForm orgId={orgId} />

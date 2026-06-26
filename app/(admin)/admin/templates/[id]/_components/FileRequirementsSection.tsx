@@ -59,7 +59,8 @@ export function FileRequirementsSection({ templateId, requirements }: Props) {
   return (
     <div className="divide-y divide-zinc-50">
       {requirements.length > 0 && (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[580px] text-sm">
           <thead className="border-b border-zinc-100">
             <tr>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Name</th>
@@ -77,6 +78,7 @@ export function FileRequirementsSection({ templateId, requirements }: Props) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <form action={handleCreate} className="space-y-4 px-5 py-5">

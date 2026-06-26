@@ -15,6 +15,7 @@ import { ResendPbdrButton } from "./_components/ResendPbdrButton";
 import { PauseForm } from "./_components/PauseForm";
 import { ResumeButton } from "./_components/ResumeButton";
 import { AdminDeleteButton } from "./_components/AdminDeleteButton";
+import { AdminProjectNumberForm } from "./_components/AdminProjectNumberForm";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
@@ -302,8 +303,12 @@ export default async function ProjectDetailPage({
         </Link>
         <div className="mt-2 flex items-center gap-3 flex-wrap">
           <h1 className="text-xl font-semibold text-zinc-900">
-            {(project.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
-              (project.po_number ? `PO ${project.po_number}` : (project.project_number ?? project.id.slice(0, 8)))}
+            {(() => {
+              const addr = project.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined;
+              if (project.project_number && addr) return `${project.project_number} — ${addr}`;
+              if (addr) return addr;
+              return project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8);
+            })()}
           </h1>
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
             project.status === "paused"
@@ -486,42 +491,56 @@ export default async function ProjectDetailPage({
         <FieldsForm projectId={id} fields={fieldEntries} />
       </div>
 
-      {/* PBDB version history */}
-      {pbdbFiles.length > 0 && (
+      {/* PBDB — project number + generation + file history in one card */}
+      {(!isDeleted && !isTerminal || pbdbFiles.length > 0) && (
         <div className="rounded-lg border border-zinc-200 bg-white">
           <div className="border-b border-zinc-100 px-5 py-4">
             <h2 className="text-sm font-semibold text-zinc-900">PBDB</h2>
           </div>
-          <div className="divide-y divide-zinc-100">
-            {pbdbFiles.map((f) => {
-              const version = f.version as number;
-              const isQa = version >= 2;
-              return (
-                <div
-                  key={f.id as string}
-                  className="flex items-center justify-between px-5 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-zinc-900">
-                      {f.original_filename as string}
-                    </p>
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      Version {version}
-                      {isQa ? " — QA corrected" : " — Generated"}
-                      {" · "}
-                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                    </p>
-                  </div>
-                  <a
-                    href={`/api/download/pbdb/${f.id as string}`}
-                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+
+          {/* Project number + generate — editable while project is live */}
+          {!isDeleted && !isTerminal && (
+            <div className={`px-5 py-4${pbdbFiles.length > 0 ? " border-b border-zinc-100" : ""}`}>
+              <AdminProjectNumberForm
+                projectId={id}
+                currentNumber={project.project_number}
+              />
+            </div>
+          )}
+
+          {/* File history */}
+          {pbdbFiles.length > 0 && (
+            <div className="divide-y divide-zinc-100">
+              {pbdbFiles.map((f) => {
+                const version = f.version as number;
+                const isQa = version >= 2;
+                return (
+                  <div
+                    key={f.id as string}
+                    className="flex items-center justify-between px-5 py-3"
                   >
-                    Download
-                  </a>
-                </div>
-              );
-            })}
-          </div>
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900">
+                        {f.original_filename as string}
+                      </p>
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        Version {version}
+                        {isQa ? " — QA corrected" : " — Generated"}
+                        {" · "}
+                        {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                      </p>
+                    </div>
+                    <a
+                      href={`/api/download/pbdb/${f.id as string}`}
+                      className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Download
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

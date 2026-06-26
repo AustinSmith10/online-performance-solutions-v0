@@ -6,6 +6,7 @@ import { EditOrgForm } from "./_components/edit-org-form";
 import { OrgConfigForm } from "./_components/org-config-form";
 import { EmailWhitelistCard } from "./_components/email-whitelist-card";
 import { StakeholderList } from "./_components/stakeholder-list";
+import { DeleteOrgButton } from "./_components/delete-org-button";
 import type { Organisation, User } from "@/types";
 
 export default async function OrganisationDetailPage({
@@ -93,7 +94,7 @@ export default async function OrganisationDetailPage({
       </div>
 
       {/* Balances */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="rounded-lg border border-zinc-200 bg-white p-5">
           <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
             Credit balance
@@ -176,7 +177,8 @@ export default async function OrganisationDetailPage({
         {orgTemplates.length === 0 ? (
           <p className="text-sm text-zinc-500">No templates yet.</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[300px] text-sm">
             <thead className="border-b border-zinc-100">
               <tr>
                 <th className="pb-2 text-left font-medium text-zinc-500">Name</th>
@@ -211,6 +213,7 @@ export default async function OrganisationDetailPage({
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -222,6 +225,25 @@ export default async function OrganisationDetailPage({
           override is configured.
         </p>
         <StakeholderList orgId={orgData.id} stakeholders={stakeholderRows} />
+      </div>
+
+      {/* Danger zone */}
+      <div className="rounded-lg border border-red-200 bg-red-50 p-5 space-y-4">
+        <h2 className="text-sm font-semibold text-red-800">Danger zone</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div>
+            <p className="text-sm font-medium text-zinc-900">Delete organisation</p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Permanently removes this organisation. All projects must be purged first.
+              Existing user accounts are kept but lose org membership.
+            </p>
+          </div>
+          <DeleteOrgButton
+            orgId={orgData.id}
+            orgName={orgData.name}
+            userCount={orgUsers.length}
+          />
+        </div>
       </div>
 
       {/* Users */}
@@ -239,7 +261,8 @@ export default async function OrganisationDetailPage({
         {orgUsers.length === 0 ? (
           <p className="text-sm text-zinc-500">No users yet.</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px] text-sm">
             <thead className="border-b border-zinc-100">
               <tr>
                 <th className="pb-2 text-left font-medium text-zinc-500">Name / email</th>
@@ -279,6 +302,7 @@ export default async function OrganisationDetailPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

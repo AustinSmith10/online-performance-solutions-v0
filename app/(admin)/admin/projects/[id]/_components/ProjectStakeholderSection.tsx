@@ -17,7 +17,8 @@ export function ProjectStakeholderSection({ projectId, stakeholders }: Props) {
   return (
     <div className="space-y-4">
       {stakeholders.length > 0 ? (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[360px] text-sm">
           <tbody className="divide-y divide-zinc-50">
             {stakeholders.map((s) => {
               const removeAction = removeProjectStakeholder.bind(null, projectId, s.id);
@@ -37,6 +38,7 @@ export function ProjectStakeholderSection({ projectId, stakeholders }: Props) {
             })}
           </tbody>
         </table>
+        </div>
       ) : (
         <p className="text-sm text-zinc-400">None — using inherited stakeholder list.</p>
       )}

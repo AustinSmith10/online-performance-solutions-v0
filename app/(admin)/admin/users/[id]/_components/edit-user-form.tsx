@@ -17,7 +17,7 @@ export function EditUserForm({ user, organisations }: Props) {
 
   return (
     <form action={action} className="space-y-5">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="First name" error={state.errors?.first_name}>
           <input
             name="first_name"

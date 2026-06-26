@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ClickableRow } from "@/components/ClickableRow";
+import { DownloadPbdrLink } from "./_components/DownloadPbdrLink";
 import type { ProjectStatus, PaymentMethod } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -129,7 +130,35 @@ export default async function ClientPortalPage() {
   // Ready banner: recently complete + not yet downloaded by this user
   const reportsReady = recentlyComplete.filter((p) => !downloadedIds.has(p.id));
 
-  // Main table: exclude all complete projects (they live in history or the ready banner)
+  const PBDR_DOWNLOAD_LIMIT = 2;
+  const PBDR_WINDOW_DAYS = 2;
+
+  // Projects currently in delivered status
+  const allDelivered = projects.filter((p) => p.status === "delivered");
+
+  // Count how many times this user has downloaded the PBDR for each delivered project
+  const pbdrDownloadCounts = new Map<string, number>();
+  if (allDelivered.length > 0) {
+    const { data: pbdrDlRows } = await supabase
+      .from("audit_log")
+      .select("project_id")
+      .eq("event_type", "project.pbdr_downloaded")
+      .eq("actor_id", user.id as string)
+      .in("project_id", allDelivered.map((p) => p.id));
+    for (const row of pbdrDlRows ?? []) {
+      const id = row.project_id as string;
+      pbdrDownloadCounts.set(id, (pbdrDownloadCounts.get(id) ?? 0) + 1);
+    }
+  }
+
+  // Show banner only while within the download limit AND within the 2-working-day window
+  const deliveredProjects = allDelivered.filter((p) => {
+    if ((pbdrDownloadCounts.get(p.id) ?? 0) >= PBDR_DOWNLOAD_LIMIT) return false;
+    const from = p.delivered_at ?? p.created_at;
+    return workingDaysElapsed(from, todayIso) < PBDR_WINDOW_DAYS;
+  });
+
+  // Main table: exclude complete projects (they live in history or the ready banner)
   const activeProjects = projects.filter((p) => p.status !== "complete");
 
   return (
@@ -189,6 +218,38 @@ export default async function ClientPortalPage() {
                   className="text-sm font-medium text-amber-700 hover:text-amber-900"
                 >
                   Review →
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* PBDR delivered — available to download */}
+      {deliveredProjects.length > 0 && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-5">
+          <h2 className="text-sm font-semibold text-green-900">
+            {deliveredProjects.length === 1 ? "Your PBDR is ready" : "PBDRs ready to download"} (
+            {deliveredProjects.length})
+          </h2>
+          <p className="mt-0.5 text-xs text-green-700">
+            Your Performance-Based Design Report{deliveredProjects.length > 1 ? "s have" : " has"}{" "}
+            been delivered. Download below.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {deliveredProjects.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between gap-3 rounded-md border border-green-100 bg-white px-4 py-2.5"
+              >
+                <span className="min-w-0 truncate text-sm font-medium text-zinc-900">
+                  {projectLabel(p)}
+                </span>
+                <a
+                  href={`/api/download/pbdr/${p.id}`}
+                  className="shrink-0 inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                >
+                  Download PBDR
                 </a>
               </li>
             ))}
@@ -261,46 +322,96 @@ export default async function ClientPortalPage() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[520px] text-sm">
-            <thead className="border-b border-zinc-100 bg-zinc-50">
-              <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Submitted</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Expected delivery</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {activeProjects.map((p) => (
-                <ClickableRow key={p.id} href={`/portal/projects/${p.id}`}>
-                  <td className="px-5 py-3 font-medium text-zinc-900">{projectLabel(p)}</td>
-                  <td className="px-5 py-3">
+        <>
+          {/* Mobile cards */}
+          <div className="flex flex-col gap-3 sm:hidden">
+            {activeProjects.map((p) => (
+              <div
+                key={p.id}
+                className="rounded-lg border border-zinc-200 bg-white px-4 py-4"
+              >
+                <Link href={`/portal/projects/${p.id}`} className="block">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-medium text-zinc-900 leading-snug">{projectLabel(p)}</p>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}
                     >
                       {STATUS_LABELS[p.status]}
                     </span>
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
-                    {new Date(p.created_at).toLocaleDateString("en-AU")}
-                  </td>
-                  <td className="px-5 py-3 text-zinc-500">
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                    <span>Submitted {new Date(p.created_at).toLocaleDateString("en-AU")}</span>
                     {p.expected_delivery_date ? (
-                      new Date(p.expected_delivery_date).toLocaleDateString("en-AU", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })
+                      <span>
+                        Expected{" "}
+                        {new Date(p.expected_delivery_date).toLocaleDateString("en-AU", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
                     ) : (
-                      <span className="text-zinc-300">—</span>
+                      <span>No delivery date set</span>
                     )}
-                  </td>
-                </ClickableRow>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                </Link>
+                {p.status === "delivered" && deliveredProjects.some((d) => d.id === p.id) && (
+                  <div className="mt-3 border-t border-zinc-100 pt-3">
+                    <DownloadPbdrLink projectId={p.id} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead className="border-b border-zinc-100 bg-zinc-50">
+                <tr>
+                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
+                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
+                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Submitted</th>
+                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Expected delivery</th>
+                  <th className="px-5 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-50">
+                {activeProjects.map((p) => (
+                  <ClickableRow key={p.id} href={`/portal/projects/${p.id}`}>
+                    <td className="px-5 py-3 font-medium text-zinc-900">{projectLabel(p)}</td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}
+                      >
+                        {STATUS_LABELS[p.status]}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
+                      {new Date(p.created_at).toLocaleDateString("en-AU")}
+                    </td>
+                    <td className="px-5 py-3 text-zinc-500">
+                      {p.expected_delivery_date ? (
+                        new Date(p.expected_delivery_date).toLocaleDateString("en-AU", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      ) : (
+                        <span className="text-zinc-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      {p.status === "delivered" && deliveredProjects.some((d) => d.id === p.id) && (
+                        <DownloadPbdrLink projectId={p.id} />
+                      )}
+                    </td>
+                  </ClickableRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

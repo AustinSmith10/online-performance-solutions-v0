@@ -36,6 +36,7 @@ const TERMINAL_STATUSES = new Set<ProjectStatus>(["delivered", "complete"]);
 
 type ProjectRow = {
   id: string;
+  project_number: string | null;
   extracted_fields: Record<string, string> | null;
   status: ProjectStatus;
   po_number: string | null;
@@ -65,7 +66,7 @@ export default async function ConsultantOpsPage({
   const { data } = await supabase
     .from("projects")
     .select(`
-      id, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle,
+      id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle,
       organisations(name),
       submitter:users!projects_submitted_by_fkey(first_name, last_name, email)
     `)
@@ -212,7 +213,7 @@ function ProjectSection({
         <table className="w-full min-w-[700px] text-sm">
           <thead className="border-b border-zinc-100 bg-zinc-50">
             <tr>
-              <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
+              <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
@@ -228,8 +229,11 @@ function ProjectSection({
               return (
                 <ClickableRow key={p.id} href={`/ops/projects/${p.id}`}>
                   <td className="max-w-[180px] truncate px-5 py-3 font-medium text-zinc-900">
-                    {(p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
-                      (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))}
+                    {(() => {
+                        const addr = p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined ?? null;
+                        if (p.project_number && addr) return `${p.project_number} — ${addr}`;
+                        return addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
+                      })()}
                   </td>
                   <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
                     {p.organisations?.name ?? <span className="text-zinc-400">—</span>}

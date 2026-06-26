@@ -16,6 +16,7 @@ import type { ConsultantAvailability, ProjectStatus } from "@/types";
 
 export interface DashboardProject {
   id: string;
+  project_number: string | null;
   po_number: string | null;
   site_address: string | null;
   status: ProjectStatus;
@@ -75,8 +76,11 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   paused: "Paused",
 };
 
-function projectLabel(p: { site_address: string | null; po_number: string | null; id: string }) {
-  return p.site_address ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
+function projectLabel(p: { project_number: string | null; site_address: string | null; po_number: string | null; id: string }) {
+  const addr = p.site_address;
+  if (p.project_number && addr) return `${p.project_number} — ${addr}`;
+  if (addr) return addr;
+  return p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8);
 }
 
 function consultantName(c: { first_name: string | null; last_name: string | null; email: string } | null) {

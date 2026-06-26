@@ -58,6 +58,7 @@ export function NotificationTray({
     applyDismissed(initialNotifications)
   );
   const [openAtPathname, setOpenAtPathname] = useState<string | null>(null);
+  const [useFixed, setUseFixed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const open = openAtPathname !== null && openAtPathname === pathname;
@@ -115,6 +116,7 @@ export function NotificationTray({
 
   function handleToggle() {
     if (!open) {
+      setUseFixed(typeof window !== "undefined" && window.innerWidth < 640);
       void refresh();
       setOpenAtPathname(pathname);
     } else {
@@ -132,7 +134,10 @@ export function NotificationTray({
       </button>
 
       {open && (
-        <div style={{ ...tray, ...(align === "right" ? { right: 0, left: "auto" } : { left: 0 }) }}>
+        <div style={useFixed
+          ? { ...tray, position: "fixed", top: "64px", right: "8px", left: "auto" }
+          : { ...tray, ...(align === "right" ? { right: 0, left: "auto" } : { left: 0 }) }
+        }>
           <div style={trayHeader}>
             <span style={trayTitle}>Notifications</span>
             <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
@@ -224,6 +229,7 @@ const tray: React.CSSProperties = {
   left: 0,
   top: "calc(100% + 8px)",
   width: "360px",
+  maxWidth: "calc(100vw - 16px)",
   backgroundColor: "#fff",
   border: "1px solid #e4e4e7",
   borderRadius: "8px",

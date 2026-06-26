@@ -62,50 +62,89 @@ export default async function ClientHistoryPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[400px] text-sm">
-            <thead className="border-b border-zinc-100 bg-zinc-50">
-              <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Delivered</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Download</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {reports.map((r) => {
-                const hasPbdr = projectsWithPbdr.has(r.id);
-                const deliveredDate = r.delivered_at ?? r.created_at;
-                return (
-                  <tr key={r.id} className="hover:bg-blue-50">
-                    <td className="px-5 py-3 font-medium text-zinc-900">
-                      {r.extracted_fields?.["EXTRACT_ADDRESS"] ??
-                        (r.po_number ? `PO ${r.po_number}` : r.id.slice(0, 8))}
-                    </td>
-                    <td className="px-5 py-3 text-zinc-500">
-                      {new Date(deliveredDate).toLocaleDateString("en-AU", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </td>
-                    <td className="px-5 py-3">
-                      {hasPbdr ? (
-                        <a
-                          href={`/api/download/pbdr/${r.id}`}
-                          className="inline-flex items-center rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                        >
-                          Download PDF
-                        </a>
-                      ) : (
-                        <span className="text-xs text-zinc-400">Processing…</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Mobile cards */}
+          <div className="flex flex-col gap-3 sm:hidden">
+            {reports.map((r) => {
+              const hasPbdr = projectsWithPbdr.has(r.id);
+              const deliveredDate = r.delivered_at ?? r.created_at;
+              const label =
+                r.extracted_fields?.["EXTRACT_ADDRESS"] ??
+                (r.po_number ? `PO ${r.po_number}` : r.id.slice(0, 8));
+              return (
+                <div key={r.id} className="rounded-lg border border-zinc-200 bg-white px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-medium text-zinc-900 leading-snug">{label}</p>
+                    {hasPbdr ? (
+                      <a
+                        href={`/api/download/pbdr/${r.id}`}
+                        className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                      >
+                        Download PDF
+                      </a>
+                    ) : (
+                      <span className="shrink-0 text-xs text-zinc-400">Processing…</span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Delivered{" "}
+                    {new Date(deliveredDate).toLocaleDateString("en-AU", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+            <table className="w-full min-w-[400px] text-sm">
+              <thead className="border-b border-zinc-100 bg-zinc-50">
+                <tr>
+                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
+                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Delivered</th>
+                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Download</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-50">
+                {reports.map((r) => {
+                  const hasPbdr = projectsWithPbdr.has(r.id);
+                  const deliveredDate = r.delivered_at ?? r.created_at;
+                  return (
+                    <tr key={r.id} className="hover:bg-blue-50">
+                      <td className="px-5 py-3 font-medium text-zinc-900">
+                        {r.extracted_fields?.["EXTRACT_ADDRESS"] ??
+                          (r.po_number ? `PO ${r.po_number}` : r.id.slice(0, 8))}
+                      </td>
+                      <td className="px-5 py-3 text-zinc-500">
+                        {new Date(deliveredDate).toLocaleDateString("en-AU", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="px-5 py-3">
+                        {hasPbdr ? (
+                          <a
+                            href={`/api/download/pbdr/${r.id}`}
+                            className="inline-flex items-center rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                          >
+                            Download PDF
+                          </a>
+                        ) : (
+                          <span className="text-xs text-zinc-400">Processing…</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

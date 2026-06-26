@@ -223,9 +223,10 @@ export default async function ConsultantProjectDetailPage({
     },
   ];
 
-  const title =
-    (project.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ||
-    (project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8));
+  const addr = (project.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ?? null;
+  const title = (project.project_number && addr)
+    ? `${project.project_number} — ${addr}`
+    : addr ?? (project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8));
 
   return (
     <div className="space-y-6">

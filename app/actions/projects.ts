@@ -104,6 +104,78 @@ export async function uploadProjectFile(
   return { success: true };
 }
 
+// ─── Admin: set / override project number and (re-)generate PBDB ─────────────
+
+export type AdminProjectNumberState = { error?: string; success?: boolean };
+
+export async function adminSetProjectNumber(
+  projectId: string,
+  _prev: AdminProjectNumberState,
+  formData: FormData
+): Promise<AdminProjectNumberState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const rawNumber = (formData.get("project_number") as string | null)?.trim();
+  if (!rawNumber) return { error: "Project number is required." };
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, org_id, status, project_number")
+    .eq("id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!project) return { error: "Project not found." };
+
+  const previousNumber = project.project_number as string | null;
+
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update({ project_number: rawNumber })
+    .eq("id", projectId);
+
+  if (updateError) return { error: updateError.message };
+
+  try {
+    await generatePbdb(projectId, actor.id);
+  } catch (err) {
+    // Roll back the project number change so admin can retry cleanly
+    await supabase
+      .from("projects")
+      .update({ project_number: previousNumber })
+      .eq("id", projectId);
+    return {
+      error: err instanceof Error ? err.message : "PBDB generation failed. Please try again.",
+    };
+  }
+
+  // Advance status to in_progress if the project hasn't progressed past initial assignment
+  const currentStatus = project.status as string;
+  if (currentStatus === "submitted" || currentStatus === "assigned") {
+    await supabase
+      .from("projects")
+      .update({ status: "in_progress", updated_at: new Date().toISOString() })
+      .eq("id", projectId);
+  }
+
+  await auditLog("project.pbdb_generated", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.org_id as string,
+    metadata: {
+      project_number: rawNumber,
+      ...(previousNumber && previousNumber !== rawNumber
+        ? { previous_number: previousNumber }
+        : {}),
+      actor: "admin",
+    },
+  });
+
+  revalidatePath(`/admin/projects/${projectId}`);
+  revalidatePath(`/ops/projects/${projectId}`);
+  return { success: true };
+}
+
 // ─── Consultant: enter project number and trigger PBDB generation ─────────────
 
 export type ProjectNumberState = { error?: string; success?: boolean };

@@ -68,7 +68,7 @@ export default async function OrgCreditsPage({
       </div>
 
       {/* Balance cards */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {orgData.payment_method === "credit_deduction" && (
           <div className="rounded-lg border border-zinc-200 bg-white p-5">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
@@ -139,7 +139,8 @@ export default async function OrgCreditsPage({
         {entries.length === 0 ? (
           <p className="px-5 py-4 text-sm text-zinc-400">No ledger entries yet.</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
             <thead className="border-b border-zinc-100 bg-zinc-50">
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-zinc-600">Date</th>
@@ -183,6 +184,7 @@ export default async function OrgCreditsPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
