@@ -38,7 +38,9 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   building_plans: "Building Plans",
+  building_drawing_plans: "Building Drawing Plans",
   po: "Purchase Order",
+  purchase_order: "Purchase Order",
   additional: "Additional",
 };
 
@@ -235,7 +237,7 @@ export default async function ClientProjectDetailPage({
       )}
 
       {/* Two-column layout */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-[2fr_3fr]">
+      <div className="project-two-col">
         {/* Left column: project summary + documents */}
         <div className="space-y-6">
           {/* Project summary */}
@@ -284,9 +286,8 @@ export default async function ClientProjectDetailPage({
                 {latestPbdr && (
                   <div className="flex items-center gap-4 px-5 py-3">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-900">{latestPbdr.original_filename as string}</p>
+                      <p className="truncate text-sm text-zinc-900">Performance Based Design Report</p>
                       <p className="text-xs text-zinc-500">
-                        Performance Based Design Report &middot;{" "}
                         {new Date(latestPbdr.created_at as string).toLocaleDateString("en-AU")}
                       </p>
                     </div>
@@ -298,9 +299,8 @@ export default async function ClientProjectDetailPage({
                 {latestPbdb && (
                   <div className="flex items-center gap-4 px-5 py-3">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-900">{latestPbdb.original_filename as string}</p>
+                      <p className="truncate text-sm text-zinc-900">Performance Based Design Brief</p>
                       <p className="text-xs text-zinc-500">
-                        Performance Based Design Brief &middot;{" "}
                         {new Date(latestPbdb.created_at as string).toLocaleDateString("en-AU")}
                       </p>
                     </div>
@@ -317,9 +317,10 @@ export default async function ClientProjectDetailPage({
                 {files.map((f) => (
                   <div key={f.id as string} className="flex items-center gap-4 px-5 py-3">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-900">{f.original_filename as string}</p>
+                      <p className="truncate text-sm text-zinc-900">
+                        {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
+                      </p>
                       <p className="text-xs text-zinc-500">
-                        {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type} &middot;{" "}
                         {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                       </p>
                     </div>

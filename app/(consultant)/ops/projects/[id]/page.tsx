@@ -45,7 +45,9 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   building_plans: "Building Plans",
+  building_drawing_plans: "Building Drawing Plans",
   po: "Purchase Order",
+  purchase_order: "Purchase Order",
   additional: "Additional",
 };
 

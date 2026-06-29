@@ -53,3 +53,16 @@ body {
 :target {
   animation: section-highlight 2.5s ease-out;
 }
+
+/* Two-column project layout [2fr 3fr] — used on admin, client, and consultant pages */
+.project-two-col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .project-two-col {
+    grid-template-columns: 40% 60%;
+  }
+}

@@ -46,7 +46,9 @@ const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   building_plans: "Building Plans",
+  building_drawing_plans: "Building Drawing Plans",
   po: "Purchase Order",
+  purchase_order: "Purchase Order",
   additional: "Additional",
 };
 
@@ -202,7 +204,7 @@ export default async function ProjectDetailPage({
       .from("project_files")
       .select("id, file_type, original_filename, storage_path, created_at")
       .eq("project_id", id)
-      .in("file_type", ["po", "building_plans", "additional"])
+      .in("file_type", ["po", "purchase_order", "building_plans", "building_drawing_plans", "additional"])
       .order("created_at"),
     supabase
       .from("project_files")
@@ -341,7 +343,7 @@ export default async function ProjectDetailPage({
 
   // ── Tab: Overview ───────────────────────────────────────────────────────────
   const overviewContent = (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-[2fr_3fr]">
+    <div className="project-two-col">
       {/* Left column: metadata */}
       <div className="space-y-6">
         {/* Project details */}
@@ -821,7 +823,7 @@ export default async function ProjectDetailPage({
       )}
 
       {!isDeleted && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-[2fr_3fr]">
+        <div className="project-two-col">
           {/* Left column: payment gate + project controls */}
           <div className="space-y-6">
             {/* Payment gate */}

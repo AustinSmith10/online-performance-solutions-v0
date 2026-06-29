@@ -164,7 +164,7 @@ async function handleNewSubmission(
     const attachment = files[i];
     const buffer = attachmentBuffer(attachment);
     const storagePath = `${org.id}/${projectId}/${attachment.Name}`;
-    const fileType = i === 0 && attachment.ContentType === "application/pdf" ? "po" : "building_plans";
+    const fileType = i === 0 && attachment.ContentType === "application/pdf" ? "purchase_order" : "building_drawing_plans";
 
     const { error: uploadError } = await supabase.storage
       .from("submissions")
@@ -378,7 +378,7 @@ async function handleThreadReply(
     if (!existing) {
       await supabase.from("project_files").insert({
         project_id: projectId,
-        file_type: "building_plans",
+        file_type: "building_drawing_plans",
         storage_path: storagePath,
         original_filename: attachment.Name,
         uploaded_by: user.id,
