@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useActionState } from "react";
+import { useState, useCallback, useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Drawer } from "./Drawer";
 import { AssignForm } from "@/app/(admin)/admin/projects/[id]/_components/AssignForm";
@@ -10,6 +10,7 @@ import { WaiveForm } from "@/app/(admin)/admin/projects/[id]/_components/WaiveFo
 import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/DispatchButton";
 import { reconcileOverrideAction, type ReconcileState } from "@/app/actions/credits";
 import { triggerPbdrConversion, type ConvertState } from "@/app/actions/conversion";
+import { adminSetProjectNumber, type AdminProjectNumberState } from "@/app/actions/projects";
 import type { ConsultantAvailability, ProjectStatus } from "@/types";
 
 // ── Types (serialisable — passed from server component) ──────────────────────
@@ -152,6 +153,128 @@ function RetryConversionForm({ projectId }: { projectId: string }) {
 }
 
 // ── Drawer content components ─────────────────────────────────────────────────
+
+function SetNumberAndAssignDrawerContent({
+  project,
+  consultants,
+}: {
+  project: DashboardProject;
+  consultants: ConsultantOption[];
+}) {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [projectNumber, setProjectNumber] = useState("");
+  const [state, action, pending] = useActionState<AdminProjectNumberState, FormData>(
+    adminSetProjectNumber.bind(null, project.id),
+    {}
+  );
+
+  useEffect(() => {
+    if (!state.success) return;
+    const t = setTimeout(() => setStep(2), 0);
+    return () => clearTimeout(t);
+  }, [state.success]);
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm">
+        <p className="font-medium text-zinc-900">{projectLabel(project)}</p>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          {project.organisations?.name ?? "—"} · Submitted {fmtDate(project.created_at)}
+        </p>
+      </div>
+
+      {/* Step indicator */}
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+            step > 1 ? "bg-green-500 text-white" : "bg-zinc-900 text-white"
+          }`}
+        >
+          {step > 1 ? (
+            <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+          ) : "1"}
+        </span>
+        <span className={`text-xs font-medium ${step === 1 ? "text-zinc-900" : "text-zinc-400"}`}>
+          Set project number
+        </span>
+        <span className="text-zinc-300">→</span>
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+            step === 2 ? "bg-zinc-900 text-white" : "bg-zinc-200 text-zinc-500"
+          }`}
+        >
+          2
+        </span>
+        <span className={`text-xs font-medium ${step === 2 ? "text-zinc-900" : "text-zinc-400"}`}>
+          Assign consultant
+        </span>
+      </div>
+
+      {step === 1 ? (
+        <div>
+          <p className="mb-3 text-xs text-zinc-500">
+            Set the project number to generate the initial PBDB document.
+          </p>
+          <form action={action} className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-700">
+                Project number
+              </label>
+              <input
+                name="project_number"
+                type="text"
+                value={projectNumber}
+                onChange={(e) => setProjectNumber(e.target.value)}
+                placeholder="e.g. 25-001"
+                required
+                disabled={pending}
+                className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-50"
+              />
+              <p className="mt-1 text-xs text-zinc-400">
+                The suffix <span className="font-mono">-S</span> is appended automatically.
+              </p>
+            </div>
+            {state.error && (
+              <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={pending || !projectNumber.trim()}
+              className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+            >
+              {pending ? "Generating…" : "Set & generate PBDB"}
+            </button>
+          </form>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+            <p className="text-sm font-medium text-green-900">Project number set</p>
+            <p className="mt-0.5 text-xs text-green-700">
+              PBDB is being generated — it will appear in the project files shortly.
+            </p>
+          </div>
+          <div>
+            <p className="mb-3 text-sm font-medium text-zinc-700">Assign a consultant</p>
+            <AssignForm
+              projectId={project.id}
+              consultants={consultants}
+              currentConsultantId=""
+              isReassign={false}
+            />
+            {consultants.length === 0 && (
+              <p className="mt-2 text-xs text-zinc-400">
+                No consultants available — invite one from the users page.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AssignDrawerContent({
   project,
@@ -592,6 +715,7 @@ type SystemError = { id: string; message: string; project_id: string | null; cre
 
 type DrawerState =
   | { type: "assign"; project: DashboardProject }
+  | { type: "set-number"; project: DashboardProject }
   | { type: "stakeholder"; project: DashboardProject }
   | { type: "override"; project: DashboardProject }
   | { type: "overdue"; project: DashboardProject }
@@ -653,7 +777,7 @@ export function ActionPanel({
       : drawer?.project.id ?? "";
 
   const drawerAnchorId =
-    drawer?.type === "assign"
+    drawer?.type === "assign" || drawer?.type === "set-number"
       ? "assign"
       : drawer?.type === "stakeholder"
       ? "stakeholders"
@@ -726,15 +850,28 @@ export function ActionPanel({
                         {p.organisations?.name ?? "—"}
                         {" · "}
                         Submitted {fmtDate(p.created_at)}
+                        {!p.project_number && (
+                          <> · <span className="font-medium text-amber-600">No project number</span></>
+                        )}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setDrawer({ type: "assign", project: p })}
-                      className="shrink-0 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                    >
-                      Assign →
-                    </button>
+                    {!p.project_number ? (
+                      <button
+                        type="button"
+                        onClick={() => setDrawer({ type: "set-number", project: p })}
+                        className="shrink-0 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                      >
+                        Set number →
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setDrawer({ type: "assign", project: p })}
+                        className="shrink-0 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                      >
+                        Assign →
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -868,6 +1005,12 @@ export function ActionPanel({
         anchorId={drawerAnchorId}
         successMessage={drawerSuccess ?? undefined}
       >
+        {drawer?.type === "set-number" && (
+          <SetNumberAndAssignDrawerContent
+            project={drawer.project}
+            consultants={consultants}
+          />
+        )}
         {drawer?.type === "assign" && (
           <AssignDrawerContent
             project={drawer.project}
