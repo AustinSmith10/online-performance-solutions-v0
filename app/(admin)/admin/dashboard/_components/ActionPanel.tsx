@@ -838,7 +838,7 @@ export function ActionPanel({
                   {unassigned.length}
                 </span>
                 <span className="text-sm font-medium text-blue-900">
-                  New submission{unassigned.length !== 1 ? "s" : ""} awaiting consultant assignment
+                  New submission{unassigned.length !== 1 ? "s" : ""} pending setup
                 </span>
               </div>
               <ul className="divide-y divide-zinc-100">
