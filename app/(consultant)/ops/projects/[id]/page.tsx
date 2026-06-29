@@ -168,7 +168,9 @@ export default async function ConsultantProjectDetailPage({
       (rawPbdrFiles ?? []).map(async (f) => {
         const { data: signed } = await supabase.storage
           .from("documents")
-          .createSignedUrl(f.storage_path as string, 3600);
+          .createSignedUrl(f.storage_path as string, 3600, {
+            download: (f.original_filename as string) || true,
+          });
         return { ...f, signedUrl: signed?.signedUrl ?? null };
       })
     ),

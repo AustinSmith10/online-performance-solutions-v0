@@ -157,7 +157,9 @@ export default async function ClientProjectDetailPage({
   if (latestPbdr) {
     const { data: signed } = await supabase.storage
       .from("documents")
-      .createSignedUrl(latestPbdr.storage_path as string, 3600);
+      .createSignedUrl(latestPbdr.storage_path as string, 3600, {
+        download: (latestPbdr.original_filename as string) || true,
+      });
     pbdrSignedUrl = signed?.signedUrl ?? null;
   }
 
