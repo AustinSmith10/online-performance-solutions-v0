@@ -59,11 +59,16 @@ export async function performAssignment(
     }
   }
 
+  // Only move to "assigned" from early statuses; don't downgrade a project
+  // that's already in progress (e.g. admin generated PBDB before assigning).
+  const earlyStatuses = ["submitted", "draft"];
+  const newStatus = earlyStatuses.includes(project.status) ? "assigned" : project.status;
+
   const { error: updateErr } = await supabase
     .from("projects")
     .update({
       assigned_consultant_id: consultantId,
-      status: "assigned",
+      status: newStatus,
       updated_at: new Date().toISOString(),
       ...(deliveryDate && !project.expected_delivery_date ? { expected_delivery_date: deliveryDate } : {}),
     })

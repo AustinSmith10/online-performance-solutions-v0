@@ -252,9 +252,9 @@ export default async function ConsultantProjectDetailPage({
   const isTerminal = TERMINAL_STATUSES.has(project.status) || project.status === "converting";
   const step1Completed = !!project.project_number;
   const step2Locked = !project.project_number || !latestPbdb;
-  const step3Locked = !latestPbdb || project.status === "assigned";
-  const step3Active = project.status === "in_progress" && !!latestPbdb && !hasQaFile;
-  const step3Completed = hasQaFile || (!step3Locked && !step3Active);
+  const step3Locked = !latestPbdb;
+  const step3Active = !!latestPbdb && !hasQaFile;
+  const step3Completed = hasQaFile;
   const step4Active = (["dispatched", "revision_required"] as ProjectStatus[]).includes(project.status as ProjectStatus);
   const step4Completed = isTerminal;
 

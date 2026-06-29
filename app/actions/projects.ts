@@ -318,7 +318,7 @@ export async function uploadQaPbdb(
     .from("projects")
     .select("id, org_id, status, review_cycle, project_number, extracted_fields")
     .eq("id", projectId)
-    .in("status", ["in_progress", "revision_required"])
+    .in("status", ["assigned", "in_progress", "revision_required"])
     .is("deleted_at", null);
 
   if (actor.role === "consultant") {
@@ -327,6 +327,16 @@ export async function uploadQaPbdb(
 
   const { data: project } = await query.maybeSingle();
   if (!project) return { error: "Project not found or not in progress." };
+
+  // If the project is still "assigned" (e.g. admin generated the PBDB before assigning),
+  // advance it to "in_progress" now so dispatch can proceed normally.
+  if ((project.status as string) === "assigned") {
+    await supabase
+      .from("projects")
+      .update({ status: "in_progress", updated_at: new Date().toISOString() })
+      .eq("id", projectId);
+    project.status = "in_progress";
+  }
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Please select a file." };
