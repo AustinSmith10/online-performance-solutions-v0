@@ -74,7 +74,7 @@ export async function extractFields(
   const templateId = (formData.get("template_id") as string | null)?.trim();
   if (!templateId) return { step: 1, error: "No template selected." };
 
-  const isAdmin = actor.role === "super_admin";
+  const isAdmin = actor.role === "super_admin" || actor.role === "admin";
   const orgId = isAdmin
     ? ((formData.get("admin_org_id") as string | null)?.trim() ?? "")
     : (actor.org_id as string);
@@ -386,7 +386,7 @@ export async function submitProject(
   const actor = await requireRole("client", "super_admin", "admin");
   const supabase = createAdminClient();
 
-  const isAdmin = actor.role === "super_admin";
+  const isAdmin = actor.role === "super_admin" || actor.role === "admin";
   const orgId = isAdmin
     ? ((formData.get("admin_org_id") as string | null)?.trim() ?? "")
     : (actor.org_id as string);
