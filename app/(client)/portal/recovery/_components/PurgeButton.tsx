@@ -13,7 +13,9 @@ export function PurgeButton({ projectId }: { projectId: string }) {
   const [phase, setPhase] = useState<Phase>("idle");
 
   useEffect(() => {
-    if (state.success) setPhase("success");
+    if (!state.success) return;
+    const t = setTimeout(() => setPhase("success"), 0);
+    return () => clearTimeout(t);
   }, [state.success]);
 
   useEffect(() => {

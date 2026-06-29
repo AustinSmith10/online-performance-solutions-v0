@@ -22,10 +22,9 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
 
   useEffect(() => {
     if (!state.success) return;
-    setEditing(false);
-    setOverlayVisible(true);
-    const t = setTimeout(() => setOverlayVisible(false), 3500);
-    return () => clearTimeout(t);
+    const t1 = setTimeout(() => { setEditing(false); setOverlayVisible(true); }, 0);
+    const t2 = setTimeout(() => setOverlayVisible(false), 3500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [state.success]);
 
   return (

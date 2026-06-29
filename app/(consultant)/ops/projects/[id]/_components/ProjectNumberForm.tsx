@@ -13,9 +13,9 @@ export function ProjectNumberForm({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     if (!state.success) return;
-    setOverlayVisible(true);
-    const t = setTimeout(() => setOverlayVisible(false), 3500);
-    return () => clearTimeout(t);
+    const t1 = setTimeout(() => setOverlayVisible(true), 0);
+    const t2 = setTimeout(() => setOverlayVisible(false), 3500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [state.success]);
 
   return (
