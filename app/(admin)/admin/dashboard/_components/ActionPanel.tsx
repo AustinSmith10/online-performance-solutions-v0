@@ -200,7 +200,7 @@ function OverdueDrawerContent({
   onSuccess: () => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, "resend" | "email" | "waive" | null>>({});
-  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
+  const [_sentIds, setSentIds] = useState<Set<string>>(new Set());
 
   function toggle(id: string, action: "resend" | "email" | "waive") {
     setExpanded((prev) => ({ ...prev, [id]: prev[id] === action ? null : action }));
@@ -407,7 +407,7 @@ function StakeholderDrawerContent({
   onSuccess: () => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, "resend" | "email" | "waive" | null>>({});
-  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
+  const [_sentIds, setSentIds] = useState<Set<string>>(new Set());
 
   function toggle(id: string, action: "resend" | "email" | "waive") {
     setExpanded((prev) => ({ ...prev, [id]: prev[id] === action ? null : action }));
