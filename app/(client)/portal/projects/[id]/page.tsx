@@ -186,7 +186,7 @@ export default async function ClientProjectDetailPage({
     (project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8));
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10 space-y-6">
+    <div className="mx-auto max-w-5xl px-4 py-10 space-y-6">
       <Link
         href={isDeleted ? "/portal/recovery" : "/portal"}
         className="text-sm text-zinc-500 hover:text-zinc-700"
@@ -208,9 +208,7 @@ export default async function ClientProjectDetailPage({
 
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold text-zinc-900">{title}</h1>
-        <span
-          className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}
-        >
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}>
           {STATUS_LABELS[project.status]}
         </span>
         {isOverdue && (
@@ -220,94 +218,14 @@ export default async function ClientProjectDetailPage({
         )}
       </div>
 
-      {/* PBDB review — inline form when pending, locked card when responded */}
-      {clientReview && clientReview.status === "pending" && (
-        <PortalApprovalForm
-          reviewId={clientReview.id as string}
-          projectId={id}
-          pbdbDownloadUrl={pbdbDownloadUrl}
-          expiresAt={clientReview.expires_at as string}
-        />
-      )}
-      {clientReview && clientReview.status !== "pending" && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-5">
-          <h2 className="text-sm font-semibold text-green-900">Your PBDB review has been recorded</h2>
-          <p className="mt-1 text-sm text-green-800">
-            You{" "}
-            {(clientReview.status as string).startsWith("approved")
-              ? "approved"
-              : "requested changes to"}{" "}
-            this PBDB
-            {clientReview.responded_at
-              ? ` on ${new Date(clientReview.responded_at as string).toLocaleDateString("en-AU", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}`
-              : ""}
-            .
-          </p>
-          {clientReview.comments && (
-            <p className="mt-2 text-sm italic text-green-800">
-              &ldquo;{clientReview.comments as string}&rdquo;
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Project summary */}
-      <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
-        <Row
-          label="Submitted via"
-          value={
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                project.source === "email"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-blue-100 text-blue-700"
-              }`}
-            >
-              {project.source === "email" ? "Email" : "Portal"}
-            </span>
-          }
-        />
-        <Row label="PO number" value={project.po_number ?? "—"} />
-        <Row
-          label="Submitted"
-          value={new Date(project.created_at).toLocaleDateString("en-AU", {
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-          })}
-        />
-        <Row
-          label="Expected delivery"
-          value={
-            project.expected_delivery_date ? (
-              <span className={isOverdue ? "text-red-600" : ""}>
-                Your report is due by{" "}
-                {new Date(project.expected_delivery_date).toLocaleDateString(
-                  "en-AU",
-                  { day: "numeric", month: "short", year: "numeric" }
-                )}
-              </span>
-            ) : (
-              "—"
-            )
-          }
-        />
-      </div>
-
-      {/* Draft resume prompt — hidden for deleted projects */}
+      {/* Draft resume prompt — full-width, above the grid */}
       {!isDeleted && project.status === "draft" && (
         <Link
           href={`/portal/submit/resume/${project.id}`}
           className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-5 py-4 hover:bg-zinc-50 transition-colors"
         >
           <div>
-            <p className="text-sm font-medium text-zinc-900">
-              This submission is still a draft
-            </p>
+            <p className="text-sm font-medium text-zinc-900">This submission is still a draft</p>
             <p className="mt-0.5 text-xs text-zinc-500">
               Your documents have been saved — click here to review and submit.
             </p>
@@ -316,121 +234,180 @@ export default async function ClientProjectDetailPage({
         </Link>
       )}
 
-      {/* Submitted field values */}
-      {fieldEntries.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">
-              Submitted details
-            </h2>
+      {/* Two-column layout */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[2fr_3fr]">
+        {/* Left column: project summary + documents */}
+        <div className="space-y-6">
+          {/* Project summary */}
+          <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
+            <Row
+              label="Submitted via"
+              value={
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                  project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                }`}>
+                  {project.source === "email" ? "Email" : "Portal"}
+                </span>
+              }
+            />
+            <Row label="PO number" value={project.po_number ?? "—"} />
+            <Row
+              label="Submitted"
+              value={new Date(project.created_at).toLocaleDateString("en-AU", {
+                day: "numeric", month: "long", year: "numeric",
+              })}
+            />
+            <Row
+              label="Expected delivery"
+              value={
+                project.expected_delivery_date ? (
+                  <span className={isOverdue ? "text-red-600" : ""}>
+                    Your report is due by{" "}
+                    {new Date(project.expected_delivery_date).toLocaleDateString("en-AU", {
+                      day: "numeric", month: "short", year: "numeric",
+                    })}
+                  </span>
+                ) : "—"
+              }
+            />
           </div>
-          <div className="divide-y divide-zinc-100">
-            {fieldEntries.map(({ token, label, value }) => (
-              <Row key={token} label={label} value={value || "—"} />
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* Documents */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
+          {/* Documents */}
+          <div className="rounded-lg border border-zinc-200 bg-white">
+            <div className="border-b border-zinc-100 px-5 py-4">
+              <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
+            </div>
+            {files.length === 0 && !latestPbdb && !latestPbdr ? (
+              <p className="px-5 py-6 text-sm text-zinc-500">No documents uploaded yet.</p>
+            ) : (
+              <div className="divide-y divide-zinc-100">
+                {latestPbdr && (
+                  <div className="flex items-center gap-4 px-5 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-zinc-900">{latestPbdr.original_filename as string}</p>
+                      <p className="text-xs text-zinc-500">
+                        Performance Based Design Report &middot;{" "}
+                        {new Date(latestPbdr.created_at as string).toLocaleDateString("en-AU")}
+                      </p>
+                    </div>
+                    {pbdrSignedUrl && (
+                      <PbdrDownloadButton href={pbdrSignedUrl} filename={latestPbdr.original_filename as string} />
+                    )}
+                  </div>
+                )}
+                {latestPbdb && (
+                  <div className="flex items-center gap-4 px-5 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-zinc-900">{latestPbdb.original_filename as string}</p>
+                      <p className="text-xs text-zinc-500">
+                        Performance Based Design Brief &middot;{" "}
+                        {new Date(latestPbdb.created_at as string).toLocaleDateString("en-AU")}
+                      </p>
+                    </div>
+                    {pbdbDownloadUrl && (
+                      <a
+                        href={pbdbDownloadUrl}
+                        className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                      >
+                        Download
+                      </a>
+                    )}
+                  </div>
+                )}
+                {files.map((f) => (
+                  <div key={f.id as string} className="flex items-center gap-4 px-5 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-zinc-900">{f.original_filename as string}</p>
+                      <p className="text-xs text-zinc-500">
+                        {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type} &middot;{" "}
+                        {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                      </p>
+                    </div>
+                    {f.signedUrl && (
+                      <a
+                        href={f.signedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                      >
+                        Download
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {!isDeleted && (
+              <div className="border-t border-zinc-100 px-5 py-4">
+                <FileUploadForm projectId={id} />
+              </div>
+            )}
+          </div>
+
+          {/* Delete / can't-delete notice */}
+          {!isDeleted && (project.status === "draft" || project.status === "submitted") && (
+            <div>
+              <DeleteProjectButton projectId={project.id} />
+            </div>
+          )}
+          {!isDeleted && !["draft", "submitted"].includes(project.status) && (
+            <p className="text-xs text-zinc-400">
+              This report has been assigned to a consultant and can no longer be deleted. Contact{" "}
+              <a href="mailto:support@ddeg.com.au" className="underline hover:text-zinc-600">
+                DDEG
+              </a>{" "}
+              if you need to cancel.
+            </p>
+          )}
         </div>
-        {files.length === 0 && !latestPbdb && !latestPbdr ? (
-          <p className="px-5 py-6 text-sm text-zinc-500">No documents uploaded yet.</p>
-        ) : (
-          <div className="divide-y divide-zinc-100">
-            {latestPbdr && (
-              <div className="flex items-center gap-4 px-5 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-zinc-900">
-                    {latestPbdr.original_filename as string}
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    Performance Based Design Report &middot;{" "}
-                    {new Date(latestPbdr.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </div>
-                {pbdrSignedUrl && (
-                  <PbdrDownloadButton
-                    href={pbdrSignedUrl}
-                    filename={latestPbdr.original_filename as string}
-                  />
-                )}
+
+        {/* Right column: review card + submitted field values */}
+        <div className="space-y-6">
+          {/* PBDB review — inline form when pending, locked card when responded */}
+          {clientReview && clientReview.status === "pending" && (
+            <PortalApprovalForm
+              reviewId={clientReview.id as string}
+              projectId={id}
+              pbdbDownloadUrl={pbdbDownloadUrl}
+              expiresAt={clientReview.expires_at as string}
+            />
+          )}
+          {clientReview && clientReview.status !== "pending" && (
+            <div className="rounded-lg border border-green-200 bg-green-50 p-5">
+              <h2 className="text-sm font-semibold text-green-900">Your PBDB review has been recorded</h2>
+              <p className="mt-1 text-sm text-green-800">
+                You{" "}
+                {(clientReview.status as string).startsWith("approved") ? "approved" : "requested changes to"}{" "}
+                this PBDB
+                {clientReview.responded_at
+                  ? ` on ${new Date(clientReview.responded_at as string).toLocaleDateString("en-AU", {
+                      day: "numeric", month: "long", year: "numeric",
+                    })}`
+                  : ""}.
+              </p>
+              {clientReview.comments && (
+                <p className="mt-2 text-sm italic text-green-800">
+                  &ldquo;{clientReview.comments as string}&rdquo;
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Submitted field values */}
+          {fieldEntries.length > 0 && (
+            <div className="rounded-lg border border-zinc-200 bg-white">
+              <div className="border-b border-zinc-100 px-5 py-4">
+                <h2 className="text-sm font-semibold text-zinc-900">Submitted details</h2>
               </div>
-            )}
-            {latestPbdb && (
-              <div className="flex items-center gap-4 px-5 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-zinc-900">
-                    {latestPbdb.original_filename as string}
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    Performance Based Design Brief &middot;{" "}
-                    {new Date(latestPbdb.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </div>
-                {pbdbDownloadUrl && (
-                  <a
-                    href={pbdbDownloadUrl}
-                    className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Download
-                  </a>
-                )}
+              <div className="divide-y divide-zinc-100">
+                {fieldEntries.map(({ token, label, value }) => (
+                  <Row key={token} label={label} value={value || "—"} />
+                ))}
               </div>
-            )}
-            {files.map((f) => (
-              <div
-                key={f.id as string}
-                className="flex items-center gap-4 px-5 py-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-zinc-900">
-                    {f.original_filename as string}
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}{" "}
-                    &middot;{" "}
-                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </div>
-                {f.signedUrl && (
-                  <a
-                    href={f.signedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Download
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        {!isDeleted && (
-          <div className="border-t border-zinc-100 px-5 py-4">
-            <FileUploadForm projectId={id} />
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
-
-      {!isDeleted && (project.status === "draft" || project.status === "submitted") && (
-        <div className="pt-2">
-          <DeleteProjectButton projectId={project.id} />
-        </div>
-      )}
-      {!isDeleted && !["draft", "submitted"].includes(project.status) && (
-        <p className="pt-2 text-xs text-zinc-400">
-          This report has been assigned to a consultant and can no longer be deleted. Contact{" "}
-          <a href="mailto:support@ddeg.com.au" className="underline hover:text-zinc-600">
-            DDEG
-          </a>{" "}
-          if you need to cancel.
-        </p>
-      )}
     </div>
   );
 }
