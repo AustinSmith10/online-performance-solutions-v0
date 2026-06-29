@@ -69,7 +69,7 @@ export async function assignConsultantFromForm(
   if (!consultantId) return { error: "Please select a consultant." };
   try {
     await performAssignment(projectId, consultantId, actor.id, actor.email);
-    return { success: true };
+    redirect(`/admin/projects/${projectId}?assigned=1`);
   } catch (err) {
     console.error("[assignConsultantFromForm]", err);
     return {
@@ -142,16 +142,15 @@ export async function uploadProjectFile(
 
 export type AdminProjectNumberState = { error?: string; success?: boolean };
 
-export async function adminSetProjectNumber(
+// Shared core: set number, generate PBDB, advance status, audit log.
+// Returns an error string on failure, undefined on success.
+async function _applyProjectNumber(
   projectId: string,
-  _prev: AdminProjectNumberState,
-  formData: FormData
-): Promise<AdminProjectNumberState> {
-  const actor = await requireRole("super_admin", "admin");
+  rawNumber: string,
+  actorId: string,
+  actorEmail: string
+): Promise<string | undefined> {
   const supabase = createAdminClient();
-
-  const rawNumber = (formData.get("project_number") as string | null)?.trim();
-  if (!rawNumber) return { error: "Project number is required." };
 
   const { data: project } = await supabase
     .from("projects")
@@ -160,7 +159,7 @@ export async function adminSetProjectNumber(
     .is("deleted_at", null)
     .maybeSingle();
 
-  if (!project) return { error: "Project not found." };
+  if (!project) return "Project not found.";
 
   const previousNumber = project.project_number as string | null;
 
@@ -169,22 +168,18 @@ export async function adminSetProjectNumber(
     .update({ project_number: rawNumber })
     .eq("id", projectId);
 
-  if (updateError) return { error: updateError.message };
+  if (updateError) return updateError.message;
 
   try {
-    await generatePbdb(projectId, actor.id);
+    await generatePbdb(projectId, actorId);
   } catch (err) {
-    // Roll back the project number change so admin can retry cleanly
     await supabase
       .from("projects")
       .update({ project_number: previousNumber })
       .eq("id", projectId);
-    return {
-      error: err instanceof Error ? err.message : "PBDB generation failed. Please try again.",
-    };
+    return err instanceof Error ? err.message : "PBDB generation failed. Please try again.";
   }
 
-  // Advance status to in_progress if the project hasn't progressed past initial assignment
   const currentStatus = project.status as string;
   if (currentStatus === "submitted" || currentStatus === "assigned") {
     await supabase
@@ -193,7 +188,7 @@ export async function adminSetProjectNumber(
       .eq("id", projectId);
   }
 
-  await auditLog("project.pbdb_generated", actor.id, actor.email as string, {
+  await auditLog("project.pbdb_generated", actorId, actorEmail, {
     projectId,
     orgId: project.org_id as string,
     metadata: {
@@ -207,7 +202,40 @@ export async function adminSetProjectNumber(
 
   revalidatePath(`/admin/projects/${projectId}`);
   revalidatePath(`/ops/projects/${projectId}`);
+}
+
+export async function adminSetProjectNumber(
+  projectId: string,
+  _prev: AdminProjectNumberState,
+  formData: FormData
+): Promise<AdminProjectNumberState> {
+  const actor = await requireRole("super_admin", "admin");
+
+  const rawNumber = (formData.get("project_number") as string | null)?.trim();
+  if (!rawNumber) return { error: "Project number is required." };
+
+  const err = await _applyProjectNumber(projectId, rawNumber, actor.id, actor.email as string);
+  if (err) return { error: err };
+
   redirect(`/admin/projects/${projectId}?number_saved=1`);
+}
+
+// Dashboard variant: same work, returns success state instead of redirecting
+// so the two-step drawer can advance to the assign step.
+export async function adminSetProjectNumberFromDashboard(
+  projectId: string,
+  _prev: AdminProjectNumberState,
+  formData: FormData
+): Promise<AdminProjectNumberState> {
+  const actor = await requireRole("super_admin", "admin");
+
+  const rawNumber = (formData.get("project_number") as string | null)?.trim();
+  if (!rawNumber) return { error: "Project number is required." };
+
+  const err = await _applyProjectNumber(projectId, rawNumber, actor.id, actor.email as string);
+  if (err) return { error: err };
+
+  return { success: true };
 }
 
 // ─── Consultant: enter project number and trigger PBDB generation ─────────────
@@ -867,8 +895,7 @@ export async function pauseProject(
     metadata: { previous_status: project.status, reason },
   });
 
-  revalidatePath(`/admin/projects/${projectId}`);
-  return { success: true };
+  redirect(`/admin/projects/${projectId}?paused=1`);
 }
 
 export async function resumeProject(
@@ -923,8 +950,7 @@ export async function resumeProject(
     },
   });
 
-  revalidatePath(`/admin/projects/${projectId}`);
-  return { success: true };
+  redirect(`/admin/projects/${projectId}?resumed=1`);
 }
 
 export type SetStripTokenColorState = { error?: string };

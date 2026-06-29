@@ -10,7 +10,7 @@ import { WaiveForm } from "@/app/(admin)/admin/projects/[id]/_components/WaiveFo
 import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/DispatchButton";
 import { reconcileOverrideAction, type ReconcileState } from "@/app/actions/credits";
 import { triggerPbdrConversion, type ConvertState } from "@/app/actions/conversion";
-import { adminSetProjectNumber, type AdminProjectNumberState } from "@/app/actions/projects";
+import { adminSetProjectNumberFromDashboard, type AdminProjectNumberState } from "@/app/actions/projects";
 import type { ConsultantAvailability, ProjectStatus } from "@/types";
 
 // ── Types (serialisable — passed from server component) ──────────────────────
@@ -164,7 +164,7 @@ function SetNumberAndAssignDrawerContent({
   const [step, setStep] = useState<1 | 2>(1);
   const [projectNumber, setProjectNumber] = useState("");
   const [state, action, pending] = useActionState<AdminProjectNumberState, FormData>(
-    adminSetProjectNumber.bind(null, project.id),
+    adminSetProjectNumberFromDashboard.bind(null, project.id),
     {}
   );
 
