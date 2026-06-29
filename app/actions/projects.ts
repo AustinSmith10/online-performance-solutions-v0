@@ -69,7 +69,6 @@ export async function assignConsultantFromForm(
   if (!consultantId) return { error: "Please select a consultant." };
   try {
     await performAssignment(projectId, consultantId, actor.id, actor.email);
-    redirect(`/admin/projects/${projectId}?assigned=1`);
   } catch (err) {
     console.error("[assignConsultantFromForm]", err);
     return {
@@ -79,6 +78,7 @@ export async function assignConsultantFromForm(
           : "Assignment failed. Please try again.",
     };
   }
+  redirect(`/admin/projects/${projectId}?assigned=1`);
 }
 
 // ─── Upload a file to an existing project ────────────────────────────────────
