@@ -156,13 +156,12 @@ function RetryConversionForm({ projectId }: { projectId: string }) {
 function AssignDrawerContent({
   project,
   consultants,
-  onClose,
+  onSuccess,
 }: {
   project: DashboardProject;
   consultants: ConsultantOption[];
-  onClose: () => void;
+  onSuccess: () => void;
 }) {
-  const router = useRouter();
   return (
     <div className="space-y-5">
       <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm">
@@ -180,16 +179,9 @@ function AssignDrawerContent({
           consultants={consultants}
           currentConsultantId={project.assigned_consultant_id ?? ""}
           isReassign={false}
+          onSuccess={onSuccess}
         />
       </div>
-
-      <button
-        type="button"
-        onClick={() => { onClose(); router.refresh(); }}
-        className="mt-2 text-xs text-zinc-400 hover:text-zinc-600"
-      >
-        Done — close panel
-      </button>
     </div>
   );
 }
@@ -199,15 +191,27 @@ function OverdueDrawerContent({
   todayIso,
   pendingReviews,
   consultants,
+  onSuccess,
 }: {
   project: DashboardProject;
   todayIso: string;
   pendingReviews: PendingReview[];
   consultants: ConsultantOption[];
+  onSuccess: () => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, "resend" | "email" | "waive" | null>>({});
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
+
   function toggle(id: string, action: "resend" | "email" | "waive") {
     setExpanded((prev) => ({ ...prev, [id]: prev[id] === action ? null : action }));
+  }
+
+  function handleSent(id: string) {
+    setSentIds((prev) => {
+      const next = new Set(prev).add(id);
+      if (next.size >= projectReviews.length) onSuccess();
+      return next;
+    });
   }
 
   const daysOverdue = project.expected_delivery_date
@@ -252,6 +256,7 @@ function OverdueDrawerContent({
             consultants={consultants}
             currentConsultantId={project.assigned_consultant_id ?? ""}
             isReassign={false}
+            onSuccess={onSuccess}
           />
           {consultants.length === 0 && (
             <p className="text-xs text-zinc-400">
@@ -333,7 +338,7 @@ function OverdueDrawerContent({
                   </div>
                   {expanded[r.id] === "resend" && (
                     <div className="mt-3">
-                      <ResendTokenButton reviewId={r.id} projectId={project.id} />
+                      <ResendTokenButton reviewId={r.id} projectId={project.id} onSent={() => handleSent(r.id)} />
                     </div>
                   )}
                   {expanded[r.id] === "email" && (
@@ -395,14 +400,25 @@ function OverdueDrawerContent({
 function StakeholderDrawerContent({
   project,
   reviews,
+  onSuccess,
 }: {
   project: DashboardProject;
   reviews: PendingReview[];
+  onSuccess: () => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, "resend" | "email" | "waive" | null>>({});
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
 
   function toggle(id: string, action: "resend" | "email" | "waive") {
     setExpanded((prev) => ({ ...prev, [id]: prev[id] === action ? null : action }));
+  }
+
+  function handleSent(id: string) {
+    setSentIds((prev) => {
+      const next = new Set(prev).add(id);
+      if (next.size >= reviews.length) onSuccess();
+      return next;
+    });
   }
 
   return (
@@ -474,7 +490,7 @@ function StakeholderDrawerContent({
               </div>
 
               {expanded[r.id] === "resend" && (
-                <ResendTokenButton reviewId={r.id} projectId={project.id} />
+                <ResendTokenButton reviewId={r.id} projectId={project.id} onSent={() => handleSent(r.id)} />
               )}
               {expanded[r.id] === "email" && (
                 <UpdateEmailForm
@@ -594,7 +610,18 @@ export function ActionPanel({
   systemErrors,
 }: Props) {
   const [drawer, setDrawer] = useState<DrawerState>(null);
-  const closeDrawer = useCallback(() => setDrawer(null), []);
+  const [drawerSuccess, setDrawerSuccess] = useState<string | null>(null);
+  const router = useRouter();
+
+  const closeDrawer = useCallback(() => {
+    setDrawer(null);
+    setDrawerSuccess(null);
+    router.refresh();
+  }, [router]);
+
+  const handleSuccess = useCallback((message: string) => {
+    setDrawerSuccess(message);
+  }, []);
 
   const actionCount =
     unassigned.length +
@@ -839,12 +866,13 @@ export function ActionPanel({
         subtitle={drawerSubtitle}
         projectId={drawerProjectId}
         anchorId={drawerAnchorId}
+        successMessage={drawerSuccess ?? undefined}
       >
         {drawer?.type === "assign" && (
           <AssignDrawerContent
             project={drawer.project}
             consultants={consultants}
-            onClose={closeDrawer}
+            onSuccess={() => handleSuccess("Consultant assigned successfully.")}
           />
         )}
         {drawer?.type === "overdue" && (
@@ -853,12 +881,18 @@ export function ActionPanel({
             todayIso={todayIso}
             pendingReviews={pendingReviews}
             consultants={consultants}
+            onSuccess={() => handleSuccess("Action completed successfully.")}
           />
         )}
         {drawer?.type === "stakeholder" && (
           <StakeholderDrawerContent
             project={drawer.project}
             reviews={activeReviews}
+            onSuccess={() => handleSuccess(
+              activeReviews.length > 1
+                ? "All review links have been resent."
+                : "Review link resent successfully."
+            )}
           />
         )}
         {drawer?.type === "override" && (

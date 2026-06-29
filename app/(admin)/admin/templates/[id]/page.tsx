@@ -179,8 +179,12 @@ export default async function TemplatePage({
           templateId={id}
           labels={template.section_labels ?? {
             extract: "Extracted from your documents",
+            extractDesc: "",
+            trusteeDesc: "",
             org: "Organisation details",
+            orgDesc: "",
             client: "Additional information",
+            clientDesc: "",
           }}
         />
       </div>

@@ -501,8 +501,12 @@ export async function updateSectionLabels(
 
   const labels = {
     extract: (formData.get("label_extract") as string | null)?.trim() || "Extracted from your documents",
+    extractDesc: (formData.get("label_extract_desc") as string | null)?.trim() || "",
+    trusteeDesc: (formData.get("label_trustee_desc") as string | null)?.trim() || "",
     org: (formData.get("label_org") as string | null)?.trim() || "Organisation details",
+    orgDesc: (formData.get("label_org_desc") as string | null)?.trim() || "",
     client: (formData.get("label_client") as string | null)?.trim() || "Additional information",
+    clientDesc: (formData.get("label_client_desc") as string | null)?.trim() || "",
   };
 
   const { error } = await supabase

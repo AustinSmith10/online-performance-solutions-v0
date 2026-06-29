@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DeleteProjectButton } from "./_components/DeleteProjectButton";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { PortalApprovalForm } from "./_components/PortalApprovalForm";
+import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import type { ProjectStatus } from "@/types";
 
@@ -49,10 +50,14 @@ const PBDB_VISIBLE_STATUSES = new Set<ProjectStatus>([
 
 export default async function ClientProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const justSubmitted = sp.submitted === "1";
   const user = await requireRole("client");
   const supabase = createAdminClient();
 
@@ -185,6 +190,8 @@ export default async function ClientProjectDetailPage({
       >
         {isDeleted ? "← Recovery bin" : "← My Reports"}
       </Link>
+
+      {justSubmitted && <SubmissionSuccessBanner projectId={id} />}
 
       {isDeleted && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

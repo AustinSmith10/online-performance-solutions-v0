@@ -68,6 +68,7 @@ export default async function SubmitPage() {
         templates={activeTemplates}
         defaultTemplateId={defaultTemplateId}
         requirementsByTemplate={requirementsByTemplate}
+        showExtractionBanner
       />
     </div>
   );

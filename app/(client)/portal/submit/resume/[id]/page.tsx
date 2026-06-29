@@ -140,8 +140,12 @@ export default async function ResumeDraftPage({
   const rawLabels = (tmplData?.section_labels ?? {}) as Record<string, string>;
   const sectionLabels: SectionLabels = {
     extract: rawLabels.extract || "Extracted from your documents",
+    extractDesc: rawLabels.extractDesc || "Review and correct any fields marked below before submitting.",
+    trusteeDesc: rawLabels.trusteeDesc || "",
     org: rawLabels.org || "Organisation details",
+    orgDesc: rawLabels.orgDesc || "These details are pre-filled from your organisation's configuration.",
     client: rawLabels.client || "Additional information",
+    clientDesc: rawLabels.clientDesc || "Please fill in the remaining details required for this report.",
   };
 
   const initialState: ExtractState = {

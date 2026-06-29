@@ -1,19 +1,24 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { resendFreshToken, type ResendTokenState } from "@/app/actions/stakeholders";
 
 interface Props {
   reviewId: string;
   projectId: string;
+  onSent?: () => void;
 }
 
-export function ResendTokenButton({ reviewId, projectId }: Props) {
+export function ResendTokenButton({ reviewId, projectId, onSent }: Props) {
   const boundAction = resendFreshToken.bind(null, reviewId, projectId);
   const [state, formAction, pending] = useActionState<ResendTokenState, FormData>(
     boundAction,
     {}
   );
+
+  useEffect(() => {
+    if (state.sent) onSent?.();
+  }, [state.sent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.sent) {
     return <p className="text-xs text-green-700">Link resent.</p>;

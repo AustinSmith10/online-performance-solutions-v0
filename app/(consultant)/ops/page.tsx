@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ClickableRow } from "@/components/ClickableRow";
 import { RevisionRequiredPanel, type ReviewRow } from "./_components/RevisionRequiredPanel";
 import { RealtimeProjectRefresher } from "./_components/RealtimeProjectRefresher";
+import { SelfAssignButton } from "./_components/SelfAssignButton";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -52,6 +53,15 @@ function clientName(s: ProjectRow["submitter"]) {
   return [s.first_name, s.last_name].filter(Boolean).join(" ") || s.email;
 }
 
+type AvailableProject = {
+  id: string;
+  extracted_fields: Record<string, string> | null;
+  po_number: string | null;
+  created_at: string;
+  expected_delivery_date: string | null;
+  organisations: { name: string } | null;
+};
+
 export default async function ConsultantOpsPage({
   searchParams,
 }: {
@@ -59,6 +69,7 @@ export default async function ConsultantOpsPage({
 }) {
   const { tab } = await searchParams;
   const isArchive = tab === "archive";
+  const isAvailable = tab === "available";
 
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
@@ -123,6 +134,17 @@ export default async function ConsultantOpsPage({
     (["delivered", "complete"] as ProjectStatus[]).includes(p.status)
   );
 
+  // Available jobs — submitted, unassigned, not deleted
+  const { data: rawAvailable } = await supabase
+    .from("projects")
+    .select("id, extracted_fields, po_number, created_at, expected_delivery_date, organisations(name)")
+    .eq("status", "submitted")
+    .is("assigned_consultant_id", null)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+
+  const availableProjects = (rawAvailable ?? []) as unknown as AvailableProject[];
+
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <RealtimeProjectRefresher userId={user.id as string} />
@@ -133,12 +155,29 @@ export default async function ConsultantOpsPage({
           <Link
             href="/ops"
             className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-              !isArchive
+              !isArchive && !isAvailable
                 ? "bg-zinc-900 text-white"
                 : "text-zinc-600 hover:text-zinc-900"
             }`}
           >
             Workspace
+          </Link>
+          <Link
+            href="/ops?tab=available"
+            className={`relative rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+              isAvailable
+                ? "bg-zinc-900 text-white"
+                : "text-zinc-600 hover:text-zinc-900"
+            }`}
+          >
+            Available jobs
+            {availableProjects.length > 0 && (
+              <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-semibold ${
+                isAvailable ? "bg-white text-zinc-900" : "bg-blue-600 text-white"
+              }`}>
+                {availableProjects.length}
+              </span>
+            )}
           </Link>
           <Link
             href="/ops?tab=archive"
@@ -153,8 +192,70 @@ export default async function ConsultantOpsPage({
         </div>
       </div>
 
+      {/* Available jobs tab */}
+      {isAvailable && (
+        availableProjects.length === 0 ? (
+          <div className="rounded-lg border border-zinc-200 bg-white p-12 text-center">
+            <p className="text-sm font-medium text-zinc-900">No available jobs</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              New submissions will appear here once a client submits a report request.
+            </p>
+          </div>
+        ) : (
+          <section>
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Available jobs ({availableProjects.length})
+            </h2>
+            <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead className="border-b border-zinc-100 bg-zinc-50">
+                  <tr>
+                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
+                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Submitted</th>
+                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Expected delivery</th>
+                    <th className="px-5 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50">
+                  {availableProjects.map((p) => {
+                    const addr = p.extracted_fields?.["EXTRACT_ADDRESS"] ?? null;
+                    const label = addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
+                    return (
+                      <tr key={p.id} className="hover:bg-zinc-50">
+                        <td className="max-w-[200px] truncate px-5 py-3 font-medium text-zinc-900">
+                          {label}
+                        </td>
+                        <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
+                          {p.organisations?.name ?? <span className="text-zinc-400">—</span>}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
+                          {new Date(p.created_at).toLocaleDateString("en-AU", {
+                            day: "numeric", month: "short", year: "numeric",
+                          })}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
+                          {p.expected_delivery_date
+                            ? new Date(p.expected_delivery_date).toLocaleDateString("en-AU", {
+                                day: "numeric", month: "short", year: "numeric",
+                              })
+                            : <span className="text-zinc-300">—</span>}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <SelfAssignButton projectId={p.id} address={label} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )
+      )}
+
       {/* Workspace tab */}
-      {!isArchive && (
+      {!isArchive && !isAvailable && (
         <>
           {projects.filter((p) => !TERMINAL_STATUSES.has(p.status)).length === 0 && (
             <div className="rounded-lg border border-zinc-200 bg-white p-12 text-center">
@@ -177,7 +278,7 @@ export default async function ConsultantOpsPage({
       )}
 
       {/* Archive tab */}
-      {isArchive && (
+      {isArchive && !isAvailable && (
         done.length === 0 ? (
           <div className="rounded-lg border border-zinc-200 bg-white p-12 text-center">
             <p className="text-sm font-medium text-zinc-900">No archived projects</p>

@@ -5,10 +5,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { ProjectNumberForm } from "./_components/ProjectNumberForm";
 import { PbdbQaUploadForm } from "./_components/PbdbQaUploadForm";
-import { MarkQaCompleteButton } from "./_components/MarkQaCompleteButton";
+import { QaUploadedBanner } from "./_components/QaUploadedBanner";
+import { PbdbResentBanner } from "./_components/PbdbResentBanner";
 import { ResendPbdbForm } from "./_components/ResendPbdbForm";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
+import { PbdbDownloadButton } from "@/components/PbdbDownloadButton";
+import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
+import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -47,10 +51,17 @@ const TERMINAL_STATUSES = new Set<ProjectStatus>(["delivered", "complete"]);
 
 export default async function ConsultantProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const justPickedUp = sp.picked_up === "1";
+  const justSavedNumber = sp.number_saved === "1";
+  const justUploadedQa = sp.qa_uploaded === "1";
+  const justResentPbdb = sp.pbdb_resent === "1";
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
 
@@ -94,13 +105,13 @@ export default async function ConsultantProjectDetailPage({
     project.expected_delivery_date < todayIso &&
     !TERMINAL_STATUSES.has(project.status);
 
-  // Load template mappings, submission files, PBDB/PBDR files, and stakeholder reviews
   const [
     { data: mappings },
     { data: rawSubmissionFiles },
     { data: rawPbdbFiles },
     { data: rawPbdrFiles },
     { data: rawReviews },
+    { data: rawFileRequirements },
   ] = await Promise.all([
     project.template_id
       ? supabase
@@ -113,7 +124,7 @@ export default async function ConsultantProjectDetailPage({
       .from("project_files")
       .select("id, file_type, original_filename, storage_path, created_at")
       .eq("project_id", id)
-      .in("file_type", ["po", "building_plans", "additional"])
+      .not("file_type", "in", "(pbdb,pbdr)")
       .order("created_at"),
     supabase
       .from("project_files")
@@ -133,9 +144,16 @@ export default async function ConsultantProjectDetailPage({
       .eq("project_id", id)
       .order("review_cycle", { ascending: false })
       .order("responded_at", { ascending: true }),
+    supabase
+      .from("file_requirements")
+      .select("slug, name")
+      .order("sort_order"),
   ]);
 
-  // Generate signed URLs — submission files from `submissions`, PBDB/PBDR from `documents`
+  const fileReqLabelMap = new Map<string, string>(
+    (rawFileRequirements ?? []).map((r) => [r.slug as string, r.name as string])
+  );
+
   const [submissionFiles, pbdrFiles] = await Promise.all([
     Promise.all(
       (rawSubmissionFiles ?? []).map(async (f) => {
@@ -158,6 +176,7 @@ export default async function ConsultantProjectDetailPage({
   const pbdbFiles = rawPbdbFiles ?? [];
   const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
   const hasQaFile = pbdbFiles.some((f) => (f.version as number) >= 2);
+
   type ReviewRow = {
     id: string; stakeholder_name: string; stakeholder_email: string;
     status: string; comments: string | null; responded_at: string | null; review_cycle: number;
@@ -179,7 +198,6 @@ export default async function ConsultantProjectDetailPage({
 
   const extractedFields = project.extracted_fields ?? {};
 
-  // EXTRACT_ / CLIENT_ tokens — submitted by the client
   const clientFieldEntries = Object.entries(extractedFields)
     .filter(([token]) => token.startsWith("EXTRACT_") || token.startsWith("CLIENT_"))
     .map(([token, value]) => ({
@@ -188,7 +206,6 @@ export default async function ConsultantProjectDetailPage({
       value: value as string,
     }));
 
-  // ORG_ tokens — org config, with any extracted overrides applied on top
   const orgConfig = (project.organisations?.org_config ?? {}) as Record<string, string>;
   const orgMerged: Record<string, string> = { ...orgConfig };
   for (const [k, v] of Object.entries(extractedFields)) {
@@ -202,7 +219,6 @@ export default async function ConsultantProjectDetailPage({
       value: value as string,
     }));
 
-  // SYS_ / PROJECT_ tokens — auto-populated at generation time
   const fmtDMY = (d: Date) =>
     `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
   const latestGenDate = latestPbdb ? new Date(latestPbdb.created_at as string) : null;
@@ -212,13 +228,13 @@ export default async function ConsultantProjectDetailPage({
       label: "Project number",
       value: project.project_number ? `${project.project_number}-S` : "Not yet set",
     },
-    { label: "Submission date (SYS_SUB_DATE)", value: fmtDMY(new Date(project.created_at)) },
+    { label: "Submission date", value: fmtDMY(new Date(project.created_at)) },
     {
-      label: "Generation date (SYS_GEN_DATE)",
+      label: "Generation date",
       value: latestGenDate ? fmtDMY(latestGenDate) : "Not yet generated",
     },
     {
-      label: "Revision number (SYS_REV_NO)",
+      label: "Revision number",
       value: latestVersion !== null ? String(latestVersion - 1) : "0",
     },
   ];
@@ -228,17 +244,33 @@ export default async function ConsultantProjectDetailPage({
     ? `${project.project_number} — ${addr}`
     : addr ?? (project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8));
 
+  // Step states
+  const isTerminal = TERMINAL_STATUSES.has(project.status) || project.status === "converting";
+  const step1Completed = !!project.project_number;
+  const step2Locked = !project.project_number || !latestPbdb;
+  const step3Locked = !latestPbdb || project.status === "assigned";
+  const step3Active = project.status === "in_progress" && !!latestPbdb && !hasQaFile;
+  const step3Completed = hasQaFile || (!step3Locked && !step3Active);
+  const step4Active = (["dispatched", "revision_required"] as ProjectStatus[]).includes(project.status as ProjectStatus);
+  const step4Completed = isTerminal;
+
+  const currentCycleReviews = reviewsByCycle.get(project.review_cycle) ?? [];
+  const currentCycleComments = currentCycleReviews.filter((r) => r.comments);
+
   return (
     <div className="space-y-6">
+      {justPickedUp && <PickedUpBanner projectId={id} />}
+      {justSavedNumber && <NumberSavedBanner cleanUrl={`/ops/projects/${id}`} />}
+      {justUploadedQa && <QaUploadedBanner cleanUrl={`/ops/projects/${id}`} />}
+      {justResentPbdb && <PbdbResentBanner cleanUrl={`/ops/projects/${id}`} />}
+
       <div>
         <Link href="/ops" className="text-sm text-zinc-500 hover:text-zinc-700">
           ← My projects
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-semibold text-zinc-900">{title}</h1>
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}
-          >
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}>
             {STATUS_LABELS[project.status]}
           </span>
           {isOverdue && (
@@ -249,458 +281,532 @@ export default async function ConsultantProjectDetailPage({
         </div>
       </div>
 
-      {/* Project summary */}
-      <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
-        <Row label="Organisation" value={project.organisations?.name ?? "—"} />
-        <Row
-          label="Submitted via"
-          value={
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                project.source === "email"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-blue-100 text-blue-700"
-              }`}
-            >
-              {project.source === "email" ? "Email" : "Portal"}
-            </span>
-          }
-        />
-        <Row label="PO number" value={project.po_number ?? "—"} />
-        <Row
-          label="Submitted"
-          value={new Date(project.created_at).toLocaleDateString("en-AU", {
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-          })}
-        />
-        <Row
-          label="Expected delivery"
-          value={
-            project.expected_delivery_date ? (
-              <span className={isOverdue ? "font-medium text-red-600" : ""}>
-                {new Date(project.expected_delivery_date).toLocaleDateString(
-                  "en-AU",
-                  { day: "numeric", month: "short", year: "numeric" }
-                )}
-              </span>
-            ) : (
-              "—"
-            )
-          }
-        />
-      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_3fr] items-start">
 
-      {/* Client contact */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">Client contact</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            The person who submitted this project — your point of contact for any queries.
-          </p>
-        </div>
-        <div className="divide-y divide-zinc-100">
-          {project.submitter ? (
-            <>
+        {/* LEFT — read-only info, collapsible on mobile */}
+        <details open>
+          <summary className="lg:hidden mb-4 flex cursor-pointer list-none items-center justify-between rounded-lg border border-zinc-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-700">
+            Project info
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-zinc-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            </svg>
+          </summary>
+
+          <div className="space-y-4">
+            {/* Project summary */}
+            <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
+              <Row label="Organisation" value={project.organisations?.name ?? "—"} />
               <Row
-                label="Name"
+                label="Submitted via"
                 value={
-                  [project.submitter.first_name, project.submitter.last_name]
-                    .filter(Boolean)
-                    .join(" ") || "—"
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                  }`}>
+                    {project.source === "email" ? "Email" : "Portal"}
+                  </span>
                 }
               />
+              <Row label="PO number" value={project.po_number ?? "—"} />
               <Row
-                label="Email"
+                label="Submitted"
+                value={new Date(project.created_at).toLocaleDateString("en-AU", {
+                  day: "numeric", month: "long", year: "numeric",
+                })}
+              />
+              <Row
+                label="Expected delivery"
                 value={
-                  <a
-                    href={`mailto:${project.submitter.email}`}
-                    className="text-blue-600 hover:underline"
-                  >
-                    {project.submitter.email}
-                  </a>
+                  project.expected_delivery_date ? (
+                    <span className={isOverdue ? "font-medium text-red-600" : ""}>
+                      {new Date(project.expected_delivery_date).toLocaleDateString("en-AU", {
+                        day: "numeric", month: "short", year: "numeric",
+                      })}
+                    </span>
+                  ) : "—"
                 }
               />
-              {project.submitter.phone && (
-                <Row
-                  label="Phone"
-                  value={
-                    <a href={`tel:${project.submitter.phone}`} className="text-blue-600 hover:underline">
-                      {project.submitter.phone}
-                    </a>
-                  }
-                />
-              )}
-              {project.submitter.company_role && (
-                <Row label="Role" value={project.submitter.company_role} />
-              )}
-              {project.organisations && (
-                <>
-                  <Row label="Organisation" value={project.organisations.name} />
-                  {project.organisations.state_territory && (
-                    <Row label="State / Territory" value={project.organisations.state_territory} />
-                  )}
-                </>
-              )}
-            </>
-          ) : (
-            <div className="px-5 py-4 text-sm text-zinc-400">
-              No submitter on record — project may have been submitted via email.
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Submitted field values (EXTRACT_ / CLIENT_) */}
-      {clientFieldEntries.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">Submitted details</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              Values entered or extracted from documents during client submission.
-            </p>
-          </div>
-          <div className="divide-y divide-zinc-100">
-            {clientFieldEntries.map(({ token, label, value }) => (
-              <Row key={token} label={label} value={value || "—"} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Organisation values (ORG_) */}
-      {orgTokenEntries.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">Organisation values</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              Configured at organisation level — certifier details, licence numbers, etc.
-            </p>
-          </div>
-          <div className="divide-y divide-zinc-100">
-            {orgTokenEntries.map(({ token, label, value }) => (
-              <Row key={token} label={label} value={value || "—"} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* System values (SYS_ / PROJECT_) */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">System values</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            Auto-populated by OPS at generation time — these are the values swapped into the PBDB.
-          </p>
-        </div>
-        <div className="divide-y divide-zinc-100">
-          {sysValues.map(({ label, value }) => (
-            <Row key={label} label={label} value={value} />
-          ))}
-        </div>
-      </div>
-
-      {/* PBDB */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">PBDB</h2>
-        </div>
-        <div className="divide-y divide-zinc-100">
-          {!project.project_number ? (
-            <div className="px-5 py-4">
-              <ProjectNumberForm projectId={id} />
-            </div>
-          ) : !latestPbdb ? (
-            <div className="px-5 py-4">
-              <p className="text-sm text-zinc-500">
-                PBDB is being generated — refresh in a moment.
-              </p>
-            </div>
-          ) : (
-            pbdbFiles.map((f) => {
-              const version = f.version as number;
-              const isQa = version >= 2;
-              return (
-                <div
-                  key={f.id as string}
-                  className="flex items-center justify-between px-5 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-zinc-900">
-                      {f.original_filename as string}
-                    </p>
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      Version {version}
-                      {isQa ? " — QA corrected" : " — Generated"}
-                      {" · "}
-                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                    </p>
+            {/* Client contact */}
+            <div className="rounded-lg border border-zinc-200 bg-white">
+              <div className="border-b border-zinc-100 px-5 py-3">
+                <h2 className="text-sm font-semibold text-zinc-900">Client contact</h2>
+              </div>
+              <div className="divide-y divide-zinc-100">
+                {project.submitter ? (
+                  <>
+                    <Row
+                      label="Name"
+                      value={
+                        [project.submitter.first_name, project.submitter.last_name]
+                          .filter(Boolean).join(" ") || "—"
+                      }
+                    />
+                    <Row
+                      label="Email"
+                      value={
+                        <a href={`mailto:${project.submitter.email}`} className="text-blue-600 hover:underline">
+                          {project.submitter.email}
+                        </a>
+                      }
+                    />
+                    {project.submitter.phone && (
+                      <Row
+                        label="Phone"
+                        value={
+                          <a href={`tel:${project.submitter.phone}`} className="text-blue-600 hover:underline">
+                            {project.submitter.phone}
+                          </a>
+                        }
+                      />
+                    )}
+                    {project.submitter.company_role && (
+                      <Row label="Role" value={project.submitter.company_role} />
+                    )}
+                    {project.organisations?.state_territory && (
+                      <Row label="State / Territory" value={project.organisations.state_territory} />
+                    )}
+                  </>
+                ) : (
+                  <div className="px-5 py-4 text-sm text-zinc-400">
+                    No submitter on record — project may have been submitted via email.
                   </div>
-                  <a
-                    href={`/api/download/pbdb/${f.id as string}`}
-                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Download
-                  </a>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* Client document colour */}
-      {latestPbdb && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-5">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Client document colour</h2>
-          <p className="mb-4 text-xs text-zinc-500">
-            Controls whether the client receives a version with black text or the original red
-            token colour when they download the PBDB via their review link.
-          </p>
-          <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
-        </div>
-      )}
-
-      {/* PBDR */}
-      {pbdrFiles.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">PBDR</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              Final converted document delivered to the client.
-            </p>
-          </div>
-          <div className="divide-y divide-zinc-100">
-            {pbdrFiles.map((f) => (
-              <div key={f.id as string} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900">
-                    {f.original_filename as string}
-                  </p>
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    Version {f.version as number} ·{" "}
-                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </div>
-                {f.signedUrl && (
-                  <a
-                    href={f.signedUrl}
-                    download={f.original_filename as string}
-                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Download
-                  </a>
                 )}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
 
-      {/* Stakeholder review history — all cycles, always visible when reviews exist */}
-      {allReviews.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">Stakeholder reviews</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              All review cycles — each cycle corresponds to one version of the PBDB sent to stakeholders.
-            </p>
-          </div>
-          {reviewCycles.map((cycle) => {
-            const cycleReviews = reviewsByCycle.get(cycle)!;
-            const pbdbForCycle = pbdbFiles.find((f) => (f.version as number) === cycle);
-            const isCurrent = cycle === project.review_cycle;
-            return (
-              <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
-                <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
-                  <span className="text-xs font-semibold text-zinc-700">Cycle {cycle}</span>
-                  {pbdbForCycle ? (
-                    <span className="text-xs text-zinc-400">
-                      · PBDB v{cycle} ({(pbdbForCycle.version as number) >= 2 ? "QA corrected" : "Generated"})
-                      · {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-zinc-400">· PBDB v{cycle}</span>
-                  )}
-                  {isCurrent && (
-                    <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                      Current
-                    </span>
-                  )}
+            {/* Submitted details */}
+            {clientFieldEntries.length > 0 && (
+              <div className="rounded-lg border border-zinc-200 bg-white">
+                <div className="border-b border-zinc-100 px-5 py-3">
+                  <h2 className="text-sm font-semibold text-zinc-900">Submitted details</h2>
                 </div>
-                <div className="divide-y divide-zinc-50">
-                  {cycleReviews.map((r) => {
-                    const statusConfig = {
-                      pending: { label: "Pending", cls: "bg-amber-100 text-amber-700" },
-                      approved_without_comments: { label: "Approved", cls: "bg-green-100 text-green-700" },
-                      approved_with_comments: { label: "Approved with notes", cls: "bg-green-100 text-green-700" },
-                      rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
-                      waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
-                    }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
-                    return (
-                      <div key={r.id} className="px-5 py-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
-                            <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
-                            {r.comments && (
-                              <p className="mt-2 text-sm leading-relaxed text-zinc-700">{r.comments}</p>
-                            )}
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <span
-                              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}
-                            >
-                              {statusConfig.label}
-                            </span>
-                            {r.responded_at && (
-                              <p className="mt-0.5 text-xs text-zinc-400">
-                                {new Date(r.responded_at).toLocaleDateString("en-AU", {
-                                  day: "numeric", month: "short", year: "numeric",
-                                })}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="divide-y divide-zinc-100">
+                  {clientFieldEntries.map(({ token, label, value }) => (
+                    <Row key={token} label={label} value={value || "—"} />
+                  ))}
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            )}
 
-      {/* Revision action — re-upload form, shown only when a revision is needed */}
-      {project.status === "revision_required" && (
-        <div className="rounded-lg border border-red-200 bg-red-50">
-          <div className="border-b border-red-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-red-800">Upload revised PBDB</h2>
-            <p className="mt-1 text-xs text-red-600">
-              Review the feedback below, correct the document in Word, then upload the revised
-              version to re-submit to stakeholders.
-            </p>
-          </div>
-          {(() => {
-            const currentReviews = reviewsByCycle.get(project.review_cycle) ?? [];
-            const reviewsWithComments = currentReviews.filter((r) => r.comments);
-            if (reviewsWithComments.length === 0) return null;
-            return (
-              <div className="border-b border-red-100 divide-y divide-red-100">
-                {reviewsWithComments.map((r) => (
-                  <div key={r.id} className="px-5 py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-red-900">{r.stakeholder_name}</p>
-                        <p className="text-xs text-red-500">{r.stakeholder_email}</p>
-                        <p className="mt-2 text-sm leading-relaxed text-red-800">{r.comments}</p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        {r.responded_at && (
-                          <p className="text-xs text-red-400">
-                            {new Date(r.responded_at).toLocaleDateString("en-AU", {
-                              day: "numeric", month: "short", year: "numeric",
-                            })}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+            {/* Organisation values */}
+            {orgTokenEntries.length > 0 && (
+              <div className="rounded-lg border border-zinc-200 bg-white">
+                <div className="border-b border-zinc-100 px-5 py-3">
+                  <h2 className="text-sm font-semibold text-zinc-900">Organisation values</h2>
+                </div>
+                <div className="divide-y divide-zinc-100">
+                  {orgTokenEntries.map(({ token, label, value }) => (
+                    <Row key={token} label={label} value={value || "—"} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* System values */}
+            <div className="rounded-lg border border-zinc-200 bg-white">
+              <div className="border-b border-zinc-100 px-5 py-3">
+                <h2 className="text-sm font-semibold text-zinc-900">System values</h2>
+              </div>
+              <div className="divide-y divide-zinc-100">
+                {sysValues.map(({ label, value }) => (
+                  <Row key={label} label={label} value={value} />
                 ))}
               </div>
-            );
-          })()}
-          <div className="px-5 py-5">
-            <PbdbQaUploadForm
-              projectId={id}
-              submitLabel="Upload revised PBDB and re-submit to stakeholders"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Resend PBDB — shown while dispatched and awaiting stakeholder responses */}
-      {project.status === "dispatched" && latestPbdb && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50">
-          <div className="border-b border-amber-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-amber-900">Resend updated PBDB</h2>
-            <p className="mt-1 text-xs text-amber-700">
-              Upload a corrected version to replace the current PBDB and resend approval
-              emails to all stakeholders. Use this if you spotted an error or the email
-              failed to deliver.
-            </p>
-          </div>
-          <div className="px-5 py-5">
-            <ResendPbdbForm
-              projectId={id}
-              stakeholderCount={(reviewsByCycle.get(project.review_cycle) ?? []).length}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* QA correction + Documents — side by side */}
-      <div className={project.status === "in_progress" && latestPbdb ? "grid grid-cols-1 gap-6 items-start lg:grid-cols-2" : ""}>
-        {/* QA correction — only shown while in_progress */}
-        {project.status === "in_progress" && latestPbdb && (
-          <div className="rounded-lg border border-zinc-200 bg-white">
-            <div className="border-b border-zinc-100 px-5 py-4">
-              <h2 className="text-sm font-semibold text-zinc-900">Submit completed PBDB</h2>
-              <p className="mt-1 text-xs text-zinc-500">
-                Open the generated PBDB in Word, insert the plan images at the correct
-                positions, correct any errors, then upload your completed version here.
-              </p>
             </div>
-            <div className="space-y-4 px-5 py-5">
-              <PbdbQaUploadForm projectId={id} />
-              {hasQaFile && <MarkQaCompleteButton projectId={id} />}
-            </div>
-          </div>
-        )}
 
-        {/* Submission documents */}
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
-          </div>
-          {submissionFiles.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-zinc-500">No documents uploaded yet.</p>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {submissionFiles.map((f) => (
-                <div
-                  key={f.id as string}
-                  className="flex items-center justify-between px-5 py-3"
-                >
-                  <div>
-                    <p className="text-sm text-zinc-900">{f.original_filename as string}</p>
-                    <p className="text-xs text-zinc-500">
-                      {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type} &middot;{" "}
-                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                    </p>
-                  </div>
-                  {f.signedUrl && (
-                    <a
-                      href={f.signedUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                    >
-                      Download
-                    </a>
-                  )}
+            {/* Submission documents */}
+            <div className="rounded-lg border border-zinc-200 bg-white">
+              <div className="border-b border-zinc-100 px-5 py-3">
+                <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
+              </div>
+              {submissionFiles.length === 0 ? (
+                <p className="px-5 py-4 text-sm text-zinc-400">No documents uploaded yet.</p>
+              ) : (
+                <div className="divide-y divide-zinc-100">
+                  {submissionFiles.map((f) => (
+                    <div key={f.id as string} className="flex items-center justify-between px-5 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900">
+                          {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type as string}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {f.original_filename as string} &middot;{" "}
+                          {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                        </p>
+                      </div>
+                      {f.signedUrl && (
+                        <a
+                          href={f.signedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                        >
+                          Download
+                        </a>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+              <div className="border-t border-zinc-100 px-5 py-4">
+                <FileUploadForm projectId={id} />
+              </div>
             </div>
-          )}
-          <div className="border-t border-zinc-100 px-5 py-4">
-            <FileUploadForm projectId={id} />
+
+            {/* Client document colour */}
+            {latestPbdb && (
+              <div className="rounded-lg border border-zinc-200 bg-white px-5 py-4">
+                <h2 className="mb-1 text-sm font-semibold text-zinc-900">Client document colour</h2>
+                <p className="mb-4 text-xs text-zinc-500">
+                  Controls whether the client receives a version with black text or the original red
+                  token colour when they download the PBDB via their review link.
+                </p>
+                <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
+              </div>
+            )}
+
+            {/* Stakeholder reviews */}
+            {allReviews.length > 0 && (
+              <div className="rounded-lg border border-zinc-200 bg-white">
+                <div className="border-b border-zinc-100 px-5 py-3">
+                  <h2 className="text-sm font-semibold text-zinc-900">Stakeholder reviews</h2>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    All review cycles — each cycle corresponds to one version of the PBDB sent to stakeholders.
+                  </p>
+                </div>
+                {reviewCycles.map((cycle) => {
+                  const cycleReviews = reviewsByCycle.get(cycle)!;
+                  const pbdbForCycle = pbdbFiles.find((f) => (f.version as number) === cycle);
+                  const isCurrent = cycle === project.review_cycle;
+                  return (
+                    <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
+                      <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
+                        <span className="text-xs font-semibold text-zinc-700">Cycle {cycle}</span>
+                        {pbdbForCycle ? (
+                          <span className="text-xs text-zinc-400">
+                            · PBDB v{cycle} ({(pbdbForCycle.version as number) >= 2 ? "QA corrected" : "Generated"})
+                            · {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-zinc-400">· PBDB v{cycle}</span>
+                        )}
+                        {isCurrent && (
+                          <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <div className="divide-y divide-zinc-50">
+                        {cycleReviews.map((r) => {
+                          const statusConfig = {
+                            pending: { label: "Pending", cls: "bg-amber-100 text-amber-700" },
+                            approved_without_comments: { label: "Approved", cls: "bg-green-100 text-green-700" },
+                            approved_with_comments: { label: "Approved with notes", cls: "bg-green-100 text-green-700" },
+                            rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
+                            waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
+                          }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
+                          return (
+                            <div key={r.id} className="px-5 py-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                                  <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
+                                  {r.comments && (
+                                    <p className="mt-1.5 text-sm leading-relaxed text-zinc-700">{r.comments}</p>
+                                  )}
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}>
+                                    {statusConfig.label}
+                                  </span>
+                                  {r.responded_at && (
+                                    <p className="mt-0.5 text-xs text-zinc-400">
+                                      {new Date(r.responded_at).toLocaleDateString("en-AU", {
+                                        day: "numeric", month: "short", year: "numeric",
+                                      })}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* PBDR */}
+            {pbdrFiles.length > 0 && (
+              <div className="rounded-lg border border-zinc-200 bg-white">
+                <div className="border-b border-zinc-100 px-5 py-3">
+                  <h2 className="text-sm font-semibold text-zinc-900">PBDR</h2>
+                  <p className="mt-0.5 text-xs text-zinc-500">Final converted document delivered to the client.</p>
+                </div>
+                <div className="divide-y divide-zinc-100">
+                  {pbdrFiles.map((f) => (
+                    <div key={f.id as string} className="flex items-center justify-between px-5 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
+                        <p className="mt-0.5 text-xs text-zinc-500">
+                          Version {f.version as number} ·{" "}
+                          {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                        </p>
+                      </div>
+                      {f.signedUrl && (
+                        <a
+                          href={f.signedUrl}
+                          download={f.original_filename as string}
+                          className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                        >
+                          Download
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
+        </details>
+
+        {/* RIGHT — action steps */}
+        <div className="space-y-3">
+
+          {/* Step 1: Set project number */}
+          <StepCard
+            step={1}
+            title="Set project number"
+            completed={step1Completed}
+            completedNote={`Project number set: ${project.project_number}-S`}
+          >
+            <ProjectNumberForm projectId={id} />
+          </StepCard>
+
+          {/* Step 2: Download PBDB */}
+          <div className={`rounded-lg border ${step2Locked ? "border-zinc-200 bg-zinc-50" : "border-zinc-200 bg-white"}`}>
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-100 last:border-b-0">
+              <StepIndicator step={2} completed={false} locked={step2Locked} />
+              <h3 className={`text-sm font-semibold ${step2Locked ? "text-zinc-400" : "text-zinc-900"}`}>
+                Download PBDB
+              </h3>
+            </div>
+            {step2Locked ? (
+              <p className="px-5 py-4 text-sm text-zinc-400">
+                {!project.project_number
+                  ? "Set the project number first — the PBDB will be generated automatically."
+                  : "PBDB is being generated — refresh in a moment."}
+              </p>
+            ) : (
+              <div className="divide-y divide-zinc-100">
+                {pbdbFiles.map((f, i) => {
+                  const version = f.version as number;
+                  const isLatest = i === pbdbFiles.length - 1;
+                  const showDispatchedBadge =
+                    isLatest &&
+                    (["dispatched", "revision_required"] as ProjectStatus[]).includes(
+                      project.status as ProjectStatus
+                    );
+                  return (
+                    <div
+                      key={f.id as string}
+                      id={showDispatchedBadge ? "qa-pbdb-row" : undefined}
+                      className="flex items-center justify-between px-5 py-3 transition-shadow duration-700"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
+                          {showDispatchedBadge && (
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                              Dispatched PBDB
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-zinc-500">
+                          v{version} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                        </p>
+                      </div>
+                      <PbdbDownloadButton
+                        href={`/api/download/pbdb/${f.id as string}`}
+                        filename={f.original_filename as string}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Step 3: Upload completed PBDB */}
+          <StepCard
+            step={3}
+            title="Upload completed PBDB"
+            completed={step3Completed}
+            locked={step3Locked}
+            completedNote="Completed PBDB uploaded — dispatched to stakeholders for approval."
+          >
+            <PbdbQaUploadForm projectId={id} />
+          </StepCard>
+
+          {/* Step 4: Resend / replace PBDB */}
+          {/* Step 4: Stakeholder approvals — covers dispatched + revision cycle */}
+          <StepCard
+            step={4}
+            title="Stakeholder approvals"
+            completed={step4Completed}
+            inactive={!step4Active && !step4Completed}
+            completedNote={project.status === "converting" ? "All stakeholders approved — converting to PBDR." : undefined}
+            completedChildren={
+              project.status !== "converting" && pbdrFiles.length > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-green-800">PBDR ready for download</p>
+                  {pbdrFiles.map((f) => (
+                    <div key={f.id as string} className="flex items-center justify-between rounded-md border border-green-200 bg-white px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
+                        <p className="mt-0.5 text-xs text-zinc-500">
+                          v{f.version as number} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                        </p>
+                      </div>
+                      {f.signedUrl && (
+                        <a
+                          href={f.signedUrl}
+                          download={f.original_filename as string}
+                          className="ml-4 shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
+                        >
+                          Download
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : undefined
+            }
+            inactiveNote="Awaiting PBDB upload and dispatch."
+          >
+            {project.status === "revision_required" ? (
+              <div className="space-y-4">
+                {currentCycleComments.length > 0 && (
+                  <div className="space-y-3">
+                    {currentCycleComments.map((r) => (
+                      <div key={r.id} className="rounded-md border border-red-100 bg-red-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-red-800">{r.stakeholder_name}</p>
+                        <p className="mt-1 text-sm leading-relaxed text-red-700">{r.comments}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <PbdbQaUploadForm
+                  projectId={id}
+                  submitLabel="Upload revised PBDB and re-submit to stakeholders"
+                />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 rounded-md border border-blue-100 bg-blue-50 px-4 py-3">
+                  <svg className="h-4 w-4 shrink-0 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clipRule="evenodd" />
+                  </svg>
+                  <p className="text-sm text-blue-700">PBDB dispatched — awaiting stakeholder responses.</p>
+                </div>
+                <ResendPbdbForm
+                  projectId={id}
+                  stakeholderCount={currentCycleReviews.length}
+                />
+              </div>
+            )}
+          </StepCard>
+
         </div>
       </div>
+    </div>
+  );
+}
 
+function StepIndicator({
+  step,
+  completed,
+  locked,
+}: {
+  step: number;
+  completed: boolean;
+  locked?: boolean;
+}) {
+  if (completed) {
+    return (
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-500 text-white text-xs font-semibold">
+        ✓
+      </div>
+    );
+  }
+  if (locked) {
+    return (
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-zinc-400 text-xs font-semibold">
+        {step}
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white text-xs font-semibold">
+      {step}
+    </div>
+  );
+}
+
+function StepCard({
+  step,
+  title,
+  completed,
+  locked,
+  inactive,
+  completedNote,
+  completedChildren,
+  inactiveNote,
+  children,
+}: {
+  step: number;
+  title: string;
+  completed: boolean;
+  locked?: boolean;
+  inactive?: boolean;
+  completedNote?: string;
+  completedChildren?: React.ReactNode;
+  inactiveNote?: string;
+  children?: React.ReactNode;
+}) {
+  const isActive = !completed && !locked && !inactive;
+
+  return (
+    <div className={`rounded-lg border ${
+      completed
+        ? "border-green-200 bg-green-50"
+        : locked || inactive
+        ? "border-zinc-200 bg-zinc-50"
+        : "border-zinc-200 bg-white"
+    }`}>
+      <div className={`flex items-center gap-3 px-5 py-4 ${isActive || (completed && completedChildren) ? "border-b border-zinc-100" : ""}`}>
+        <StepIndicator step={step} completed={completed} locked={locked || inactive} />
+        <h3 className={`text-sm font-semibold ${
+          completed ? "text-green-800" : locked || inactive ? "text-zinc-400" : "text-zinc-900"
+        }`}>
+          {title}
+        </h3>
+      </div>
+      {completed && completedNote && (
+        <p className="px-5 pb-4 text-xs text-green-700">{completedNote}</p>
+      )}
+      {completed && completedChildren && (
+        <div className="px-5 py-4">{completedChildren}</div>
+      )}
+      {(locked || inactive) && (inactive ? inactiveNote : null) && (
+        <p className="px-5 pb-4 text-xs text-zinc-400">{inactiveNote}</p>
+      )}
+      {isActive && children && (
+        <div className="px-5 py-4">{children}</div>
+      )}
     </div>
   );
 }
@@ -708,7 +814,7 @@ export default async function ConsultantProjectDetailPage({
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline gap-4 px-5 py-3">
-      <span className="w-44 shrink-0 text-sm text-zinc-500">{label}</span>
+      <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
       <span className="text-sm text-zinc-900">{value}</span>
     </div>
   );

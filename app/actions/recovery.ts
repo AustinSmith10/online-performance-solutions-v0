@@ -8,9 +8,9 @@ import { auditLog } from "@/lib/audit/log";
 
 export async function purgeProject(
   projectId: string,
-  _prev: { error?: string },
+  _prev: { error?: string; success?: boolean },
   _formData: FormData
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; success?: boolean }> {
   const user = await getSessionUser();
   if (!user || (user.role !== "client" && user.role !== "super_admin" && user.role !== "admin")) {
     return { error: "Unauthorized." };
@@ -66,10 +66,7 @@ export async function purgeProject(
   revalidatePath("/portal/recovery");
   revalidatePath("/admin/recovery");
 
-  if (user.role === "client") {
-    redirect("/portal/recovery");
-  }
-  redirect("/admin/recovery");
+  return { success: true };
 }
 
 export async function softDeleteProject(projectId: string): Promise<{ error?: string }> {
@@ -111,7 +108,7 @@ export async function softDeleteProject(projectId: string): Promise<{ error?: st
   });
 
   revalidatePath("/portal");
-  redirect("/portal");
+  redirect("/portal?deleted=1");
 }
 
 export async function restoreProject(
@@ -163,5 +160,8 @@ export async function restoreProject(
   revalidatePath("/admin/recovery");
   revalidatePath("/portal");
 
+  if (user.role === "client") {
+    redirect("/portal?restored=1");
+  }
   return {};
 }

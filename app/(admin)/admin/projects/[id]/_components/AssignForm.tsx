@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { assignConsultantFromForm, type AssignState } from "@/app/actions/projects";
 import type { ConsultantAvailability } from "@/types";
 
@@ -23,21 +23,21 @@ interface Props {
   consultants: ConsultantOption[];
   currentConsultantId: string;
   isReassign: boolean;
+  onSuccess?: () => void;
 }
 
-export function AssignForm({ projectId, consultants, currentConsultantId, isReassign }: Props) {
+export function AssignForm({ projectId, consultants, currentConsultantId, isReassign, onSuccess }: Props) {
   const boundAction = assignConsultantFromForm.bind(null, projectId);
   const [state, action, pending] = useActionState<AssignState, FormData>(boundAction, {});
+
+  useEffect(() => {
+    if (state.success) onSuccess?.();
+  }, [state.success]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-3">
       {state.error && (
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</p>
-      )}
-      {state.success && (
-        <p className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
-          Consultant {isReassign ? "reassigned" : "assigned"} successfully.
-        </p>
       )}
 
       <form action={action} className="flex items-end gap-3">

@@ -3,6 +3,8 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ClickableRow } from "@/components/ClickableRow";
 import { DownloadPbdrLink } from "./_components/DownloadPbdrLink";
+import { DeletedBanner } from "./_components/DeletedBanner";
+import { RestoredBanner } from "./_components/RestoredBanner";
 import type { ProjectStatus, PaymentMethod } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -69,7 +71,14 @@ function workingDaysElapsed(fromIso: string, todayIso: string): number {
   return days;
 }
 
-export default async function ClientPortalPage() {
+export default async function ClientPortalPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string>>;
+}) {
+  const sp = await searchParams;
+  const justDeleted = sp.deleted === "1";
+  const justRestored = sp.restored === "1";
   const user = await requireRole("client");
   const supabase = createAdminClient();
   const orgId = user.org_id as string;
@@ -163,6 +172,8 @@ export default async function ClientPortalPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 space-y-8">
+      {justDeleted && <DeletedBanner />}
+      {justRestored && <RestoredBanner />}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900">My report requests</h1>
         <Link

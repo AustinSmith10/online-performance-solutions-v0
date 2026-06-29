@@ -18,6 +18,8 @@ import { AdminDeleteButton } from "./_components/AdminDeleteButton";
 import { AdminProjectNumberForm } from "./_components/AdminProjectNumberForm";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
+import { PbdbDownloadButton } from "@/components/PbdbDownloadButton";
+import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -68,10 +70,14 @@ function calcDaysPaused(pausedAt: string | null): number {
 
 export default async function ProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const justSavedNumber = sp.number_saved === "1";
   const supabase = createAdminClient();
 
   const [projectResult, consultantsResult] = await Promise.all([
@@ -294,6 +300,7 @@ export default async function ProjectDetailPage({
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      {justSavedNumber && <NumberSavedBanner cleanUrl={`/admin/projects/${id}`} />}
       <div>
         <Link
           href={isDeleted ? "/admin/recovery" : "/admin/projects"}
@@ -493,7 +500,7 @@ export default async function ProjectDetailPage({
 
       {/* PBDB — project number + generation + file history in one card */}
       {(!isDeleted && !isTerminal || pbdbFiles.length > 0) && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
+        <div id="pbdb-section" className="rounded-lg border border-zinc-200 bg-white transition-shadow duration-700">
           <div className="border-b border-zinc-100 px-5 py-4">
             <h2 className="text-sm font-semibold text-zinc-900">PBDB</h2>
           </div>
@@ -530,12 +537,10 @@ export default async function ProjectDetailPage({
                         {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                       </p>
                     </div>
-                    <a
+                    <PbdbDownloadButton
                       href={`/api/download/pbdb/${f.id as string}`}
-                      className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                    >
-                      Download
-                    </a>
+                      filename={f.original_filename as string}
+                    />
                   </div>
                 );
               })}

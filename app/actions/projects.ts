@@ -17,6 +17,40 @@ import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalReques
 
 export type AssignState = { error?: string; success?: boolean };
 
+export type SelfAssignState = { error?: string; success?: boolean };
+
+export async function selfAssignProject(
+  projectId: string,
+  _prev: SelfAssignState,
+  _formData: FormData
+): Promise<SelfAssignState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  // Verify project is still available (submitted, unassigned)
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, status, assigned_consultant_id")
+    .eq("id", projectId)
+    .eq("status", "submitted")
+    .is("assigned_consultant_id", null)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!project) {
+    return { error: "This project is no longer available — it may have already been assigned." };
+  }
+
+  try {
+    await performAssignment(projectId, actor.id, actor.id, actor.email);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Assignment failed. Please try again." };
+  }
+
+  revalidatePath("/ops");
+  redirect(`/ops/projects/${projectId}?picked_up=1`);
+}
+
 export async function assignConsultant(
   projectId: string,
   consultantId: string
@@ -173,7 +207,7 @@ export async function adminSetProjectNumber(
 
   revalidatePath(`/admin/projects/${projectId}`);
   revalidatePath(`/ops/projects/${projectId}`);
-  return { success: true };
+  redirect(`/admin/projects/${projectId}?number_saved=1`);
 }
 
 // ─── Consultant: enter project number and trigger PBDB generation ─────────────
@@ -237,7 +271,7 @@ export async function saveProjectNumber(
 
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
-  return { success: true };
+  redirect(`/ops/projects/${projectId}?number_saved=1`);
 }
 
 // ─── Consultant: re-upload corrected PBDB after QA ───────────────────────────
@@ -356,19 +390,58 @@ export async function uploadQaPbdb(
       metadata: { review_cycle: cycle, version: nextVersion, filename: file.name },
     });
 
-    dispatchPbdb(projectId, actor.id).catch((err) => {
-      console.error(`[uploadQaPbdb] revision auto-dispatch failed for ${projectId}:`, err);
-    });
+    try {
+      await dispatchPbdb(projectId, actor.id);
+    } catch (err) {
+      return { error: `File uploaded but dispatch failed: ${err instanceof Error ? err.message : "Unknown error"}` };
+    }
   } else {
-    await auditLog("project.pbdb_qa_uploaded", actor.id, actor.email as string, {
+    // Initial QA upload (in_progress) — mark complete, notify admins, dispatch to stakeholders
+    await supabase
+      .from("projects")
+      .update({ qa_completed_by: actor.id, updated_at: now })
+      .eq("id", projectId);
+
+    const fields = project.extracted_fields as Record<string, string> | null;
+    const projectRef =
+      fields?.["EXTRACT_ADDRESS"] ??
+      (project.project_number as string | null) ??
+      projectId.slice(0, 8);
+
+    const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
+    if (admins && admins.length > 0) {
+      await Promise.all(
+        admins.map((admin) =>
+          notify({
+            recipientId: admin.id as string,
+            type: "qa_complete",
+            message: `QA complete for ${projectRef} — dispatching to stakeholders now.`,
+            projectId,
+            emailSubject: `QA complete — ${projectRef}`,
+            emailHtml: QaCompleteEmail({
+              projectRef,
+              portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/admin/projects/${projectId}`,
+            }),
+          })
+        )
+      );
+    }
+
+    await auditLog("project.qa_complete", actor.id, actor.email as string, {
       projectId,
       orgId: project.org_id as string,
-      metadata: { version: nextVersion, filename: file.name },
+      metadata: { version: nextVersion, filename: file.name, project_ref: projectRef },
     });
+
+    try {
+      await dispatchPbdb(projectId, actor.id);
+    } catch (err) {
+      return { error: `File uploaded but dispatch failed: ${err instanceof Error ? err.message : "Unknown error"}` };
+    }
   }
 
   revalidatePath(`/admin/projects/${projectId}`);
-  redirect(`/ops/projects/${projectId}`);
+  redirect(`/ops/projects/${projectId}?qa_uploaded=1`);
 }
 
 // ─── Consultant: mark QA complete ────────────────────────────────────────────
@@ -484,7 +557,7 @@ export async function resendPbdb(
       "id, org_id, status, review_cycle, project_number, extracted_fields, organisations(state_territory)"
     )
     .eq("id", projectId)
-    .eq("status", "dispatched")
+    .in("status", ["dispatched", "in_progress"])
     .is("deleted_at", null);
 
   if (actor.role === "consultant") {
@@ -492,7 +565,7 @@ export async function resendPbdb(
   }
 
   const { data: project } = await query.maybeSingle();
-  if (!project) return { error: "Project not found or not currently dispatched." };
+  if (!project) return { error: "Project not found or not available for resend." };
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Please select a file." };
@@ -653,7 +726,7 @@ export async function resendPbdb(
   });
 
   revalidatePath(`/admin/projects/${projectId}`);
-  redirect(`/ops/projects/${projectId}`);
+  redirect(`/ops/projects/${projectId}?pbdb_resent=1`);
 }
 
 // ─── Super Admin: update project field values ─────────────────────────────────

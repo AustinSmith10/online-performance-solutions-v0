@@ -35,8 +35,12 @@ export interface TokenField {
 
 export interface SectionLabels {
   extract: string;
+  extractDesc: string;
+  trusteeDesc: string;
   org: string;
+  orgDesc: string;
   client: string;
+  clientDesc: string;
 }
 
 export type ExtractState =
@@ -181,8 +185,12 @@ export async function extractFields(
   const rawLabels = (templateResult.data?.section_labels ?? {}) as Record<string, string>;
   const sectionLabels: SectionLabels = {
     extract: rawLabels.extract || "Extracted from your documents",
+    extractDesc: rawLabels.extractDesc || "Review and correct any fields marked below before submitting.",
+    trusteeDesc: rawLabels.trusteeDesc || "",
     org: rawLabels.org || "Organisation details",
+    orgDesc: rawLabels.orgDesc || "These details are pre-filled from your organisation's configuration.",
     client: rawLabels.client || "Additional information",
+    clientDesc: rawLabels.clientDesc || "Please fill in the remaining details required for this report.",
   };
 
   const extractMappings = allMappings.filter((m) => m.field_key === "extract");
@@ -576,7 +584,7 @@ export async function submitProject(
   } else {
     revalidatePath("/portal");
     revalidatePath(`/portal/projects/${projectId}`);
-    redirect(`/portal/projects/${projectId}`);
+    redirect(`/portal/projects/${projectId}?submitted=1`);
   }
 }
 

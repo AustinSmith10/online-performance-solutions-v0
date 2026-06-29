@@ -34,6 +34,7 @@ interface Props {
   adminClientId?: string;
   projectBasePath?: string;
   startOverHref?: string;
+  showExtractionBanner?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -149,13 +150,21 @@ interface ReviewStepProps {
   adminClientId?: string;
   projectBasePath: string;
   startOverHref: string;
+  showBanner?: boolean;
 }
 
-function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgId, adminClientId, projectBasePath, startOverHref }: ReviewStepProps) {
+function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgId, adminClientId, projectBasePath, startOverHref, showBanner }: ReviewStepProps) {
   const { poNumber, tokenGroups, sectionLabels, hasTrustee, rainfallToken, developments, projectId, templateId } = state;
 
   const [modified, setModified] = useState<Set<string>>(new Set());
   const mark = (key: string) => setModified((prev) => new Set(prev).add(key));
+
+  const [bannerVisible, setBannerVisible] = useState(showBanner ?? false);
+  useEffect(() => {
+    if (!showBanner) return;
+    const t = setTimeout(() => setBannerVisible(false), 4500);
+    return () => clearTimeout(t);
+  }, [showBanner]);
 
   const devNameField = tokenGroups.extract.find((t) => t.token === "EXTRACT_DEV_NAME");
   const trusteeField = tokenGroups.extract.find((t) => t.token === "EXTRACT_TRUSTEE");
@@ -186,6 +195,29 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
 
   return (
     <div className="relative">
+      {bannerVisible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-white/40">
+          <div className="mx-4 w-full max-w-sm rounded-xl border border-green-200 bg-white p-8 shadow-xl text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+              <svg className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <p className="text-base font-semibold text-zinc-900">Extraction complete</p>
+            <p className="mt-2 text-sm text-zinc-500">
+              We&apos;ve extracted the details from your documents. Review each field — if anything looks incorrect, update it before submitting.
+            </p>
+            <button
+              type="button"
+              onClick={() => setBannerVisible(false)}
+              className="mt-6 w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            >
+              Review details
+            </button>
+          </div>
+        </div>
+      )}
+
       {submitPending && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-lg bg-white/80 backdrop-blur-sm">
           <Spinner className="h-8 w-8 text-zinc-400" />
@@ -209,7 +241,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
         {extractFieldsList.length > 0 && (
           <div className="rounded-lg border border-zinc-200 bg-white p-6">
             <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.extract}</h2>
-            <p className="mb-5 text-sm text-zinc-500">Review and correct any fields marked below before submitting.</p>
+            {sectionLabels.extractDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.extractDesc}</p>}
             <div className="space-y-4">
               {extractFieldsList.map((field) => (
                 <TokenInput
@@ -227,6 +259,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
         {hasTrustee && (
           <div className="rounded-lg border border-zinc-200 bg-white p-6">
             <h2 className="mb-1 text-sm font-semibold text-zinc-900">{trusteeLabel}</h2>
+            {sectionLabels.trusteeDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.trusteeDesc}</p>}
             <div>
               <label className="mb-1 block text-xs font-medium text-zinc-700">{trusteeLabel}</label>
               <select
@@ -249,6 +282,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
         {tokenGroups.org.length > 0 && (
           <div className="rounded-lg border border-zinc-200 bg-white p-6">
             <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.org}</h2>
+            {sectionLabels.orgDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.orgDesc}</p>}
             <div className="space-y-4">
               {tokenGroups.org.map((field) => (
                 <TokenInput key={field.token} field={field} modified={modified} onMark={mark} disabled={submitPending} />
@@ -260,6 +294,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
         {tokenGroups.client.length > 0 && (
           <div className="rounded-lg border border-zinc-200 bg-white p-6">
             <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.client}</h2>
+            {sectionLabels.clientDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.clientDesc}</p>}
             <div className="space-y-4">
               {tokenGroups.client.map((field) => (
                 <TokenInput key={field.token} field={field} modified={modified} onMark={mark} disabled={submitPending} />
@@ -498,6 +533,7 @@ export function SubmissionForm({
   adminClientId,
   projectBasePath = "/portal/projects",
   startOverHref = "/portal/submit",
+  showExtractionBanner = false,
 }: Props) {
   const [extractState, extractAction, extractPending] = useActionState<ExtractState, FormData>(
     extractFields,
@@ -550,6 +586,7 @@ export function SubmissionForm({
         adminClientId={adminClientId}
         projectBasePath={projectBasePath}
         startOverHref={startOverHref}
+        showBanner={showExtractionBanner}
       />
     );
   }
