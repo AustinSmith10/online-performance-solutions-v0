@@ -16,7 +16,7 @@ export function ConsultantProjectTabs({
   return (
     <div className="space-y-6">
       {/* Tab bar — hidden at lg+ where both columns show */}
-      <div className="flex gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1 lg:hidden">
+      <div className="consultant-tabs-bar flex gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1">
         <button
           type="button"
           onClick={() => setTab("steps")}
@@ -42,9 +42,9 @@ export function ConsultantProjectTabs({
       </div>
 
       {/* Grid: 1 col on mobile (only active tab visible), 2 col on desktop (both visible) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_3fr] lg:items-start">
-        <div className={`space-y-4 ${tab === "steps" ? "max-lg:hidden" : ""}`}>{info}</div>
-        <div className={`space-y-3 ${tab === "info" ? "max-lg:hidden" : ""}`}>{steps}</div>
+      <div className="consultant-two-col">
+        <div className={`space-y-4 ${tab === "steps" ? "consultant-tab-hidden" : ""}`}>{info}</div>
+        <div className={`space-y-3 ${tab === "info" ? "consultant-tab-hidden" : ""}`}>{steps}</div>
       </div>
     </div>
   );

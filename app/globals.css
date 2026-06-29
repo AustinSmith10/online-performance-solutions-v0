@@ -54,7 +54,7 @@ body {
   animation: section-highlight 2.5s ease-out;
 }
 
-/* Two-column project layout [2fr 3fr] — used on admin, client, and consultant pages */
+/* Two-column project layout — used on admin and client project pages (md breakpoint) */
 .project-two-col {
   display: grid;
   grid-template-columns: 1fr;
@@ -64,5 +64,34 @@ body {
 @media (min-width: 768px) {
   .project-two-col {
     grid-template-columns: 40% 60%;
+  }
+}
+
+/* Two-column layout for consultant project tabs (lg breakpoint) */
+.consultant-two-col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .consultant-two-col {
+    grid-template-columns: 40% 60%;
+    align-items: start;
+  }
+}
+
+/* Tab visibility helpers for consultant project tabs */
+.consultant-tab-hidden {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .consultant-tab-hidden {
+    display: block;
+  }
+
+  .consultant-tabs-bar {
+    display: none;
   }
 }
