@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
 import type { ProjectStatus } from "@/types";
 
 type DeliveredProject = {
@@ -76,12 +77,10 @@ export default async function ClientHistoryPage() {
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-medium text-zinc-900 leading-snug">{label}</p>
                     {hasPbdr ? (
-                      <a
+                      <PbdrDownloadButton
                         href={`/api/download/pbdr/${r.id}`}
-                        className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                      >
-                        Download PDF
-                      </a>
+                        label="Download PDF"
+                      />
                     ) : (
                       <span className="shrink-0 text-xs text-zinc-400">Processing…</span>
                     )}
@@ -128,12 +127,10 @@ export default async function ClientHistoryPage() {
                       </td>
                       <td className="px-5 py-3">
                         {hasPbdr ? (
-                          <a
+                          <PbdrDownloadButton
                             href={`/api/download/pbdr/${r.id}`}
-                            className="inline-flex items-center rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                          >
-                            Download PDF
-                          </a>
+                            label="Download PDF"
+                          />
                         ) : (
                           <span className="text-xs text-zinc-400">Processing…</span>
                         )}

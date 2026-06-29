@@ -11,6 +11,7 @@ import { ResendPbdbForm } from "./_components/ResendPbdbForm";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { PbdbDownloadButton } from "@/components/PbdbDownloadButton";
+import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import type { ProjectStatus } from "@/types";
@@ -557,13 +558,10 @@ export default async function ConsultantProjectDetailPage({
                         </p>
                       </div>
                       {f.signedUrl && (
-                        <a
+                        <PbdrDownloadButton
                           href={f.signedUrl}
-                          download={f.original_filename as string}
-                          className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                        >
-                          Download
-                        </a>
+                          filename={f.original_filename as string}
+                        />
                       )}
                     </div>
                   ))}
@@ -672,13 +670,11 @@ export default async function ConsultantProjectDetailPage({
                         </p>
                       </div>
                       {f.signedUrl && (
-                        <a
+                        <PbdrDownloadButton
                           href={f.signedUrl}
-                          download={f.original_filename as string}
-                          className="ml-4 shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
-                        >
-                          Download
-                        </a>
+                          filename={f.original_filename as string}
+                          className="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
+                        />
                       )}
                     </div>
                   ))}

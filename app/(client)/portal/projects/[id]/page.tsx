@@ -7,6 +7,7 @@ import { FileUploadForm } from "./_components/FileUploadForm";
 import { PortalApprovalForm } from "./_components/PortalApprovalForm";
 import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
+import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -350,13 +351,10 @@ export default async function ClientProjectDetailPage({
                   </p>
                 </div>
                 {pbdrSignedUrl && (
-                  <a
+                  <PbdrDownloadButton
                     href={pbdrSignedUrl}
-                    download={latestPbdr.original_filename as string}
-                    className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Download
-                  </a>
+                    filename={latestPbdr.original_filename as string}
+                  />
                 )}
               </div>
             )}

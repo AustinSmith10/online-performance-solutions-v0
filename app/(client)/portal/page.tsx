@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ClickableRow } from "@/components/ClickableRow";
 import { DownloadPbdrLink } from "./_components/DownloadPbdrLink";
+import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
 import { DeletedBanner } from "./_components/DeletedBanner";
 import { RestoredBanner } from "./_components/RestoredBanner";
 import type { ProjectStatus, PaymentMethod } from "@/types";
@@ -256,12 +257,11 @@ export default async function ClientPortalPage({
                 <span className="min-w-0 truncate text-sm font-medium text-zinc-900">
                   {projectLabel(p)}
                 </span>
-                <a
+                <PbdrDownloadButton
                   href={`/api/download/pbdr/${p.id}`}
+                  label="Download PBDR"
                   className="shrink-0 inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
-                >
-                  Download PBDR
-                </a>
+                />
               </li>
             ))}
           </ul>
@@ -301,12 +301,11 @@ export default async function ClientPortalPage({
                         : `Available for ${daysLeft} more working day${daysLeft !== 1 ? "s" : ""}`}
                     </span>
                   </div>
-                  <a
+                  <PbdrDownloadButton
                     href={`/api/download/pbdr/${p.id}`}
-                    className="ml-4 shrink-0 inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
-                  >
-                    Download report
-                  </a>
+                    label="Download report"
+                    className="shrink-0 inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                  />
                 </li>
               );
             })}
