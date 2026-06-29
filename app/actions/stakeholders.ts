@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
@@ -187,8 +188,7 @@ export async function dispatchToStakeholders(
     return { error: err instanceof Error ? err.message : "Dispatch failed." };
   }
 
-  revalidatePath(`/admin/projects/${projectId}`);
-  return { dispatched: true };
+  redirect(`/admin/projects/${projectId}?dispatched=1`);
 }
 
 // ─── Waive stakeholder ────────────────────────────────────────────────────────

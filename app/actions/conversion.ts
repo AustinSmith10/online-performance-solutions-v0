@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deliverPbdr } from "@/lib/documents/delivery";
@@ -130,6 +131,5 @@ export async function resendPbdrEmail(
     metadata: { pbdr_version: pbdrFile.version, triggered_by: "admin_resend" },
   });
 
-  revalidatePath(`/admin/projects/${projectId}`);
-  return { sent: true };
+  redirect(`/admin/projects/${projectId}?pbdr_resent=1`);
 }

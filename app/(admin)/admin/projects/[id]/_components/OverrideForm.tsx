@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
 import {
   overridePaymentGateAction,
   reconcileOverrideAction,
@@ -15,13 +14,8 @@ interface Props {
 }
 
 function ReconcileButton({ projectId }: { projectId: string }) {
-  const router = useRouter();
   const boundAction = reconcileOverrideAction.bind(null, projectId);
   const [state, action, pending] = useActionState<ReconcileState, FormData>(boundAction, {});
-
-  useEffect(() => {
-    if (state.success) router.refresh();
-  }, [state.success, router]);
 
   return (
     <div className="space-y-2">
@@ -45,13 +39,8 @@ function ReconcileButton({ projectId }: { projectId: string }) {
 }
 
 export function OverrideForm({ projectId, alreadyOverridden }: Props) {
-  const router = useRouter();
   const boundAction = overridePaymentGateAction.bind(null, projectId);
   const [state, action, pending] = useActionState<OverrideState, FormData>(boundAction, {});
-
-  useEffect(() => {
-    if (state.success) router.refresh();
-  }, [state.success, router]);
 
   if (alreadyOverridden) {
     return <ReconcileButton projectId={projectId} />;
@@ -62,12 +51,6 @@ export function OverrideForm({ projectId, alreadyOverridden }: Props) {
       {state.error && (
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</p>
       )}
-      {state.success && (
-        <p className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
-          Override applied. Project flagged as Override — Payment Pending.
-        </p>
-      )}
-
       <form action={action} className="space-y-3">
         <div>
           <label htmlFor="reason" className="mb-1 block text-xs font-medium text-zinc-600">

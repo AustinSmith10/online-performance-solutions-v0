@@ -10,14 +10,6 @@ export function DispatchButton({ projectId }: { projectId: string }) {
     {}
   );
 
-  if (state.dispatched) {
-    return (
-      <p className="text-sm text-green-700">
-        Dispatch queued. Stakeholders will receive emails shortly.
-      </p>
-    );
-  }
-
   return (
     <form action={formAction}>
       <button

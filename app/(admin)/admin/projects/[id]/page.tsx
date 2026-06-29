@@ -86,6 +86,8 @@ export default async function ProjectDetailPage({
   const justPaused = sp.paused === "1";
   const justResumed = sp.resumed === "1";
   const justPbdrResent = sp.pbdr_resent === "1";
+  const justPaymentOverridden = sp.payment_overridden === "1";
+  const justPaymentReconciled = sp.payment_reconciled === "1";
 
   const initialTab: "overview" | "workflow" | "controls" =
     justSavedNumber || justAssigned || justDispatched || justPbdrResent
@@ -823,7 +825,12 @@ export default async function ProjectDetailPage({
           {/* Left column: payment gate + project controls */}
           <div className="space-y-6">
             {/* Payment gate */}
-            <div className="rounded-lg border border-zinc-200 bg-white p-5">
+            <div className="relative rounded-lg border border-zinc-200 bg-white p-5">
+              {project.status === "paused" && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/80 backdrop-blur-[2px]">
+                  <p className="text-sm font-medium text-zinc-500">Payment override disabled while project is paused</p>
+                </div>
+              )}
               <h2 className="mb-1 text-sm font-semibold text-zinc-900">Payment gate</h2>
               <div className="mb-4 flex gap-6 text-sm">
                 <span>
@@ -948,6 +955,20 @@ export default async function ProjectDetailPage({
           body="A fresh 30-day download link has been sent to the submitter."
         />
       )}
+      {justPaymentOverridden && (
+        <AdminSuccessBanner
+          cleanUrl={`/admin/projects/${id}`}
+          title="Payment override applied"
+          body="The project has been flagged as Override — Payment Pending."
+        />
+      )}
+      {justPaymentReconciled && (
+        <AdminSuccessBanner
+          cleanUrl={`/admin/projects/${id}`}
+          title="Override reconciled"
+          body="Payment has been marked as collected and the override flag has been cleared."
+        />
+      )}
 
       {/* Header */}
       <div>
@@ -993,11 +1014,6 @@ export default async function ProjectDetailPage({
           <span className="font-semibold">Project paused.</span>
           {pauseData.pause_reason && (
             <>{" "}<span className="text-amber-700">{pauseData.pause_reason}</span></>
-          )}
-          {pauseData.paused_previous_status && (
-            <span className="ml-1 text-amber-600">
-              — was {STATUS_LABELS[pauseData.paused_previous_status as ProjectStatus] ?? pauseData.paused_previous_status}.
-            </span>
           )}
         </div>
       )}

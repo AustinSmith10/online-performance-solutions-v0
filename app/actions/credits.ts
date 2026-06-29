@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { topUpCredit, logOverride } from "@/lib/payments/ledger";
@@ -83,20 +84,22 @@ export async function overridePaymentGateAction(
   const supabase = createAdminClient();
   const { data: project } = await supabase
     .from("projects")
-    .select("payment_override")
+    .select("payment_override, status")
     .eq("id", projectId)
     .maybeSingle();
+  if (project?.status === "paused") {
+    return { error: "Cannot apply a payment override while the project is paused. Resume the project first." };
+  }
   if (project?.payment_override) {
     return { error: "This project already has a payment override applied." };
   }
 
   try {
     await logOverride(projectId, actor.id, reason);
-    revalidatePath(`/admin/projects/${projectId}`);
-    return { success: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Override failed." };
   }
+  redirect(`/admin/projects/${projectId}?payment_overridden=1`);
 }
 
 export async function reconcileOverrideAction(
@@ -155,7 +158,5 @@ export async function reconcileOverrideAction(
     metadata: { project_number: project.project_number ?? null },
   });
 
-  revalidatePath(`/admin/projects/${projectId}`);
-  revalidatePath("/admin/projects");
-  return { success: true };
+  redirect(`/admin/projects/${projectId}?payment_reconciled=1`);
 }
