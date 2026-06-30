@@ -111,9 +111,10 @@ export default async function ClientProjectDetailPage({
     project.template_id
       ? supabase
           .from("template_field_mappings")
-          .select("placeholder_token, field_key, display_label")
+          .select("placeholder_token, field_key, display_label, client_visible, client_sort_order")
           .eq("template_id", project.template_id)
-          .order("placeholder_token")
+          .order("client_sort_order", { ascending: true })
+          .order("placeholder_token", { ascending: true })
       : Promise.resolve({ data: [] }),
     supabase
       .from("project_files")
@@ -166,17 +167,36 @@ export default async function ClientProjectDetailPage({
   }
 
   // Build label map from template mappings
+  type MappingEntry = {
+    placeholder_token: string;
+    display_label: string | null;
+    client_visible: boolean | null;
+    client_sort_order: number | null;
+  };
+
+  const mappingEntries = (mappings ?? []) as MappingEntry[];
+
+  // Build label and visibility maps from template mappings
   const labelMap = new Map<string, string>(
-    (mappings ?? []).map((m) => [
-      m.placeholder_token as string,
-      (m.display_label as string | null) ?? prettifyToken(m.placeholder_token as string),
+    mappingEntries.map((m) => [
+      m.placeholder_token,
+      m.display_label ?? prettifyToken(m.placeholder_token),
     ])
   );
+  const visibleTokens = new Set(
+    mappingEntries
+      .filter((m) => m.client_visible !== false)
+      .map((m) => m.placeholder_token)
+  );
 
-  const CLIENT_HIDDEN_TOKENS = new Set(["EXTRACT_RAINFALL_INTENSITY"]);
   const extractedFields = project.extracted_fields ?? {};
   const fieldEntries = Object.entries(extractedFields)
-    .filter(([token]) => !CLIENT_HIDDEN_TOKENS.has(token))
+    .filter(([token]) => visibleTokens.has(token))
+    .sort(([a], [b]) => {
+      const ma = mappingEntries.find((m) => m.placeholder_token === a);
+      const mb = mappingEntries.find((m) => m.placeholder_token === b);
+      return (ma?.client_sort_order ?? 0) - (mb?.client_sort_order ?? 0);
+    })
     .map(([token, value]) => ({
       token,
       label: labelMap.get(token) ?? prettifyToken(token),

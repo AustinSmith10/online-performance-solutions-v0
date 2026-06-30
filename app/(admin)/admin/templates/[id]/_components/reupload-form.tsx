@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from "react";
 import { reuploadTemplate, type ReuploadTemplateState } from "@/app/actions/templates";
+import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 
 export function ReuploadForm({ templateId }: { templateId: string }) {
   const action = reuploadTemplate.bind(null, templateId);
@@ -12,6 +13,7 @@ export function ReuploadForm({ templateId }: { templateId: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  useUnsavedChanges("reupload", fileName !== null);
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault();

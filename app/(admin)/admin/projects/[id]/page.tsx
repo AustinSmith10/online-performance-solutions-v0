@@ -23,6 +23,7 @@ import { PbdbDownloadButton } from "@/components/PbdbDownloadButton";
 import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
+import { HighlightRing } from "@/components/HighlightRing";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -90,11 +91,13 @@ export default async function ProjectDetailPage({
   const justPbdrResent = sp.pbdr_resent === "1";
   const justPaymentOverridden = sp.payment_overridden === "1";
   const justPaymentReconciled = sp.payment_reconciled === "1";
+  const justReviewWaived = sp.review_waived === "1";
+  const justEmailUpdated = sp.email_updated ?? null;
 
   const initialTab: "overview" | "workflow" | "controls" =
-    justSavedNumber || justAssigned || justDispatched || justPbdrResent
+    justSavedNumber || justAssigned || justDispatched || justPbdrResent || justReviewWaived || justEmailUpdated
       ? "workflow"
-      : justPaused || justResumed
+      : justPaused || justResumed || justPaymentOverridden || justPaymentReconciled
       ? "controls"
       : "overview";
 
@@ -719,24 +722,31 @@ export default async function ProjectDetailPage({
               Pending responses ({pendingReviews.length})
             </p>
             <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
-              {pendingReviews.map((r) => (
-                <div key={r.id} className="space-y-3 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
-                      <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
+              {pendingReviews.map((r) => {
+                const inner = (
+                  <div className="space-y-3 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                        <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        Pending
+                      </span>
                     </div>
-                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                      Pending
-                    </span>
+                    <div className="space-y-2">
+                      <ResendTokenButton reviewId={r.id} projectId={id} />
+                      <UpdateEmailForm reviewId={r.id} projectId={id} currentEmail={r.stakeholder_email} />
+                      <WaiveForm reviewId={r.id} projectId={id} stakeholderName={r.stakeholder_name} />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <ResendTokenButton reviewId={r.id} projectId={id} />
-                    <UpdateEmailForm reviewId={r.id} projectId={id} currentEmail={r.stakeholder_email} />
-                    <WaiveForm reviewId={r.id} projectId={id} stakeholderName={r.stakeholder_name} />
+                );
+                return (
+                  <div key={r.id}>
+                    {justEmailUpdated === r.id ? <HighlightRing>{inner}</HighlightRing> : inner}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -969,6 +979,20 @@ export default async function ProjectDetailPage({
           cleanUrl={`/admin/projects/${id}`}
           title="Override reconciled"
           body="Payment has been marked as collected and the override flag has been cleared."
+        />
+      )}
+      {justReviewWaived && (
+        <AdminSuccessBanner
+          cleanUrl={`/admin/projects/${id}`}
+          title="Review waived"
+          body="The stakeholder's review has been waived and the audit trail updated."
+        />
+      )}
+      {justEmailUpdated && (
+        <AdminSuccessBanner
+          cleanUrl={`/admin/projects/${id}`}
+          title="Email updated"
+          body="The stakeholder's email has been updated and a fresh approval link has been resent."
         />
       )}
 

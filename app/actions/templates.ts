@@ -148,7 +148,7 @@ export async function activateTemplate(
   revalidatePath(`/admin/templates/${templateId}`);
   revalidatePath(`/admin/templates`);
   revalidatePath(`/admin/organisations/${template.org_id}`);
-  return {};
+  redirect(`/admin/templates/${templateId}?activated=1`);
 }
 
 export type DeactivateTemplateState = { error?: string };
@@ -182,7 +182,7 @@ export async function deactivateTemplate(
   revalidatePath(`/admin/templates/${templateId}`);
   revalidatePath(`/admin/templates`);
   revalidatePath(`/admin/organisations/${template.org_id}`);
-  return {};
+  redirect(`/admin/templates/${templateId}?deactivated=1`);
 }
 
 export type DeleteTemplateState = { error?: string };
@@ -221,7 +221,7 @@ export async function deleteTemplate(
 
   revalidatePath("/admin/templates");
   revalidatePath(`/admin/organisations/${template.org_id}`);
-  redirect("/admin/templates");
+  redirect("/admin/templates?deleted=1");
 }
 
 export type ReuploadTemplateState = { error?: string };
@@ -417,7 +417,7 @@ export async function addExtractionOnlyToken(
   }
 
   revalidatePath(`/admin/templates/${templateId}`);
-  return {};
+  redirect(`/admin/templates/${templateId}?token_added=${encodeURIComponent(token)}`);
 }
 
 export type DeleteExtractionTokenState = { error?: string };
@@ -548,5 +548,130 @@ export async function reactivateTemplate(
 
   revalidatePath(`/admin/templates/${templateId}`);
   revalidatePath(`/admin/templates`);
-  return {};
+  redirect(`/admin/templates/${templateId}?activated=1`);
+}
+
+export type UpdateSingleTokenState = { error?: string; success?: boolean };
+
+export async function updateSingleTokenLabel(
+  templateId: string,
+  placeholderToken: string,
+  _prev: UpdateSingleTokenState,
+  formData: FormData
+): Promise<UpdateSingleTokenState> {
+  await requireRole("super_admin", "admin");
+
+  const label = (formData.get("label") as string | null)?.trim();
+  if (!label) return { error: "Display label is required." };
+
+  const hint = (formData.get("hint") as string | null)?.trim() || null;
+  const is_required = formData.get("is_required") === "on";
+
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("template_field_mappings")
+    .update({ display_label: label, extraction_hint: hint, is_required })
+    .eq("template_id", templateId)
+    .eq("placeholder_token", placeholderToken)
+    .eq("in_template", true);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return { success: true };
+}
+
+export async function updateTokenOrder(
+  templateId: string,
+  orders: { placeholder_token: string; sort_order: number }[]
+): Promise<void> {
+  await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  for (const { placeholder_token, sort_order } of orders) {
+    await supabase
+      .from("template_field_mappings")
+      .update({ sort_order })
+      .eq("template_id", templateId)
+      .eq("placeholder_token", placeholder_token)
+      .eq("in_template", true);
+  }
+
+  revalidatePath(`/admin/templates/${templateId}`);
+}
+
+export async function updateSingleSectionLabel(
+  templateId: string,
+  _prev: UpdateSectionLabelsState,
+  formData: FormData
+): Promise<UpdateSectionLabelsState> {
+  await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data, error: readErr } = await supabase
+    .from("templates")
+    .select("section_labels")
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (readErr || !data) return { error: "Template not found." };
+
+  const fieldMap: Record<string, string> = {
+    label_extract: "extract",
+    label_extract_desc: "extractDesc",
+    label_trustee_desc: "trusteeDesc",
+    label_org: "org",
+    label_org_desc: "orgDesc",
+    label_client: "client",
+    label_client_desc: "clientDesc",
+  };
+
+  const updated = { ...((data.section_labels as Record<string, string>) ?? {}) };
+  for (const [formKey, labelKey] of Object.entries(fieldMap)) {
+    const val = formData.get(formKey);
+    if (val !== null) updated[labelKey] = (val as string).trim();
+  }
+
+  const { error } = await supabase
+    .from("templates")
+    .update({ section_labels: updated })
+    .eq("id", templateId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return { success: true };
+}
+
+export type UpdateClientProfileState = { error?: string; success?: boolean };
+
+export async function updateClientProfile(
+  templateId: string,
+  _prev: UpdateClientProfileState,
+  formData: FormData
+): Promise<UpdateClientProfileState> {
+  await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const tokens: string[] = [];
+  for (const key of formData.keys()) {
+    if (key.startsWith("order_")) tokens.push(key.slice(6));
+  }
+
+  for (const token of tokens) {
+    const client_sort_order = parseInt(formData.get(`order_${token}`) as string, 10) || 0;
+    const client_visible = formData.get(`visible_${token}`) === "on";
+
+    const { error } = await supabase
+      .from("template_field_mappings")
+      .update({ client_visible, client_sort_order })
+      .eq("template_id", templateId)
+      .eq("placeholder_token", token);
+
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return { success: true };
 }

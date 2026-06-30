@@ -2,13 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { MappingTable } from "./_components/mapping-table";
 import { TemplateStatusActions } from "./_components/status-actions";
 import { DeleteButton } from "./_components/delete-button";
 import { ReuploadForm } from "./_components/reupload-form";
-import { AddExtractionTokenForm } from "./_components/add-extraction-token-form";
+import { ExtractionOnlyPanel } from "./_components/ExtractionOnlyPanel";
 import { FileRequirementsSection } from "./_components/FileRequirementsSection";
 import { SectionLabelsForm } from "./_components/SectionLabelsForm";
+import { TemplateTabs } from "./_components/TemplateTabs";
+import { AddFileRequirementForm } from "./_components/AddFileRequirementForm";
+import { ClientProfileSection, type ClientProfileRow } from "./_components/ClientProfileSection";
 
 type MappingRow = {
   id: string;
@@ -20,6 +24,8 @@ type MappingRow = {
   extraction_hint: string | null;
   is_required: boolean;
   sort_order: number;
+  client_visible: boolean;
+  client_sort_order: number;
 };
 
 type TemplateDetail = {
@@ -34,11 +40,14 @@ type TemplateDetail = {
 
 export default async function TemplatePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string>>;
 }) {
   await requireRole("super_admin", "admin");
   const { id } = await params;
+  const sp = await searchParams;
   const supabase = createAdminClient();
 
   const [{ data: tmpl }, { data: mappings }, { data: fileReqs }] = await Promise.all([
@@ -49,7 +58,7 @@ export default async function TemplatePage({
       .maybeSingle(),
     supabase
       .from("template_field_mappings")
-      .select("id, placeholder_token, field_key, is_mapped, in_template, display_label, extraction_hint, is_required, sort_order")
+      .select("id, placeholder_token, field_key, is_mapped, in_template, display_label, extraction_hint, is_required, sort_order, client_visible, client_sort_order")
       .eq("template_id", id)
       .order("sort_order", { ascending: true })
       .order("placeholder_token", { ascending: true }),
@@ -71,6 +80,10 @@ export default async function TemplatePage({
   const templateRows = rows.filter((r) => r.in_template);
   const extractionOnlyRows = rows.filter((r) => !r.in_template);
 
+  const clientProfileTokens: ClientProfileRow[] = rows
+    .filter((r) => r.field_key === "extract")
+    .sort((a, b) => a.client_sort_order - b.client_sort_order || a.placeholder_token.localeCompare(b.placeholder_token));
+
   const redFlags = rows.filter((r) => !r.is_mapped);
   const missingLabels = rows.filter((r) => !r.display_label?.trim());
   const missingHints = rows.filter(
@@ -83,24 +96,40 @@ export default async function TemplatePage({
   const canActivate =
     redFlags.length === 0 && missingLabels.length === 0 && missingHints.length === 0;
 
+  const uploadedDate = new Date(template.created_at).toLocaleDateString("en-AU", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {/* Header */}
-      <div>
-        <Link href="/admin/templates" className="text-sm text-zinc-500 hover:text-zinc-700">
-          ← Templates
-        </Link>
-        <div className="mt-2 flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-zinc-900">{template.name}</h1>
-          <StatusBadge status={template.status} />
-        </div>
-        {template.org && (
-          <p className="mt-1 text-sm text-zinc-500">
-            <Link href={`/admin/organisations/${template.org.id}`} className="hover:underline">
-              {template.org.name}
-            </Link>
+    <div className="mx-auto max-w-4xl space-y-5">
+      {/* Breadcrumb */}
+      <Link href="/admin/templates" className="text-sm text-zinc-500 hover:text-zinc-700">
+        ← Templates
+      </Link>
+
+      {/* Header card */}
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white px-5 py-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5">
+            <h1 className="truncate text-base font-semibold text-zinc-900">{template.name}</h1>
+            <StatusBadge status={template.status} />
+          </div>
+          <p className="mt-0.5 text-xs text-zinc-400">
+            {template.org ? (
+              <>
+                <Link href={`/admin/organisations/${template.org.id}`} className="hover:underline text-zinc-500">
+                  {template.org.name}
+                </Link>
+                {" · "}
+              </>
+            ) : null}
+            Uploaded {uploadedDate}
           </p>
-        )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <TemplateStatusActions templateId={id} status={template.status} canActivate={canActivate} />
+          <DeleteButton templateId={id} />
+        </div>
       </div>
 
       {/* Validation banners */}
@@ -149,96 +178,144 @@ export default async function TemplatePage({
         </div>
       )}
 
-      {/* Status actions + danger zone */}
-      <div className="flex items-center justify-between">
-        <TemplateStatusActions
-          templateId={id}
-          status={template.status}
-          canActivate={canActivate}
+      {/* Tabbed content */}
+      <TemplateTabs
+        tabs={[
+          {
+            label: `Tokens (${rows.length})`,
+            content: (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-xs text-zinc-500">
+                    Set a display label and extraction hint for each token, drag to reorder, and mark fields as required to block submission.
+                  </p>
+                  <ExtractionOnlyPanel
+                    templateId={id}
+                    tokens={extractionOnlyRows}
+                    highlightToken={sp.token_added}
+                  />
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-white">
+                  <div className="border-b border-zinc-100 px-5 py-4">
+                    <h2 className="text-sm font-semibold text-zinc-900">
+                      Template tokens ({templateRows.length})
+                    </h2>
+                  </div>
+                  {templateRows.length === 0 ? (
+                    <p className="px-5 py-8 text-center text-sm text-zinc-500">
+                      No placeholders found in this document.
+                    </p>
+                  ) : (
+                    <MappingTable rows={templateRows} templateId={id} missingOrgTokens={yellowFlags} isActivated={template.status !== "draft"} />
+                  )}
+                </div>
+              </div>
+            ),
+          },
+          {
+            label: "Section labels",
+            content: (
+              <div className="rounded-lg border border-zinc-200 bg-white p-5">
+                <h2 className="mb-1 text-sm font-semibold text-zinc-900">Step 2 section headings</h2>
+                <p className="mb-4 text-xs text-zinc-500">
+                  Labels shown to the client above each group of fields in the review step.
+                </p>
+                <SectionLabelsForm
+                  templateId={id}
+                  isActivated={template.status !== "draft"}
+                  labels={template.section_labels ?? {
+                    extract: "Extracted from your documents",
+                    extractDesc: "",
+                    trusteeDesc: "",
+                    org: "Organisation details",
+                    orgDesc: "",
+                    client: "Additional information",
+                    clientDesc: "",
+                  }}
+                />
+              </div>
+            ),
+          },
+          {
+            label: `File requirements (${requirements.length})`,
+            content: (
+              <div className="rounded-lg border border-zinc-200 bg-white">
+                <div className="border-b border-zinc-100 px-5 py-4">
+                  <h2 className="text-sm font-semibold text-zinc-900">
+                    File requirements ({requirements.length})
+                  </h2>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    Files the client must attach when submitting a project using this template.
+                  </p>
+                </div>
+                <div className="border-b border-zinc-100 bg-zinc-50/50 px-5 py-4">
+                  <AddFileRequirementForm templateId={id} />
+                </div>
+                <div className="p-4">
+                  <FileRequirementsSection templateId={id} requirements={requirements} />
+                </div>
+              </div>
+            ),
+          },
+          {
+            label: "Client profile",
+            content: (
+              <div className="rounded-lg border border-zinc-200 bg-white">
+                <div className="border-b border-zinc-100 px-5 py-4">
+                  <h2 className="text-sm font-semibold text-zinc-900">Client profile layout</h2>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    Controls which extracted values appear on the client&apos;s project page and in what order. Drag to reorder. Toggle visibility per field.
+                  </p>
+                </div>
+                <ClientProfileSection templateId={id} tokens={clientProfileTokens} />
+              </div>
+            ),
+          },
+          {
+            label: "Settings",
+            content: (
+              <div className="rounded-lg border border-zinc-200 bg-white">
+                <div className="border-b border-zinc-100 px-5 py-4">
+                  <h2 className="text-sm font-semibold text-zinc-900">Replace file</h2>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    Upload a new .docx to replace the current file and re-extract tokens.
+                  </p>
+                </div>
+                <div className="px-5 py-4 space-y-4">
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                    <span className="font-semibold">This action is destructive.</span>{" "}
+                    The template will revert to draft and all display labels, extraction hints, and sort orders will need to be re-entered.
+                  </div>
+                  <ReuploadForm templateId={id} />
+                </div>
+              </div>
+            ),
+          },
+        ]}
+      />
+
+      {/* Success banners */}
+      {sp.activated === "1" && (
+        <AdminSuccessBanner
+          cleanUrl={`/admin/templates/${id}`}
+          title="Template activated"
+          body="This template is now available for new projects."
         />
-        <DeleteButton templateId={id} />
-      </div>
-
-      {/* Re-upload */}
-      <div className="rounded-lg border border-zinc-200 bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-900">Replace file</h2>
-        <p className="mb-4 text-xs text-zinc-500">
-          Upload a new .docx to replace the current file. Tokens will be re-extracted and the
-          template reset to draft. Labels and hints will need to be re-entered.
-        </p>
-        <ReuploadForm templateId={id} />
-      </div>
-
-      {/* Section labels */}
-      <div className="rounded-lg border border-zinc-200 bg-white p-5">
-        <h2 className="mb-1 text-sm font-semibold text-zinc-900">Step 2 section headings</h2>
-        <p className="mb-4 text-xs text-zinc-500">
-          Labels shown to the client above each group of fields in the review step.
-        </p>
-        <SectionLabelsForm
-          templateId={id}
-          labels={template.section_labels ?? {
-            extract: "Extracted from your documents",
-            extractDesc: "",
-            trusteeDesc: "",
-            org: "Organisation details",
-            orgDesc: "",
-            client: "Additional information",
-            clientDesc: "",
-          }}
+      )}
+      {sp.deactivated === "1" && (
+        <AdminSuccessBanner
+          cleanUrl={`/admin/templates/${id}`}
+          title="Template deactivated"
+          body="This template will no longer appear for new projects."
         />
-      </div>
-
-      {/* Template token table */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">
-            Template tokens ({templateRows.length})
-          </h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            Tokens found inside the .docx file. Set a display label, extraction hint, and order for each.
-            Mark fields as required to block submission.
-            <code className="ml-1 rounded bg-zinc-100 px-1 font-mono">EXTRACT_ADDRESS</code> is always used for duplicate detection.
-            <code className="ml-1 rounded bg-zinc-100 px-1 font-mono">EXTRACT_TRUSTEE</code> and <code className="rounded bg-zinc-100 px-1 font-mono">EXTRACT_RAINFALL_INTENSITY</code> are auto-populated from the Halcyon table.
-          </p>
-        </div>
-
-        {templateRows.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-zinc-500">
-            No placeholders found in this document.
-          </p>
-        ) : (
-          <MappingTable rows={templateRows} templateId={id} missingOrgTokens={yellowFlags} />
-        )}
-      </div>
-
-      {/* Extraction-only tokens */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">
-            Extraction-only tokens ({extractionOnlyRows.length})
-          </h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            Fields extracted from submitted documents but not present as placeholders in the .docx.
-            Used for Halcyon lookups and other system operations. Optionally shown to the client if a display label is set.
-          </p>
-        </div>
-        <AddExtractionTokenForm templateId={id} existingTokens={extractionOnlyRows} />
-      </div>
-
-      {/* File requirements */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">
-            File requirements ({requirements.length})
-          </h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            Files the client must attach when submitting a project using this template.
-            Set a name, identifier, upload limit, and whether the field is required or must be unique.
-          </p>
-        </div>
-        <FileRequirementsSection templateId={id} requirements={requirements} />
-      </div>
+      )}
+      {sp.token_added && (
+        <AdminSuccessBanner
+          cleanUrl={`/admin/templates/${id}`}
+          title="Extraction token added"
+          body={`{${sp.token_added}} has been added to this template.`}
+        />
+      )}
     </div>
   );
 }

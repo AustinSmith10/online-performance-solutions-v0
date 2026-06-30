@@ -125,7 +125,7 @@ export default async function ConsultantOpsPage({
     }
   }
   const active = projects.filter((p) =>
-    (["assigned", "in_progress"] as ProjectStatus[]).includes(p.status)
+    (["assigned", "in_progress", "revision_required"] as ProjectStatus[]).includes(p.status)
   );
   const withStakeholders = projects.filter((p) =>
     (["dispatched", "converting"] as ProjectStatus[]).includes(p.status)

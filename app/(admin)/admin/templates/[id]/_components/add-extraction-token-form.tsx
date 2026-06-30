@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useTransition, useState } from "react";
+import { useActionState, useTransition, useState, useEffect, useRef } from "react";
 import {
   addExtractionOnlyToken,
   deleteExtractionToken,
@@ -19,9 +19,10 @@ interface Row {
 interface Props {
   templateId: string;
   existingTokens: Row[];
+  highlightToken?: string;
 }
 
-export function AddExtractionTokenForm({ templateId, existingTokens }: Props) {
+export function AddExtractionTokenForm({ templateId, existingTokens, highlightToken }: Props) {
   const boundAdd = addExtractionOnlyToken.bind(null, templateId);
   const [state, formAction, pending] = useActionState<AddExtractionTokenState, FormData>(
     boundAdd,
@@ -31,7 +32,8 @@ export function AddExtractionTokenForm({ templateId, existingTokens }: Props) {
   return (
     <div className="divide-y divide-zinc-50">
       {existingTokens.length > 0 && (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[480px] text-sm">
           <thead className="border-b border-zinc-100">
             <tr>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Token</th>
@@ -43,10 +45,16 @@ export function AddExtractionTokenForm({ templateId, existingTokens }: Props) {
           </thead>
           <tbody className="divide-y divide-zinc-50">
             {existingTokens.map((row) => (
-              <ExtractionOnlyRow key={row.id} templateId={templateId} row={row} />
+              <ExtractionOnlyRow
+                key={row.id}
+                templateId={templateId}
+                row={row}
+                highlight={row.placeholder_token === highlightToken}
+              />
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <form action={formAction} className="space-y-4 px-5 py-5">
@@ -123,8 +131,22 @@ export function AddExtractionTokenForm({ templateId, existingTokens }: Props) {
   );
 }
 
-function ExtractionOnlyRow({ templateId, row }: { templateId: string; row: Row }) {
+function ExtractionOnlyRow({ templateId, row, highlight }: { templateId: string; row: Row; highlight?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
+  const trRef = useRef<HTMLTableRowElement>(null);
+
+  useEffect(() => {
+    if (!highlight || !trRef.current) return;
+    const el = trRef.current;
+    el.style.outline = "2px solid #4ade80";
+    el.style.outlineOffset = "-2px";
+    const t = setTimeout(() => {
+      el.style.transition = "outline-color 0.6s ease";
+      el.style.outlineColor = "transparent";
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [highlight]);
+
   const [isDeletePending, startDeleteTransition] = useTransition();
   const [isSavePending, startSaveTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | undefined>();
@@ -212,7 +234,7 @@ function ExtractionOnlyRow({ templateId, row }: { templateId: string; row: Row }
   }
 
   return (
-    <tr className={isDeletePending ? "opacity-40" : ""}>
+    <tr ref={trRef} className={isDeletePending ? "opacity-40" : ""}>
       <td className="px-5 py-3 font-mono text-xs text-zinc-800">
         {"{"}
         {row.placeholder_token}

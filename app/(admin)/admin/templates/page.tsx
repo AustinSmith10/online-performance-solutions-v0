@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { ClickableRow } from "@/components/ClickableRow";
+import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 
 type TemplateRow = {
   id: string;
@@ -44,11 +45,11 @@ function StatusBadge({ status }: { status: string }) {
 export default async function TemplatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; org?: string; sort?: string; order?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; org?: string; sort?: string; order?: string; deleted?: string }>;
 }) {
   await requireRole("super_admin", "admin");
 
-  const { q, status, org, sort, order } = await searchParams;
+  const { q, status, org, sort, order, deleted } = await searchParams;
 
   const sortCol: SortCol = SORT_COLS.includes(sort as SortCol) ? (sort as SortCol) : "created_at";
   const sortOrder: "asc" | "desc" = order === "asc" ? "asc" : "desc";
@@ -77,7 +78,7 @@ export default async function TemplatesPage({
   if (orgIds !== null) {
     if (orgIds.length === 0) {
       const hasFilter = !!(q || status || org);
-      return <TemplatesLayout rows={[]} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} />;
+      return <TemplatesLayout rows={[]} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} deleted={deleted} />;
     }
     query = query.in("org_id", orgIds);
   }
@@ -86,7 +87,7 @@ export default async function TemplatesPage({
   const rows = (templates ?? []) as unknown as TemplateRow[];
   const hasFilter = !!(q || status || org);
 
-  return <TemplatesLayout rows={rows} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} />;
+  return <TemplatesLayout rows={rows} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} deleted={deleted} />;
 }
 
 function TemplatesLayout({
@@ -95,12 +96,14 @@ function TemplatesLayout({
   sortCol,
   sortOrder,
   hasFilter,
+  deleted,
 }: {
   rows: TemplateRow[];
   params: Record<string, string | undefined>;
   sortCol: SortCol;
   sortOrder: "asc" | "desc";
   hasFilter: boolean;
+  deleted?: string;
 }) {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -205,6 +208,14 @@ function TemplatesLayout({
           </table>
           <p className="px-5 py-3 text-xs text-zinc-400">{rows.length} template{rows.length !== 1 ? "s" : ""}</p>
         </div>
+      )}
+
+      {deleted === "1" && (
+        <AdminSuccessBanner
+          cleanUrl="/admin/templates"
+          title="Template deleted"
+          body="The template has been permanently removed."
+        />
       )}
     </div>
   );

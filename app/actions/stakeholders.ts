@@ -20,7 +20,6 @@ export interface StakeholderActionState {
 
 export interface WaiveState {
   error?: string;
-  saved?: boolean;
 }
 
 // ─── Org stakeholder management ──────────────────────────────────────────────
@@ -253,8 +252,7 @@ export async function waiveStakeholderResponse(
     }
   }
 
-  revalidatePath(`/admin/projects/${projectId}`);
-  return { saved: true };
+  redirect(`/admin/projects/${projectId}?review_waived=1`);
 }
 
 // ─── Resend fresh token ───────────────────────────────────────────────────────
@@ -359,7 +357,6 @@ export async function resendFreshToken(
 
 export interface UpdateEmailState {
   error?: string;
-  saved?: boolean;
 }
 
 export async function updateStakeholderEmail(
@@ -460,7 +457,6 @@ export async function updateStakeholderEmail(
     console.error(`[update-email] email to ${newEmail} failed:`, err);
   });
 
-  revalidatePath(`/admin/projects/${projectId}`);
-  return { saved: true };
+  redirect(`/admin/projects/${projectId}?email_updated=${reviewId}`);
 }
 

@@ -42,9 +42,7 @@ export function AdminProjectTabs({
         ))}
       </div>
       <div>
-        {tab === "overview" && overview}
-        {tab === "workflow" && workflow}
-        {tab === "controls" && controls}
+        {tab === "overview" ? overview : tab === "workflow" ? workflow : controls}
       </div>
     </div>
   );

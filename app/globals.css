@@ -9,6 +9,8 @@
 @source inline("bg-blue-50 bg-blue-100 bg-blue-600 border-blue-100 border-blue-200 border-blue-300 text-blue-700 text-blue-900 hover:bg-blue-100 bg-orange-50 bg-orange-100 bg-orange-600 border-orange-100 border-orange-200 text-orange-600 text-orange-900 hover:bg-orange-50 animate-spin");
 @source inline("bg-indigo-100 text-indigo-700 bg-emerald-100 text-emerald-700 bg-zinc-200 text-zinc-700");
 @source inline("grid-cols-1 md:grid-cols-[2fr_3fr] lg:grid-cols-[2fr_3fr] lg:grid-cols-2 max-lg:hidden");
+@source inline("grid-cols-2 grid-cols-[3fr_2fr] gap-x-8 gap-y-6 min-w-0 items-start focus:h-20 transition-[height] duration-200 resize-none overflow-hidden");
+@source inline("translate-x-0 translate-x-full transition-transform transition-opacity ease-in-out duration-300 pointer-events-none overflow-y-auto line-clamp-2 shrink-0 opacity-0 opacity-100");
 
 :root {
   --background: #ffffff;
@@ -54,8 +56,8 @@ body {
   animation: section-highlight 2.5s ease-out;
 }
 
-/* Two-column project layout — used on admin and client project pages (md breakpoint) */
-.project-two-col {
+/* Two-column project layout — admin and client pages (md breakpoint) */
+@utility project-two-col {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1.5rem;
@@ -68,7 +70,7 @@ body {
 }
 
 /* Two-column layout for consultant project tabs (lg breakpoint) */
-.consultant-two-col {
+@utility consultant-two-col {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1.5rem;
@@ -81,8 +83,8 @@ body {
   }
 }
 
-/* Tab visibility helpers for consultant project tabs */
-.consultant-tab-hidden {
+/* Hidden on mobile, shown at lg+ (consultant tabs inactive column) */
+@utility consultant-tab-hidden {
   display: none;
 }
 
@@ -90,7 +92,14 @@ body {
   .consultant-tab-hidden {
     display: block;
   }
+}
 
+/* Shown on mobile, hidden at lg+ (consultant tabs bar) */
+@utility consultant-tabs-bar {
+  display: flex;
+}
+
+@media (min-width: 1024px) {
   .consultant-tabs-bar {
     display: none;
   }
