@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
-import { sendInvite } from "@/lib/auth/invite";
+import { createAccount } from "@/lib/auth/invite";
 import { auditLog } from "@/lib/audit/log";
 import type { ConsultantAvailability } from "@/types";
 
@@ -19,7 +19,6 @@ export async function deleteUser(
   const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
-  // Read email/role before deletion for the audit entry
   const { data: user } = await supabase
     .from("users")
     .select("email, role")
@@ -29,24 +28,75 @@ export async function deleteUser(
   if (!user) return { error: "User not found." };
 
   if (actor.role === "admin" && (user.role === "super_admin" || user.role === "admin")) {
-    return { error: "Insufficient permissions to delete this account." };
+    return { error: "Insufficient permissions to deactivate this account." };
   }
 
-  // Delegate to the SQL function — it validates, handles audit_log trigger, and deletes
-  const { error } = await supabase.rpc("admin_delete_user", { p_user_id: userId });
-  if (error) {
-    // The SQL function raises human-readable exceptions for blocking conditions
-    return { error: error.message };
-  }
+  const { error } = await supabase
+    .from("users")
+    .update({ is_active: false })
+    .eq("id", userId);
 
-  await auditLog("user.deleted", actor.id, actor.email, {
+  if (error) return { error: error.message };
+
+  const { error: banError } = await supabase.auth.admin.updateUserById(userId, {
+    ban_duration: "876600h",
+  });
+  if (banError) return { error: banError.message };
+
+  await auditLog("user.deactivated", actor.id, actor.email, {
     metadata: { target_user_id: userId, target_email: user.email, role: user.role },
   });
 
+  revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");
   revalidatePath("/admin/clients");
   revalidatePath("/admin/consultants");
-  redirect("/admin/users");
+  redirect(`/admin/users/${userId}?deleted=1`);
+}
+
+export type RestoreUserState = { error?: string };
+
+export async function restoreUser(
+  userId: string,
+  _prev: RestoreUserState,
+  _formData: FormData
+): Promise<RestoreUserState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: user } = await supabase
+    .from("users")
+    .select("email, role")
+    .eq("id", userId)
+    .single();
+
+  if (!user) return { error: "User not found." };
+
+  if (actor.role === "admin" && (user.role === "super_admin" || user.role === "admin")) {
+    return { error: "Insufficient permissions to restore this account." };
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .update({ is_active: true })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+
+  const { error: unbanError } = await supabase.auth.admin.updateUserById(userId, {
+    ban_duration: "none",
+  });
+  if (unbanError) return { error: unbanError.message };
+
+  await auditLog("user.restored", actor.id, actor.email, {
+    metadata: { target_user_id: userId, target_email: user.email, role: user.role },
+  });
+
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin/consultants");
+  redirect(`/admin/users/${userId}?restored=1`);
 }
 
 export type ResetPasswordState = { link?: string; error?: string };
@@ -79,30 +129,36 @@ export async function resetUserPassword(
   return { link: data.properties.action_link };
 }
 
-const InviteSchema = z.object({
+const CreateAccountSchema = z.object({
   email: z.string().email({ error: "Valid email required" }).trim().toLowerCase(),
+  first_name: z.string().min(1, { error: "First name required" }).trim(),
+  last_name: z.string().min(1, { error: "Last name required" }).trim(),
   role: z.enum(["client", "consultant", "admin"], { error: "Invalid role" }),
   org_id: z.string().uuid({ error: "Invalid organisation" }).optional().or(z.literal("")),
 });
 
-export type InviteUserState = {
+export type CreateAccountState = {
   errors?: {
     email?: string[];
+    first_name?: string[];
+    last_name?: string[];
     role?: string[];
     org_id?: string[];
     form?: string[];
   };
 };
 
-export async function inviteUser(
-  _prev: InviteUserState,
+export async function createUserAccount(
+  _prev: CreateAccountState,
   formData: FormData
-): Promise<InviteUserState> {
+): Promise<CreateAccountState> {
   const caller = await requireRole("super_admin", "admin");
 
   const rawOrgId = formData.get("org_id") as string | null;
-  const validated = InviteSchema.safeParse({
+  const validated = CreateAccountSchema.safeParse({
     email: formData.get("email"),
+    first_name: formData.get("first_name"),
+    last_name: formData.get("last_name"),
     role: formData.get("role"),
     org_id: rawOrgId || undefined,
   });
@@ -111,21 +167,25 @@ export async function inviteUser(
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const { email, role, org_id } = validated.data;
+  const { email, first_name, last_name, role, org_id } = validated.data;
 
   if (role === "admin" && caller.role !== "super_admin") {
-    return { errors: { role: ["Only a Super Admin can invite Admin users"] } };
+    return { errors: { role: ["Only a Super Admin can create Admin accounts"] } };
   }
 
   if (role === "client" && !org_id) {
-    return { errors: { org_id: ["Organisation required for client users"] } };
+    return { errors: { org_id: ["Organisation required for client accounts"] } };
   }
 
-  const result = await sendInvite(email, role, org_id || undefined);
+  const result = await createAccount(email, role, first_name, last_name, org_id || undefined);
   if (result.error) return { errors: { form: [result.error] } };
 
+  await auditLog("user.account_created", caller.id, caller.email, {
+    metadata: { target_user_id: result.userId, target_email: email, role },
+  });
+
   revalidatePath("/admin/users");
-  redirect(`/admin/users/${result.userId}`);
+  redirect(`/admin/users/${result.userId}?created=1`);
 }
 
 export async function unlockUser(userId: string) {
@@ -179,7 +239,6 @@ const EditUserSchema = z.object({
 });
 
 export type EditUserState = {
-  saved?: boolean;
   errors?: {
     first_name?: string[];
     last_name?: string[];
@@ -260,6 +319,22 @@ export async function updateUserProfile(
   const { org_id, phone, company_role, ...rest } = validated.data;
 
   const supabase = createAdminClient();
+
+  // Fetch current values to determine which fields actually changed
+  const { data: current } = await supabase
+    .from("users")
+    .select("first_name, last_name, phone, company_role, state_territory, org_id")
+    .eq("id", userId)
+    .single();
+
+  const changedFields: string[] = [];
+  if (rest.first_name !== (current?.first_name ?? "")) changedFields.push("first_name");
+  if (rest.last_name !== (current?.last_name ?? "")) changedFields.push("last_name");
+  if ((phone || "") !== (current?.phone ?? "")) changedFields.push("phone");
+  if ((company_role || "") !== (current?.company_role ?? "")) changedFields.push("company_role");
+  if (rest.state_territory !== (current?.state_territory ?? "")) changedFields.push("state_territory");
+  if ((org_id || "") !== (current?.org_id ?? "")) changedFields.push("org_id");
+
   const { error } = await supabase
     .from("users")
     .update({
@@ -275,5 +350,8 @@ export async function updateUserProfile(
   revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");
   revalidatePath("/admin/consultants");
-  return { saved: true };
+
+  const params = new URLSearchParams({ saved: "1" });
+  if (changedFields.length) params.set("fields", changedFields.join(","));
+  redirect(`/admin/users/${userId}?${params}`);
 }

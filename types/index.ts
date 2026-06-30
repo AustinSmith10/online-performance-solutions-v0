@@ -88,6 +88,7 @@ export interface User {
   role: UserRole;
   org_id: string | null;
   availability: ConsultantAvailability;
+  is_active: boolean;
   is_locked: boolean;
   totp_enabled: boolean;
   profile_complete: boolean;

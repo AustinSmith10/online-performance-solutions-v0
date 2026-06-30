@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { updateUserProfile, type EditUserState } from "@/app/actions/admin-users";
+import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import type { User, Organisation } from "@/types";
 
 const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
@@ -9,14 +10,46 @@ const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
 type Props = {
   user: User;
   organisations: Pick<Organisation, "id" | "name">[];
+  saved?: boolean;
+  savedFields?: string[];
 };
 
-export function EditUserForm({ user, organisations }: Props) {
+export function EditUserForm({ user, organisations, saved, savedFields }: Props) {
   const boundAction = updateUserProfile.bind(null, user.id);
   const [state, action, pending] = useActionState<EditUserState, FormData>(boundAction, {});
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const [dirty, setDirty] = useState(false);
+  useUnsavedChanges("edit-user-profile", dirty);
+
+  function handleChange() {
+    if (!formRef.current) return;
+    const data = new FormData(formRef.current);
+    const changed =
+      (data.get("first_name") ?? "") !== (user.first_name ?? "") ||
+      (data.get("last_name") ?? "") !== (user.last_name ?? "") ||
+      (data.get("phone") ?? "") !== (user.phone ?? "") ||
+      (data.get("company_role") ?? "") !== (user.company_role ?? "") ||
+      (data.get("state_territory") ?? "") !== (user.state_territory ?? "") ||
+      (data.get("org_id") ?? "") !== (user.org_id ?? "");
+    setDirty(changed);
+  }
+
+  useEffect(() => {
+    if (!saved || !formRef.current) return;
+    setDirty(false);
+    formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    const fields = savedFields?.length ? savedFields : [];
+    fields.forEach((name) => {
+      const el = formRef.current?.querySelector<HTMLElement>(`[name="${name}"]`);
+      if (!el) return;
+      el.classList.add("ring-2", "ring-green-400");
+      setTimeout(() => el.classList.remove("ring-2", "ring-green-400"), 2000);
+    });
+  }, [saved, savedFields]);
 
   return (
-    <form action={action} className="space-y-5">
+    <form ref={formRef} action={action} className="space-y-5" onChange={handleChange}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="First name" error={state.errors?.first_name}>
           <input
@@ -89,10 +122,6 @@ export function EditUserForm({ user, organisations }: Props) {
         <p key={e} className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{e}</p>
       ))}
 
-      {state.saved && (
-        <p className="text-sm text-green-600">Saved.</p>
-      )}
-
       <div className="pt-2">
         <button
           type="submit"
@@ -127,4 +156,4 @@ function Field({
 }
 
 const input =
-  "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500";
+  "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 transition-shadow duration-300";
