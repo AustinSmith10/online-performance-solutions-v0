@@ -478,24 +478,7 @@ export async function saveProjectNumber(
 
   if (updateError) return { error: updateError.message };
 
-  try {
-    await generatePbdb(projectId, actor.id);
-  } catch (err) {
-    // Roll back the project number so the consultant can retry
-    await supabase.from("projects").update({ project_number: null }).eq("id", projectId);
-    return {
-      error:
-        err instanceof Error ? err.message : "PBDB generation failed. Please try again.",
-    };
-  }
-
-  // PBDB generated — consultant is now working on it
-  await supabase
-    .from("projects")
-    .update({ status: "in_progress", updated_at: new Date().toISOString() })
-    .eq("id", projectId);
-
-  await auditLog("project.pbdb_generated", actor.id, actor.email as string, {
+  await auditLog("project.number_set", actor.id, actor.email as string, {
     projectId,
     orgId: project.client_id as string,
     metadata: { project_number: rawNumber },
@@ -503,7 +486,7 @@ export async function saveProjectNumber(
 
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
-  redirect(`/ops/projects/${projectId}?number_saved=1`);
+  redirect(`/ops/projects/${projectId}`);
 }
 
 // ─── Consultant: re-upload corrected PBDB after QA ───────────────────────────

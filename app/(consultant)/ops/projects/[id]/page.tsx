@@ -12,7 +12,6 @@ import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { DownloadCard } from "@/components/DownloadCard";
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
-import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { CollapsibleSection } from "./_components/CollapsibleSection";
 import type { ProjectStatus } from "@/types";
 
@@ -62,7 +61,6 @@ export default async function ConsultantProjectDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const justPickedUp = sp.picked_up === "1";
-  const justSavedNumber = sp.number_saved === "1";
   const justUploadedQa = sp.qa_uploaded === "1";
   const justResentPbdb = sp.pbdb_resent === "1";
   const user = await requireRole("consultant", "super_admin");
@@ -537,9 +535,7 @@ export default async function ConsultantProjectDetailPage({
         </div>
         {step2Locked ? (
           <p className="px-5 py-4 text-sm text-zinc-400">
-            {!project.project_number
-              ? "Set the project number first — the PBDB will be generated automatically."
-              : "PBDB is being generated — refresh in a moment."}
+            Set the project number first to unlock PBDB generation.
           </p>
         ) : (
           <div className="divide-y divide-zinc-100">
@@ -654,7 +650,6 @@ export default async function ConsultantProjectDetailPage({
   return (
     <div className="space-y-6">
       {justPickedUp && <PickedUpBanner projectId={id} />}
-      {justSavedNumber && <NumberSavedBanner cleanUrl={`/ops/projects/${id}`} />}
       {justUploadedQa && <QaUploadedBanner cleanUrl={`/ops/projects/${id}`} />}
       {justResentPbdb && <PbdbResentBanner cleanUrl={`/ops/projects/${id}`} />}
 
