@@ -28,7 +28,7 @@ export function OrgConfigReadonly({ orgId, tokens, currentConfig }: Props) {
   useEffect(() => { queueMicrotask(() => setMounted(true)); }, []);
 
   useEffect(() => {
-    if (state.saved) setOpen(false);
+    if (state.saved) queueMicrotask(() => setOpen(false));
   }, [state.saved]);
 
   useEffect(() => {

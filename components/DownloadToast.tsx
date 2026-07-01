@@ -11,7 +11,7 @@ export function DownloadToast({ visible }: Props) {
 
   useEffect(() => {
     if (visible) {
-      setShow(true);
+      queueMicrotask(() => setShow(true));
     } else {
       const t = setTimeout(() => setShow(false), 300);
       return () => clearTimeout(t);
