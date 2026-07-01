@@ -20,7 +20,7 @@ const TAB_LABELS: Record<Tab, string> = {
   templates: "Templates",
   stakeholders: "Stakeholders",
   users: "Users",
-  danger: "Danger zone",
+  danger: "Delete",
 };
 
 export default async function OrganisationDetailPage({
@@ -343,10 +343,10 @@ export default async function OrganisationDetailPage({
         </div>
       )}
 
-      {/* Tab: Danger zone */}
+      {/* Tab: Delete */}
       {activeTab === "danger" && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-red-800">Danger zone</h2>
+          <h2 className="text-sm font-semibold text-red-800">Delete</h2>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div>
               <p className="text-sm font-medium text-zinc-900">Delete organisation</p>

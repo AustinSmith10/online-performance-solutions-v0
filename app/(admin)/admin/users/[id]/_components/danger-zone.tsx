@@ -40,7 +40,7 @@ export function DangerZone({ user }: Props) {
 
   return (
     <div className="rounded-lg border border-red-200 bg-red-50 p-5 space-y-5">
-      <h2 className="text-sm font-semibold text-red-800">Danger zone</h2>
+      <h2 className="text-sm font-semibold text-red-800">Delete</h2>
 
       {/* Reset password */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
