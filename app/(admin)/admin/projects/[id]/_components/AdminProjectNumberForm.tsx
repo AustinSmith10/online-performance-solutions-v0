@@ -39,7 +39,7 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
             </div>
             <p className="text-base font-semibold text-zinc-900">Project number saved</p>
             <p className="mt-2 text-sm text-zinc-500">
-              The PBDB is being generated — it will appear in the files section in a moment.
+              Generate the PBDB from the PBDB step below.
             </p>
             <button
               type="button"
@@ -56,8 +56,8 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
         <div className="min-w-0 flex-1">
           <p className="text-xs text-zinc-500">
             {currentNumber
-              ? "Updating the number re-generates the PBDB from the current template and field values."
-              : "Set the project number to generate the initial PBDB document."}
+              ? "Updating the number does not regenerate the PBDB automatically — use Regenerate in the PBDB step if needed."
+              : "Set the project number to unlock PBDB generation."}
           </p>
 
           {!editing && currentNumber ? (
@@ -96,11 +96,7 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
                   disabled={pending}
                   className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                 >
-                  {pending
-                    ? "Generating…"
-                    : currentNumber
-                    ? "Update & re-generate"
-                    : "Set & generate PBDB"}
+                  {pending ? "Saving…" : currentNumber ? "Update number" : "Save"}
                 </button>
                 {currentNumber && (
                   <button

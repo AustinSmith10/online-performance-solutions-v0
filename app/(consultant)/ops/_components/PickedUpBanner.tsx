@@ -25,7 +25,7 @@ export function PickedUpBanner({ projectId }: { projectId: string }) {
         </div>
         <p className="text-base font-semibold text-zinc-900">Job picked up</p>
         <p className="mt-2 text-sm text-zinc-500">
-          This project is now assigned to you. Set the project number below to generate the PBDB and get started.
+          This project is now assigned to you. Set the project number below to unlock PBDB generation and get started.
         </p>
         <button
           type="button"

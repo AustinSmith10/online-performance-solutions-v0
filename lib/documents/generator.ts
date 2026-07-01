@@ -145,7 +145,10 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     .filter(Boolean)
     .join(" ") + ".docx";
 
-  const storagePath = `${project.client_id as string}/${projectId}/pbdb/${filename}`;
+  // Regenerating on the same day with an unchanged revision produces an identical
+  // filename — prefix the storage object with the version counter to guarantee a
+  // unique path while keeping original_filename (the download name) canonical.
+  const storagePath = `${project.client_id as string}/${projectId}/pbdb/v${version}_${filename}`;
 
   const { error: uploadError } = await supabase.storage
     .from("documents")

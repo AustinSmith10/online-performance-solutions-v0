@@ -342,11 +342,12 @@ async function notifyAdminsOfSubmissionEdit(
   );
 }
 
-// ─── Admin: set / override project number and (re-)generate PBDB ─────────────
+// ─── Admin: set / override project number ─────────────────────────────────
 
 export type AdminProjectNumberState = { error?: string; success?: boolean };
 
-// Shared core: set number, generate PBDB, advance status, audit log.
+// Shared core: set number, audit log. PBDB generation is a separate, manual
+// step (see generatePbdbForProject) — this no longer triggers it.
 // Returns an error string on failure, undefined on success.
 async function _applyProjectNumber(
   projectId: string,
@@ -374,25 +375,7 @@ async function _applyProjectNumber(
 
   if (updateError) return updateError.message;
 
-  try {
-    await generatePbdb(projectId, actorId);
-  } catch (err) {
-    await supabase
-      .from("projects")
-      .update({ project_number: previousNumber })
-      .eq("id", projectId);
-    return err instanceof Error ? err.message : "PBDB generation failed. Please try again.";
-  }
-
-  const currentStatus = project.status as string;
-  if (currentStatus === "submitted" || currentStatus === "assigned") {
-    await supabase
-      .from("projects")
-      .update({ status: "in_progress", updated_at: new Date().toISOString() })
-      .eq("id", projectId);
-  }
-
-  await auditLog("project.pbdb_generated", actorId, actorEmail, {
+  await auditLog("project.number_set", actorId, actorEmail, {
     projectId,
     orgId: project.client_id as string,
     metadata: {
@@ -487,6 +470,78 @@ export async function saveProjectNumber(
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
   redirect(`/ops/projects/${projectId}`);
+}
+
+// ─── Consultant / Admin / Super Admin: manual PBDB generation ────────────────
+//
+// Replaces the old auto-generation-on-number-save flow. First call generates
+// v1; subsequent calls ("Regenerate") create a new version and keep the rest.
+// Regeneration is blocked once the PBDB has been dispatched to stakeholders —
+// past that point project_files.version is also used to match files to
+// review cycles, and a template regeneration would desync the two.
+
+const PBDB_REGENERATE_STATUSES = ["assigned", "in_progress"] as const;
+
+export type GeneratePbdbState = { error?: string; success?: boolean };
+
+export async function generatePbdbForProject(
+  projectId: string,
+  _prev: GeneratePbdbState,
+  _formData: FormData
+): Promise<GeneratePbdbState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select("id, client_id, project_number, status")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
+  if (!project.project_number) return { error: "Project number must be set before generating the PBDB." };
+
+  const { data: existingPbdbs } = await supabase
+    .from("project_files")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("file_type", "pbdb")
+    .limit(1);
+
+  const isRegenerate = (existingPbdbs?.length ?? 0) > 0;
+  const status = project.status as string;
+
+  if (isRegenerate && !PBDB_REGENERATE_STATUSES.includes(status as (typeof PBDB_REGENERATE_STATUSES)[number])) {
+    return { error: "The PBDB can no longer be regenerated once it has been dispatched to stakeholders." };
+  }
+
+  try {
+    await generatePbdb(projectId, actor.id);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "PBDB generation failed. Please try again." };
+  }
+
+  if (!isRegenerate && (status === "submitted" || status === "assigned")) {
+    await supabase
+      .from("projects")
+      .update({ status: "in_progress", updated_at: new Date().toISOString() })
+      .eq("id", projectId);
+  }
+
+  await auditLog(isRegenerate ? "project.pbdb_regenerated" : "project.pbdb_generated", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.client_id as string,
+    metadata: { actor: actor.role },
+  });
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { success: true };
 }
 
 // ─── Consultant: re-upload corrected PBDB after QA ───────────────────────────

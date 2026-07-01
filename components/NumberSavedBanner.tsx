@@ -35,7 +35,7 @@ export function NumberSavedBanner({ cleanUrl }: { cleanUrl: string }) {
         </div>
         <p className="text-base font-semibold text-zinc-900">Project number saved</p>
         <p className="mt-2 text-sm text-zinc-500">
-          Your PBDB has been generated — find it in the PBDB section below.
+          Generate the PBDB from the PBDB section below.
         </p>
         <button
           type="button"

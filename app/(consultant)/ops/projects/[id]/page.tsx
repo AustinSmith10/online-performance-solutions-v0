@@ -11,6 +11,7 @@ import { ResendPbdbForm } from "./_components/ResendPbdbForm";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { DownloadCard } from "@/components/DownloadCard";
+import { GeneratePbdbButton, RegeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
 import { CollapsibleSection } from "./_components/CollapsibleSection";
 import type { ProjectStatus } from "@/types";
@@ -69,7 +70,7 @@ export default async function ConsultantProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, clients(name, state_territory, client_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, qa_completed_by, clients(name, state_territory, client_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -89,6 +90,7 @@ export default async function ConsultantProjectDetailPage({
     expected_delivery_date: string | null;
     source: "portal" | "email";
     strip_token_color: boolean;
+    qa_completed_by: string | null;
     clients: { name: string; state_territory: string | null; client_config: Record<string, string> } | null;
     submitter: {
       first_name: string | null;
@@ -178,7 +180,6 @@ export default async function ConsultantProjectDetailPage({
 
   const pbdbFiles = rawPbdbFiles ?? [];
   const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
-  const hasQaFile = pbdbFiles.some((f) => (f.version as number) >= 2);
 
   type ReviewRow = {
     id: string; stakeholder_name: string; stakeholder_email: string;
@@ -250,9 +251,10 @@ export default async function ConsultantProjectDetailPage({
   // Step states
   const isTerminal = TERMINAL_STATUSES.has(project.status) || project.status === "converting";
   const step1Completed = !!project.project_number;
-  const step2Locked = !project.project_number || !latestPbdb;
+  const step2Locked = !project.project_number;
+  const canRegeneratePbdb = (["assigned", "in_progress"] as ProjectStatus[]).includes(project.status);
   const step3Locked = !latestPbdb;
-  const step3Completed = hasQaFile;
+  const step3Completed = !!project.qa_completed_by;
   const step4Active = (["dispatched", "revision_required"] as ProjectStatus[]).includes(project.status as ProjectStatus);
   const step4Completed = isTerminal;
 
@@ -431,7 +433,7 @@ export default async function ConsultantProjectDetailPage({
                   <span className="text-xs font-semibold text-zinc-700">Cycle {cycle}</span>
                   {pbdbForCycle ? (
                     <span className="text-xs text-zinc-400">
-                      · PBDB v{cycle} ({(pbdbForCycle.version as number) >= 2 ? "QA corrected" : "Generated"})
+                      · PBDB v{cycle}
                       · {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
                     </span>
                   ) : (
@@ -525,18 +527,22 @@ export default async function ConsultantProjectDetailPage({
         <ProjectNumberForm projectId={id} />
       </StepCard>
 
-      {/* Step 2: Download PBDB */}
+      {/* Step 2: Generate PBDB */}
       <div className={`rounded-lg border ${step2Locked ? "border-zinc-200 bg-zinc-50" : "border-zinc-200 bg-white"}`}>
         <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-100 last:border-b-0">
           <StepIndicator step={2} completed={false} locked={step2Locked} />
           <h3 className={`text-sm font-semibold ${step2Locked ? "text-zinc-400" : "text-zinc-900"}`}>
-            Download PBDB
+            PBDB
           </h3>
         </div>
         {step2Locked ? (
           <p className="px-5 py-4 text-sm text-zinc-400">
             Set the project number first to unlock PBDB generation.
           </p>
+        ) : pbdbFiles.length === 0 ? (
+          <div className="px-5 py-4">
+            <GeneratePbdbButton projectId={id} />
+          </div>
         ) : (
           <div className="divide-y divide-zinc-100">
             {pbdbFiles.map((f, i) => {
@@ -569,6 +575,21 @@ export default async function ConsultantProjectDetailPage({
                 </DownloadCard>
               );
             })}
+            <div className="flex items-center justify-between gap-3 px-5 py-3">
+              {canRegeneratePbdb && (
+                <p className="text-xs text-zinc-500">
+                  Need to fix something? Regenerating creates a new version — existing versions are kept.
+                </p>
+              )}
+              <RegeneratePbdbButton
+                projectId={id}
+                disabledMessage={
+                  canRegeneratePbdb
+                    ? undefined
+                    : "Regeneration is only available before the PBDB is dispatched to stakeholders."
+                }
+              />
+            </div>
           </div>
         )}
       </div>

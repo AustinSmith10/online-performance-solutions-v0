@@ -20,6 +20,7 @@ import { AdminProjectTabs } from "./_components/AdminProjectTabs";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { DownloadCard } from "@/components/DownloadCard";
+import { GeneratePbdbButton, RegeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { HighlightRing } from "@/components/HighlightRing";
@@ -323,8 +324,9 @@ export default async function ProjectDetailPage({
     : null;
 
   // ── Step locking logic ──────────────────────────────────────────────────────
-  const step1Completed = !!project.project_number && pbdbFiles.length > 0;
-  const step2Locked = pbdbFiles.length === 0;
+  const step1Completed = !!project.project_number;
+  const step2Locked = !project.project_number;
+  const canRegeneratePbdb = (["assigned", "in_progress"] as ProjectStatus[]).includes(project.status);
   const step3Locked = !step1Completed;
   const step3Completed = !!project.assigned;
   const step4Locked = !step3Completed;
@@ -473,7 +475,7 @@ export default async function ProjectDetailPage({
                     <span className="text-xs font-semibold text-zinc-700">Cycle {cycle}</span>
                     {pbdbForCycle ? (
                       <span className="text-xs text-zinc-400">
-                        · PBDB v{cycle} ({(pbdbForCycle.version as number) >= 2 ? "QA corrected" : "Generated"})
+                        · PBDB v{cycle}
                         · {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
                       </span>
                     ) : (
@@ -550,18 +552,22 @@ export default async function ProjectDetailPage({
         </StepCard>
       </div>
 
-      {/* Step 2: Download PBDB */}
+      {/* Step 2: Generate PBDB */}
       <div className={`rounded-lg border ${step2Locked ? "border-zinc-200 bg-zinc-50" : "border-zinc-200 bg-white"}`}>
         <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-4 last:border-b-0">
           <StepIndicator step={2} completed={false} locked={step2Locked} />
           <h3 className={`text-sm font-semibold ${step2Locked ? "text-zinc-400" : "text-zinc-900"}`}>
-            Download PBDB
+            PBDB
           </h3>
         </div>
         {step2Locked ? (
           <p className="px-5 py-4 text-sm text-zinc-400">
-            Set the project number first — the PBDB will be generated automatically.
+            Set the project number first to unlock PBDB generation.
           </p>
+        ) : pbdbFiles.length === 0 ? (
+          <div className="px-5 py-4">
+            <GeneratePbdbButton projectId={id} />
+          </div>
         ) : (
           <div className="divide-y divide-zinc-100">
             {pbdbFiles.map((f) => {
@@ -574,12 +580,27 @@ export default async function ProjectDetailPage({
                 >
                   <p className="truncate text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
                   <p className="mt-0.5 text-xs text-zinc-500">
-                    Version {version}{version >= 2 ? " — QA corrected" : " — Generated"}
+                    Version {version}
                     {" · "}{new Date(f.created_at as string).toLocaleDateString("en-AU")}
                   </p>
                 </DownloadCard>
               );
             })}
+            <div className="flex items-center justify-between gap-3 px-5 py-3">
+              {canRegeneratePbdb && (
+                <p className="text-xs text-zinc-500">
+                  Need to fix something? Regenerating creates a new version — existing versions are kept.
+                </p>
+              )}
+              <RegeneratePbdbButton
+                projectId={id}
+                disabledMessage={
+                  canRegeneratePbdb
+                    ? undefined
+                    : "Regeneration is only available before the PBDB is dispatched to stakeholders."
+                }
+              />
+            </div>
           </div>
         )}
       </div>

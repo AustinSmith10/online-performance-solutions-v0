@@ -215,7 +215,7 @@ function SetNumberAndAssignDrawerContent({
       {step === 1 ? (
         <div>
           <p className="mb-3 text-xs text-zinc-500">
-            Set the project number to generate the initial PBDB document.
+            Set the project number to unlock PBDB generation.
           </p>
           <form action={action} className="space-y-3">
             <div>
@@ -244,7 +244,7 @@ function SetNumberAndAssignDrawerContent({
               disabled={pending || !projectNumber.trim()}
               className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
-              {pending ? "Generating…" : "Set & generate PBDB"}
+              {pending ? "Saving…" : "Save"}
             </button>
           </form>
         </div>
@@ -253,7 +253,7 @@ function SetNumberAndAssignDrawerContent({
           <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
             <p className="text-sm font-medium text-green-900">Project number set</p>
             <p className="mt-0.5 text-xs text-green-700">
-              PBDB is being generated — it will appear in the project files shortly.
+              Generate the PBDB from the project&apos;s PBDB step once a consultant is assigned.
             </p>
           </div>
           <div>
