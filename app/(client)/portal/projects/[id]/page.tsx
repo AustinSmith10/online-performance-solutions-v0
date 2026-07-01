@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DeleteProjectButton } from "./_components/DeleteProjectButton";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { PortalApprovalForm } from "./_components/PortalApprovalForm";
+import { ReplaceDocumentControl } from "./_components/ReplaceDocumentControl";
+import { SubmissionDetailsCard } from "./_components/SubmissionDetailsCard";
 import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { DownloadCard } from "@/components/DownloadCard";
@@ -67,7 +69,7 @@ export default async function ClientProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at, source"
+      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at, source, assigned_consultant_id"
     )
     .eq("id", id)
     .eq("client_id", user.client_id as string)
@@ -85,10 +87,12 @@ export default async function ClientProjectDetailPage({
     expected_delivery_date: string | null;
     deleted_at: string | null;
     source: "portal" | "email";
+    assigned_consultant_id: string | null;
   };
 
   const project = data as unknown as ProjectDetail;
   const isDeleted = !!project.deleted_at;
+  const isLocked = !!project.assigned_consultant_id;
   const pbdbVisible = PBDB_VISIBLE_STATUSES.has(project.status);
   const todayIso = new Date().toISOString().slice(0, 10);
   const isOverdue =
@@ -272,7 +276,6 @@ export default async function ClientProjectDetailPage({
                 </span>
               }
             />
-            <Row label="PO number" value={project.po_number ?? "—"} />
             <Row
               label="Submitted"
               value={new Date(project.created_at).toLocaleDateString("en-AU", {
@@ -329,23 +332,32 @@ export default async function ClientProjectDetailPage({
                   </DownloadCard>
                 )}
                 {files.map((f) => (
-                  <DownloadCard
-                    key={f.id as string}
-                    href={f.signedUrl}
-                    originalFilename={f.original_filename as string}
-                    wrapperClassName="flex items-center gap-4 px-5 py-3"
-                  >
-                    <p className="truncate text-sm text-zinc-900">
-                      {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
-                    </p>
-                    <p className="text-xs text-zinc-500">
-                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                    </p>
-                  </DownloadCard>
+                  <div key={f.id as string}>
+                    <DownloadCard
+                      href={f.signedUrl}
+                      originalFilename={f.original_filename as string}
+                      wrapperClassName="flex items-center gap-4 px-5 py-3"
+                    >
+                      <p className="truncate text-sm text-zinc-900">
+                        {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                      </p>
+                    </DownloadCard>
+                    {!isDeleted && !isLocked && (
+                      <ReplaceDocumentControl projectId={id} fileId={f.id as string} />
+                    )}
+                  </div>
                 ))}
               </div>
             )}
-            {!isDeleted && (
+            {!isDeleted && isLocked && (
+              <p className="border-t border-zinc-100 px-5 py-3 text-xs text-amber-800 bg-amber-50">
+                Under review — editing is no longer available.
+              </p>
+            )}
+            {!isDeleted && !isLocked && (
               <div className="border-t border-zinc-100 px-5 py-4">
                 <FileUploadForm projectId={id} />
               </div>
@@ -402,18 +414,14 @@ export default async function ClientProjectDetailPage({
             </div>
           )}
 
-          {/* Submitted field values */}
-          {fieldEntries.length > 0 && (
-            <div className="rounded-lg border border-zinc-200 bg-white">
-              <div className="border-b border-zinc-100 px-5 py-4">
-                <h2 className="text-sm font-semibold text-zinc-900">Submitted details</h2>
-              </div>
-              <div className="divide-y divide-zinc-100">
-                {fieldEntries.map(({ token, label, value }) => (
-                  <Row key={token} label={label} value={value || "—"} />
-                ))}
-              </div>
-            </div>
+          {/* Submitted field values + PO number — editable until a consultant picks up */}
+          {!isDeleted && (
+            <SubmissionDetailsCard
+              projectId={id}
+              poNumber={project.po_number}
+              fieldEntries={fieldEntries}
+              locked={isLocked}
+            />
           )}
         </div>
       </div>

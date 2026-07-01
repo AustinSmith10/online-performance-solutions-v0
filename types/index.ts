@@ -35,6 +35,7 @@ export type NotificationType =
   | "modifications_requested"
   | "stakeholder_waived"
   | "review_response_recorded"
+  | "submission_edited"
   | "system_error";
 
 export type CreditEventType =

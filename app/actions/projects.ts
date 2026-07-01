@@ -96,7 +96,7 @@ export async function uploadProjectFile(
   // Verify access based on role
   let query = supabase
     .from("projects")
-    .select("id, client_id")
+    .select("id, client_id, assigned_consultant_id, extracted_fields, project_number")
     .eq("id", projectId)
     .is("deleted_at", null);
 
@@ -108,6 +108,12 @@ export async function uploadProjectFile(
 
   const { data: project } = await query.maybeSingle();
   if (!project) return { error: "Project not found or access denied." };
+
+  // Stakeholders can only add documents to their submission while it's unpicked-up —
+  // once a consultant has taken the project, the submission is locked.
+  if (actor.role === "stakeholder" && project.assigned_consultant_id) {
+    return { error: "This project is under review — editing is no longer available." };
+  }
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Please select a file." };
@@ -132,10 +138,208 @@ export async function uploadProjectFile(
     uploaded_by: actor.id,
   });
 
+  if (actor.role === "stakeholder") {
+    await auditLog("project.submission_edited", actor.id, actor.email as string, {
+      projectId,
+      orgId: project.client_id as string,
+      metadata: { document_added: file.name },
+    });
+    await notifyAdminsOfSubmissionEdit(supabase, projectId, project, `added a new document (${file.name})`);
+  }
+
   revalidatePath(`/portal/projects/${projectId}`);
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
   return { success: true };
+}
+
+// ─── Stakeholder: replace a previously uploaded document (pre-pickup only) ───
+
+export type ReplaceFileState = { error?: string; success?: boolean };
+
+export async function replaceProjectFile(
+  projectId: string,
+  fileId: string,
+  _prev: ReplaceFileState,
+  formData: FormData
+): Promise<ReplaceFileState> {
+  const actor = await requireRole("stakeholder");
+  const supabase = createAdminClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, client_id, assigned_consultant_id, extracted_fields, project_number")
+    .eq("id", projectId)
+    .eq("client_id", actor.client_id as string)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!project) return { error: "Project not found or access denied." };
+  if (project.assigned_consultant_id) {
+    return { error: "This project is under review — editing is no longer available." };
+  }
+
+  const { data: existingFile } = await supabase
+    .from("project_files")
+    .select("id, storage_path, file_type, original_filename")
+    .eq("id", fileId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (!existingFile) return { error: "Document not found." };
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "Please select a file." };
+  if (file.size > 50 * 1024 * 1024) return { error: "File must be under 50 MB." };
+
+  const fileBuffer = Buffer.from(await file.arrayBuffer());
+  const storagePath = `${project.client_id}/${projectId}/${existingFile.file_type}/${Date.now()}_${file.name}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("submissions")
+    .upload(storagePath, fileBuffer, {
+      contentType: file.type || "application/octet-stream",
+    });
+  if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
+
+  const previousFilename = existingFile.original_filename as string;
+  const previousStoragePath = existingFile.storage_path as string;
+
+  const { error: updateError } = await supabase
+    .from("project_files")
+    .update({
+      storage_path: storagePath,
+      original_filename: file.name,
+      uploaded_by: actor.id,
+      created_at: new Date().toISOString(),
+    })
+    .eq("id", fileId);
+
+  if (updateError) {
+    await supabase.storage.from("submissions").remove([storagePath]);
+    return { error: "Failed to record file. Please try again." };
+  }
+
+  await supabase.storage.from("submissions").remove([previousStoragePath]).catch(() => {});
+
+  await auditLog("project.submission_edited", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.client_id as string,
+    metadata: { document_replaced: { previous: previousFilename, new: file.name } },
+  });
+  await notifyAdminsOfSubmissionEdit(
+    supabase,
+    projectId,
+    project,
+    `replaced "${previousFilename}" with a new document`
+  );
+
+  revalidatePath(`/portal/projects/${projectId}`);
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { success: true };
+}
+
+// ─── Stakeholder: edit submitted details + PO number (pre-pickup only) ───────
+
+export type UpdateSubmissionState = { error?: string; success?: boolean };
+
+export async function updateStakeholderSubmission(
+  projectId: string,
+  _prev: UpdateSubmissionState,
+  formData: FormData
+): Promise<UpdateSubmissionState> {
+  const actor = await requireRole("stakeholder");
+  const supabase = createAdminClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, client_id, assigned_consultant_id, extracted_fields, po_number, project_number")
+    .eq("id", projectId)
+    .eq("client_id", actor.client_id as string)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!project) return { error: "Project not found or access denied." };
+  if (project.assigned_consultant_id) {
+    return { error: "This project is under review — editing is no longer available." };
+  }
+
+  const existingFields = (project.extracted_fields as Record<string, string>) ?? {};
+  const updatedFields: Record<string, string> = { ...existingFields };
+  const changedTokens: string[] = [];
+
+  for (const [key, rawVal] of formData.entries()) {
+    if (key.startsWith("EXTRACT_") || key.startsWith("ORG_") || key.startsWith("CLIENT_")) {
+      const newVal = (rawVal as string).trim();
+      if ((existingFields[key] ?? "") !== newVal) changedTokens.push(key);
+      updatedFields[key] = newVal;
+    }
+  }
+
+  const rawPo = (formData.get("po_number") as string | null)?.trim() ?? "";
+  const newPoNumber = rawPo || null;
+  const poChanged = (project.po_number ?? null) !== newPoNumber;
+
+  if (changedTokens.length === 0 && !poChanged) {
+    return { error: "No changes were made." };
+  }
+
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update({
+      extracted_fields: updatedFields,
+      po_number: newPoNumber,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", projectId);
+
+  if (updateError) return { error: updateError.message };
+
+  await auditLog("project.submission_edited", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.client_id as string,
+    metadata: {
+      changed_fields: changedTokens,
+      ...(poChanged
+        ? { previous_po_number: project.po_number, new_po_number: newPoNumber }
+        : {}),
+    },
+  });
+  await notifyAdminsOfSubmissionEdit(supabase, projectId, { ...project, extracted_fields: updatedFields }, "edited their submitted details");
+
+  revalidatePath(`/portal/projects/${projectId}`);
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { success: true };
+}
+
+async function notifyAdminsOfSubmissionEdit(
+  supabase: ReturnType<typeof createAdminClient>,
+  projectId: string,
+  project: { extracted_fields: unknown; project_number?: unknown },
+  changeSummary: string
+) {
+  const fields = project.extracted_fields as Record<string, string> | null;
+  const projectRef =
+    fields?.["EXTRACT_ADDRESS"] ??
+    (project.project_number as string | null) ??
+    projectId.slice(0, 8);
+
+  const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
+  if (!admins || admins.length === 0) return;
+
+  await Promise.all(
+    admins.map((a) =>
+      notify({
+        recipientId: a.id as string,
+        type: "submission_edited",
+        message: `A stakeholder ${changeSummary} for ${projectRef}.`,
+        projectId,
+        emailSubject: `Submission updated — ${projectRef}`,
+        emailHtml: `<p style="font-family:sans-serif">A stakeholder ${changeSummary} for project <strong>${projectRef}</strong>. Review the changes in the admin dashboard.</p>`,
+      }).catch(() => {})
+    )
+  );
 }
 
 // ─── Admin: set / override project number and (re-)generate PBDB ─────────────
