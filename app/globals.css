@@ -69,7 +69,8 @@ body {
   }
 }
 
-/* Two-column layout for consultant project tabs (lg breakpoint) */
+/* Two-column consultant project layout: steps (narrow, left) + details (wide, right).
+   Single column on mobile — DOM order (steps first) determines stacking order. */
 @utility consultant-two-col {
   display: grid;
   grid-template-columns: 1fr;
@@ -78,29 +79,7 @@ body {
 
 @media (min-width: 1024px) {
   .consultant-two-col {
-    grid-template-columns: 40% 60%;
+    grid-template-columns: 1fr 1.5fr;
     align-items: start;
-  }
-}
-
-/* Hidden on mobile, shown at lg+ (consultant tabs inactive column) */
-@utility consultant-tab-hidden {
-  display: none;
-}
-
-@media (min-width: 1024px) {
-  .consultant-tab-hidden {
-    display: block;
-  }
-}
-
-/* Shown on mobile, hidden at lg+ (consultant tabs bar) */
-@utility consultant-tabs-bar {
-  display: flex;
-}
-
-@media (min-width: 1024px) {
-  .consultant-tabs-bar {
-    display: none;
   }
 }

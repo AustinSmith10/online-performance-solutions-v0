@@ -13,7 +13,7 @@ import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { DownloadCard } from "@/components/DownloadCard";
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
-import { ConsultantProjectTabs } from "./_components/ConsultantProjectTabs";
+import { CollapsibleSection } from "./_components/CollapsibleSection";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -264,44 +264,43 @@ export default async function ConsultantProjectDetailPage({
   const infoContent = (
     <>
       {/* Project summary */}
-      <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
-        <Row label="Client" value={project.clients?.name ?? "—"} />
-        <Row
-          label="Submitted via"
-          value={
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-              project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-            }`}>
-              {project.source === "email" ? "Email" : "Portal"}
-            </span>
-          }
-        />
-        <Row label="PO number" value={project.po_number ?? "—"} />
-        <Row
-          label="Submitted"
-          value={new Date(project.created_at).toLocaleDateString("en-AU", {
-            day: "numeric", month: "long", year: "numeric",
-          })}
-        />
-        <Row
-          label="Expected delivery"
-          value={
-            project.expected_delivery_date ? (
-              <span className={isOverdue ? "font-medium text-red-600" : ""}>
-                {new Date(project.expected_delivery_date).toLocaleDateString("en-AU", {
-                  day: "numeric", month: "short", year: "numeric",
-                })}
+      <CollapsibleSection title="Project summary" defaultOpen>
+        <div className="divide-y divide-zinc-100">
+          <Row label="Client" value={project.clients?.name ?? "—"} />
+          <Row
+            label="Submitted via"
+            value={
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+              }`}>
+                {project.source === "email" ? "Email" : "Portal"}
               </span>
-            ) : "—"
-          }
-        />
-      </div>
+            }
+          />
+          <Row label="PO number" value={project.po_number ?? "—"} />
+          <Row
+            label="Submitted"
+            value={new Date(project.created_at).toLocaleDateString("en-AU", {
+              day: "numeric", month: "long", year: "numeric",
+            })}
+          />
+          <Row
+            label="Expected delivery"
+            value={
+              project.expected_delivery_date ? (
+                <span className={isOverdue ? "font-medium text-red-600" : ""}>
+                  {new Date(project.expected_delivery_date).toLocaleDateString("en-AU", {
+                    day: "numeric", month: "short", year: "numeric",
+                  })}
+                </span>
+              ) : "—"
+            }
+          />
+        </div>
+      </CollapsibleSection>
 
       {/* Client contact */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-3">
-          <h2 className="text-sm font-semibold text-zinc-900">Client contact</h2>
-        </div>
+      <CollapsibleSection title="Client contact" defaultOpen>
         <div className="divide-y divide-zinc-100">
           {project.submitter ? (
             <>
@@ -343,53 +342,41 @@ export default async function ConsultantProjectDetailPage({
             </div>
           )}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* Submitted details */}
       {clientFieldEntries.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-zinc-900">Submitted details</h2>
-          </div>
+        <CollapsibleSection title="Submitted details" defaultOpen>
           <div className="divide-y divide-zinc-100">
             {clientFieldEntries.map(({ token, label, value }) => (
               <Row key={token} label={label} value={value || "—"} />
             ))}
           </div>
-        </div>
+        </CollapsibleSection>
       )}
 
       {/* Client values */}
       {orgTokenEntries.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-zinc-900">Client values</h2>
-          </div>
+        <CollapsibleSection title="Client values" defaultOpen={false}>
           <div className="divide-y divide-zinc-100">
             {orgTokenEntries.map(({ token, label, value }) => (
               <Row key={token} label={label} value={value || "—"} />
             ))}
           </div>
-        </div>
+        </CollapsibleSection>
       )}
 
       {/* System values */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-3">
-          <h2 className="text-sm font-semibold text-zinc-900">System values</h2>
-        </div>
+      <CollapsibleSection title="System values" defaultOpen={false}>
         <div className="divide-y divide-zinc-100">
           {sysValues.map(({ label, value }) => (
             <Row key={label} label={label} value={value} />
           ))}
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* Submission documents */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-100 px-5 py-3">
-          <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
-        </div>
+      <CollapsibleSection title="Documents" defaultOpen>
         {submissionFiles.length === 0 ? (
           <p className="px-5 py-4 text-sm text-zinc-400">No documents uploaded yet.</p>
         ) : (
@@ -414,29 +401,28 @@ export default async function ConsultantProjectDetailPage({
         <div className="border-t border-zinc-100 px-5 py-4">
           <FileUploadForm projectId={id} />
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* Client document colour */}
       {latestPbdb && (
-        <div className="rounded-lg border border-zinc-200 bg-white px-5 py-4">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Client document colour</h2>
-          <p className="mb-4 text-xs text-zinc-500">
-            Controls whether the client receives a version with black text or the original red
-            token colour when they download the PBDB via their review link.
-          </p>
-          <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
-        </div>
+        <CollapsibleSection title="Client document colour" defaultOpen>
+          <div className="px-5 py-4">
+            <p className="mb-4 text-xs text-zinc-500">
+              Controls whether the client receives a version with black text or the original red
+              token colour when they download the PBDB via their review link.
+            </p>
+            <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
+          </div>
+        </CollapsibleSection>
       )}
 
       {/* Stakeholder reviews */}
       {allReviews.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-zinc-900">Stakeholder reviews</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              All review cycles — each cycle corresponds to one version of the PBDB sent to stakeholders.
-            </p>
-          </div>
+        <CollapsibleSection
+          title="Stakeholder reviews"
+          subtitle="All review cycles — each cycle corresponds to one version of the PBDB sent to stakeholders."
+          defaultOpen={false}
+        >
           {reviewCycles.map((cycle) => {
             const cycleReviews = reviewsByCycle.get(cycle)!;
             const pbdbForCycle = pbdbFiles.find((f) => (f.version as number) === cycle);
@@ -498,16 +484,16 @@ export default async function ConsultantProjectDetailPage({
               </div>
             );
           })}
-        </div>
+        </CollapsibleSection>
       )}
 
       {/* PBDR */}
       {pbdrFiles.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-zinc-900">PBDR</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">Final converted document delivered to the client.</p>
-          </div>
+        <CollapsibleSection
+          title="PBDR"
+          subtitle="Final converted document delivered to the client."
+          defaultOpen
+        >
           <div className="divide-y divide-zinc-100">
             {pbdrFiles.map((f) => (
               <DownloadCard
@@ -524,7 +510,7 @@ export default async function ConsultantProjectDetailPage({
               </DownloadCard>
             ))}
           </div>
-        </div>
+        </CollapsibleSection>
       )}
     </>
   );
@@ -689,7 +675,12 @@ export default async function ConsultantProjectDetailPage({
         </div>
       </div>
 
-      <ConsultantProjectTabs info={infoContent} steps={stepsContent} />
+      {/* Two-column layout: workflow steps (narrow, left) + project details (wide, right).
+          Single column on mobile — steps stack above details. */}
+      <div className="consultant-two-col">
+        <div className="space-y-3">{stepsContent}</div>
+        <div className="space-y-4">{infoContent}</div>
+      </div>
     </div>
   );
 }
