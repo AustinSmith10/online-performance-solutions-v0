@@ -19,7 +19,7 @@ export async function submitPortalApproval(
   _prev: PortalApprovalState,
   formData: FormData
 ): Promise<PortalApprovalState> {
-  const user = await requireRole("client");
+  const user = await requireRole("stakeholder");
 
   const response = formData.get("response") as string | null;
   const comments = (formData.get("comments") as string | null)?.trim() || null;

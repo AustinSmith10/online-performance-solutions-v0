@@ -54,7 +54,7 @@ export async function deliverPbdr(
   // Load project
   const { data: project, error: projErr } = await supabase
     .from("projects")
-    .select("id, org_id, status, project_number, extracted_fields, delivery_recipient_email, submitted_by, assigned_consultant_id, review_cycle, strip_token_color")
+    .select("id, client_id, status, project_number, extracted_fields, delivery_recipient_email, submitted_by, assigned_consultant_id, review_cycle, strip_token_color")
     .eq("id", projectId)
     .is("deleted_at", null)
     .single();
@@ -156,7 +156,7 @@ export async function deliverPbdr(
       conversionStart
     );
 
-    pdfStoragePath = `${project.org_id as string}/${projectId}/pbdr/${pbdrFilename}`;
+    pdfStoragePath = `${project.client_id as string}/${projectId}/pbdr/${pbdrFilename}`;
 
     const { error: uploadErr } = await supabase.storage
       .from("documents")
@@ -252,13 +252,13 @@ export async function deliverPbdr(
 
     await auditLog("project.delivered", actorId, actorEmail, {
       projectId,
-      orgId: project.org_id as string,
+      orgId: project.client_id as string,
       metadata: { project_number: (project.project_number as string | null) ?? null },
     });
 
     await auditLog("pbdr.delivered", actorId, actorEmail, {
       projectId,
-      orgId: project.org_id as string,
+      orgId: project.client_id as string,
       metadata: {
         pbdb_version: pbdbFile.version,
         pbdr_version: revisionIndex + 1,
@@ -312,7 +312,7 @@ export async function deliverPbdr(
 
     await auditLog("pbdr.conversion_failed", actorId, actorEmail, {
       projectId,
-      orgId: project.org_id as string,
+      orgId: project.client_id as string,
       metadata: {
         error: err instanceof Error ? err.message : String(err),
         pbdb_version: pbdbVersion,

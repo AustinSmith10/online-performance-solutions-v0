@@ -32,6 +32,8 @@ Client       ←  scoped to own organisation only
 
 ---
 
+
+
 ## Admin role — definition
 
 Admin is a **Restricted Super Admin**. It is intended for trusted operators who manage day-to-day platform operations without holding the most sensitive system-level powers. The ceiling is:
@@ -43,6 +45,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 - **Can** do everything else a Super Admin can, including org settings, templates, credits top-up, user management for `consultant` and `client` accounts, and full project workflow
 
 ---
+
+
 
 ## Dashboard & navigation
 
@@ -56,6 +60,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 
 ---
+
+
 
 ## Project lifecycle
 
@@ -75,6 +81,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 ---
 
+
+
 ## PBDB (QA document)
 
 
@@ -88,6 +96,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 ---
 
+
+
 ## PBDR (delivery report)
 
 
@@ -99,6 +109,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 
 ---
+
+
 
 ## Stakeholder management
 
@@ -115,6 +127,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 ---
 
+
+
 ## Consultant management
 
 
@@ -126,6 +140,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 
 ---
+
+
 
 ## User & organisation management
 
@@ -147,6 +163,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 ---
 
+
+
 ## Credits & payments
 
 
@@ -159,6 +177,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 
 ---
+
+
 
 ## Templates
 
@@ -173,6 +193,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 ---
 
+
+
 ## Profile & account
 
 
@@ -185,6 +207,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 ---
 
+
+
 ## Audit & compliance
 
 
@@ -194,6 +218,8 @@ Admin is a **Restricted Super Admin**. It is intended for trusted operators who 
 
 
 ---
+
+
 
 ## Admin role — ceiling summary
 
@@ -211,11 +237,15 @@ These are the deliberate restrictions that separate Admin from Super Admin. They
 
 ---
 
+
+
 ## Confirmed gaps
 
 These are verified cases where a role is missing access to something a peer role can do, or where an admin-tier role cannot perform an action that represents a legitimate operational need.
 
 ---
+
+
 
 ### GAP 1 — Super Admin and Admin cannot submit a project
 
@@ -229,6 +259,8 @@ Neither Super Admin nor Admin can create a project. There is no submission flow 
 
 ---
 
+
+
 ### GAP 2 — Super Admin and Admin cannot soft-delete a draft project
 
 **Severity:** Medium
@@ -240,6 +272,8 @@ The `softDeleteProject()` action in `lib/actions/recovery.ts` is scoped to `clie
 **Impact:** If a junk or test project needs to be cleaned up, an admin-tier user has to ask the client to delete it first before they can purge it. The flow is asymmetric — they have more destructive power (purge) but not the lighter-touch action (soft-delete).
 
 ---
+
+
 
 ### GAP 3 — Consultant cannot download the PBDR
 
@@ -253,6 +287,8 @@ The consultant uploads the QA PBDB and marks QA complete, but has no access to d
 
 ---
 
+
+
 ### GAP 4 — Super Admin and Admin have no availability state (structural inconsistency)
 
 **Severity:** Low
@@ -264,6 +300,8 @@ The `setOwnAvailability()` action in `lib/actions/consultant.ts` is consultant-o
 **Impact:** Likely intentional since neither role is a bookable resource, but structurally inconsistent. If a Super Admin or Admin ever doubles as a consultant, there is no mechanism to reflect that.
 
 ---
+
+
 
 ## Notification types by role
 
@@ -284,6 +322,8 @@ The `setOwnAvailability()` action in `lib/actions/consultant.ts` is consultant-o
 
 
 ---
+
+
 
 ## Database-level access (RLS policies)
 

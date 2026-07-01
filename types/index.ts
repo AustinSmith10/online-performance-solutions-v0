@@ -1,4 +1,4 @@
-export type UserRole = "super_admin" | "admin" | "consultant" | "client";
+export type UserRole = "super_admin" | "admin" | "consultant" | "stakeholder";
 
 export type ProjectStatus =
   | "draft"
@@ -50,14 +50,14 @@ export interface AuditLogEntry {
   actor_id: string | null;
   actor_email: string | null;
   project_id: string | null;
-  org_id: string | null;
+  client_id: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
 export interface CreditLedgerEntry {
   id: string;
-  org_id: string;
+  client_id: string;
   project_id: string | null;
   event_type: CreditEventType;
   amount: number;
@@ -86,7 +86,7 @@ export interface User {
   company_role: string | null;
   state_territory: string | null;
   role: UserRole;
-  org_id: string | null;
+  client_id: string | null;
   availability: ConsultantAvailability;
   is_active: boolean;
   is_locked: boolean;
@@ -97,7 +97,7 @@ export interface User {
   created_at: string;
 }
 
-export interface Organisation {
+export interface Client {
   id: string;
   name: string;
   slug: string;
@@ -110,14 +110,14 @@ export interface Organisation {
   abandoned_draft_days: number;
   is_frozen: boolean;
   email_whitelist: string[];
-  org_config: Record<string, string>;
+  client_config: Record<string, string>;
   created_at: string;
   updated_at: string;
 }
 
 export interface Project {
   id: string;
-  org_id: string;
+  client_id: string;
   template_id: string;
   submitted_by: string;
   assigned_consultant_id: string | null;
@@ -146,7 +146,7 @@ export type TemplateStatus = "draft" | "active" | "inactive";
 
 export interface Template {
   id: string;
-  org_id: string;
+  client_id: string;
   name: string;
   storage_path: string;
   status: TemplateStatus;

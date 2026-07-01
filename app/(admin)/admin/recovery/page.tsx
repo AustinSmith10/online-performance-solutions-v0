@@ -25,7 +25,7 @@ type DeletedProject = {
   site_address: string | null;
   status: ProjectStatus;
   deleted_at: string;
-  organisations: { name: string } | null;
+  clients: { name: string } | null;
 };
 
 function daysRemaining(deletedAt: string): number {
@@ -69,7 +69,7 @@ export default async function AdminRecoveryPage({
   let orgIds: string[] | null = null;
   if (org?.trim()) {
     const { data: matched } = await supabase
-      .from("organisations")
+      .from("clients")
       .select("id")
       .ilike("name", `%${org.trim()}%`);
     orgIds = matched?.map((o) => o.id as string) ?? [];
@@ -77,7 +77,7 @@ export default async function AdminRecoveryPage({
 
   let query = supabase
     .from("projects")
-    .select("id, project_number, po_number, site_address, status, deleted_at, organisations(name)")
+    .select("id, project_number, po_number, site_address, status, deleted_at, clients(name)")
     .not("deleted_at", "is", null)
     .order(sortCol, { ascending: sortOrder === "asc" });
 
@@ -89,7 +89,7 @@ export default async function AdminRecoveryPage({
     if (orgIds.length === 0) {
       return <RecoveryLayout projects={[]} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter />;
     }
-    query = query.in("org_id", orgIds);
+    query = query.in("client_id", orgIds);
   }
 
   const { data } = await query;
@@ -117,7 +117,7 @@ function RecoveryLayout({
       <div>
         <h1 className="text-xl font-semibold text-zinc-900">Recovery bin</h1>
         <p className="mt-0.5 text-sm text-zinc-500">
-          All organisations&apos; deleted projects. Permanently purged after 30 days.
+          All clients&apos; deleted projects. Permanently purged after 30 days.
         </p>
       </div>
 
@@ -134,7 +134,7 @@ function RecoveryLayout({
             type="text"
             name="org"
             defaultValue={params.org ?? ""}
-            placeholder="Organisation…"
+            placeholder="Client…"
             className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
           />
           <select
@@ -174,7 +174,7 @@ function RecoveryLayout({
             <thead className="border-b border-zinc-100 bg-zinc-50">
               <tr>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Address / ID</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">
                   <a href={sortHref(params, "status")} className="group inline-flex items-center hover:text-zinc-700">
                     Status at deletion <SortIcon active={sortCol === "status"} order={sortOrder} />
@@ -203,7 +203,7 @@ function RecoveryLayout({
                         {label}
                       </Link>
                     </td>
-                    <td className="px-5 py-3 text-zinc-600">{p.organisations?.name ?? "—"}</td>
+                    <td className="px-5 py-3 text-zinc-600">{p.clients?.name ?? "—"}</td>
                     <td className="px-5 py-3 text-zinc-500">{STATUS_LABELS[p.status]}</td>
                     <td className="px-5 py-3 text-zinc-500">
                       {new Date(p.deleted_at).toLocaleDateString("en-AU")}

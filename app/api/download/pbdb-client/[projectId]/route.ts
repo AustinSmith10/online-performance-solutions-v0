@@ -15,7 +15,7 @@ export async function GET(
   const { projectId } = await params;
 
   const user = await getSessionUser();
-  if (!user || user.role !== "client") {
+  if (!user || user.role !== "stakeholder") {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
@@ -24,9 +24,9 @@ export async function GET(
   const [{ data: project }, { data: pbdbFile }] = await Promise.all([
     supabase
       .from("projects")
-      .select("org_id, status, strip_token_color")
+      .select("client_id, status, strip_token_color")
       .eq("id", projectId)
-      .eq("org_id", user.org_id as string)
+      .eq("client_id", user.client_id as string)
       .in("status", PBDB_VISIBLE_STATUSES)
       .maybeSingle(),
     supabase
@@ -44,7 +44,7 @@ export async function GET(
 
   await auditLog("project.pbdb_downloaded", user.id as string, user.email as string, {
     projectId,
-    orgId: user.org_id as string,
+    orgId: user.client_id as string,
     metadata: { version: pbdbFile.version, filename: pbdbFile.original_filename },
   });
 

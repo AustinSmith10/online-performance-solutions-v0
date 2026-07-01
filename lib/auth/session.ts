@@ -6,7 +6,7 @@ import type { UserRole } from "@/types";
 
 // Per-role session duration in milliseconds
 export const SESSION_DURATION: Record<UserRole, number> = {
-  client: 8 * 60 * 60 * 1000,
+  stakeholder: 8 * 60 * 60 * 1000,
   consultant: 4 * 60 * 60 * 1000,
   admin: 4 * 60 * 60 * 1000,
   super_admin: 4 * 60 * 60 * 1000,

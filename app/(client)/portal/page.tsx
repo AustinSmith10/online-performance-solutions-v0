@@ -6,6 +6,7 @@ import { DownloadPbdrLink } from "./_components/DownloadPbdrLink";
 import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
 import { DeletedBanner } from "./_components/DeletedBanner";
 import { RestoredBanner } from "./_components/RestoredBanner";
+import { PendingReviewModal } from "./_components/PendingReviewModal";
 import type { ProjectStatus, PaymentMethod } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -80,9 +81,9 @@ export default async function ClientPortalPage({
   const sp = await searchParams;
   const justDeleted = sp.deleted === "1";
   const justRestored = sp.restored === "1";
-  const user = await requireRole("client");
+  const user = await requireRole("stakeholder");
   const supabase = createAdminClient();
-  const orgId = user.org_id as string;
+  const orgId = user.client_id as string;
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const [{ data: projectsData }, { data: orgData }, { data: pendingReviewsData }] =
@@ -92,17 +93,17 @@ export default async function ClientPortalPage({
         .select(
           "id, po_number, extracted_fields, status, created_at, delivered_at, expected_delivery_date"
         )
-        .eq("org_id", orgId)
+        .eq("client_id", orgId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false }),
       supabase
-        .from("organisations")
+        .from("clients")
         .select("payment_method, credit_balance")
         .eq("id", orgId)
         .single(),
       supabase
         .from("stakeholder_reviews")
-        .select("project_id, token")
+        .select("id, project_id, token, expires_at")
         .eq("stakeholder_email", user.email as string)
         .eq("status", "pending"),
     ]);
@@ -110,10 +111,11 @@ export default async function ClientPortalPage({
   const projects = (projectsData ?? []) as unknown as ProjectRow[];
   const org = orgData as OrgRow | null;
 
-  const pendingTokenMap = new Map<string, string>(
-    (pendingReviewsData ?? []).map((r) => [r.project_id as string, r.token as string])
+  type PendingReview = { id: string; project_id: string; token: string; expires_at: string };
+  const pendingReviewMap = new Map<string, PendingReview>(
+    (pendingReviewsData ?? []).map((r) => [r.project_id as string, r as unknown as PendingReview])
   );
-  const pendingApprovals = projects.filter((p) => pendingTokenMap.has(p.id));
+  const pendingApprovals = projects.filter((p) => pendingReviewMap.has(p.id));
 
   // Complete projects within the 8-working-day window
   const recentlyComplete = projects.filter((p) => {
@@ -225,12 +227,13 @@ export default async function ClientPortalPage({
                 className="flex items-center justify-between rounded-md border border-amber-100 bg-white px-4 py-2.5"
               >
                 <span className="text-sm text-zinc-900">{projectLabel(p)}</span>
-                <a
-                  href={`/approve/${pendingTokenMap.get(p.id)}`}
-                  className="text-sm font-medium text-amber-700 hover:text-amber-900"
-                >
-                  Review →
-                </a>
+                <PendingReviewModal
+                  projectLabel={projectLabel(p)}
+                  reviewId={pendingReviewMap.get(p.id)!.id}
+                  projectId={p.id}
+                  pbdbDownloadUrl={`/api/download/pbdb-client/${p.id}`}
+                  expiresAt={pendingReviewMap.get(p.id)!.expires_at}
+                />
               </li>
             ))}
           </ul>

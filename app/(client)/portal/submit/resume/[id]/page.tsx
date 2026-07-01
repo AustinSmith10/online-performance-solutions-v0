@@ -13,23 +13,23 @@ export default async function ResumeDraftPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await requireRole("client");
+  const user = await requireRole("stakeholder");
   const supabase = createAdminClient();
-  const orgId = user.org_id as string;
+  const orgId = user.client_id as string;
 
   const [{ data: project }, { data: templates }] = await Promise.all([
     supabase
       .from("projects")
       .select("id, status, template_id, extracted_fields, po_number")
       .eq("id", id)
-      .eq("org_id", orgId)
+      .eq("client_id", orgId)
       .eq("submitted_by", user.id)
       .is("deleted_at", null)
       .maybeSingle(),
     supabase
       .from("templates")
       .select("id, name")
-      .eq("org_id", orgId)
+      .eq("client_id", orgId)
       .eq("status", "active")
       .order("name"),
   ]);
@@ -54,8 +54,8 @@ export default async function ResumeDraftPage({
         .order("sort_order")
         .order("placeholder_token"),
       supabase
-        .from("organisations")
-        .select("org_config")
+        .from("clients")
+        .select("client_config")
         .eq("id", orgId)
         .single(),
       supabase
@@ -70,7 +70,7 @@ export default async function ResumeDraftPage({
     ]);
 
   const allMappings = mappings ?? [];
-  const orgConfig = ((orgData?.org_config ?? {}) as Record<string, string>);
+  const orgConfig = ((orgData?.client_config ?? {}) as Record<string, string>);
   const savedFields: Record<string, string> = { ...((project.extracted_fields ?? {}) as Record<string, string>) };
   const developments = (devsData ?? []) as Development[];
 
@@ -142,7 +142,7 @@ export default async function ResumeDraftPage({
     extract: rawLabels.extract || "Extracted from your documents",
     extractDesc: rawLabels.extractDesc || "Review and correct any fields marked below before submitting.",
     trusteeDesc: rawLabels.trusteeDesc || "",
-    org: rawLabels.org || "Organisation details",
+    org: rawLabels.org || "Client details",
     orgDesc: rawLabels.orgDesc || "These details are pre-filled from your organisation's configuration.",
     client: rawLabels.client || "Additional information",
     clientDesc: rawLabels.clientDesc || "Please fill in the remaining details required for this report.",

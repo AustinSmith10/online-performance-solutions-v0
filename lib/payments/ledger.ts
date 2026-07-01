@@ -26,8 +26,8 @@ async function getOrgClientIds(orgId: string): Promise<string[]> {
   const { data } = await supabase
     .from("users")
     .select("id")
-    .eq("org_id", orgId)
-    .eq("role", "client");
+    .eq("client_id", orgId)
+    .eq("role", "stakeholder");
   return (data ?? []).map((u: { id: string }) => u.id);
 }
 
@@ -65,22 +65,22 @@ export async function topUpCredit(
   const supabase = createAdminClient();
 
   const { data: org, error: orgErr } = await supabase
-    .from("organisations")
+    .from("clients")
     .select("credit_balance")
     .eq("id", orgId)
     .single();
-  if (orgErr || !org) throw new Error("Organisation not found.");
+  if (orgErr || !org) throw new Error("Client not found.");
 
   const newBalance = (org.credit_balance as number) + amount;
 
   const { error: updateErr } = await supabase
-    .from("organisations")
+    .from("clients")
     .update({ credit_balance: newBalance, updated_at: new Date().toISOString() })
     .eq("id", orgId);
   if (updateErr) throw new Error(updateErr.message);
 
   await supabase.from("credit_ledger").insert({
-    org_id: orgId,
+    client_id: orgId,
     event_type: "top_up",
     amount,
     balance_after: newBalance,
@@ -105,11 +105,11 @@ export async function deductCredit(
   const supabase = createAdminClient();
 
   const { data: org, error: orgErr } = await supabase
-    .from("organisations")
+    .from("clients")
     .select("credit_balance, name")
     .eq("id", orgId)
     .single();
-  if (orgErr || !org) throw new Error("Organisation not found.");
+  if (orgErr || !org) throw new Error("Client not found.");
 
   const balance = org.credit_balance as number;
 
@@ -136,7 +136,7 @@ export async function deductCredit(
 
   const [updateErr1, updateErr2] = await Promise.all([
     supabase
-      .from("organisations")
+      .from("clients")
       .update({ credit_balance: newBalance, updated_at: new Date().toISOString() })
       .eq("id", orgId)
       .then((r) => r.error),
@@ -150,7 +150,7 @@ export async function deductCredit(
   if (updateErr2) throw new Error(updateErr2.message);
 
   await supabase.from("credit_ledger").insert({
-    org_id: orgId,
+    client_id: orgId,
     project_id: projectId,
     event_type: "deduction",
     amount: -1,
@@ -195,14 +195,14 @@ export async function debitDeferred(
   const supabase = createAdminClient();
 
   const { data: org, error: orgErr } = await supabase
-    .from("organisations")
+    .from("clients")
     .select("deferred_balance, credit_limit, is_frozen")
     .eq("id", orgId)
     .single();
-  if (orgErr || !org) throw new Error("Organisation not found.");
+  if (orgErr || !org) throw new Error("Client not found.");
 
   if (org.is_frozen as boolean) {
-    throw new Error("Organisation account is frozen — deferred dispatch blocked.");
+    throw new Error("Client account is frozen — deferred dispatch blocked.");
   }
 
   const deferred = org.deferred_balance as number;
@@ -215,7 +215,7 @@ export async function debitDeferred(
 
   const [updateErr1, updateErr2] = await Promise.all([
     supabase
-      .from("organisations")
+      .from("clients")
       .update({ deferred_balance: newDeferred, updated_at: new Date().toISOString() })
       .eq("id", orgId)
       .then((r) => r.error),
@@ -229,7 +229,7 @@ export async function debitDeferred(
   if (updateErr2) throw new Error(updateErr2.message);
 
   await supabase.from("credit_ledger").insert({
-    org_id: orgId,
+    client_id: orgId,
     project_id: projectId,
     event_type: "deferred_debit",
     amount: -1,
@@ -255,15 +255,15 @@ export async function logUpfront(
   const supabase = createAdminClient();
 
   const { data: org, error: orgErr } = await supabase
-    .from("organisations")
+    .from("clients")
     .select("credit_balance")
     .eq("id", orgId)
     .single();
-  if (orgErr || !org) throw new Error("Organisation not found.");
+  if (orgErr || !org) throw new Error("Client not found.");
 
   await Promise.all([
     supabase.from("credit_ledger").insert({
-      org_id: orgId,
+      client_id: orgId,
       project_id: projectId,
       event_type: "upfront_log",
       amount: 0,
@@ -289,17 +289,17 @@ export async function logOverride(
 
   const { data: project, error: projErr } = await supabase
     .from("projects")
-    .select("org_id, project_number, site_address, extracted_fields")
+    .select("client_id, project_number, site_address, extracted_fields")
     .eq("id", projectId)
     .single();
   if (projErr || !project) throw new Error("Project not found.");
 
   const { data: org, error: orgErr } = await supabase
-    .from("organisations")
+    .from("clients")
     .select("credit_balance")
-    .eq("id", project.org_id as string)
+    .eq("id", project.client_id as string)
     .single();
-  if (orgErr || !org) throw new Error("Organisation not found.");
+  if (orgErr || !org) throw new Error("Client not found.");
 
   const now = new Date().toISOString();
 
@@ -317,7 +317,7 @@ export async function logOverride(
       .eq("id", projectId)
       .then((r) => r.error),
     supabase.from("credit_ledger").insert({
-      org_id: project.org_id,
+      client_id: project.client_id,
       project_id: projectId,
       event_type: "override",
       amount: 0,
@@ -350,7 +350,7 @@ export async function logOverride(
 
   await auditLog("payment.override_applied", performedById, null, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: { reason, project_number: project.project_number ?? null },
   });
 

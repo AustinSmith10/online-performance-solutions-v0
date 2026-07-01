@@ -68,7 +68,7 @@ export async function extractFields(
   _prev: ExtractState,
   formData: FormData
 ): Promise<ExtractState> {
-  const actor = await requireRole("client", "super_admin", "admin");
+  const actor = await requireRole("stakeholder", "super_admin", "admin");
   const supabase = createAdminClient();
 
   const templateId = (formData.get("template_id") as string | null)?.trim();
@@ -76,9 +76,9 @@ export async function extractFields(
 
   const isAdmin = actor.role === "super_admin" || actor.role === "admin";
   const orgId = isAdmin
-    ? ((formData.get("admin_org_id") as string | null)?.trim() ?? "")
-    : (actor.org_id as string);
-  if (!orgId) return { step: 1, error: "Organisation is required." };
+    ? ((formData.get("admin_client_id") as string | null)?.trim() ?? "")
+    : (actor.client_id as string);
+  if (!orgId) return { step: 1, error: "Client is required." };
   const adminClientId = isAdmin
     ? ((formData.get("admin_client_id") as string | null)?.trim() ?? "")
     : "";
@@ -176,18 +176,18 @@ export async function extractFields(
       .eq("is_mapped", true)
       .order("sort_order")
       .order("placeholder_token"),
-    supabase.from("organisations").select("org_config").eq("id", orgId).single(),
+    supabase.from("clients").select("client_config").eq("id", orgId).single(),
     supabase.from("templates").select("section_labels").eq("id", templateId).single(),
   ]);
 
   const allMappings = mappingsResult.data ?? [];
-  const orgConfig = (orgResult.data?.org_config ?? {}) as Record<string, string>;
+  const orgConfig = (orgResult.data?.client_config ?? {}) as Record<string, string>;
   const rawLabels = (templateResult.data?.section_labels ?? {}) as Record<string, string>;
   const sectionLabels: SectionLabels = {
     extract: rawLabels.extract || "Extracted from your documents",
     extractDesc: rawLabels.extractDesc || "Review and correct any fields marked below before submitting.",
     trusteeDesc: rawLabels.trusteeDesc || "",
-    org: rawLabels.org || "Organisation details",
+    org: rawLabels.org || "Client details",
     orgDesc: rawLabels.orgDesc || "These details are pre-filled from your organisation's configuration.",
     client: rawLabels.client || "Additional information",
     clientDesc: rawLabels.clientDesc || "Please fill in the remaining details required for this report.",
@@ -281,7 +281,7 @@ export async function extractFields(
       supabase
         .from("projects")
         .select("id")
-        .eq("org_id", orgId)
+        .eq("client_id", orgId)
         .eq("site_address", extractedAddress)
         .is("deleted_at", null)
         .limit(1)
@@ -289,7 +289,7 @@ export async function extractFields(
       supabase
         .from("projects")
         .select("id")
-        .eq("org_id", orgId)
+        .eq("client_id", orgId)
         .filter("extracted_fields->>EXTRACT_ADDRESS", "eq", extractedAddress)
         .is("deleted_at", null)
         .limit(1)
@@ -312,7 +312,7 @@ export async function extractFields(
   );
   const { error: projectError } = await supabase.from("projects").insert({
     id: projectId,
-    org_id: orgId,
+    client_id: orgId,
     template_id: templateId,
     submitted_by: isAdmin ? adminClientId : actor.id,
     status: "draft",
@@ -383,14 +383,14 @@ export async function submitProject(
   _prev: SubmitState,
   formData: FormData
 ): Promise<SubmitState> {
-  const actor = await requireRole("client", "super_admin", "admin");
+  const actor = await requireRole("stakeholder", "super_admin", "admin");
   const supabase = createAdminClient();
 
   const isAdmin = actor.role === "super_admin" || actor.role === "admin";
   const orgId = isAdmin
-    ? ((formData.get("admin_org_id") as string | null)?.trim() ?? "")
-    : (actor.org_id as string);
-  if (!orgId) return { error: "Organisation is required." };
+    ? ((formData.get("admin_client_id") as string | null)?.trim() ?? "")
+    : (actor.client_id as string);
+  if (!orgId) return { error: "Client is required." };
   const adminClientId = isAdmin
     ? ((formData.get("admin_client_id") as string | null)?.trim() ?? "")
     : "";
@@ -438,14 +438,14 @@ export async function submitProject(
       ? supabase
           .from("projects")
           .select("id")
-          .eq("org_id", orgId)
+          .eq("client_id", orgId)
           .eq("site_address", siteAddress)
           .neq("id", projectId)
           .is("deleted_at", null)
           .maybeSingle()
       : Promise.resolve({ data: null }),
     supabase
-      .from("organisations")
+      .from("clients")
       .select("name, delivery_working_days, state_territory")
       .eq("id", orgId)
       .single(),
@@ -525,7 +525,7 @@ export async function submitProject(
       { count: "exact" }
     )
     .eq("id", projectId)
-    .eq("org_id", orgId)
+    .eq("client_id", orgId)
     .eq("status", "draft");
   // Clients can only finalise their own draft; admins scoped by id+org is sufficient.
   if (!isAdmin) updateQuery = updateQuery.eq("submitted_by", actor.id);

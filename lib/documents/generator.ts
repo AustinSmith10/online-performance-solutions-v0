@@ -14,7 +14,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("id, org_id, template_id, project_number, extracted_fields, created_at, review_cycle, submitted_by")
+    .select("id, client_id, template_id, project_number, extracted_fields, created_at, review_cycle, submitted_by")
     .eq("id", projectId)
     .is("deleted_at", null)
     .single();
@@ -31,9 +31,9 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
       .eq("status", "active")
       .single(),
     supabase
-      .from("organisations")
-      .select("org_config")
-      .eq("id", project.org_id as string)
+      .from("clients")
+      .select("client_config")
+      .eq("id", project.client_id as string)
       .single(),
     supabase
       .from("users")
@@ -73,8 +73,8 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   // Build substitution context
   const extractedFields = (project.extracted_fields as Record<string, string>) ?? {};
 
-  // ORG_ tokens: prefer value confirmed by client during submission, fall back to org_config
-  const orgConfig = ((orgData?.org_config ?? {}) as Record<string, string>);
+  // ORG_ tokens: prefer value confirmed by client during submission, fall back to client_config
+  const orgConfig = ((orgData?.client_config ?? {}) as Record<string, string>);
   const orgValues: Record<string, string> = {};
   for (const [k, v] of Object.entries(orgConfig)) {
     if (k.startsWith("ORG_") && !extractedFields[k]) {
@@ -145,7 +145,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     .filter(Boolean)
     .join(" ") + ".docx";
 
-  const storagePath = `${project.org_id as string}/${projectId}/pbdb/${filename}`;
+  const storagePath = `${project.client_id as string}/${projectId}/pbdb/${filename}`;
 
   const { error: uploadError } = await supabase.storage
     .from("documents")

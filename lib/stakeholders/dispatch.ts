@@ -24,20 +24,20 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
   const { data: project, error: projErr } = await supabase
     .from("projects")
     .select(
-      "id, org_id, template_id, submitted_by, status, review_cycle, credit_deducted, project_number, extracted_fields, organisations(state_territory, payment_method, name)"
+      "id, client_id, template_id, submitted_by, status, review_cycle, credit_deducted, project_number, extracted_fields, clients(state_territory, payment_method, name)"
     )
     .eq("id", projectId)
     .single();
 
   if (projErr || !project) throw new Error("Project not found.");
 
-  const org = project.organisations as unknown as {
+  const org = project.clients as unknown as {
     state_territory: string | null;
     payment_method: string;
     name: string;
   } | null;
 
-  const orgId = project.org_id as string;
+  const orgId = project.client_id as string;
   const stateTerritory = org?.state_territory ?? null;
   const paymentMethod = org?.payment_method ?? "upfront";
   const reviewCycle = (project.review_cycle as number) ?? 1;
@@ -146,13 +146,13 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
       u as { id: string; email: string; role: string },
     ])
   );
-  if (submitter && (submitter.role as string) === "client") {
+  if (submitter && (submitter.role as string) === "stakeholder") {
     const submitterKey = (submitter.email as string).toLowerCase();
     if (!portalUserMap.has(submitterKey)) {
       portalUserMap.set(submitterKey, {
         id: project.submitted_by as string,
         email: submitter.email as string,
-        role: "client",
+        role: "stakeholder",
       });
     }
   }
@@ -188,7 +188,7 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
 
     // Clients with portal accounts go to the inline approval form; everyone else uses the token URL
     const approvalUrl =
-      portalUser?.role === "client"
+      portalUser?.role === "stakeholder"
         ? `${process.env.NEXT_PUBLIC_APP_URL}/portal/projects/${projectId}`
         : `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
 

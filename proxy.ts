@@ -21,7 +21,7 @@ const AUTH_FLOW_PATHS = ["/complete-profile", "/setup-2fa", "/verify-2fa"];
 const ROLE_ROUTES: Array<{ prefix: string; roles: UserRole[] }> = [
   { prefix: "/admin", roles: ["super_admin", "admin"] },
   { prefix: "/ops", roles: ["consultant", "super_admin", "admin"] },
-  { prefix: "/portal", roles: ["client"] },
+  { prefix: "/portal", roles: ["stakeholder"] },
 ];
 
 export async function proxy(request: NextRequest) {

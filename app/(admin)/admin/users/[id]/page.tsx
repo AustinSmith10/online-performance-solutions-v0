@@ -11,7 +11,7 @@ import { UserTabs } from "./_components/user-tabs";
 import { UserHeaderActions } from "./_components/user-header-actions";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { UnsavedChangesProvider } from "@/components/UnsavedChangesProvider";
-import type { User, Organisation, ConsultantAvailability } from "@/types";
+import type { User, Client, ConsultantAvailability } from "@/types";
 
 export default async function UserDetailPage({
   params,
@@ -25,14 +25,14 @@ export default async function UserDetailPage({
   const supabase = createAdminClient();
 
   const [userResult, orgsResult] = await Promise.all([
-    supabase.from("users").select("*, organisations(id, name)").eq("id", id).maybeSingle(),
-    supabase.from("organisations").select("id, name").order("name"),
+    supabase.from("users").select("*, clients(id, name)").eq("id", id).maybeSingle(),
+    supabase.from("clients").select("id, name").order("name"),
   ]);
 
   if (!userResult.data) notFound();
 
-  const u = userResult.data as User & { organisations: Pick<Organisation, "id" | "name"> | null };
-  const organisations = (orgsResult.data ?? []) as Pick<Organisation, "id" | "name">[];
+  const u = userResult.data as User & { clients: Pick<Client, "id" | "name"> | null };
+  const clients = (orgsResult.data ?? []) as Pick<Client, "id" | "name">[];
 
   const unlockAction = unlockUser.bind(null, id);
   const resetTotpAction = resetUserTotp.bind(null, id);
@@ -127,12 +127,12 @@ export default async function UserDetailPage({
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-zinc-500">
                 <span>{u.email}</span>
-                {u.organisations && (
+                {u.clients && (
                   <Link
-                    href={`/admin/organisations/${u.organisations.id}`}
+                    href={`/admin/clients/${u.clients.id}`}
                     className="hover:text-zinc-700 hover:underline"
                   >
-                    {u.organisations.name}
+                    {u.clients.name}
                   </Link>
                 )}
               </div>
@@ -230,7 +230,7 @@ export default async function UserDetailPage({
         <div className="rounded-xl border border-zinc-200 bg-white p-6">
           <UserTabs
             user={u}
-            organisations={organisations}
+            clients={clients}
             saved={saved}
             savedFields={savedFields}
             availabilityActions={availabilityActions}
@@ -250,6 +250,12 @@ function StatCard({
   value: string;
   variant: "success" | "warning" | "neutral";
 }) {
+  const containerClass =
+    variant === "warning"
+      ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-amber-400 bg-white px-3 py-2.5"
+      : variant === "success"
+      ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-green-500 bg-white px-3 py-2.5"
+      : "rounded-lg border border-zinc-200 bg-white px-3 py-2.5";
   const valueClass =
     variant === "success"
       ? "text-green-700"
@@ -258,8 +264,8 @@ function StatCard({
       : "text-zinc-900";
 
   return (
-    <div className="rounded-lg bg-zinc-50 px-3 py-2.5">
-      <p className="text-xs text-zinc-500">{label}</p>
+    <div className={containerClass}>
+      <p className="text-[10px] text-zinc-400">{label}</p>
       <p className={`mt-0.5 text-sm font-medium ${valueClass}`}>{value}</p>
     </div>
   );

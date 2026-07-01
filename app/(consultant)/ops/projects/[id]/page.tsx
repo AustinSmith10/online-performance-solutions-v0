@@ -72,7 +72,7 @@ export default async function ConsultantProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, organisations(name, state_territory, org_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, clients(name, state_territory, client_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -92,7 +92,7 @@ export default async function ConsultantProjectDetailPage({
     expected_delivery_date: string | null;
     source: "portal" | "email";
     strip_token_color: boolean;
-    organisations: { name: string; state_territory: string | null; org_config: Record<string, string> } | null;
+    clients: { name: string; state_territory: string | null; client_config: Record<string, string> } | null;
     submitter: {
       first_name: string | null;
       last_name: string | null;
@@ -212,7 +212,7 @@ export default async function ConsultantProjectDetailPage({
       value: value as string,
     }));
 
-  const orgConfig = (project.organisations?.org_config ?? {}) as Record<string, string>;
+  const orgConfig = (project.clients?.client_config ?? {}) as Record<string, string>;
   const orgMerged: Record<string, string> = { ...orgConfig };
   for (const [k, v] of Object.entries(extractedFields)) {
     if (k.startsWith("ORG_")) orgMerged[k] = v as string;
@@ -266,7 +266,7 @@ export default async function ConsultantProjectDetailPage({
     <>
       {/* Project summary */}
       <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
-        <Row label="Organisation" value={project.organisations?.name ?? "—"} />
+        <Row label="Client" value={project.clients?.name ?? "—"} />
         <Row
           label="Submitted via"
           value={
@@ -334,8 +334,8 @@ export default async function ConsultantProjectDetailPage({
               {project.submitter.company_role && (
                 <Row label="Role" value={project.submitter.company_role} />
               )}
-              {project.organisations?.state_territory && (
-                <Row label="State / Territory" value={project.organisations.state_territory} />
+              {project.clients?.state_territory && (
+                <Row label="State / Territory" value={project.clients.state_territory} />
               )}
             </>
           ) : (
@@ -360,11 +360,11 @@ export default async function ConsultantProjectDetailPage({
         </div>
       )}
 
-      {/* Organisation values */}
+      {/* Client values */}
       {orgTokenEntries.length > 0 && (
         <div className="rounded-lg border border-zinc-200 bg-white">
           <div className="border-b border-zinc-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-zinc-900">Organisation values</h2>
+            <h2 className="text-sm font-semibold text-zinc-900">Client values</h2>
           </div>
           <div className="divide-y divide-zinc-100">
             {orgTokenEntries.map(({ token, label, value }) => (

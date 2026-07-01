@@ -31,7 +31,7 @@ export async function GET(
   if (user.role === "consultant") {
     const { data: project } = await supabase
       .from("projects")
-      .select("assigned_consultant_id, org_id")
+      .select("assigned_consultant_id, client_id")
       .eq("id", file.project_id as string)
       .maybeSingle();
 
@@ -42,7 +42,7 @@ export async function GET(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("org_id")
+    .select("client_id")
     .eq("id", file.project_id as string)
     .maybeSingle();
 
@@ -58,7 +58,7 @@ export async function GET(
 
   await auditLog("project.pbdb_downloaded", user.id as string, user.email as string, {
     projectId: file.project_id as string,
-    orgId: project?.org_id as string | undefined,
+    orgId: project?.client_id as string | undefined,
     metadata: {
       file_id: file.id,
       version: file.version,

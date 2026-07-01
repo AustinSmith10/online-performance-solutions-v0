@@ -85,7 +85,7 @@ const CATEGORIES: Record<string, { label: string; color: string; events: string[
     ],
   },
   org: {
-    label: "Organisations",
+    label: "Clients",
     color: "bg-zinc-200 text-zinc-700",
     events: ["org.created", "org.updated", "org.config_updated", "org.frozen", "org.unfrozen"],
   },
@@ -138,11 +138,11 @@ const EVENT_LABELS: Record<string, string> = {
   "template.mapping_updated": "Template mappings updated",
   "template.token_added": "Extraction token added",
   "template.token_deleted": "Extraction token removed",
-  "org.created": "Organisation created",
-  "org.updated": "Organisation updated",
-  "org.config_updated": "Organisation settings changed",
-  "org.frozen": "Organisation frozen",
-  "org.unfrozen": "Organisation unfrozen",
+  "org.created": "Client created",
+  "org.updated": "Client updated",
+  "org.config_updated": "Client settings changed",
+  "org.frozen": "Client frozen",
+  "org.unfrozen": "Client unfrozen",
 };
 
 const EVENT_CATEGORY: Record<string, string> = {};
@@ -404,7 +404,7 @@ type AuditRow = {
   actor_id: string | null;
   actor_email: string | null;
   project_id: string | null;
-  org_id: string | null;
+  client_id: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
   project: { project_number: string | null } | null;
@@ -446,7 +446,7 @@ export default async function AuditPage({
   let orgIds: string[] | null = null;
   if (org_name?.trim()) {
     const { data: orgs } = await supabase
-      .from("organisations")
+      .from("clients")
       .select("id")
       .ilike("name", `%${org_name.trim()}%`);
     orgIds = orgs?.map((o) => o.id as string) ?? [];
@@ -459,7 +459,7 @@ export default async function AuditPage({
   if (orgIds === null || orgIds.length > 0) {
     let query = supabase
       .from("audit_log")
-      .select("*, project:projects(project_number), org:organisations(name)", { count: "exact" })
+      .select("*, project:projects(project_number), org:clients(name)", { count: "exact" })
       .order(sortCol, { ascending: sortOrder === "asc" })
       .range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
 
@@ -475,7 +475,7 @@ export default async function AuditPage({
     }
 
     if (orgIds !== null && orgIds.length > 0) {
-      query = query.in("org_id", orgIds);
+      query = query.in("client_id", orgIds);
     }
 
     if (from?.trim()) {
@@ -572,13 +572,13 @@ export default async function AuditPage({
           {/* Org name */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">
-              Organisation
+              Client
             </label>
             <input
               type="text"
               name="org_name"
               defaultValue={org_name ?? ""}
-              placeholder="Organisation name"
+              placeholder="Client name"
               className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
             />
           </div>
@@ -674,7 +674,7 @@ export default async function AuditPage({
                     </a>
                   </th>
                 ))}
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Details</th>
               </tr>

@@ -68,7 +68,7 @@ export async function addOrgStakeholder(
   });
   if (error) return { error: error.message };
 
-  revalidatePath(`/admin/organisations/${orgId}`);
+  revalidatePath(`/admin/clients/${orgId}`);
   return { saved: true };
 }
 
@@ -86,7 +86,7 @@ export async function removeOrgStakeholder(
     .eq("scope", "org")
     .eq("scope_id", orgId);
 
-  revalidatePath(`/admin/organisations/${orgId}`);
+  revalidatePath(`/admin/clients/${orgId}`);
 }
 
 // ─── Project stakeholder management ──────────────────────────────────────────
@@ -284,12 +284,12 @@ export async function resendFreshToken(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("organisations(state_territory), extracted_fields, project_number")
+    .select("clients(state_territory), extracted_fields, project_number")
     .eq("id", projectId)
     .single();
 
   const stateTerritory =
-    (project?.organisations as unknown as { state_territory: string | null } | null)
+    (project?.clients as unknown as { state_territory: string | null } | null)
       ?.state_territory ?? null;
 
   const token = generateTokenString();
@@ -397,12 +397,12 @@ export async function updateStakeholderEmail(
   // Resend the token to the new email address
   const { data: project } = await supabase
     .from("projects")
-    .select("organisations(state_territory)")
+    .select("clients(state_territory)")
     .eq("id", projectId)
     .single();
 
   const stateTerritory =
-    (project?.organisations as unknown as { state_territory: string | null } | null)
+    (project?.clients as unknown as { state_territory: string | null } | null)
       ?.state_territory ?? null;
 
   const token = generateTokenString();

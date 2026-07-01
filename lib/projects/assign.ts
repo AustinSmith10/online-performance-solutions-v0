@@ -18,7 +18,7 @@ export async function performAssignment(
   const [projectResult, consultantResult] = await Promise.all([
     supabase
       .from("projects")
-      .select("id, project_number, site_address, extracted_fields, status, org_id, expected_delivery_date, organisations(name, delivery_working_days, state_territory)")
+      .select("id, project_number, site_address, extracted_fields, status, client_id, expected_delivery_date, clients(name, delivery_working_days, state_territory)")
       .eq("id", projectId)
       .single(),
     supabase
@@ -35,7 +35,7 @@ export async function performAssignment(
   const project = projectResult.data as typeof projectResult.data & {
     status: string;
     expected_delivery_date: string | null;
-    organisations: { name: string; delivery_working_days: number; state_territory: string | null } | null;
+    clients: { name: string; delivery_working_days: number; state_territory: string | null } | null;
   };
   const consultant = consultantResult.data;
 
@@ -43,7 +43,7 @@ export async function performAssignment(
   let deliveryDate = project.expected_delivery_date as string | null;
   if (!deliveryDate) {
     try {
-      const org = project.organisations;
+      const org = project.clients;
       const deliveryDays = org?.delivery_working_days ?? 5;
       const stateTerritory = org?.state_territory ?? null;
       const now = new Date();
@@ -79,7 +79,7 @@ export async function performAssignment(
   const consultantName =
     [consultant.first_name, consultant.last_name].filter(Boolean).join(" ") ||
     consultant.email;
-  const orgName = project.organisations?.name ?? "a client";
+  const orgName = project.clients?.name ?? "a client";
   const address = (project.site_address as string | null) ??
     ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"]) ??
     null;
@@ -101,7 +101,7 @@ export async function performAssignment(
 
   await auditLog("assignment.created", actorId ?? null, actorEmail ?? null, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: { consultant_id: consultantId, consultant_name: consultantName, project_status: project.status },
   });
 

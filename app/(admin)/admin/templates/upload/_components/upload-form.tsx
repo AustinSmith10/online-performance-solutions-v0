@@ -18,10 +18,10 @@ export function UploadTemplateForm({ orgs, defaultOrgId }: Props) {
     <form action={formAction} className="space-y-5">
       <div>
         <label className="mb-1.5 block text-sm font-medium text-zinc-700">
-          Organisation
+          Client
         </label>
         <select
-          name="org_id"
+          name="client_id"
           defaultValue={defaultOrgId ?? ""}
           required
           className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"

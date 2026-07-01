@@ -25,21 +25,23 @@ export function AdminProjectTabs({
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              tab === t.id
-                ? "bg-white text-zinc-900 shadow-sm"
-                : "text-zinc-500 hover:text-zinc-700"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="border-b border-zinc-200">
+        <nav className="-mb-px flex gap-0">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                tab === t.id
+                  ? "border-zinc-900 text-zinc-900"
+                  : "border-transparent text-zinc-500 hover:text-zinc-700"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
       </div>
       <div>
         {tab === "overview" ? overview : tab === "workflow" ? workflow : controls}

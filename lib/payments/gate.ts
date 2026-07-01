@@ -23,11 +23,11 @@ export async function checkDispatchGate(
   const supabase = createAdminClient();
 
   const { data: org, error: orgErr } = await supabase
-    .from("organisations")
+    .from("clients")
     .select("payment_method, credit_balance, credit_limit, deferred_balance, is_frozen")
     .eq("id", orgId)
     .single();
-  if (orgErr || !org) return { allowed: false, reason: "Organisation not found." };
+  if (orgErr || !org) return { allowed: false, reason: "Client not found." };
 
   const method = org.payment_method as PaymentMethod;
 

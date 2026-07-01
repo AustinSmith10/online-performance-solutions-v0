@@ -89,7 +89,7 @@ export default async function ApprovePage({
       .from("users")
       .select("id")
       .eq("email", review.stakeholder_email)
-      .eq("role", "client")
+      .eq("role", "stakeholder")
       .maybeSingle(),
   ]);
 

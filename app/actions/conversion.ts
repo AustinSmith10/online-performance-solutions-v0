@@ -48,7 +48,7 @@ export async function resendPbdrEmail(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, org_id, project_number, delivery_recipient_email, submitted_by")
+    .select("id, client_id, project_number, delivery_recipient_email, submitted_by")
     .eq("id", projectId)
     .in("status", ["delivered", "complete"])
     .is("deleted_at", null)
@@ -127,7 +127,7 @@ export async function resendPbdrEmail(
 
   await auditLog("pbdr.redelivered", actor.id, actor.email as string, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: { pbdr_version: pbdrFile.version, triggered_by: "admin_resend" },
   });
 

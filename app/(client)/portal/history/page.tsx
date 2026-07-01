@@ -18,13 +18,13 @@ type PbdrFile = {
 };
 
 export default async function ClientHistoryPage() {
-  const user = await requireRole("client");
+  const user = await requireRole("stakeholder");
   const supabase = createAdminClient();
 
   const { data } = await supabase
     .from("projects")
     .select("id, po_number, extracted_fields, status, created_at, delivered_at, expected_delivery_date")
-    .eq("org_id", user.org_id as string)
+    .eq("client_id", user.client_id as string)
     .in("status", ["delivered", "complete"])
     .order("created_at", { ascending: false });
 

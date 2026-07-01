@@ -16,8 +16,8 @@ export async function uploadTemplate(
 ): Promise<UploadTemplateState> {
   const actor = await requireRole("super_admin", "admin");
 
-  const orgId = (formData.get("org_id") as string | null)?.trim();
-  if (!orgId) return { error: "Organisation is required." };
+  const orgId = (formData.get("client_id") as string | null)?.trim();
+  if (!orgId) return { error: "Client is required." };
 
   const file = formData.get("file") as File | null;
   const name = (formData.get("name") as string | null)?.trim();
@@ -50,7 +50,7 @@ export async function uploadTemplate(
 
   const { error: insertError } = await supabase.from("templates").insert({
     id: templateId,
-    org_id: orgId,
+    client_id: orgId,
     name,
     storage_path: storagePath,
     status: "draft",
@@ -127,7 +127,7 @@ export async function activateTemplate(
 
   const { data: template, error: tmplErr } = await supabase
     .from("templates")
-    .select("org_id, name")
+    .select("client_id, name")
     .eq("id", templateId)
     .maybeSingle();
 
@@ -141,13 +141,13 @@ export async function activateTemplate(
   if (error) return { error: error.message };
 
   await auditLog("template.activated", actor.id, actor.email, {
-    orgId: template.org_id as string,
+    orgId: template.client_id as string,
     metadata: { templateId, name: template.name },
   });
 
   revalidatePath(`/admin/templates/${templateId}`);
   revalidatePath(`/admin/templates`);
-  revalidatePath(`/admin/organisations/${template.org_id}`);
+  revalidatePath(`/admin/clients/${template.client_id}`);
   redirect(`/admin/templates/${templateId}?activated=1`);
 }
 
@@ -161,7 +161,7 @@ export async function deactivateTemplate(
 
   const { data: template, error: tmplErr } = await supabase
     .from("templates")
-    .select("org_id, name")
+    .select("client_id, name")
     .eq("id", templateId)
     .maybeSingle();
 
@@ -175,13 +175,13 @@ export async function deactivateTemplate(
   if (error) return { error: error.message };
 
   await auditLog("template.deactivated", actor.id, actor.email, {
-    orgId: template.org_id as string,
+    orgId: template.client_id as string,
     metadata: { templateId, name: template.name },
   });
 
   revalidatePath(`/admin/templates/${templateId}`);
   revalidatePath(`/admin/templates`);
-  revalidatePath(`/admin/organisations/${template.org_id}`);
+  revalidatePath(`/admin/clients/${template.client_id}`);
   redirect(`/admin/templates/${templateId}?deactivated=1`);
 }
 
@@ -195,7 +195,7 @@ export async function deleteTemplate(
 
   const { data: template, error: tmplErr } = await supabase
     .from("templates")
-    .select("org_id, name, storage_path")
+    .select("client_id, name, storage_path")
     .eq("id", templateId)
     .maybeSingle();
 
@@ -215,12 +215,12 @@ export async function deleteTemplate(
     .remove([template.storage_path as string]);
 
   await auditLog("template.deleted", actor.id, actor.email, {
-    orgId: template.org_id as string,
+    orgId: template.client_id as string,
     metadata: { templateId, name: template.name },
   });
 
   revalidatePath("/admin/templates");
-  revalidatePath(`/admin/organisations/${template.org_id}`);
+  revalidatePath(`/admin/clients/${template.client_id}`);
   redirect("/admin/templates?deleted=1");
 }
 
@@ -242,7 +242,7 @@ export async function reuploadTemplate(
 
   const { data: template, error: tmplErr } = await supabase
     .from("templates")
-    .select("org_id, name, storage_path")
+    .select("client_id, name, storage_path")
     .eq("id", templateId)
     .maybeSingle();
 
@@ -257,7 +257,7 @@ export async function reuploadTemplate(
     return { error: "Could not parse the .docx file. Ensure it is a valid Word document." };
   }
 
-  const newStoragePath = `${template.org_id}/${templateId}/${file.name}`;
+  const newStoragePath = `${template.client_id}/${templateId}/${file.name}`;
 
   // Remove old file then upload new one
   await supabase.storage.from("templates").remove([template.storage_path as string]);
@@ -300,7 +300,7 @@ export async function reuploadTemplate(
   }
 
   await auditLog("template.reuploaded", actor.id, actor.email, {
-    orgId: template.org_id as string,
+    orgId: template.client_id as string,
     metadata: { templateId, name: template.name, tokenCount: tokens.length },
   });
 
@@ -320,7 +320,7 @@ export async function updateTokenLabels(
 
   const { data: template } = await supabase
     .from("templates")
-    .select("org_id, name")
+    .select("client_id, name")
     .eq("id", templateId)
     .maybeSingle();
 
@@ -355,7 +355,7 @@ export async function updateTokenLabels(
 
   if (template) {
     await auditLog("template.mapping_updated", actor.id, actor.email, {
-      orgId: template.org_id as string,
+      orgId: template.client_id as string,
       metadata: { templateId, name: template.name, tokenCount: updates.length },
     });
   }
@@ -388,7 +388,7 @@ export async function addExtractionOnlyToken(
 
   const { data: template } = await supabase
     .from("templates")
-    .select("org_id, name")
+    .select("client_id, name")
     .eq("id", templateId)
     .maybeSingle();
 
@@ -411,7 +411,7 @@ export async function addExtractionOnlyToken(
 
   if (template) {
     await auditLog("template.token_added", actor.id, actor.email, {
-      orgId: template.org_id as string,
+      orgId: template.client_id as string,
       metadata: { templateId, name: template.name, token },
     });
   }
@@ -431,7 +431,7 @@ export async function deleteExtractionToken(
 
   const { data: template } = await supabase
     .from("templates")
-    .select("org_id, name")
+    .select("client_id, name")
     .eq("id", templateId)
     .maybeSingle();
 
@@ -446,7 +446,7 @@ export async function deleteExtractionToken(
 
   if (template) {
     await auditLog("template.token_deleted", actor.id, actor.email, {
-      orgId: template.org_id as string,
+      orgId: template.client_id as string,
       metadata: { templateId, name: template.name, token },
     });
   }
@@ -503,7 +503,7 @@ export async function updateSectionLabels(
     extract: (formData.get("label_extract") as string | null)?.trim() || "Extracted from your documents",
     extractDesc: (formData.get("label_extract_desc") as string | null)?.trim() || "",
     trusteeDesc: (formData.get("label_trustee_desc") as string | null)?.trim() || "",
-    org: (formData.get("label_org") as string | null)?.trim() || "Organisation details",
+    org: (formData.get("label_org") as string | null)?.trim() || "Client details",
     orgDesc: (formData.get("label_org_desc") as string | null)?.trim() || "",
     client: (formData.get("label_client") as string | null)?.trim() || "Additional information",
     clientDesc: (formData.get("label_client_desc") as string | null)?.trim() || "",
@@ -528,7 +528,7 @@ export async function reactivateTemplate(
 
   const { data: template, error: tmplErr } = await supabase
     .from("templates")
-    .select("org_id, name")
+    .select("client_id, name")
     .eq("id", templateId)
     .maybeSingle();
 
@@ -542,7 +542,7 @@ export async function reactivateTemplate(
   if (error) return { error: error.message };
 
   await auditLog("template.reactivated", actor.id, actor.email, {
-    orgId: template.org_id as string,
+    orgId: template.client_id as string,
     metadata: { templateId, name: template.name },
   });
 

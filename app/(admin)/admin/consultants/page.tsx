@@ -33,7 +33,7 @@ function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" })
 }
 
 type ConsultantRow = Pick<User, "id" | "email" | "first_name" | "last_name" | "availability" | "is_locked"> & {
-  organisations: { name: string } | null;
+  clients: { name: string } | null;
 };
 
 export default async function ConsultantsPage({
@@ -50,7 +50,7 @@ export default async function ConsultantsPage({
   const supabase = createAdminClient();
   let query = supabase
     .from("users")
-    .select("id, email, first_name, last_name, availability, is_locked, organisations(name)")
+    .select("id, email, first_name, last_name, availability, is_locked, clients(name)")
     .eq("role", "consultant")
     .order(sortCol, { ascending: sortOrder === "asc" });
 
@@ -136,7 +136,7 @@ export default async function ConsultantsPage({
                     Name <SortIcon active={sortCol === "first_name"} order={sortOrder} />
                   </a>
                 </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">
                   <a href={sortHref(params, "availability")} className="group inline-flex items-center hover:text-zinc-700">
                     Availability <SortIcon active={sortCol === "availability"} order={sortOrder} />
@@ -155,7 +155,7 @@ export default async function ConsultantsPage({
                       <div className="text-xs text-zinc-400">{c.email}</div>
                     )}
                   </td>
-                  <td className="px-5 py-3 text-zinc-600">{c.organisations?.name ?? "—"}</td>
+                  <td className="px-5 py-3 text-zinc-600">{c.clients?.name ?? "—"}</td>
                   <td className="px-5 py-3">
                     {c.is_locked ? (
                       <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Locked</span>

@@ -1,37 +1,67 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendEmail } from "@/lib/email/sender";
+import { WelcomeAccountEmail } from "@/lib/email/templates/WelcomeAccountEmail";
 import type { UserRole } from "@/types";
 
-export async function sendInvite(
+export async function createAccount(
   email: string,
   role: UserRole,
+  firstName: string,
+  lastName: string,
   orgId?: string
 ) {
   const supabase = createAdminClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
-  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm`,
-    data: { role, org_id: orgId ?? null },
+  const { data, error } = await supabase.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    user_metadata: { role, client_id: orgId ?? null },
   });
 
   if (error) return { error: error.message };
-  if (!data.user) return { error: "Failed to create invite" };
+  if (!data.user) return { error: "Failed to create account" };
 
-  // Set role in app_metadata so it appears in the JWT (service-role only field)
-  await supabase.auth.admin.updateUserById(data.user.id, {
-    app_metadata: { role, org_id: orgId ?? null },
+  const userId = data.user.id;
+
+  await supabase.auth.admin.updateUserById(userId, {
+    app_metadata: { role, client_id: orgId ?? null },
   });
 
-  // Pre-create the public users row
   const { error: insertError } = await supabase.from("users").insert({
-    id: data.user.id,
+    id: userId,
     email,
     role,
-    org_id: orgId ?? null,
+    first_name: firstName,
+    last_name: lastName,
+    client_id: orgId ?? null,
     invited_at: new Date().toISOString(),
   });
 
   if (insertError) return { error: insertError.message };
 
-  return { userId: data.user.id };
+  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo: `${appUrl}/auth/update-password` },
+  });
+
+  if (linkError || !linkData?.properties?.action_link) {
+    return { error: linkError?.message ?? "Failed to generate welcome link" };
+  }
+
+  await sendEmail({
+    to: email,
+    subject: "Your DDEG OPS account is ready",
+    html: WelcomeAccountEmail({
+      firstName,
+      email,
+      role,
+      resetLink: linkData.properties.action_link,
+      appUrl,
+    }),
+  });
+
+  return { userId };
 }

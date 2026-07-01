@@ -39,11 +39,11 @@ export async function POST(req: NextRequest) {
   // ── 1. Look up sender ──────────────────────────────────────────────────────
   const { data: user } = await supabase
     .from("users")
-    .select("id, email, org_id, role")
+    .select("id, email, client_id, role")
     .eq("email", fromEmail)
     .single();
 
-  if (!user || !user.org_id) {
+  if (!user || !user.client_id) {
     await sendEmail({
       to: fromEmail,
       subject: "OPS: Unrecognised sender",
@@ -55,16 +55,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Only client users can submit via email
-  if (user.role !== "client") {
+  // Only stakeholder users can submit via email
+  if (user.role !== "stakeholder") {
     return NextResponse.json({ ok: true });
   }
 
   // ── 2. Email whitelist check ───────────────────────────────────────────────
   const { data: org } = await supabase
-    .from("organisations")
+    .from("clients")
     .select("id, name, email_whitelist, abandoned_draft_days")
-    .eq("id", user.org_id)
+    .eq("id", user.client_id)
     .single();
 
   if (!org) {
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
 async function handleNewSubmission(
   payload: ReturnType<typeof parseInboundPayload> & object,
   files: PostmarkAttachment[],
-  user: { id: string; email: string; org_id: string },
+  user: { id: string; email: string; client_id: string },
   org: { id: string; name: string },
   supabase: ReturnType<typeof createAdminClient>
 ) {
@@ -131,7 +131,7 @@ async function handleNewSubmission(
   const { data: templates } = await supabase
     .from("templates")
     .select("id")
-    .eq("org_id", org.id)
+    .eq("client_id", org.id)
     .eq("status", "active")
     .limit(1);
 
@@ -141,7 +141,7 @@ async function handleNewSubmission(
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .insert({
-      org_id: org.id,
+      client_id: org.id,
       template_id: templateId,
       submitted_by: user.id,
       status: "draft",
@@ -262,7 +262,7 @@ async function handleNewSubmission(
         const { data: dupe } = await supabase
           .from("projects")
           .select("id")
-          .eq("org_id", org.id)
+          .eq("client_id", org.id)
           .eq("site_address", siteAddress)
           .is("deleted_at", null)
           .maybeSingle();
@@ -323,18 +323,18 @@ async function handleNewSubmission(
 async function handleThreadReply(
   payload: ReturnType<typeof parseInboundPayload> & object,
   projectId: string,
-  user: { id: string; email: string; org_id: string },
+  user: { id: string; email: string; client_id: string },
   supabase: ReturnType<typeof createAdminClient>
 ) {
   // Validate the project exists and belongs to the user's org
   const { data: project } = await supabase
     .from("projects")
-    .select("id, org_id, status, template_id")
+    .select("id, client_id, status, template_id")
     .eq("id", projectId)
     .is("deleted_at", null)
     .single();
 
-  if (!project || project.org_id !== user.org_id || project.status !== "draft") {
+  if (!project || project.client_id !== user.client_id || project.status !== "draft") {
     await auditLog("email.thread_reply_invalid", user.id, user.email, {
       metadata: { mailbox_hash: projectId, message_id: payload.MessageID },
     });
@@ -353,7 +353,7 @@ async function handleThreadReply(
 
   for (const attachment of supportedFiles) {
     const buffer = attachmentBuffer(attachment);
-    const storagePath = `${user.org_id}/${projectId}/${attachment.Name}`;
+    const storagePath = `${user.client_id}/${projectId}/${attachment.Name}`;
 
     const { error: uploadError } = await supabase.storage
       .from("submissions")

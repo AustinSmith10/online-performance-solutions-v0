@@ -142,7 +142,7 @@ export async function login(
   }
 
   // Set role-based session expiry cookie
-  const role = (userRow?.role ?? "client") as UserRole;
+  const role = (userRow?.role ?? "stakeholder") as UserRole;
   const durationMs = SESSION_DURATION[role];
   const expiresAt = Date.now() + durationMs;
   const cookieStore = await cookies();
@@ -273,7 +273,7 @@ export async function verifyTotp(
     : { data: null };
 
   const next = formData.get("next") as string | null;
-  redirect(next || roleHomePath((userRow?.role as string | null) ?? "client"));
+  redirect(next || roleHomePath((userRow?.role as string | null) ?? "stakeholder"));
 }
 
 // ─── TOTP enrollment confirmation ─────────────────────────────────────────────
@@ -309,14 +309,14 @@ export async function confirmTotpEnrollment(
 
   // Mark TOTP as enabled in the users table and fetch role for redirect
   const { data: { user } } = await supabase.auth.getUser();
-  let userRole = "client";
+  let userRole = "stakeholder";
   if (user) {
     const adminClient = createAdminClient();
     const [, roleRow] = await Promise.all([
       adminClient.from("users").update({ totp_enabled: true }).eq("id", user.id),
       adminClient.from("users").select("role").eq("id", user.id).maybeSingle(),
     ]);
-    userRole = (roleRow.data?.role as string | null) ?? "client";
+    userRole = (roleRow.data?.role as string | null) ?? "stakeholder";
   }
 
   redirect(roleHomePath(userRole));

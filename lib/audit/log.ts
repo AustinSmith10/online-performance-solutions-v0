@@ -24,7 +24,7 @@ export async function auditLog(
       actor_id: actorId ?? null,
       actor_email: actorEmail ?? null,
       project_id: options?.projectId ?? null,
-      org_id: options?.orgId ?? null,
+      client_id: options?.orgId ?? null,
       metadata: options?.metadata ?? null,
     });
   } catch (err) {

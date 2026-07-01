@@ -14,15 +14,15 @@ type FileRequirement = {
 };
 
 export default async function SubmitPage() {
-  const user = await requireRole("client");
+  const user = await requireRole("stakeholder");
   const supabase = createAdminClient();
 
-  const orgId = user.org_id as string;
+  const orgId = user.client_id as string;
 
   const { data: templates } = await supabase
     .from("templates")
     .select("id, name")
-    .eq("org_id", orgId)
+    .eq("client_id", orgId)
     .eq("status", "active")
     .order("name");
 

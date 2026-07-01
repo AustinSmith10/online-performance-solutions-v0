@@ -54,7 +54,7 @@ type ProjectRow = {
   review_buffer_fired_at: string | null;
   qa_completed_by: string | null;
   created_at: string;
-  organisations: { name: string } | null;
+  clients: { name: string } | null;
   consultant: { first_name: string | null; last_name: string | null; email: string; phone: string | null } | null;
 };
 
@@ -95,7 +95,7 @@ export default async function AdminDashboardPage() {
         id, project_number, po_number, site_address, status, expected_delivery_date,
         payment_override, payment_override_at, payment_override_reason, assigned_consultant_id,
         review_buffer_fired_at, qa_completed_by, created_at,
-        organisations(name),
+        clients(name),
         consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email, phone)
       `)
       .is("deleted_at", null)
@@ -106,7 +106,7 @@ export default async function AdminDashboardPage() {
       .from("projects")
       .select(`
         id, project_number, po_number, site_address, status, payment_override_at, payment_override_reason,
-        organisations(name)
+        clients(name)
       `)
       .is("deleted_at", null)
       .eq("payment_override", true)
@@ -208,7 +208,7 @@ export default async function AdminDashboardPage() {
               <thead className="border-b border-zinc-100 bg-zinc-50">
                 <tr>
                   <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
                   <th className="px-5 py-3 text-left font-medium text-zinc-500">Consultant</th>
                   <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
                   <th className="whitespace-nowrap px-5 py-3 text-left font-medium text-zinc-500">Due</th>
@@ -224,7 +224,7 @@ export default async function AdminDashboardPage() {
                         {projectLabel(p)}
                       </td>
                       <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                        {p.organisations?.name ?? "—"}
+                        {p.clients?.name ?? "—"}
                       </td>
                       <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
                         {consultantName(p.consultant) ?? (

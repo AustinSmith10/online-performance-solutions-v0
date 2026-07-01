@@ -35,7 +35,7 @@ type TemplateDetail = {
   storage_path: string;
   created_at: string;
   section_labels: { extract: string; org: string; client: string };
-  org: { id: string; name: string; org_config: Record<string, string> } | null;
+  org: { id: string; name: string; client_config: Record<string, string> } | null;
 };
 
 export default async function TemplatePage({
@@ -53,7 +53,7 @@ export default async function TemplatePage({
   const [{ data: tmpl }, { data: mappings }, { data: fileReqs }] = await Promise.all([
     supabase
       .from("templates")
-      .select("id, name, status, storage_path, created_at, section_labels, org:org_id(id, name, org_config)")
+      .select("id, name, status, storage_path, created_at, section_labels, org:client_id(id, name, client_config)")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -90,7 +90,7 @@ export default async function TemplatePage({
     (r) => r.field_key === "extract" && !r.extraction_hint?.trim()
   );
   const tokenSet = new Set(templateRows.map((r) => r.placeholder_token));
-  const yellowFlags = Object.keys(template.org?.org_config ?? {}).filter(
+  const yellowFlags = Object.keys(template.org?.client_config ?? {}).filter(
     (key) => !tokenSet.has(key)
   );
   const canActivate =
@@ -108,27 +108,43 @@ export default async function TemplatePage({
       </Link>
 
       {/* Header card */}
-      <div className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white px-5 py-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
-            <h1 className="truncate text-base font-semibold text-zinc-900">{template.name}</h1>
-            <StatusBadge status={template.status} />
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <h1 className="truncate text-base font-semibold text-zinc-900">{template.name}</h1>
+              <StatusBadge status={template.status} />
+            </div>
+            <p className="mt-0.5 text-xs text-zinc-400">
+              {template.org ? (
+                <>
+                  <Link href={`/admin/clients/${template.org.id}`} className="hover:underline text-zinc-500">
+                    {template.org.name}
+                  </Link>
+                  {" · "}
+                </>
+              ) : null}
+              Uploaded {uploadedDate}
+            </p>
           </div>
-          <p className="mt-0.5 text-xs text-zinc-400">
-            {template.org ? (
-              <>
-                <Link href={`/admin/organisations/${template.org.id}`} className="hover:underline text-zinc-500">
-                  {template.org.name}
-                </Link>
-                {" · "}
-              </>
-            ) : null}
-            Uploaded {uploadedDate}
-          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <TemplateStatusActions templateId={id} status={template.status} canActivate={canActivate} />
+            <DeleteButton templateId={id} />
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <TemplateStatusActions templateId={id} status={template.status} canActivate={canActivate} />
-          <DeleteButton templateId={id} />
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label="Tokens" value={String(rows.length)} variant="neutral" />
+          <StatCard label="File requirements" value={String(requirements.length)} variant="neutral" />
+          <StatCard
+            label="Unmapped"
+            value={String(redFlags.length)}
+            variant={redFlags.length > 0 ? "warning" : "neutral"}
+          />
+          <StatCard
+            label="Ready to activate"
+            value={canActivate ? "Yes" : "No"}
+            variant={canActivate ? "success" : "neutral"}
+          />
         </div>
       </div>
 
@@ -227,7 +243,7 @@ export default async function TemplatePage({
                     extract: "Extracted from your documents",
                     extractDesc: "",
                     trusteeDesc: "",
-                    org: "Organisation details",
+                    org: "Client details",
                     orgDesc: "",
                     client: "Additional information",
                     clientDesc: "",
@@ -316,6 +332,36 @@ export default async function TemplatePage({
           body={`{${sp.token_added}} has been added to this template.`}
         />
       )}
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  variant,
+}: {
+  label: string;
+  value: string;
+  variant: "success" | "warning" | "neutral";
+}) {
+  const valueClass =
+    variant === "success"
+      ? "text-green-700"
+      : variant === "warning"
+      ? "text-amber-700"
+      : "text-zinc-900";
+  const containerClass =
+    variant === "warning"
+      ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-amber-400 bg-white px-3 py-2.5"
+      : variant === "success"
+      ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-green-500 bg-white px-3 py-2.5"
+      : "rounded-lg border border-zinc-200 bg-white px-3 py-2.5";
+
+  return (
+    <div className={containerClass}>
+      <p className="text-[10px] text-zinc-400">{label}</p>
+      <p className={`mt-0.5 text-sm font-medium ${valueClass}`}>{value}</p>
     </div>
   );
 }

@@ -10,7 +10,7 @@ export async function GET(
   const { projectId } = await params;
 
   const user = await getSessionUser();
-  if (!user || user.role !== "client") {
+  if (!user || user.role !== "stakeholder") {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
@@ -19,9 +19,9 @@ export async function GET(
   // Verify the project belongs to the user's org and is in a delivered state
   const { data: project } = await supabase
     .from("projects")
-    .select("id, org_id")
+    .select("id, client_id")
     .eq("id", projectId)
-    .eq("org_id", user.org_id as string)
+    .eq("client_id", user.client_id as string)
     .in("status", ["delivered", "complete"])
     .maybeSingle();
 
@@ -54,7 +54,7 @@ export async function GET(
 
   await auditLog("project.pbdr_downloaded", user.id as string, user.email as string, {
     projectId,
-    orgId: user.org_id as string,
+    orgId: user.client_id as string,
     metadata: { filename: pbdrFile.original_filename },
   });
 

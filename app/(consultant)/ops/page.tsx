@@ -44,7 +44,7 @@ type ProjectRow = {
   expected_delivery_date: string | null;
   created_at: string;
   review_cycle: number;
-  organisations: { name: string } | null;
+  clients: { name: string } | null;
   submitter: { first_name: string | null; last_name: string | null; email: string } | null;
 };
 
@@ -59,7 +59,7 @@ type AvailableProject = {
   po_number: string | null;
   created_at: string;
   expected_delivery_date: string | null;
-  organisations: { name: string } | null;
+  clients: { name: string } | null;
 };
 
 export default async function ConsultantOpsPage({
@@ -78,7 +78,7 @@ export default async function ConsultantOpsPage({
     .from("projects")
     .select(`
       id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle,
-      organisations(name),
+      clients(name),
       submitter:users!projects_submitted_by_fkey(first_name, last_name, email)
     `)
     .eq("assigned_consultant_id", user.id)
@@ -137,7 +137,7 @@ export default async function ConsultantOpsPage({
   // Available jobs — submitted, unassigned, not deleted
   const { data: rawAvailable } = await supabase
     .from("projects")
-    .select("id, extracted_fields, po_number, created_at, expected_delivery_date, organisations(name)")
+    .select("id, extracted_fields, po_number, created_at, expected_delivery_date, clients(name)")
     .eq("status", "submitted")
     .is("assigned_consultant_id", null)
     .is("deleted_at", null)
@@ -211,7 +211,7 @@ export default async function ConsultantOpsPage({
                 <thead className="border-b border-zinc-100 bg-zinc-50">
                   <tr>
                     <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
-                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
                     <th className="px-5 py-3 text-left font-medium text-zinc-500">Submitted</th>
                     <th className="px-5 py-3 text-left font-medium text-zinc-500">Expected delivery</th>
                     <th className="px-5 py-3" />
@@ -227,7 +227,7 @@ export default async function ConsultantOpsPage({
                           {label}
                         </td>
                         <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                          {p.organisations?.name ?? <span className="text-zinc-400">—</span>}
+                          {p.clients?.name ?? <span className="text-zinc-400">—</span>}
                         </td>
                         <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
                           {new Date(p.created_at).toLocaleDateString("en-AU", {
@@ -315,7 +315,7 @@ function ProjectSection({
           <thead className="border-b border-zinc-100 bg-zinc-50">
             <tr>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
-              <th className="px-5 py-3 text-left font-medium text-zinc-500">Organisation</th>
+              <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
               <th className="px-5 py-3 text-left font-medium text-zinc-500">Expected delivery</th>
@@ -337,7 +337,7 @@ function ProjectSection({
                       })()}
                   </td>
                   <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                    {p.organisations?.name ?? <span className="text-zinc-400">—</span>}
+                    {p.clients?.name ?? <span className="text-zinc-400">—</span>}
                   </td>
                   <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
                     {clientName(p.submitter) ?? <span className="text-zinc-400">—</span>}

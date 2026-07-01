@@ -6,14 +6,14 @@ import { UploadTemplateForm } from "./_components/upload-form";
 export default async function UploadTemplatePage({
   searchParams,
 }: {
-  searchParams: Promise<{ org_id?: string }>;
+  searchParams: Promise<{ client_id?: string }>;
 }) {
   await requireRole("super_admin", "admin");
-  const { org_id } = await searchParams;
+  const { client_id } = await searchParams;
 
   const supabase = createAdminClient();
   const { data: orgs } = await supabase
-    .from("organisations")
+    .from("clients")
     .select("id, name")
     .order("name", { ascending: true });
 
@@ -34,7 +34,7 @@ export default async function UploadTemplatePage({
       </div>
 
       <div className="rounded-lg border border-zinc-200 bg-white p-6">
-        <UploadTemplateForm orgs={orgList} defaultOrgId={org_id} />
+        <UploadTemplateForm orgs={orgList} defaultOrgId={client_id} />
       </div>
     </div>
   );

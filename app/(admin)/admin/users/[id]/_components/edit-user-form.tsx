@@ -1,20 +1,19 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { updateUserProfile, type EditUserState } from "@/app/actions/admin-users";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
-import type { User, Organisation } from "@/types";
+import type { User, Client } from "@/types";
 
 const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
 
 type Props = {
   user: User;
-  organisations: Pick<Organisation, "id" | "name">[];
-  saved?: boolean;
-  savedFields?: string[];
+  clients: Pick<Client, "id" | "name">[];
+  onCancel: () => void;
 };
 
-export function EditUserForm({ user, organisations, saved, savedFields }: Props) {
+export function EditUserForm({ user, clients, onCancel }: Props) {
   const boundAction = updateUserProfile.bind(null, user.id);
   const [state, action, pending] = useActionState<EditUserState, FormData>(boundAction, {});
   const formRef = useRef<HTMLFormElement>(null);
@@ -31,22 +30,14 @@ export function EditUserForm({ user, organisations, saved, savedFields }: Props)
       (data.get("phone") ?? "") !== (user.phone ?? "") ||
       (data.get("company_role") ?? "") !== (user.company_role ?? "") ||
       (data.get("state_territory") ?? "") !== (user.state_territory ?? "") ||
-      (data.get("org_id") ?? "") !== (user.org_id ?? "");
+      (data.get("client_id") ?? "") !== (user.client_id ?? "");
     setDirty(changed);
   }
 
-  useEffect(() => {
-    if (!saved || !formRef.current) return;
+  function handleCancel() {
     setDirty(false);
-    formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    const fields = savedFields?.length ? savedFields : [];
-    fields.forEach((name) => {
-      const el = formRef.current?.querySelector<HTMLElement>(`[name="${name}"]`);
-      if (!el) return;
-      el.classList.add("ring-2", "ring-green-400");
-      setTimeout(() => el.classList.remove("ring-2", "ring-green-400"), 2000);
-    });
-  }, [saved, savedFields]);
+    onCancel();
+  }
 
   return (
     <form ref={formRef} action={action} className="space-y-5" onChange={handleChange}>
@@ -103,15 +94,15 @@ export function EditUserForm({ user, organisations, saved, savedFields }: Props)
         </select>
       </Field>
 
-      {(user.role === "client" || user.role === "consultant") && (
-        <Field label="Organisation" error={state.errors?.org_id}>
+      {(user.role === "stakeholder" || user.role === "consultant") && (
+        <Field label="Client" error={state.errors?.client_id}>
           <select
-            name="org_id"
-            defaultValue={user.org_id ?? ""}
+            name="client_id"
+            defaultValue={user.client_id ?? ""}
             className={input}
           >
             <option value="">None</option>
-            {organisations.map((o) => (
+            {clients.map((o) => (
               <option key={o.id} value={o.id}>{o.name}</option>
             ))}
           </select>
@@ -122,13 +113,20 @@ export function EditUserForm({ user, organisations, saved, savedFields }: Props)
         <p key={e} className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{e}</p>
       ))}
 
-      <div className="pt-2">
+      <div className="flex items-center gap-3 pt-2">
         <button
           type="submit"
           disabled={pending}
           className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {pending ? "Saving…" : "Save changes"}
+        </button>
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="rounded-md border border-zinc-200 px-5 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+        >
+          Cancel
         </button>
       </div>
     </form>
@@ -156,4 +154,4 @@ function Field({
 }
 
 const input =
-  "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 transition-shadow duration-300";
+  "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500";

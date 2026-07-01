@@ -58,7 +58,7 @@ type ProjectRow = {
   payment_override: boolean;
   expected_delivery_date: string | null;
   created_at: string;
-  organisations: { name: string } | null;
+  clients: { name: string } | null;
   consultant: { first_name: string | null; last_name: string | null; email: string } | null;
 };
 
@@ -79,7 +79,7 @@ export default async function ProjectsPage({
   let orgIds: string[] | null = null;
   if (org?.trim()) {
     const { data: matched } = await supabase
-      .from("organisations")
+      .from("clients")
       .select("id")
       .ilike("name", `%${org.trim()}%`);
     orgIds = matched?.map((o) => o.id as string) ?? [];
@@ -97,13 +97,13 @@ export default async function ProjectsPage({
       payment_override,
       expected_delivery_date,
       created_at,
-      organisations(name),
+      clients(name),
       consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email)
     `)
     .is("deleted_at", null);
 
   query = sortCol === "org"
-    ? query.order("name", { referencedTable: "organisations", ascending: sortOrder === "asc" })
+    ? query.order("name", { referencedTable: "clients", ascending: sortOrder === "asc" })
     : query.order(sortCol, { ascending: sortOrder === "asc" });
 
   if (q?.trim()) {
@@ -118,7 +118,7 @@ export default async function ProjectsPage({
       const todayIso = new Date().toISOString().slice(0, 10);
       return <ProjectsLayout projects={projects} todayIso={todayIso} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={!!(q || status || org)} />;
     }
-    query = query.in("org_id", orgIds);
+    query = query.in("client_id", orgIds);
   }
 
   const { data } = await query;
@@ -182,7 +182,7 @@ function ProjectsLayout({
             type="text"
             name="org"
             defaultValue={params.org ?? ""}
-            placeholder="Organisation…"
+            placeholder="Client…"
             className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
           />
           <button
@@ -214,7 +214,7 @@ function ProjectsLayout({
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">
                   <a href={sortHref(params, "org")} className="group inline-flex items-center hover:text-zinc-700">
-                    Organisation <SortIcon active={sortCol === "org"} order={sortOrder} />
+                    Client <SortIcon active={sortCol === "org"} order={sortOrder} />
                   </a>
                 </th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Consultant</th>
@@ -242,7 +242,7 @@ function ProjectsLayout({
                       })()}
                   </td>
                   <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                    {p.organisations?.name ?? "—"}
+                    {p.clients?.name ?? "—"}
                   </td>
                   <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
                     {p.consultant

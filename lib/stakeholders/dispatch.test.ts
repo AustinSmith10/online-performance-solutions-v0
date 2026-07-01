@@ -29,7 +29,7 @@ const SUBMITTER_ID = "submitter-1";
 
 const BASE_PROJECT = {
   id: PROJECT_ID,
-  org_id: ORG_ID,
+  client_id: ORG_ID,
   template_id: "tmpl-1",
   submitted_by: SUBMITTER_ID,
   status: "in_progress",
@@ -37,7 +37,7 @@ const BASE_PROJECT = {
   credit_deducted: false,
   project_number: "OPS-001",
   extracted_fields: {},
-  organisations: { state_territory: "NSW", payment_method: "upfront", name: "Acme" },
+  clients: { state_territory: "NSW", payment_method: "upfront", name: "Acme" },
 };
 
 const SUBMITTER_USER = {

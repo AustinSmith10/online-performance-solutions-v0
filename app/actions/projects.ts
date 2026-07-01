@@ -90,18 +90,18 @@ export async function uploadProjectFile(
   _prev: UploadFileState,
   formData: FormData
 ): Promise<UploadFileState> {
-  const actor = await requireRole("client", "consultant", "super_admin", "admin");
+  const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   // Verify access based on role
   let query = supabase
     .from("projects")
-    .select("id, org_id")
+    .select("id, client_id")
     .eq("id", projectId)
     .is("deleted_at", null);
 
-  if (actor.role === "client") {
-    query = query.eq("org_id", actor.org_id as string);
+  if (actor.role === "stakeholder") {
+    query = query.eq("client_id", actor.client_id as string);
   } else if (actor.role === "consultant") {
     query = query.eq("assigned_consultant_id", actor.id);
   }
@@ -114,7 +114,7 @@ export async function uploadProjectFile(
   if (file.size > 50 * 1024 * 1024) return { error: "File must be under 50 MB." };
 
   const fileBuffer = Buffer.from(await file.arrayBuffer());
-  const storagePath = `${project.org_id}/${projectId}/additional/${Date.now()}_${file.name}`;
+  const storagePath = `${project.client_id}/${projectId}/additional/${Date.now()}_${file.name}`;
 
   const { error: uploadError } = await supabase.storage
     .from("submissions")
@@ -154,7 +154,7 @@ async function _applyProjectNumber(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, org_id, status, project_number")
+    .select("id, client_id, status, project_number")
     .eq("id", projectId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -190,7 +190,7 @@ async function _applyProjectNumber(
 
   await auditLog("project.pbdb_generated", actorId, actorEmail, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: {
       project_number: rawNumber,
       ...(previousNumber && previousNumber !== rawNumber
@@ -252,7 +252,7 @@ export async function saveProjectNumber(
 
   let query = supabase
     .from("projects")
-    .select("id, org_id, project_number")
+    .select("id, client_id, project_number")
     .eq("id", projectId)
     .is("deleted_at", null);
 
@@ -293,7 +293,7 @@ export async function saveProjectNumber(
 
   await auditLog("project.pbdb_generated", actor.id, actor.email as string, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: { project_number: rawNumber },
   });
 
@@ -316,7 +316,7 @@ export async function uploadQaPbdb(
 
   let query = supabase
     .from("projects")
-    .select("id, org_id, status, review_cycle, project_number, extracted_fields")
+    .select("id, client_id, status, review_cycle, project_number, extracted_fields")
     .eq("id", projectId)
     .in("status", ["assigned", "in_progress", "revision_required"])
     .is("deleted_at", null);
@@ -384,7 +384,7 @@ export async function uploadQaPbdb(
   // collide with the previously generated file, so prefix the storage object with the version
   // counter to guarantee a unique path while keeping original_filename canonical.
   const storageFilename = isRevision ? storedFilename : `v${nextVersion}_${storedFilename}`;
-  const storagePath = `${project.org_id}/${projectId}/pbdb/${storageFilename}`;
+  const storagePath = `${project.client_id}/${projectId}/pbdb/${storageFilename}`;
 
   const { error: uploadError } = await supabase.storage
     .from("documents")
@@ -424,7 +424,7 @@ export async function uploadQaPbdb(
 
     await auditLog("project.revision_complete", actor.id, actor.email as string, {
       projectId,
-      orgId: project.org_id as string,
+      orgId: project.client_id as string,
       metadata: { review_cycle: cycle, version: nextVersion, filename: file.name },
     });
 
@@ -467,7 +467,7 @@ export async function uploadQaPbdb(
 
     await auditLog("project.qa_complete", actor.id, actor.email as string, {
       projectId,
-      orgId: project.org_id as string,
+      orgId: project.client_id as string,
       metadata: { version: nextVersion, filename: file.name, project_ref: projectRef },
     });
 
@@ -496,7 +496,7 @@ export async function markQaComplete(
 
   let query = supabase
     .from("projects")
-    .select("id, org_id, status, project_number, site_address, extracted_fields")
+    .select("id, client_id, status, project_number, site_address, extracted_fields")
     .eq("id", projectId)
     .eq("status", "in_progress")
     .is("deleted_at", null);
@@ -563,7 +563,7 @@ export async function markQaComplete(
 
   await auditLog("project.qa_complete", actor.id, actor.email as string, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: { project_ref: projectRef },
   });
 
@@ -592,7 +592,7 @@ export async function resendPbdb(
   let query = supabase
     .from("projects")
     .select(
-      "id, org_id, status, review_cycle, project_number, extracted_fields, organisations(state_territory)"
+      "id, client_id, status, review_cycle, project_number, extracted_fields, clients(state_territory)"
     )
     .eq("id", projectId)
     .in("status", ["dispatched", "in_progress"])
@@ -641,7 +641,7 @@ export async function resendPbdb(
     [`${projectNum}-S PBDB R${rIndex}`, address, `${yyyy} ${mm} ${dd}`]
       .filter(Boolean)
       .join(" ") + ".docx";
-  const storagePath = `${project.org_id as string}/${projectId}/pbdb/v${nextVersion}_${storedFilename}`;
+  const storagePath = `${project.client_id as string}/${projectId}/pbdb/v${nextVersion}_${storedFilename}`;
 
   const fileBuffer = Buffer.from(await file.arrayBuffer());
   const { error: uploadError } = await supabase.storage
@@ -682,7 +682,7 @@ export async function resendPbdb(
 
   const stateTerritory =
     (
-      project.organisations as unknown as { state_territory: string | null } | null
+      project.clients as unknown as { state_territory: string | null } | null
     )?.state_territory ?? null;
   const now = new Date();
   const expiresAt = await computeTokenExpiry(now, stateTerritory);
@@ -708,7 +708,7 @@ export async function resendPbdb(
       | { id: string; email: string; role: string }
       | undefined;
     const approvalUrl =
-      portalUser?.role === "client"
+      portalUser?.role === "stakeholder"
         ? `${process.env.NEXT_PUBLIC_APP_URL}/portal/projects/${projectId}`
         : `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
 
@@ -755,7 +755,7 @@ export async function resendPbdb(
 
   await auditLog("project.pbdb_resent", actor.id, actor.email as string, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: {
       review_cycle: cycle,
       version: nextVersion,
@@ -781,7 +781,7 @@ export async function updateProjectFields(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, org_id, extracted_fields")
+    .select("id, client_id, extracted_fields")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -813,7 +813,7 @@ export async function updateProjectFields(
     actor.id,
     actor.email as string,
     {
-      orgId: project.org_id as string,
+      orgId: project.client_id as string,
       projectId,
       metadata: { updated },
     }
@@ -833,7 +833,7 @@ export async function adminDeleteProject(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, org_id, status, deleted_at")
+    .select("id, client_id, status, deleted_at")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -849,7 +849,7 @@ export async function adminDeleteProject(
 
   await auditLog("project.admin_deleted", actor.id, actor.email as string, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: { status_at_deletion: project.status },
   });
 
@@ -876,7 +876,7 @@ export async function pauseProject(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, org_id, status, deleted_at")
+    .select("id, client_id, status, deleted_at")
     .eq("id", projectId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -901,7 +901,7 @@ export async function pauseProject(
 
   await auditLog("project.paused", actor.id, actor.email as string, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: { previous_status: project.status, reason },
   });
 
@@ -918,7 +918,7 @@ export async function resumeProject(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, org_id, status, paused_at, paused_previous_status, expected_delivery_date")
+    .select("id, client_id, status, paused_at, paused_previous_status, expected_delivery_date")
     .eq("id", projectId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -953,7 +953,7 @@ export async function resumeProject(
 
   await auditLog("project.resumed", actor.id, actor.email as string, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: {
       restored_to_status: previousStatus,
       delivery_date_extended_to: newDeliveryDate,

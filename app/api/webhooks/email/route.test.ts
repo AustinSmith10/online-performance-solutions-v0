@@ -54,8 +54,8 @@ const BASE_PAYLOAD = {
 const CLIENT_USER = {
   id: "user-1",
   email: "client@example.com",
-  org_id: "org-1",
-  role: "client",
+  client_id: "org-1",
+  role: "stakeholder",
 };
 
 const ORG = {
@@ -365,7 +365,7 @@ describe("POST /api/webhooks/email", () => {
             if (selectCallCount === 2) return Promise.resolve({ data: ORG, error: null }); // org
             if (selectCallCount === 3)
               return Promise.resolve({
-                data: { id: existingProjectId, org_id: "org-1", status: "draft" },
+                data: { id: existingProjectId, client_id: "org-1", status: "draft" },
                 error: null,
               }); // project
             return Promise.resolve({ data: { extracted_fields: null, po_number: null }, error: null });
@@ -415,7 +415,7 @@ describe("POST /api/webhooks/email", () => {
             if (selectCallCount === 2) return Promise.resolve({ data: ORG, error: null });
             // Project is in 'submitted' status — not a valid draft to append to
             return Promise.resolve({
-              data: { id: "proj-x", org_id: "org-1", status: "submitted" },
+              data: { id: "proj-x", client_id: "org-1", status: "submitted" },
               error: null,
             });
           }),

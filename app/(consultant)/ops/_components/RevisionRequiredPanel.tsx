@@ -11,7 +11,7 @@ export interface RevisionProject {
   po_number: string | null;
   review_cycle: number;
   created_at: string;
-  organisations: { name: string } | null;
+  clients: { name: string } | null;
 }
 
 export interface PbdbFile {
@@ -63,7 +63,7 @@ function DrawerContent({
       <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
         <p className="text-sm font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
-          {project.organisations?.name ?? "—"}
+          {project.clients?.name ?? "—"}
           {" · "}
           <span className="font-medium text-red-600">Revision required — cycle {project.review_cycle}</span>
         </p>
@@ -191,7 +191,7 @@ export function RevisionRequiredPanel({
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-zinc-900">{projectLabel(p)}</p>
                 <p className="mt-0.5 text-xs text-zinc-500">
-                  {p.organisations?.name ?? "—"}
+                  {p.clients?.name ?? "—"}
                   {" · "}
                   <span className="font-medium text-red-600">Cycle {p.review_cycle}</span>
                 </p>
@@ -212,7 +212,7 @@ export function RevisionRequiredPanel({
         isOpen={active !== null}
         onClose={close}
         title={active ? projectLabel(active) : ""}
-        subtitle={active?.organisations?.name}
+        subtitle={active?.clients?.name}
         projectId={active?.id ?? ""}
       >
         {active && (

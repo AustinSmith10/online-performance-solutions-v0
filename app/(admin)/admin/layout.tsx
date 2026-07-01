@@ -8,10 +8,9 @@ import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 
 const ALL_NAV_ITEMS = [
   { href: "/admin/dashboard", label: "Dashboard", superAdminOnly: false },
-  { href: "/admin/organisations", label: "Organisations", superAdminOnly: false },
-  { href: "/admin/users", label: "Users", superAdminOnly: false },
-  { href: "/admin/consultants", label: "Consultants", superAdminOnly: false },
   { href: "/admin/clients", label: "Clients", superAdminOnly: false },
+  { href: "/admin/users", label: "Internal Users", superAdminOnly: false },
+  { href: "/admin/stakeholders", label: "Stakeholders", superAdminOnly: false },
   { href: "/admin/projects", label: "Projects", superAdminOnly: false },
   { href: "/admin/templates", label: "Templates", superAdminOnly: false },
   { href: "/admin/credits", label: "Credits", superAdminOnly: false },

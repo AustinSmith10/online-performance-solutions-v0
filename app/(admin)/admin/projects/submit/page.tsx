@@ -25,18 +25,18 @@ type ClientUser = {
 export default async function AdminSubmitPage({
   searchParams,
 }: {
-  searchParams: Promise<{ org_id?: string; client_id?: string }>;
+  searchParams: Promise<{ client_id?: string; stakeholder_id?: string }>;
 }) {
   await requireRole("super_admin", "admin");
-  const { org_id: orgId, client_id: clientId } = await searchParams;
+  const { client_id: orgId, stakeholder_id: clientId } = await searchParams;
   const supabase = createAdminClient();
 
   const { data: orgs } = await supabase
-    .from("organisations")
+    .from("clients")
     .select("id, name")
     .order("name");
 
-  const organisations = (orgs ?? []) as { id: string; name: string }[];
+  const clients = (orgs ?? []) as { id: string; name: string }[];
 
   // ── Step 1: pick organisation ────────────────────────────────────────────────
   if (!orgId) {
@@ -47,31 +47,31 @@ export default async function AdminSubmitPage({
             ← Projects
           </Link>
           <h1 className="mt-2 text-xl font-semibold text-zinc-900">Submit project on behalf of client</h1>
-          <p className="mt-1 text-sm text-zinc-500">Select the organisation to submit for.</p>
+          <p className="mt-1 text-sm text-zinc-500">Select the client to submit for.</p>
         </div>
         <div className="rounded-lg border border-zinc-200 bg-white p-6">
           <form method="GET" className="space-y-5">
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700">
-                Organisation <span className="text-red-500">*</span>
+                Client <span className="text-red-500">*</span>
               </label>
-              {organisations.length === 0 ? (
-                <p className="text-sm text-zinc-500">No organisations found.</p>
+              {clients.length === 0 ? (
+                <p className="text-sm text-zinc-500">No clients found.</p>
               ) : (
                 <select
-                  name="org_id"
+                  name="client_id"
                   required
                   defaultValue=""
                   className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400"
                 >
-                  <option value="" disabled>Select an organisation…</option>
-                  {organisations.map((org) => (
+                  <option value="" disabled>Select a client…</option>
+                  {clients.map((org) => (
                     <option key={org.id} value={org.id}>{org.name}</option>
                   ))}
                 </select>
               )}
             </div>
-            {organisations.length > 0 && (
+            {clients.length > 0 && (
               <button
                 type="submit"
                 className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
@@ -85,7 +85,7 @@ export default async function AdminSubmitPage({
     );
   }
 
-  const selectedOrg = organisations.find((o) => o.id === orgId);
+  const selectedOrg = clients.find((o) => o.id === orgId);
   if (!selectedOrg) notFound();
 
   // ── Step 2: pick client account within the organisation ──────────────────────
@@ -93,49 +93,49 @@ export default async function AdminSubmitPage({
     const { data: clientsData } = await supabase
       .from("users")
       .select("id, first_name, last_name, email")
-      .eq("org_id", orgId)
-      .eq("role", "client")
+      .eq("client_id", orgId)
+      .eq("role", "stakeholder")
       .order("first_name")
       .order("last_name");
 
-    const clients = (clientsData ?? []) as ClientUser[];
+    const stakeholders = (clientsData ?? []) as ClientUser[];
 
     return (
       <div className="mx-auto max-w-2xl px-4 py-10">
         <div className="mb-8">
           <Link href="/admin/projects/submit" className="text-sm text-zinc-500 hover:text-zinc-700">
-            ← Change organisation
+            ← Change client
           </Link>
           <h1 className="mt-2 text-xl font-semibold text-zinc-900">
             Submit project — {selectedOrg.name}
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Select the client account this submission is being made on behalf of.
+            Select the stakeholder account this submission is being made on behalf of.
           </p>
         </div>
         <div className="rounded-lg border border-zinc-200 bg-white p-6">
-          {clients.length === 0 ? (
+          {stakeholders.length === 0 ? (
             <div className="text-center">
-              <p className="text-sm font-medium text-zinc-900">No client accounts</p>
+              <p className="text-sm font-medium text-zinc-900">No stakeholder accounts</p>
               <p className="mt-1 text-sm text-zinc-500">
-                {selectedOrg.name} has no registered client accounts.
+                {selectedOrg.name} has no registered stakeholder accounts.
               </p>
             </div>
           ) : (
             <form method="GET" className="space-y-5">
-              <input type="hidden" name="org_id" value={orgId} />
+              <input type="hidden" name="client_id" value={orgId} />
               <div>
                 <label className="mb-1 block text-sm font-medium text-zinc-700">
-                  Client account <span className="text-red-500">*</span>
+                  Stakeholder account <span className="text-red-500">*</span>
                 </label>
                 <select
-                  name="client_id"
+                  name="stakeholder_id"
                   required
                   defaultValue=""
                   className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400"
                 >
-                  <option value="" disabled>Select a client…</option>
-                  {clients.map((u) => {
+                  <option value="" disabled>Select a stakeholder…</option>
+                  {stakeholders.map((u) => {
                     const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email;
                     return (
                       <option key={u.id} value={u.id}>
@@ -163,8 +163,8 @@ export default async function AdminSubmitPage({
     .from("users")
     .select("id, first_name, last_name, email")
     .eq("id", clientId)
-    .eq("org_id", orgId)
-    .eq("role", "client")
+    .eq("client_id", orgId)
+    .eq("role", "stakeholder")
     .single();
 
   if (!clientUser) notFound();
@@ -175,7 +175,7 @@ export default async function AdminSubmitPage({
   const { data: templates } = await supabase
     .from("templates")
     .select("id, name")
-    .eq("org_id", orgId)
+    .eq("client_id", orgId)
     .eq("status", "active")
     .order("name");
 
@@ -186,7 +186,7 @@ export default async function AdminSubmitPage({
       <div className="mx-auto max-w-2xl px-4 py-10">
         <div className="mb-8">
           <Link
-            href={`/admin/projects/submit?org_id=${orgId}`}
+            href={`/admin/projects/submit?client_id=${orgId}`}
             className="text-sm text-zinc-500 hover:text-zinc-700"
           >
             ← Change client
@@ -232,7 +232,7 @@ export default async function AdminSubmitPage({
     <div className="mx-auto max-w-2xl px-4 py-10">
       <div className="mb-8">
         <Link
-          href={`/admin/projects/submit?org_id=${orgId}`}
+          href={`/admin/projects/submit?client_id=${orgId}`}
           className="text-sm text-zinc-500 hover:text-zinc-700"
         >
           ← Change client
@@ -253,7 +253,7 @@ export default async function AdminSubmitPage({
         adminOrgId={orgId}
         adminClientId={clientId}
         projectBasePath="/admin/projects"
-        startOverHref={`/admin/projects/submit?org_id=${orgId}`}
+        startOverHref={`/admin/projects/submit?client_id=${orgId}`}
       />
     </div>
   );

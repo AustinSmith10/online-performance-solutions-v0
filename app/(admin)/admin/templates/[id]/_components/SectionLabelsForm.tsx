@@ -50,7 +50,7 @@ const SECTIONS = [
   },
   {
     key: "org",
-    title: "Organisation fields section",
+    title: "Client fields section",
     badgeLabel: "Org config",
     badgeStyle: { background: "#EEEDFE", color: "#3C3489" },
     borderColor: "#7F77DD",

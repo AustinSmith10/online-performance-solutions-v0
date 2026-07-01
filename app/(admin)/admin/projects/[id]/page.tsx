@@ -126,7 +126,7 @@ export default async function ProjectDetailPage({
         review_cycle,
         strip_token_color,
         qa_completed_by,
-        organisations(id, name),
+        clients(id, name),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
       `)
       .eq("id", id)
@@ -159,7 +159,7 @@ export default async function ProjectDetailPage({
     updated_at: string;
     source: "portal" | "email";
     strip_token_color: boolean;
-    organisations: { id: string; name: string } | null;
+    clients: { id: string; name: string } | null;
     assigned: {
       id: string;
       first_name: string | null;
@@ -351,7 +351,7 @@ export default async function ProjectDetailPage({
       <div className="space-y-6">
         {/* Project details */}
         <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
-          <Row label="Organisation" value={project.organisations?.name ?? "—"} />
+          <Row label="Client" value={project.clients?.name ?? "—"} />
           <Row
             label="Submitted via"
             value={
@@ -667,7 +667,7 @@ export default async function ProjectDetailPage({
                 <p className="mt-3 text-sm text-zinc-400">
                   No consultants available.{" "}
                   <Link href="/admin/users/invite" className="underline hover:text-zinc-700">
-                    Invite one →
+                    Create account →
                   </Link>
                 </p>
               )}
@@ -686,7 +686,7 @@ export default async function ProjectDetailPage({
           <p className="mt-3 text-sm text-zinc-400">
             No consultants available.{" "}
             <Link href="/admin/users/invite" className="underline hover:text-zinc-700">
-              Invite one →
+              Create account →
             </Link>
           </p>
         )}
@@ -996,31 +996,70 @@ export default async function ProjectDetailPage({
         />
       )}
 
-      {/* Header */}
-      <div>
-        <Link
-          href={isDeleted ? "/admin/recovery" : "/admin/projects"}
-          className="text-sm text-zinc-500 hover:text-zinc-700"
-        >
-          {isDeleted ? "← Recovery bin" : "← Projects"}
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold text-zinc-900">{pageTitle}</h1>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-            project.status === "paused" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600"
-          }`}>
-            {STATUS_LABELS[project.status]}
-          </span>
-          {project.payment_override && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-              Override — Payment Pending
-            </span>
-          )}
-          {isOverdue && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-              Overdue
-            </span>
-          )}
+      {/* Breadcrumb */}
+      <Link
+        href={isDeleted ? "/admin/recovery" : "/admin/projects"}
+        className="text-sm text-zinc-500 hover:text-zinc-700"
+      >
+        {isDeleted ? "← Recovery bin" : "← Projects"}
+      </Link>
+
+      {/* Header card */}
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-base font-semibold text-zinc-900">{pageTitle}</h1>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                project.status === "paused" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600"
+              }`}>
+                {STATUS_LABELS[project.status]}
+              </span>
+              {project.payment_override && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  Override — Payment Pending
+                </span>
+              )}
+              {isOverdue && (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                  Overdue
+                </span>
+              )}
+              {isDeleted && (
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">
+                  Deleted
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-zinc-400">
+              {project.clients?.name ?? "No organisation"}
+              {project.expected_delivery_date && (
+                <>{" · "}Delivery {new Date(project.expected_delivery_date).toLocaleDateString("en-AU")}</>
+              )}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard
+            label="Client"
+            value={project.clients?.name ?? "—"}
+            variant="neutral"
+          />
+          <StatCard
+            label="Assigned to"
+            value={assignedName ?? "Unassigned"}
+            variant={assignedName ? "neutral" : "warning"}
+          />
+          <StatCard
+            label="Review cycle"
+            value={String(project.review_cycle)}
+            variant="neutral"
+          />
+          <StatCard
+            label="Submitted"
+            value={new Date(project.created_at).toLocaleDateString("en-AU")}
+            variant="neutral"
+          />
         </div>
       </div>
 
@@ -1070,6 +1109,36 @@ export default async function ProjectDetailPage({
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function StatCard({
+  label,
+  value,
+  variant,
+}: {
+  label: string;
+  value: string;
+  variant: "success" | "warning" | "neutral";
+}) {
+  const valueClass =
+    variant === "success"
+      ? "text-green-700"
+      : variant === "warning"
+      ? "text-amber-700"
+      : "text-zinc-900";
+  const containerClass =
+    variant === "warning"
+      ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-amber-400 bg-white px-3 py-2.5"
+      : variant === "success"
+      ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-green-500 bg-white px-3 py-2.5"
+      : "rounded-lg border border-zinc-200 bg-white px-3 py-2.5";
+
+  return (
+    <div className={containerClass}>
+      <p className="text-[10px] text-zinc-400">{label}</p>
+      <p className={`mt-0.5 text-sm font-medium ${valueClass}`}>{value}</p>
+    </div>
+  );
+}
 
 function StepIndicator({
   step,

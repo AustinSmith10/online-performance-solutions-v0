@@ -60,7 +60,7 @@ export default async function TemplatesPage({
   let orgIds: string[] | null = null;
   if (org?.trim()) {
     const { data: matched } = await supabase
-      .from("organisations")
+      .from("clients")
       .select("id")
       .ilike("name", `%${org.trim()}%`);
     orgIds = matched?.map((o) => o.id as string) ?? [];
@@ -68,9 +68,9 @@ export default async function TemplatesPage({
 
   let query = supabase
     .from("templates")
-    .select("id, name, status, created_at, org:org_id(id, name)");
+    .select("id, name, status, created_at, org:client_id(id, name)");
   query = sortCol === "org"
-    ? query.order("name", { referencedTable: "organisations", ascending: sortOrder === "asc" })
+    ? query.order("name", { referencedTable: "clients", ascending: sortOrder === "asc" })
     : query.order(sortCol, { ascending: sortOrder === "asc" });
 
   if (q?.trim()) query = query.ilike("name", `%${q.trim()}%`);
@@ -80,7 +80,7 @@ export default async function TemplatesPage({
       const hasFilter = !!(q || status || org);
       return <TemplatesLayout rows={[]} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} deleted={deleted} />;
     }
-    query = query.in("org_id", orgIds);
+    query = query.in("client_id", orgIds);
   }
 
   const { data: templates } = await query;
@@ -130,7 +130,7 @@ function TemplatesLayout({
             type="text"
             name="org"
             defaultValue={params.org ?? ""}
-            placeholder="Organisation…"
+            placeholder="Client…"
             className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
           />
           <select
@@ -176,7 +176,7 @@ function TemplatesLayout({
                 </th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">
                   <a href={sortHref(params, "org")} className="group inline-flex items-center hover:text-zinc-700">
-                    Organisation <SortIcon active={sortCol === "org"} order={sortOrder} />
+                    Client <SortIcon active={sortCol === "org"} order={sortOrder} />
                   </a>
                 </th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">

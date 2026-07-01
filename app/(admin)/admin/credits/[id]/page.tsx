@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TopUpForm } from "./_components/TopUpForm";
 import { FreezeForm } from "./_components/FreezeForm";
-import type { Organisation, CreditLedgerEntry, CreditEventType } from "@/types";
+import type { Client, CreditLedgerEntry, CreditEventType } from "@/types";
 
 const EVENT_LABELS: Record<CreditEventType, string> = {
   top_up: "Top-up",
@@ -31,14 +31,14 @@ export default async function OrgCreditsPage({
 
   const [{ data: org }, { data: ledger }] = await Promise.all([
     supabase
-      .from("organisations")
+      .from("clients")
       .select("id, name, payment_method, credit_balance, deferred_balance, credit_limit, is_frozen")
       .eq("id", id)
       .maybeSingle(),
     supabase
       .from("credit_ledger")
       .select("*")
-      .eq("org_id", id)
+      .eq("client_id", id)
       .order("created_at", { ascending: false })
       .limit(50),
   ]);
@@ -46,7 +46,7 @@ export default async function OrgCreditsPage({
   if (!org) notFound();
 
   const orgData = org as Pick<
-    Organisation,
+    Client,
     "id" | "name" | "payment_method" | "credit_balance" | "deferred_balance" | "credit_limit" | "is_frozen"
   >;
   const entries = (ledger ?? []) as CreditLedgerEntry[];

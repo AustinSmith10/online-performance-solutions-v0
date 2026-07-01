@@ -29,7 +29,7 @@ export interface DashboardProject {
   assigned_consultant_id: string | null;
   review_buffer_fired_at: string | null;
   qa_completed_by: string | null;
-  organisations: { name: string } | null;
+  clients: { name: string } | null;
   consultant: { first_name: string | null; last_name: string | null; email: string; phone: string | null } | null;
 }
 
@@ -179,7 +179,7 @@ function SetNumberAndAssignDrawerContent({
       <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm">
         <p className="font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
-          {project.organisations?.name ?? "—"} · Submitted {fmtDate(project.created_at)}
+          {project.clients?.name ?? "—"} · Submitted {fmtDate(project.created_at)}
         </p>
       </div>
 
@@ -290,7 +290,7 @@ function AssignDrawerContent({
       <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm">
         <p className="font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
-          {project.organisations?.name ?? "—"} · Submitted{" "}
+          {project.clients?.name ?? "—"} · Submitted{" "}
           {fmtDate(project.created_at)}
         </p>
       </div>
@@ -352,7 +352,7 @@ function OverdueDrawerContent({
       <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
         <p className="text-sm font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
-          {project.organisations?.name ?? "—"} · {STATUS_LABELS[project.status]}
+          {project.clients?.name ?? "—"} · {STATUS_LABELS[project.status]}
         </p>
       </div>
 
@@ -549,7 +549,7 @@ function StakeholderDrawerContent({
       <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
         <p className="text-sm font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
-          {project.organisations?.name ?? "—"}
+          {project.clients?.name ?? "—"}
           {project.review_buffer_fired_at && (
             <> · Buffer fired {fmtDate(project.review_buffer_fired_at)}</>
           )}
@@ -648,7 +648,7 @@ function OverrideDrawerContent({ project }: { project: DashboardProject }) {
       <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
         <p className="text-sm font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
-          {project.organisations?.name ?? "—"} · {STATUS_LABELS[project.status]}
+          {project.clients?.name ?? "—"} · {STATUS_LABELS[project.status]}
         </p>
       </div>
 
@@ -769,7 +769,7 @@ export function ActionPanel({
   const drawerSubtitle =
     drawer?.type === "error"
       ? undefined
-      : drawer?.project.organisations?.name ?? undefined;
+      : drawer?.project.clients?.name ?? undefined;
 
   const drawerProjectId =
     drawer?.type === "error"
@@ -808,7 +808,7 @@ export function ActionPanel({
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-zinc-900">{projectLabel(p)}</p>
                       <p className="mt-0.5 text-xs text-zinc-500">
-                        {p.organisations?.name ?? "—"}
+                        {p.clients?.name ?? "—"}
                         {" · "}
                         {consultantName(p.consultant) ?? <span className="text-zinc-400">Unassigned</span>}
                         {" · "}
@@ -847,7 +847,7 @@ export function ActionPanel({
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-zinc-900">{projectLabel(p)}</p>
                       <p className="mt-0.5 text-xs text-zinc-500">
-                        {p.organisations?.name ?? "—"}
+                        {p.clients?.name ?? "—"}
                         {" · "}
                         Submitted {fmtDate(p.created_at)}
                         {!p.project_number && (
@@ -900,7 +900,7 @@ export function ActionPanel({
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium text-zinc-900">{projectLabel(p)}</p>
                         <p className="mt-0.5 text-xs text-zinc-500">
-                          {p.organisations?.name ?? "—"}
+                          {p.clients?.name ?? "—"}
                           {" · "}
                           <span className="font-medium text-orange-600">
                             {pendingCount} stakeholder{pendingCount !== 1 ? "s" : ""} pending
@@ -939,7 +939,7 @@ export function ActionPanel({
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-zinc-900">{projectLabel(p)}</p>
                       <p className="mt-0.5 text-xs text-zinc-500">
-                        {p.organisations?.name ?? "—"}
+                        {p.clients?.name ?? "—"}
                         {" · "}
                         {STATUS_LABELS[p.status] ?? p.status}
                         {p.payment_override_at && (

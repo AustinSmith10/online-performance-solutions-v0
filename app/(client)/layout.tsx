@@ -6,7 +6,7 @@ import { TopNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireRole("client");
+  const user = await requireRole("stakeholder");
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">

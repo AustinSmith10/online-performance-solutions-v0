@@ -49,7 +49,7 @@ export async function deleteUser(
 
   revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");
-  revalidatePath("/admin/clients");
+  revalidatePath("/admin/stakeholders");
   revalidatePath("/admin/consultants");
   redirect(`/admin/users/${userId}?deleted=1`);
 }
@@ -94,7 +94,7 @@ export async function restoreUser(
 
   revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");
-  revalidatePath("/admin/clients");
+  revalidatePath("/admin/stakeholders");
   revalidatePath("/admin/consultants");
   redirect(`/admin/users/${userId}?restored=1`);
 }
@@ -133,8 +133,8 @@ const CreateAccountSchema = z.object({
   email: z.string().email({ error: "Valid email required" }).trim().toLowerCase(),
   first_name: z.string().min(1, { error: "First name required" }).trim(),
   last_name: z.string().min(1, { error: "Last name required" }).trim(),
-  role: z.enum(["client", "consultant", "admin"], { error: "Invalid role" }),
-  org_id: z.string().uuid({ error: "Invalid organisation" }).optional().or(z.literal("")),
+  role: z.enum(["stakeholder", "consultant", "admin"], { error: "Invalid role" }),
+  client_id: z.string().uuid({ error: "Invalid organisation" }).optional().or(z.literal("")),
 });
 
 export type CreateAccountState = {
@@ -143,7 +143,7 @@ export type CreateAccountState = {
     first_name?: string[];
     last_name?: string[];
     role?: string[];
-    org_id?: string[];
+    client_id?: string[];
     form?: string[];
   };
 };
@@ -154,30 +154,30 @@ export async function createUserAccount(
 ): Promise<CreateAccountState> {
   const caller = await requireRole("super_admin", "admin");
 
-  const rawOrgId = formData.get("org_id") as string | null;
+  const rawOrgId = formData.get("client_id") as string | null;
   const validated = CreateAccountSchema.safeParse({
     email: formData.get("email"),
     first_name: formData.get("first_name"),
     last_name: formData.get("last_name"),
     role: formData.get("role"),
-    org_id: rawOrgId || undefined,
+    client_id: rawOrgId || undefined,
   });
 
   if (!validated.success) {
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const { email, first_name, last_name, role, org_id } = validated.data;
+  const { email, first_name, last_name, role, client_id } = validated.data;
 
   if (role === "admin" && caller.role !== "super_admin") {
     return { errors: { role: ["Only a Super Admin can create Admin accounts"] } };
   }
 
-  if (role === "client" && !org_id) {
-    return { errors: { org_id: ["Organisation required for client accounts"] } };
+  if (role === "stakeholder" && !client_id) {
+    return { errors: { client_id: ["Client required for stakeholder accounts"] } };
   }
 
-  const result = await createAccount(email, role, first_name, last_name, org_id || undefined);
+  const result = await createAccount(email, role, first_name, last_name, client_id || undefined);
   if (result.error) return { errors: { form: [result.error] } };
 
   await auditLog("user.account_created", caller.id, caller.email, {
@@ -235,7 +235,7 @@ const EditUserSchema = z.object({
   state_territory: z.enum(AU_STATES as [string, ...string[]], {
     error: "Select a valid state or territory",
   }),
-  org_id: z.string().uuid({ error: "Invalid organisation" }).optional().or(z.literal("")),
+  client_id: z.string().uuid({ error: "Invalid organisation" }).optional().or(z.literal("")),
 });
 
 export type EditUserState = {
@@ -245,7 +245,7 @@ export type EditUserState = {
     phone?: string[];
     company_role?: string[];
     state_territory?: string[];
-    org_id?: string[];
+    client_id?: string[];
     form?: string[];
   };
 };
@@ -302,28 +302,28 @@ export async function updateUserProfile(
 ): Promise<EditUserState> {
   await requireRole("super_admin", "admin");
 
-  const rawOrgId = formData.get("org_id") as string | null;
+  const rawOrgId = formData.get("client_id") as string | null;
   const validated = EditUserSchema.safeParse({
     first_name: formData.get("first_name"),
     last_name: formData.get("last_name"),
     phone: formData.get("phone") || undefined,
     company_role: formData.get("company_role") || undefined,
     state_territory: formData.get("state_territory"),
-    org_id: rawOrgId || undefined,
+    client_id: rawOrgId || undefined,
   });
 
   if (!validated.success) {
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const { org_id, phone, company_role, ...rest } = validated.data;
+  const { client_id, phone, company_role, ...rest } = validated.data;
 
   const supabase = createAdminClient();
 
   // Fetch current values to determine which fields actually changed
   const { data: current } = await supabase
     .from("users")
-    .select("first_name, last_name, phone, company_role, state_territory, org_id")
+    .select("first_name, last_name, phone, company_role, state_territory, client_id")
     .eq("id", userId)
     .single();
 
@@ -333,7 +333,7 @@ export async function updateUserProfile(
   if ((phone || "") !== (current?.phone ?? "")) changedFields.push("phone");
   if ((company_role || "") !== (current?.company_role ?? "")) changedFields.push("company_role");
   if (rest.state_territory !== (current?.state_territory ?? "")) changedFields.push("state_territory");
-  if ((org_id || "") !== (current?.org_id ?? "")) changedFields.push("org_id");
+  if ((client_id || "") !== (current?.client_id ?? "")) changedFields.push("client_id");
 
   const { error } = await supabase
     .from("users")
@@ -341,7 +341,7 @@ export async function updateUserProfile(
       ...rest,
       phone: phone || null,
       company_role: company_role || null,
-      org_id: org_id || null,
+      client_id: client_id || null,
     })
     .eq("id", userId);
 

@@ -12,7 +12,7 @@ export async function purgeProject(
   _formData: FormData
 ): Promise<{ error?: string; success?: boolean }> {
   const user = await getSessionUser();
-  if (!user || (user.role !== "client" && user.role !== "super_admin" && user.role !== "admin")) {
+  if (!user || (user.role !== "stakeholder" && user.role !== "super_admin" && user.role !== "admin")) {
     return { error: "Unauthorized." };
   }
 
@@ -21,12 +21,12 @@ export async function purgeProject(
   // Verify project is in recovery bin and accessible to this user
   let query = supabase
     .from("projects")
-    .select("id, org_id")
+    .select("id, client_id")
     .eq("id", projectId)
     .not("deleted_at", "is", null);
 
-  if (user.role === "client") {
-    query = query.eq("org_id", user.org_id as string);
+  if (user.role === "stakeholder") {
+    query = query.eq("client_id", user.client_id as string);
   }
 
   const { data: project, error: fetchError } = await query.maybeSingle();
@@ -59,7 +59,7 @@ export async function purgeProject(
   }
 
   await auditLog("project.purged", user.id, user.email as string, {
-    orgId: project.org_id,
+    orgId: project.client_id,
     metadata: { projectId, deletedBy: user.role },
   });
 
@@ -70,14 +70,14 @@ export async function purgeProject(
 }
 
 export async function softDeleteProject(projectId: string): Promise<{ error?: string }> {
-  const user = await requireRole("client");
+  const user = await requireRole("stakeholder");
   const supabase = createAdminClient();
 
   const { data: project, error: fetchError } = await supabase
     .from("projects")
-    .select("id, org_id, status, deleted_at")
+    .select("id, client_id, status, deleted_at")
     .eq("id", projectId)
-    .eq("org_id", user.org_id as string)
+    .eq("client_id", user.client_id as string)
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -104,7 +104,7 @@ export async function softDeleteProject(projectId: string): Promise<{ error?: st
 
   await auditLog("project.soft_deleted", user.id, user.email, {
     projectId,
-    orgId: project.org_id,
+    orgId: project.client_id,
   });
 
   revalidatePath("/portal");
@@ -117,7 +117,7 @@ export async function restoreProject(
   _formData: FormData
 ): Promise<{ error?: string }> {
   const user = await getSessionUser();
-  if (!user || (user.role !== "client" && user.role !== "super_admin" && user.role !== "admin")) {
+  if (!user || (user.role !== "stakeholder" && user.role !== "super_admin" && user.role !== "admin")) {
     return { error: "Unauthorized." };
   }
 
@@ -127,12 +127,12 @@ export async function restoreProject(
 
   let query = supabase
     .from("projects")
-    .select("id, org_id")
+    .select("id, client_id")
     .eq("id", projectId)
     .not("deleted_at", "is", null);
 
-  if (user.role === "client") {
-    query = query.eq("org_id", user.org_id as string);
+  if (user.role === "stakeholder") {
+    query = query.eq("client_id", user.client_id as string);
   }
 
   const { data: project, error: fetchError } = await query.maybeSingle();
@@ -153,14 +153,14 @@ export async function restoreProject(
 
   await auditLog("project.restored", actorId, actorEmail, {
     projectId,
-    orgId: project.org_id,
+    orgId: project.client_id,
   });
 
   revalidatePath("/portal/recovery");
   revalidatePath("/admin/recovery");
   revalidatePath("/portal");
 
-  if (user.role === "client") {
+  if (user.role === "stakeholder") {
     redirect("/portal?restored=1");
   }
   return {};

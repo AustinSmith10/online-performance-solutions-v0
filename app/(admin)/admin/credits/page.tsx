@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ClickableRow } from "@/components/ClickableRow";
-import type { Organisation, PaymentMethod } from "@/types";
+import type { Client, PaymentMethod } from "@/types";
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   upfront: "Upfront",
@@ -26,7 +26,7 @@ function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" })
   return <span className="ml-1 text-zinc-600">{order === "asc" ? "↑" : "↓"}</span>;
 }
 
-type OrgRow = Pick<Organisation, "id" | "name" | "payment_method" | "credit_balance" | "deferred_balance" | "credit_limit" | "is_frozen">;
+type OrgRow = Pick<Client, "id" | "name" | "payment_method" | "credit_balance" | "deferred_balance" | "credit_limit" | "is_frozen">;
 
 export default async function CreditsPage({
   searchParams,
@@ -41,7 +41,7 @@ export default async function CreditsPage({
 
   const supabase = createAdminClient();
   let query = supabase
-    .from("organisations")
+    .from("clients")
     .select("id, name, payment_method, credit_balance, deferred_balance, credit_limit, is_frozen")
     .order(sortCol, { ascending: sortOrder === "asc" });
 
@@ -61,7 +61,7 @@ export default async function CreditsPage({
           <h1 className="text-xl font-semibold text-zinc-900">Credits</h1>
           <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{orgs.length}</span>
         </div>
-        <p className="mt-1 text-sm text-zinc-500">Credit balances and ledger across all organisations.</p>
+        <p className="mt-1 text-sm text-zinc-500">Credit balances and ledger across all clients.</p>
       </div>
 
       <form method="GET" className="rounded-lg border border-zinc-200 bg-white p-4">
@@ -111,7 +111,7 @@ export default async function CreditsPage({
 
       {orgs.length === 0 ? (
         <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
-          {hasFilter ? "No organisations match your filters." : "No organisations yet."}
+          {hasFilter ? "No clients match your filters." : "No clients yet."}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
@@ -120,7 +120,7 @@ export default async function CreditsPage({
               <tr>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">
                   <a href={sortHref(params, "name")} className="group inline-flex items-center hover:text-zinc-700">
-                    Organisation <SortIcon active={sortCol === "name"} order={sortOrder} />
+                    Client <SortIcon active={sortCol === "name"} order={sortOrder} />
                   </a>
                 </th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-500">Payment</th>

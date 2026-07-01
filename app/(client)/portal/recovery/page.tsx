@@ -33,13 +33,13 @@ function daysRemaining(deletedAt: string): number {
 }
 
 export default async function ClientRecoveryPage() {
-  const user = await requireRole("client");
+  const user = await requireRole("stakeholder");
   const supabase = createAdminClient();
 
   const { data } = await supabase
     .from("projects")
     .select("id, po_number, site_address, status, deleted_at")
-    .eq("org_id", user.org_id as string)
+    .eq("client_id", user.client_id as string)
     .not("deleted_at", "is", null)
     .order("deleted_at", { ascending: false });
 

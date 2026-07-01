@@ -1,20 +1,20 @@
 "use client";
 
 import { useActionState } from "react";
-import { inviteUser, type InviteUserState } from "@/app/actions/admin-users";
-import type { Organisation } from "@/types";
+import { createUserAccount, type CreateAccountState } from "@/app/actions/admin-users";
+import type { Client } from "@/types";
 
 export function InviteUserForm({
   orgs,
   preselectedOrgId,
   callerRole,
 }: {
-  orgs: Pick<Organisation, "id" | "name">[];
+  orgs: Pick<Client, "id" | "name">[];
   preselectedOrgId?: string;
   callerRole: string;
 }) {
-  const [state, action, pending] = useActionState<InviteUserState, FormData>(
-    inviteUser,
+  const [state, action, pending] = useActionState<CreateAccountState, FormData>(
+    createUserAccount,
     {}
   );
 
@@ -36,16 +36,47 @@ export function InviteUserForm({
         ))}
       </div>
 
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">
+            First name
+          </label>
+          <input
+            name="first_name"
+            type="text"
+            required
+            className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+          />
+          {state.errors?.first_name?.map((e) => (
+            <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+          ))}
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">
+            Last name
+          </label>
+          <input
+            name="last_name"
+            type="text"
+            required
+            className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+          />
+          {state.errors?.last_name?.map((e) => (
+            <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+          ))}
+        </div>
+      </div>
+
       <div>
         <label className="mb-1 block text-sm font-medium text-zinc-700">
           Role
         </label>
         <select
           name="role"
-          defaultValue="client"
+          defaultValue="stakeholder"
           className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
         >
-          <option value="client">Client</option>
+          <option value="stakeholder">Stakeholder</option>
           <option value="consultant">Consultant</option>
           {callerRole === "super_admin" && <option value="admin">Admin</option>}
         </select>
@@ -56,10 +87,10 @@ export function InviteUserForm({
 
       <div>
         <label className="mb-1 block text-sm font-medium text-zinc-700">
-          Organisation <span className="text-zinc-400">(required for client)</span>
+          Client <span className="text-zinc-400">(required for stakeholder)</span>
         </label>
         <select
-          name="org_id"
+          name="client_id"
           defaultValue={preselectedOrgId ?? ""}
           className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
         >
@@ -70,7 +101,7 @@ export function InviteUserForm({
             </option>
           ))}
         </select>
-        {state.errors?.org_id?.map((e) => (
+        {state.errors?.client_id?.map((e) => (
           <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
         ))}
       </div>
@@ -87,7 +118,7 @@ export function InviteUserForm({
           disabled={pending}
           className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
-          {pending ? "Sending invite…" : "Send invite"}
+          {pending ? "Creating account…" : "Create account"}
         </button>
       </div>
     </form>

@@ -8,6 +8,7 @@ import { PortalApprovalForm } from "./_components/PortalApprovalForm";
 import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
+import { PbdbDownloadButton } from "@/components/PbdbDownloadButton";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -61,7 +62,7 @@ export default async function ClientProjectDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const justSubmitted = sp.submitted === "1";
-  const user = await requireRole("client");
+  const user = await requireRole("stakeholder");
   const supabase = createAdminClient();
 
   const { data } = await supabase
@@ -70,7 +71,7 @@ export default async function ClientProjectDetailPage({
       "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at, source"
     )
     .eq("id", id)
-    .eq("org_id", user.org_id as string)
+    .eq("client_id", user.client_id as string)
     .maybeSingle();
 
   if (!data) notFound();
@@ -325,12 +326,7 @@ export default async function ClientProjectDetailPage({
                       </p>
                     </div>
                     {pbdbDownloadUrl && (
-                      <a
-                        href={pbdbDownloadUrl}
-                        className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                      >
-                        Download
-                      </a>
+                      <PbdbDownloadButton href={pbdbDownloadUrl} />
                     )}
                   </div>
                 )}
@@ -345,14 +341,7 @@ export default async function ClientProjectDetailPage({
                       </p>
                     </div>
                     {f.signedUrl && (
-                      <a
-                        href={f.signedUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                      >
-                        Download
-                      </a>
+                      <PbdrDownloadButton href={f.signedUrl} />
                     )}
                   </div>
                 ))}

@@ -20,7 +20,7 @@ export async function setOrgFrozenFromCredits(
 
   const supabase = createAdminClient();
   const { error } = await supabase
-    .from("organisations")
+    .from("clients")
     .update({ is_frozen: frozen, updated_at: new Date().toISOString() })
     .eq("id", orgId);
 
@@ -33,8 +33,8 @@ export async function setOrgFrozenFromCredits(
 
   revalidatePath(`/admin/credits/${orgId}`);
   revalidatePath("/admin/credits");
-  revalidatePath(`/admin/organisations/${orgId}`);
-  revalidatePath("/admin/organisations");
+  revalidatePath(`/admin/clients/${orgId}`);
+  revalidatePath("/admin/clients");
   return { success: true };
 }
 
@@ -113,7 +113,7 @@ export async function reconcileOverrideAction(
 
   const { data: project, error: projErr } = await supabase
     .from("projects")
-    .select("payment_override, org_id, project_number")
+    .select("payment_override, client_id, project_number")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -121,9 +121,9 @@ export async function reconcileOverrideAction(
   if (!project.payment_override) return { error: "No active override to reconcile." };
 
   const { data: org } = await supabase
-    .from("organisations")
+    .from("clients")
     .select("credit_balance")
-    .eq("id", project.org_id as string)
+    .eq("id", project.client_id as string)
     .maybeSingle();
 
   const now = new Date().toISOString();
@@ -143,7 +143,7 @@ export async function reconcileOverrideAction(
 
   // Log reconciliation as an override event with a note
   await supabase.from("credit_ledger").insert({
-    org_id: project.org_id,
+    client_id: project.client_id,
     project_id: projectId,
     event_type: "override" as CreditEventType,
     amount: 0,
@@ -154,7 +154,7 @@ export async function reconcileOverrideAction(
 
   await auditLog("payment.override_reconciled", actor.id, actor.email, {
     projectId,
-    orgId: project.org_id as string,
+    orgId: project.client_id as string,
     metadata: { project_number: project.project_number ?? null },
   });
 
