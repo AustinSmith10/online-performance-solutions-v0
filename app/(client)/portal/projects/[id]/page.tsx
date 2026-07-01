@@ -7,8 +7,7 @@ import { FileUploadForm } from "./_components/FileUploadForm";
 import { PortalApprovalForm } from "./_components/PortalApprovalForm";
 import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
-import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
-import { PbdbDownloadButton } from "@/components/PbdbDownloadButton";
+import { DownloadCard } from "@/components/DownloadCard";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -305,45 +304,44 @@ export default async function ClientProjectDetailPage({
             ) : (
               <div className="divide-y divide-zinc-100">
                 {latestPbdr && (
-                  <div className="flex items-center gap-4 px-5 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-900">Performance Based Design Report</p>
-                      <p className="text-xs text-zinc-500">
-                        {new Date(latestPbdr.created_at as string).toLocaleDateString("en-AU")}
-                      </p>
-                    </div>
-                    {pbdrSignedUrl && (
-                      <PbdrDownloadButton href={pbdrSignedUrl} filename={latestPbdr.original_filename as string} />
-                    )}
-                  </div>
+                  <DownloadCard
+                    href={pbdrSignedUrl}
+                    filename={latestPbdr.original_filename as string}
+                    originalFilename={latestPbdr.original_filename as string}
+                    wrapperClassName="flex items-center gap-4 px-5 py-3"
+                  >
+                    <p className="truncate text-sm text-zinc-900">Performance Based Design Report</p>
+                    <p className="text-xs text-zinc-500">
+                      {new Date(latestPbdr.created_at as string).toLocaleDateString("en-AU")}
+                    </p>
+                  </DownloadCard>
                 )}
                 {latestPbdb && (
-                  <div className="flex items-center gap-4 px-5 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-900">Performance Based Design Brief</p>
-                      <p className="text-xs text-zinc-500">
-                        {new Date(latestPbdb.created_at as string).toLocaleDateString("en-AU")}
-                      </p>
-                    </div>
-                    {pbdbDownloadUrl && (
-                      <PbdbDownloadButton href={pbdbDownloadUrl} />
-                    )}
-                  </div>
+                  <DownloadCard
+                    href={pbdbDownloadUrl}
+                    originalFilename={latestPbdb.original_filename as string}
+                    wrapperClassName="flex items-center gap-4 px-5 py-3"
+                  >
+                    <p className="truncate text-sm text-zinc-900">Performance Based Design Brief</p>
+                    <p className="text-xs text-zinc-500">
+                      {new Date(latestPbdb.created_at as string).toLocaleDateString("en-AU")}
+                    </p>
+                  </DownloadCard>
                 )}
                 {files.map((f) => (
-                  <div key={f.id as string} className="flex items-center gap-4 px-5 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-900">
-                        {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
-                      </p>
-                      <p className="text-xs text-zinc-500">
-                        {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                      </p>
-                    </div>
-                    {f.signedUrl && (
-                      <PbdrDownloadButton href={f.signedUrl} />
-                    )}
-                  </div>
+                  <DownloadCard
+                    key={f.id as string}
+                    href={f.signedUrl}
+                    originalFilename={f.original_filename as string}
+                    wrapperClassName="flex items-center gap-4 px-5 py-3"
+                  >
+                    <p className="truncate text-sm text-zinc-900">
+                      {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                    </p>
+                  </DownloadCard>
                 ))}
               </div>
             )}
@@ -379,6 +377,7 @@ export default async function ClientProjectDetailPage({
               reviewId={clientReview.id as string}
               projectId={id}
               pbdbDownloadUrl={pbdbDownloadUrl}
+              pbdbFilename={latestPbdb?.original_filename as string | undefined}
               expiresAt={clientReview.expires_at as string}
             />
           )}

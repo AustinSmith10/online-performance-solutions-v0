@@ -1,6 +1,6 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
+import { DownloadCard } from "@/components/DownloadCard";
 import type { ProjectStatus } from "@/types";
 
 type DeliveredProject = {
@@ -15,6 +15,8 @@ type DeliveredProject = {
 
 type PbdrFile = {
   project_id: string;
+  original_filename: string | null;
+  version: number;
 };
 
 export default async function ClientHistoryPage() {
@@ -30,19 +32,24 @@ export default async function ClientHistoryPage() {
 
   const reports = (data ?? []) as DeliveredProject[];
 
-  // Determine which projects have a PBDR available
+  // Determine which projects have a PBDR available, and its original filename
   const projectIds = reports.map((r) => r.id);
   const projectsWithPbdr = new Set<string>();
+  const pbdrFilenameMap = new Map<string, string>();
 
   if (projectIds.length > 0) {
     const { data: pbdrFiles } = await supabase
       .from("project_files")
-      .select("project_id")
+      .select("project_id, original_filename, version")
       .in("project_id", projectIds)
-      .eq("file_type", "pbdr");
+      .eq("file_type", "pbdr")
+      .order("version", { ascending: false });
 
     for (const f of (pbdrFiles ?? []) as PbdrFile[]) {
       projectsWithPbdr.add(f.project_id);
+      if (!pbdrFilenameMap.has(f.project_id) && f.original_filename) {
+        pbdrFilenameMap.set(f.project_id, f.original_filename);
+      }
     }
   }
 
@@ -73,26 +80,41 @@ export default async function ClientHistoryPage() {
                 r.extracted_fields?.["EXTRACT_ADDRESS"] ??
                 (r.po_number ? `PO ${r.po_number}` : r.id.slice(0, 8));
               return (
-                <div key={r.id} className="rounded-lg border border-zinc-200 bg-white px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-medium text-zinc-900 leading-snug">{label}</p>
-                    {hasPbdr ? (
-                      <PbdrDownloadButton
-                        href={`/api/download/pbdr/${r.id}`}
-                        label="Download PDF"
-                      />
-                    ) : (
+                <div key={r.id} className="rounded-lg border border-zinc-200 bg-white">
+                  {hasPbdr ? (
+                    <DownloadCard
+                      href={`/api/download/pbdr/${r.id}`}
+                      filename={pbdrFilenameMap.get(r.id)}
+                      originalFilename={pbdrFilenameMap.get(r.id)}
+                      buttonLabel="Download PDF"
+                      wrapperClassName="flex items-start justify-between gap-3 px-4 py-4"
+                    >
+                      <p className="font-medium text-zinc-900 leading-snug">{label}</p>
+                      <p className="mt-2 text-xs text-zinc-500">
+                        Delivered{" "}
+                        {new Date(deliveredDate).toLocaleDateString("en-AU", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </DownloadCard>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3 px-4 py-4">
+                      <div>
+                        <p className="font-medium text-zinc-900 leading-snug">{label}</p>
+                        <p className="mt-2 text-xs text-zinc-500">
+                          Delivered{" "}
+                          {new Date(deliveredDate).toLocaleDateString("en-AU", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
                       <span className="shrink-0 text-xs text-zinc-400">Processing…</span>
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Delivered{" "}
-                    {new Date(deliveredDate).toLocaleDateString("en-AU", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </p>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -127,9 +149,12 @@ export default async function ClientHistoryPage() {
                       </td>
                       <td className="px-5 py-3">
                         {hasPbdr ? (
-                          <PbdrDownloadButton
+                          <DownloadCard
                             href={`/api/download/pbdr/${r.id}`}
-                            label="Download PDF"
+                            filename={pbdrFilenameMap.get(r.id)}
+                            originalFilename={pbdrFilenameMap.get(r.id)}
+                            buttonLabel="Download PDF"
+                            wrapperClassName="inline-flex items-center gap-2"
                           />
                         ) : (
                           <span className="text-xs text-zinc-400">Processing…</span>

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { validateToken } from "@/lib/stakeholders/tokens";
 import { auditLog } from "@/lib/audit/log";
 import { ApprovalForm } from "./_components/ApprovalForm";
+import { ApproveDownloadLink } from "./_components/ApproveDownloadLink";
 
 export default async function ApprovePage({
   params,
@@ -107,12 +108,10 @@ export default async function ApprovePage({
         </p>
 
         {pbdbFile && (
-          <a
+          <ApproveDownloadLink
             href={`/approve/${tokenString}/download`}
-            style={styles.downloadLink}
-          >
-            Download PBDB document
-          </a>
+            filename={pbdbFile.original_filename as string | null}
+          />
         )}
 
         <ApprovalForm token={tokenString} reviewId={review.id} redirectAfterSubmit={hasPortalAccount} />
@@ -158,13 +157,6 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.6,
     color: "#3f3f46",
     margin: "0 0 16px",
-  },
-  downloadLink: {
-    display: "inline-block",
-    marginBottom: "24px",
-    color: "#18181b",
-    fontWeight: 500,
-    fontSize: "14px",
   },
   note: {
     fontSize: "13px",

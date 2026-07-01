@@ -9,6 +9,7 @@ interface Props {
   reviewId: string;
   projectId: string;
   pbdbDownloadUrl: string;
+  pbdbFilename?: string;
   expiresAt: string;
 }
 
@@ -17,6 +18,7 @@ export function PendingReviewModal({
   reviewId,
   projectId,
   pbdbDownloadUrl,
+  pbdbFilename,
   expiresAt,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -66,6 +68,7 @@ export function PendingReviewModal({
                 reviewId={reviewId}
                 projectId={projectId}
                 pbdbDownloadUrl={pbdbDownloadUrl}
+                pbdbFilename={pbdbFilename}
                 expiresAt={expiresAt}
                 bare
                 onSubmitted={() => {

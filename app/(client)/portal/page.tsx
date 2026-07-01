@@ -3,7 +3,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ClickableRow } from "@/components/ClickableRow";
 import { DownloadPbdrLink } from "./_components/DownloadPbdrLink";
-import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
+import { DownloadCard } from "@/components/DownloadCard";
 import { DeletedBanner } from "./_components/DeletedBanner";
 import { RestoredBanner } from "./_components/RestoredBanner";
 import { PendingReviewModal } from "./_components/PendingReviewModal";
@@ -117,6 +117,21 @@ export default async function ClientPortalPage({
   );
   const pendingApprovals = projects.filter((p) => pendingReviewMap.has(p.id));
 
+  // Latest PBDB original_filename per project with a pending approval
+  const pbdbFilenameMap = new Map<string, string>();
+  if (pendingApprovals.length > 0) {
+    const { data: pbdbFilesData } = await supabase
+      .from("project_files")
+      .select("project_id, original_filename, version")
+      .in("project_id", pendingApprovals.map((p) => p.id))
+      .eq("file_type", "pbdb")
+      .order("version", { ascending: false });
+    for (const row of pbdbFilesData ?? []) {
+      const pid = row.project_id as string;
+      if (!pbdbFilenameMap.has(pid)) pbdbFilenameMap.set(pid, row.original_filename as string);
+    }
+  }
+
   // Complete projects within the 8-working-day window
   const recentlyComplete = projects.filter((p) => {
     if (p.status !== "complete") return false;
@@ -172,6 +187,22 @@ export default async function ClientPortalPage({
 
   // Main table: exclude complete projects (they live in history or the ready banner)
   const activeProjects = projects.filter((p) => p.status !== "complete");
+
+  // Latest PBDR original_filename per project — shown under the download button
+  const pbdrRelevantIds = [...new Set([...allDelivered, ...reportsReady].map((p) => p.id))];
+  const pbdrFilenameMap = new Map<string, string>();
+  if (pbdrRelevantIds.length > 0) {
+    const { data: pbdrFilesData } = await supabase
+      .from("project_files")
+      .select("project_id, original_filename, version")
+      .in("project_id", pbdrRelevantIds)
+      .eq("file_type", "pbdr")
+      .order("version", { ascending: false });
+    for (const row of pbdrFilesData ?? []) {
+      const pid = row.project_id as string;
+      if (!pbdrFilenameMap.has(pid)) pbdrFilenameMap.set(pid, row.original_filename as string);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 space-y-8">
@@ -232,6 +263,7 @@ export default async function ClientPortalPage({
                   reviewId={pendingReviewMap.get(p.id)!.id}
                   projectId={p.id}
                   pbdbDownloadUrl={`/api/download/pbdb-client/${p.id}`}
+                  pbdbFilename={pbdbFilenameMap.get(p.id)}
                   expiresAt={pendingReviewMap.get(p.id)!.expires_at}
                 />
               </li>
@@ -253,19 +285,19 @@ export default async function ClientPortalPage({
           </p>
           <ul className="mt-3 space-y-2">
             {deliveredProjects.map((p) => (
-              <li
+              <DownloadCard
                 key={p.id}
-                className="flex items-center justify-between gap-3 rounded-md border border-green-100 bg-white px-4 py-2.5"
+                href={`/api/download/pbdr/${p.id}`}
+                filename={pbdrFilenameMap.get(p.id)}
+                originalFilename={pbdrFilenameMap.get(p.id)}
+                buttonLabel="Download PBDR"
+                buttonClassName="shrink-0 inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                wrapperClassName="flex items-center justify-between gap-3 rounded-md border border-green-100 bg-white px-4 py-2.5"
               >
                 <span className="min-w-0 truncate text-sm font-medium text-zinc-900">
                   {projectLabel(p)}
                 </span>
-                <PbdrDownloadButton
-                  href={`/api/download/pbdr/${p.id}`}
-                  label="Download PBDR"
-                  className="shrink-0 inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
-                />
-              </li>
+              </DownloadCard>
             ))}
           </ul>
         </div>
@@ -290,26 +322,24 @@ export default async function ClientPortalPage({
               const daysElapsed = workingDaysElapsed(from, todayIso);
               const daysLeft = READY_WINDOW_DAYS - daysElapsed;
               return (
-                <li
+                <DownloadCard
                   key={p.id}
-                  className="flex items-center justify-between rounded-md border border-green-100 bg-white px-4 py-2.5"
+                  href={`/api/download/pbdr/${p.id}`}
+                  filename={pbdrFilenameMap.get(p.id)}
+                  originalFilename={pbdrFilenameMap.get(p.id)}
+                  buttonLabel="Download report"
+                  buttonClassName="shrink-0 inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                  wrapperClassName="flex items-center justify-between rounded-md border border-green-100 bg-white px-4 py-2.5"
                 >
-                  <div className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-zinc-900">
-                      {projectLabel(p)}
-                    </span>
-                    <span className="text-xs text-zinc-400">
-                      {daysLeft <= 1
-                        ? "Last day to download"
-                        : `Available for ${daysLeft} more working day${daysLeft !== 1 ? "s" : ""}`}
-                    </span>
-                  </div>
-                  <PbdrDownloadButton
-                    href={`/api/download/pbdr/${p.id}`}
-                    label="Download report"
-                    className="shrink-0 inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
-                  />
-                </li>
+                  <span className="block truncate text-sm font-medium text-zinc-900">
+                    {projectLabel(p)}
+                  </span>
+                  <span className="text-xs text-zinc-400">
+                    {daysLeft <= 1
+                      ? "Last day to download"
+                      : `Available for ${daysLeft} more working day${daysLeft !== 1 ? "s" : ""}`}
+                  </span>
+                </DownloadCard>
               );
             })}
           </ul>
@@ -368,9 +398,9 @@ export default async function ClientPortalPage({
                     )}
                   </div>
                 </Link>
-                {p.status === "delivered" && deliveredProjects.some((d) => d.id === p.id) && (
+                {p.status === "delivered" && (
                   <div className="mt-3 border-t border-zinc-100 pt-3">
-                    <DownloadPbdrLink projectId={p.id} />
+                    <DownloadPbdrLink projectId={p.id} filename={pbdrFilenameMap.get(p.id)} />
                   </div>
                 )}
               </div>
@@ -415,8 +445,8 @@ export default async function ClientPortalPage({
                       )}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      {p.status === "delivered" && deliveredProjects.some((d) => d.id === p.id) && (
-                        <DownloadPbdrLink projectId={p.id} />
+                      {p.status === "delivered" && (
+                        <DownloadPbdrLink projectId={p.id} filename={pbdrFilenameMap.get(p.id)} />
                       )}
                     </td>
                   </ClickableRow>

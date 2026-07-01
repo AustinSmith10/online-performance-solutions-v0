@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from "react";
 import { resendPbdb, type ResendPbdbState } from "@/app/actions/projects";
+import { UploadDropzone } from "@/components/UploadDropzone";
 
 type Phase = "idle" | "confirming";
 
@@ -17,30 +18,9 @@ export function ResendPbdbForm({
     boundAction,
     {}
   );
-  const inputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [hasFile, setHasFile] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
-
-  function handleDragOver(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(true);
-  }
-  function handleDragLeave(e: React.DragEvent) {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false);
-  }
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file && inputRef.current) {
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      inputRef.current.files = dt.files;
-      setFileName(file.name);
-    }
-  }
 
   function handleConfirm() {
     setPhase("idle");
@@ -50,40 +30,16 @@ export function ResendPbdbForm({
   return (
     <>
       <form ref={formRef} action={formAction} className="space-y-3">
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-6 text-center transition-colors ${
-            dragOver
-              ? "border-zinc-400 bg-zinc-50"
-              : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
-          }`}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            name="file"
-            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            required
-            className="hidden"
-            onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
-          />
-          {fileName ? (
-            <p className="text-sm font-medium text-zinc-800">{fileName}</p>
-          ) : (
-            <>
-              <p className="text-sm text-zinc-600">
-                Drop corrected .docx here or{" "}
-                <span className="font-medium text-zinc-900 underline underline-offset-2">
-                  browse
-                </span>
-              </p>
-              <p className="mt-1 text-xs text-zinc-400">.docx only</p>
-            </>
-          )}
-        </div>
+        <UploadDropzone
+          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          prompt="Drop corrected .docx here or browse"
+          hint=".docx only"
+          pending={pending}
+          success={state.success}
+          error={state.error}
+          required
+          onFile={(f) => setHasFile(f !== null)}
+        />
         <p className="text-xs text-amber-700">
           Uploading will reset all {stakeholderCount} pending review
           {stakeholderCount !== 1 ? "s" : ""} and resend approval emails with the
@@ -92,13 +48,12 @@ export function ResendPbdbForm({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            disabled={pending || !fileName}
+            disabled={pending || !hasFile}
             onClick={() => setPhase("confirming")}
             className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
           >
             {pending ? "Uploading…" : "Upload and resend to all stakeholders"}
           </button>
-          {state.error && <p className="text-sm text-red-600">{state.error}</p>}
         </div>
       </form>
 

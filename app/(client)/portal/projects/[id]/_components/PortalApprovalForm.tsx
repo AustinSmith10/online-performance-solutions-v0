@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { submitPortalApproval, type PortalApprovalState } from "@/app/actions/portalApproval";
-import { PbdbDownloadButton } from "@/components/PbdbDownloadButton";
+import { DownloadCard } from "@/components/DownloadCard";
 
 function Spinner({ className = "" }: { className?: string }) {
   return (
@@ -27,12 +27,13 @@ interface Props {
   reviewId: string;
   projectId: string;
   pbdbDownloadUrl: string | null;
+  pbdbFilename?: string | null;
   expiresAt: string;
   onSubmitted?: () => void;
   bare?: boolean;
 }
 
-export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownloadUrl, expiresAt, onSubmitted, bare }: Props) {
+export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownloadUrl, pbdbFilename, expiresAt, onSubmitted, bare }: Props) {
   const router = useRouter();
   const boundAction = submitPortalApproval.bind(null, reviewId);
   const [state, formAction, pending] = useActionState<PortalApprovalState, FormData>(
@@ -109,10 +110,15 @@ export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownlo
 
       {pbdbDownloadUrl && (
         <div className="mt-3">
-          <PbdbDownloadButton
+          <DownloadCard
             href={pbdbDownloadUrl}
-            label="Download PBDB document"
-          />
+            filename={pbdbFilename}
+            originalFilename={pbdbFilename}
+            buttonLabel="Download PBDB document"
+            wrapperClassName="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-4 py-3"
+          >
+            <p className="text-sm font-medium text-zinc-900">PBDB document</p>
+          </DownloadCard>
         </div>
       )}
 

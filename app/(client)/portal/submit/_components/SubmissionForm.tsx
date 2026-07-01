@@ -371,7 +371,38 @@ function FileSlot({
   const [slotError, setSlotError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadPct, setLoadPct] = useState(0);
+  const [loadingIn, setLoadingIn] = useState(false);
+  const timerRef = useRef<{ iv: ReturnType<typeof setInterval>; to: ReturnType<typeof setTimeout> } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  function startLoadAnimation() {
+    if (timerRef.current) {
+      clearInterval(timerRef.current.iv);
+      clearTimeout(timerRef.current.to);
+    }
+    const duration = 2000;
+    const start = Date.now();
+    setLoadingIn(true);
+    setLoadPct(0);
+    const iv = setInterval(() => {
+      setLoadPct(Math.min(100, ((Date.now() - start) / duration) * 100));
+    }, 30);
+    const to = setTimeout(() => {
+      clearInterval(iv);
+      setLoadPct(100);
+      setLoadingIn(false);
+      timerRef.current = null;
+    }, duration);
+    timerRef.current = { iv, to };
+  }
+
+  useEffect(() => () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current.iv);
+      clearTimeout(timerRef.current.to);
+    }
+  }, []);
 
   function applyFiles(list: FileList | null) {
     if (!list || disabled || isLoading) return;
@@ -426,6 +457,7 @@ function FileSlot({
         }
         setFileInfos(arr.map((f) => ({ name: f.name, size: f.size })));
         onHasFile(requirement.slug, true);
+        startLoadAnimation();
       })
       .catch((err: Error) => {
         setSlotError(err.message);
@@ -452,8 +484,10 @@ function FileSlot({
       </label>
 
       <div
-        className={`flex min-h-[88px] flex-col items-center justify-center rounded-md border-2 border-dashed px-4 py-6 text-center transition-colors ${
-          isBlocked
+        className={`relative flex min-h-[88px] flex-col items-center justify-center overflow-hidden rounded-md border-2 border-dashed px-4 py-6 text-center transition-colors ${
+          isBlocked && !loadingIn
+            ? "cursor-default border-zinc-100 bg-zinc-50"
+            : isBlocked
             ? "cursor-default border-zinc-100 bg-zinc-50"
             : isDragging
             ? "cursor-pointer border-zinc-500 bg-zinc-100"
@@ -485,6 +519,21 @@ function FileSlot({
           <div className="flex flex-col items-center gap-2">
             <Spinner className="h-5 w-5 text-zinc-400" />
             <p className="text-xs text-zinc-400">Checking file…</p>
+          </div>
+        ) : loadingIn ? (
+          <div className="w-full space-y-2 text-center">
+            {fileInfos.map((f) => (
+              <div key={f.name}>
+                <p className="break-all text-sm font-medium text-zinc-800">{f.name}</p>
+                <p className="text-xs text-zinc-400">{formatFileSize(f.size)}</p>
+              </div>
+            ))}
+            <div className="mx-auto mt-1 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+              <div
+                className="h-full rounded-full bg-green-500 transition-none"
+                style={{ width: `${loadPct}%` }}
+              />
+            </div>
           </div>
         ) : hasFiles ? (
           <div className="w-full space-y-1 text-center">

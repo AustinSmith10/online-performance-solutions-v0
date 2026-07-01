@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Drawer } from "./Drawer";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
+import { DownloadCard } from "@/components/DownloadCard";
 
 export interface RevisionProject {
   id: string;
@@ -116,20 +117,18 @@ function DrawerContent({
           PBDB sent to stakeholders
         </p>
         {pbdbFile ? (
-          <a
+          <DownloadCard
             href={`/api/download/pbdb/${pbdbFile.id}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 hover:bg-zinc-50"
+            filename={pbdbFile.original_filename ?? undefined}
+            originalFilename={pbdbFile.original_filename}
+            external
+            buttonLabel="Download ↓"
+            buttonClassName="ml-3 shrink-0 text-xs font-medium text-zinc-500 hover:text-zinc-700"
+            wrapperClassName="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 hover:bg-zinc-50"
           >
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-zinc-900">
-                {pbdbFile.original_filename ?? "PBDB document"}
-              </p>
-              <p className="text-xs text-zinc-500">Version {pbdbFile.version}</p>
-            </div>
-            <span className="ml-3 shrink-0 text-xs font-medium text-zinc-500">Download ↓</span>
-          </a>
+            <p className="truncate text-sm font-medium text-zinc-900">PBDB document</p>
+            <p className="text-xs text-zinc-500">Version {pbdbFile.version}</p>
+          </DownloadCard>
         ) : (
           <p className="text-xs text-zinc-400">No PBDB file found for this project.</p>
         )}

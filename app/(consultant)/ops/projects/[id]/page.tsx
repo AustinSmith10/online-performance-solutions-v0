@@ -10,8 +10,7 @@ import { PbdbResentBanner } from "./_components/PbdbResentBanner";
 import { ResendPbdbForm } from "./_components/ResendPbdbForm";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
-import { PbdbDownloadButton } from "@/components/PbdbDownloadButton";
-import { PbdrDownloadButton } from "@/components/PbdrDownloadButton";
+import { DownloadCard } from "@/components/DownloadCard";
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { ConsultantProjectTabs } from "./_components/ConsultantProjectTabs";
@@ -396,27 +395,19 @@ export default async function ConsultantProjectDetailPage({
         ) : (
           <div className="divide-y divide-zinc-100">
             {submissionFiles.map((f) => (
-              <div key={f.id as string} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900">
-                    {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type as string}
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    {f.original_filename as string} &middot;{" "}
-                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </div>
-                {f.signedUrl && (
-                  <a
-                    href={f.signedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-4 shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Download
-                  </a>
-                )}
-              </div>
+              <DownloadCard
+                key={f.id as string}
+                href={f.signedUrl}
+                originalFilename={f.original_filename as string}
+                external
+              >
+                <p className="text-sm font-medium text-zinc-900">
+                  {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? (f.file_type as string)}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                </p>
+              </DownloadCard>
             ))}
           </div>
         )}
@@ -519,18 +510,18 @@ export default async function ConsultantProjectDetailPage({
           </div>
           <div className="divide-y divide-zinc-100">
             {pbdrFiles.map((f) => (
-              <div key={f.id as string} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    Version {f.version as number} ·{" "}
-                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </div>
-                {f.signedUrl && (
-                  <PbdrDownloadButton href={f.signedUrl} filename={f.original_filename as string} />
-                )}
-              </div>
+              <DownloadCard
+                key={f.id as string}
+                href={f.signedUrl}
+                filename={f.original_filename as string}
+                originalFilename={f.original_filename as string}
+              >
+                <p className="text-sm font-medium text-zinc-900">PBDR</p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Version {f.version as number} ·{" "}
+                  {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                </p>
+              </DownloadCard>
             ))}
           </div>
         </div>
@@ -575,29 +566,25 @@ export default async function ConsultantProjectDetailPage({
                   project.status as ProjectStatus
                 );
               return (
-                <div
+                <DownloadCard
                   key={f.id as string}
                   id={showDispatchedBadge ? "qa-pbdb-row" : undefined}
-                  className="flex items-center justify-between px-5 py-3 transition-shadow duration-700"
+                  href={`/api/download/pbdb/${f.id as string}`}
+                  filename={f.original_filename as string}
+                  wrapperClassName="flex items-center justify-between px-5 py-3 transition-shadow duration-700"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
-                      {showDispatchedBadge && (
-                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                          Dispatched PBDB
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      v{version} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
+                    {showDispatchedBadge && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                        Dispatched PBDB
+                      </span>
+                    )}
                   </div>
-                  <PbdbDownloadButton
-                    href={`/api/download/pbdb/${f.id as string}`}
-                    filename={f.original_filename as string}
-                  />
-                </div>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    v{version} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                  </p>
+                </DownloadCard>
               );
             })}
           </div>
@@ -627,21 +614,19 @@ export default async function ConsultantProjectDetailPage({
             <div className="space-y-3">
               <p className="text-xs font-medium text-green-800">PBDR ready for download</p>
               {pbdrFiles.map((f) => (
-                <div key={f.id as string} className="flex items-center justify-between rounded-md border border-green-200 bg-white px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      v{f.version as number} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                    </p>
-                  </div>
-                  {f.signedUrl && (
-                    <PbdrDownloadButton
-                      href={f.signedUrl}
-                      filename={f.original_filename as string}
-                      className="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
-                    />
-                  )}
-                </div>
+                <DownloadCard
+                  key={f.id as string}
+                  href={f.signedUrl}
+                  filename={f.original_filename as string}
+                  originalFilename={f.original_filename as string}
+                  wrapperClassName="flex items-center justify-between rounded-md border border-green-200 bg-white px-4 py-3"
+                  buttonClassName="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
+                >
+                  <p className="text-sm font-medium text-zinc-900">PBDR</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    v{f.version as number} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                  </p>
+                </DownloadCard>
               ))}
             </div>
           ) : undefined
