@@ -357,10 +357,10 @@ export default async function ClientProjectDetailPage({
             )}
             {!isDeleted && isLocked && (
               <p className="border-t border-zinc-100 px-5 py-3 text-xs text-amber-800 bg-amber-50">
-                Under review — editing is no longer available.
+                Under review — existing documents can no longer be replaced, but you can still add new ones below.
               </p>
             )}
-            {!isDeleted && !isLocked && (
+            {!isDeleted && (
               <div className="border-t border-zinc-100 px-5 py-4">
                 <FileUploadForm projectId={id} />
               </div>

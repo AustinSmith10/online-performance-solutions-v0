@@ -14,7 +14,19 @@ import { GeneratePbdbButton, RegeneratePbdbButton } from "@/components/PbdbGener
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
 import { CollapsibleSection } from "./_components/CollapsibleSection";
 import { ProjectDetailsEditor } from "./_components/ProjectDetailsEditor";
+import { ConsultantProjectTabs } from "./_components/ConsultantProjectTabs";
+import { ProjectAuditTrail, type ProjectAuditRow } from "./_components/ProjectAuditTrail";
+import { CATEGORIES } from "@/lib/audit/taxonomy";
 import type { ProjectStatus } from "@/types";
+
+// Excluded from the project-scoped audit trail: financial ledger events (these
+// carry project_id but are not evidentiary for the consultant, see #43) and
+// email-deliverability internals that never reach a project's inbox anyway.
+const AUDIT_EXCLUDED_EVENTS = [
+  ...CATEGORIES.credit.events,
+  "email.thread_reply_invalid",
+  "email.whitelist_blocked",
+];
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -127,6 +139,7 @@ export default async function ConsultantProjectDetailPage({
     { data: rawPbdrFiles },
     { data: rawReviews },
     { data: rawFileRequirements },
+    { data: rawAuditEntries },
   ] = await Promise.all([
     project.template_id
       ? supabase
@@ -163,7 +176,15 @@ export default async function ConsultantProjectDetailPage({
       .from("file_requirements")
       .select("slug, name")
       .order("sort_order"),
+    supabase
+      .from("audit_log")
+      .select("id, event_type, actor_email, metadata, created_at")
+      .eq("project_id", id)
+      .not("event_type", "in", `(${AUDIT_EXCLUDED_EVENTS.join(",")})`)
+      .order("created_at", { ascending: true }),
   ]);
+
+  const auditEntries = (rawAuditEntries ?? []) as ProjectAuditRow[];
 
   const fileReqLabelMap = new Map<string, string>(
     (rawFileRequirements ?? []).map((r) => [r.slug as string, r.name as string])
@@ -725,12 +746,17 @@ export default async function ConsultantProjectDetailPage({
         </p>
       </div>
 
-      {/* Two-column layout: workflow steps (narrow, left) + project details (wide, right).
-          Single column on mobile — steps stack above details. */}
-      <div className="consultant-two-col">
-        <div className="min-w-0 space-y-3">{stepsContent}</div>
-        <div className="min-w-0 space-y-4">{infoContent}</div>
-      </div>
+      <ConsultantProjectTabs
+        overview={
+          // Two-column layout: workflow steps (narrow, left) + project details (wide, right).
+          // Single column on mobile — steps stack above details.
+          <div className="consultant-two-col">
+            <div className="min-w-0 space-y-3">{stepsContent}</div>
+            <div className="min-w-0 space-y-4">{infoContent}</div>
+          </div>
+        }
+        audit={<ProjectAuditTrail entries={auditEntries} />}
+      />
     </div>
   );
 }

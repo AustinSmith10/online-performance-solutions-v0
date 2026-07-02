@@ -106,11 +106,9 @@ export async function uploadProjectFile(
   const { data: project } = await query.maybeSingle();
   if (!project) return { error: "Project not found or access denied." };
 
-  // Stakeholders can only add documents to their submission while it's unpicked-up —
-  // once a consultant has taken the project, the submission is locked.
-  if (actor.role === "stakeholder" && project.assigned_consultant_id) {
-    return { error: "This project is under review — editing is no longer available." };
-  }
+  // Stakeholders can add new documents at any point in the project lifecycle —
+  // only replacing an existing pre-assignment document is restricted (see
+  // replaceProjectFile).
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Please select a file." };
@@ -172,8 +170,12 @@ export async function replaceProjectFile(
     .maybeSingle();
 
   if (!project) return { error: "Project not found or access denied." };
+
+  // Once a consultant has been assigned, no existing document — regardless of
+  // when it was uploaded — can be replaced. Clients can still add new
+  // documents via uploadProjectFile.
   if (project.assigned_consultant_id) {
-    return { error: "This project is under review — editing is no longer available." };
+    return { error: "This project is under review — documents can no longer be replaced." };
   }
 
   const { data: existingFile } = await supabase

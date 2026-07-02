@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stakeholder delivery tracker — mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  :root {
+    --surface-0: #FFFFFF;
+    --surface-1: #F1EFE8;
+    --surface-2: #FFFFFF;
+    --text-primary: #2C2C2A;
+    --text-secondary: #5F5E5A;
+    --text-muted: #888780;
+    --border: #D3D1C7;
+    --border-strong: #B4B2A9;
+    --radius: 8px;
+    --fill-success: #639922;
+    --on-success: #FFFFFF;
+    --fill-accent: #378ADD;
+    --on-accent: #FFFFFF;
+    --bg-warning: #FAEEDA;
+    --text-warning: #854F0B;
+    --border-warning: #EF9F27;
+    --fill-disabled: #D3D1C7;
+  }
+  body {
+    background: var(--surface-0);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--text-primary);
+    margin: 0;
+    padding: 2rem 1.5rem;
+  }
+  .wrap {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 1.5rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Stakeholder delivery tracker — proposed states</h1>
+<div style="display:flex; flex-direction:column; gap:1.25rem;">
+
+  <div style="background:var(--surface-1); border-radius:12px; padding:1.25rem 1.5rem 1.5rem;">
+    <p style="font-size:13px; color:var(--text-secondary); margin:0 0 1.25rem;">Your report is being prepared</p>
+    <div style="position:relative; display:flex; justify-content:space-between;">
+      <div style="position:absolute; top:15px; left:10%; right:10%; height:2px; background:var(--border-strong);"></div>
+      <div style="position:absolute; top:15px; left:10%; width:22.5%; height:2px; background:var(--fill-success);"></div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; background:var(--fill-success); display:flex; align-items:center; justify-content:center;"><i class="ti ti-check" style="font-size:16px; color:var(--on-success);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-primary); margin-top:8px; text-align:center;">Submitted</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; background:var(--fill-accent); display:flex; align-items:center; justify-content:center;"><i class="ti ti-clock" style="font-size:16px; color:var(--on-accent);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-primary); font-weight:500; margin-top:8px; text-align:center;">Being prepared</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid var(--border-strong); background:var(--surface-2); display:flex; align-items:center; justify-content:center;"><i class="ti ti-eye" style="font-size:16px; color:var(--text-muted);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-muted); margin-top:8px; text-align:center;">Awaiting your review</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid var(--border-strong); background:var(--surface-2); display:flex; align-items:center; justify-content:center;"><i class="ti ti-file-text" style="font-size:16px; color:var(--text-muted);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-muted); margin-top:8px; text-align:center;">Finalizing</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid var(--border-strong); background:var(--surface-2); display:flex; align-items:center; justify-content:center;"><i class="ti ti-package" style="font-size:16px; color:var(--text-muted);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-muted); margin-top:8px; text-align:center;">Delivered</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:var(--surface-1); border-radius:12px; padding:1.25rem 1.5rem 0.5rem;">
+    <div style="display:flex; align-items:center; gap:8px; margin:0 0 1.25rem;">
+      <p style="font-size:13px; color:var(--text-secondary); margin:0;">Changes requested — being reworked</p>
+      <span style="font-size:12px; font-weight:500; color:var(--text-warning); background:var(--bg-warning); padding:2px 8px; border-radius:var(--radius);">Round 2</span>
+    </div>
+    <div style="position:relative; display:flex; justify-content:space-between;">
+      <div style="position:absolute; top:15px; left:10%; right:10%; height:2px; background:var(--border-strong);"></div>
+      <div style="position:absolute; top:15px; left:10%; width:22.5%; height:2px; background:var(--fill-success);"></div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; background:var(--fill-success); display:flex; align-items:center; justify-content:center;"><i class="ti ti-check" style="font-size:16px; color:var(--on-success);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-primary); margin-top:8px; text-align:center;">Submitted</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; background:var(--fill-accent); display:flex; align-items:center; justify-content:center;"><i class="ti ti-refresh" style="font-size:16px; color:var(--on-accent);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-primary); font-weight:500; margin-top:8px; text-align:center;">Revising</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; background:var(--bg-warning); border:1.5px solid var(--border-warning); display:flex; align-items:center; justify-content:center;"><i class="ti ti-message-circle" style="font-size:16px; color:var(--text-warning);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-primary); margin-top:8px; text-align:center;">Awaiting your review</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid var(--border-strong); background:var(--surface-2); display:flex; align-items:center; justify-content:center;"><i class="ti ti-file-text" style="font-size:16px; color:var(--text-muted);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-muted); margin-top:8px; text-align:center;">Finalizing</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid var(--border-strong); background:var(--surface-2); display:flex; align-items:center; justify-content:center;"><i class="ti ti-package" style="font-size:16px; color:var(--text-muted);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-muted); margin-top:8px; text-align:center;">Delivered</span>
+      </div>
+    </div>
+    <div style="position:relative; height:44px; margin-top:-4px;">
+      <svg viewBox="0 0 100 36" preserveAspectRatio="none" style="position:absolute; left:30%; width:20%; top:0; height:44px; overflow:visible;" aria-hidden="true">
+        <path d="M 100 4 C 100 30, 0 30, 0 4" fill="none" stroke="var(--text-warning)" stroke-width="1.5" marker-end="url(#loopArrow)"></path>
+        <defs>
+          <marker id="loopArrow" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--text-warning)"></path>
+          </marker>
+        </defs>
+      </svg>
+      <span style="position:absolute; left:38%; top:20px; font-size:11px; color:var(--text-warning); white-space:nowrap;">loops back</span>
+    </div>
+  </div>
+
+  <div style="background:var(--surface-1); border-radius:12px; padding:1.25rem 1.5rem 1.5rem; opacity:0.55;">
+    <div style="display:flex; align-items:center; gap:6px; margin:0 0 1.25rem;">
+      <i class="ti ti-player-pause" style="font-size:14px; color:var(--text-secondary);" aria-hidden="true"></i>
+      <p style="font-size:13px; color:var(--text-secondary); margin:0;">On hold</p>
+    </div>
+    <div style="position:relative; display:flex; justify-content:space-between;">
+      <div style="position:absolute; top:15px; left:10%; right:10%; height:2px; background:var(--border-strong);"></div>
+      <div style="position:absolute; top:15px; left:10%; width:22.5%; height:2px; background:var(--border-strong);"></div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; background:var(--fill-disabled); display:flex; align-items:center; justify-content:center;"><i class="ti ti-check" style="font-size:16px; color:var(--text-muted);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-muted); margin-top:8px; text-align:center;">Submitted</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; background:var(--fill-disabled); border:1.5px solid var(--border-strong); display:flex; align-items:center; justify-content:center;"><i class="ti ti-clock" style="font-size:16px; color:var(--text-muted);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-muted); font-weight:500; margin-top:8px; text-align:center;">Being prepared</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid var(--border-strong); background:var(--surface-2); display:flex; align-items:center; justify-content:center;"><i class="ti ti-eye" style="font-size:16px; color:var(--text-muted);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-muted); margin-top:8px; text-align:center;">Awaiting your review</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid var(--border-strong); background:var(--surface-2); display:flex; align-items:center; justify-content:center;"><i class="ti ti-file-text" style="font-size:16px; color:var(--text-muted);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-muted); margin-top:8px; text-align:center;">Finalizing</span>
+      </div>
+      <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:20%;">
+        <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid var(--border-strong); background:var(--surface-2); display:flex; align-items:center; justify-content:center;"><i class="ti ti-package" style="font-size:16px; color:var(--text-muted);" aria-hidden="true"></i></div>
+        <span style="font-size:12px; color:var(--text-muted); margin-top:8px; text-align:center;">Delivered</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+</body>
+</html>

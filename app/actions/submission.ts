@@ -177,11 +177,12 @@ export async function extractFields(
       .order("sort_order")
       .order("placeholder_token"),
     supabase.from("clients").select("client_config").eq("id", orgId).single(),
-    supabase.from("templates").select("section_labels").eq("id", templateId).single(),
+    supabase.from("templates").select("name, section_labels").eq("id", templateId).single(),
   ]);
 
   const allMappings = mappingsResult.data ?? [];
   const orgConfig = (orgResult.data?.client_config ?? {}) as Record<string, string>;
+  const templateName = (templateResult.data?.name as string | null) ?? null;
   const rawLabels = (templateResult.data?.section_labels ?? {}) as Record<string, string>;
   const sectionLabels: SectionLabels = {
     extract: rawLabels.extract || "Extracted from your documents",
@@ -338,6 +339,22 @@ export async function extractFields(
     await supabase.from("project_files").insert(fileRecords);
   }
 
+  await auditLog("project.draft_created", actor.id, actor.email as string, {
+    orgId,
+    projectId,
+    metadata: {
+      templateId,
+      templateName,
+      files: uploadItems.map(({ req, file }) => ({
+        slug: req.slug,
+        label: req.name,
+        filename: file.name,
+      })),
+      extracted_fields: draftFields,
+      po_number: extraction.po_number.value || null,
+    },
+  });
+
   const tokenGroups = {
     extract: extractMappings.map((m) => ({
       token: m.placeholder_token,
@@ -422,11 +439,13 @@ export async function submitProject(
 
   const siteAddress = (extractedFields["EXTRACT_ADDRESS"] ?? "").trim() || null;
 
-  // Required-fields check, duplicate check, and org config all in parallel
+  // Required-fields check, duplicate check, org config, and the pre-correction
+  // draft snapshot (to diff against what's actually being submitted) all in parallel
   const [
     { data: requiredMappings },
     duplicateResult,
     { data: orgData },
+    { data: draftBefore },
   ] = await Promise.all([
     supabase
       .from("template_field_mappings")
@@ -449,7 +468,17 @@ export async function submitProject(
       .select("name, delivery_working_days, state_territory")
       .eq("id", orgId)
       .single(),
+    supabase
+      .from("projects")
+      .select("extracted_fields")
+      .eq("id", projectId)
+      .maybeSingle(),
   ]);
+
+  const draftFieldsBefore = (draftBefore?.extracted_fields as Record<string, string> | null) ?? {};
+  const correctedFields = [
+    ...new Set([...Object.keys(draftFieldsBefore), ...Object.keys(extractedFields)]),
+  ].filter((k) => (draftFieldsBefore[k] ?? "") !== (extractedFields[k] ?? ""));
 
   const missingRequired = (requiredMappings ?? []).filter(
     (m) => !extractedFields[m.placeholder_token as string]?.trim()
@@ -572,7 +601,11 @@ export async function submitProject(
       auditLog("project.submitted", actor.id, actor.email as string, {
         orgId,
         projectId,
-        metadata: { poNumber, templateId },
+        metadata: {
+          poNumber,
+          templateId,
+          ...(correctedFields.length > 0 ? { corrected_fields: correctedFields } : {}),
+        },
       }),
     ]);
   });
