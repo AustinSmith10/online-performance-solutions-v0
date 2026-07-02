@@ -6,6 +6,7 @@ import { FileUploadForm } from "./_components/FileUploadForm";
 import { ProjectNumberForm } from "./_components/ProjectNumberForm";
 import { PbdbQaUploadForm } from "./_components/PbdbQaUploadForm";
 import { QaUploadedBanner } from "./_components/QaUploadedBanner";
+import { StepIndicator } from "./_components/StepIndicator";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { DownloadCard } from "@/components/DownloadCard";
@@ -247,7 +248,6 @@ export default async function ConsultantProjectDetailPage({
 
   // Step states
   const isTerminal = TERMINAL_STATUSES.has(project.status) || project.status === "converting";
-  const step1Completed = !!project.project_number;
   const step2Locked = !project.project_number;
   const canRegeneratePbdb = (["assigned", "in_progress"] as ProjectStatus[]).includes(project.status);
 
@@ -525,14 +525,7 @@ export default async function ConsultantProjectDetailPage({
   const stepsContent = (
     <>
       {/* Step 1: Set project number */}
-      <StepCard
-        step={1}
-        title="Set project number"
-        completed={step1Completed}
-        completedNote={`Project number set: ${project.project_number}-S`}
-      >
-        <ProjectNumberForm projectId={id} />
-      </StepCard>
+      <ProjectNumberForm projectId={id} projectNumber={project.project_number} />
 
       {/* Step 2: Generate PBDB */}
       <div className={`rounded-lg border ${step2Locked ? "border-zinc-200 bg-zinc-50" : "border-zinc-200 bg-white"}`}>
@@ -747,91 +740,6 @@ export default async function ConsultantProjectDetailPage({
         <div className="space-y-3">{stepsContent}</div>
         <div className="space-y-4">{infoContent}</div>
       </div>
-    </div>
-  );
-}
-
-function StepIndicator({
-  step,
-  completed,
-  locked,
-}: {
-  step: number;
-  completed: boolean;
-  locked?: boolean;
-}) {
-  if (completed) {
-    return (
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-500 text-white text-xs font-semibold">
-        ✓
-      </div>
-    );
-  }
-  if (locked) {
-    return (
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-zinc-400 text-xs font-semibold">
-        {step}
-      </div>
-    );
-  }
-  return (
-    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white text-xs font-semibold">
-      {step}
-    </div>
-  );
-}
-
-function StepCard({
-  step,
-  title,
-  completed,
-  locked,
-  inactive,
-  completedNote,
-  completedChildren,
-  inactiveNote,
-  children,
-}: {
-  step: number;
-  title: string;
-  completed: boolean;
-  locked?: boolean;
-  inactive?: boolean;
-  completedNote?: string;
-  completedChildren?: React.ReactNode;
-  inactiveNote?: string;
-  children?: React.ReactNode;
-}) {
-  const isActive = !completed && !locked && !inactive;
-
-  return (
-    <div className={`rounded-lg border ${
-      completed
-        ? "border-green-200 bg-green-50"
-        : locked || inactive
-        ? "border-zinc-200 bg-zinc-50"
-        : "border-zinc-200 bg-white"
-    }`}>
-      <div className={`flex items-center gap-3 px-5 py-4 ${isActive || (completed && completedChildren) ? "border-b border-zinc-100" : ""}`}>
-        <StepIndicator step={step} completed={completed} locked={locked || inactive} />
-        <h3 className={`text-sm font-semibold ${
-          completed ? "text-green-800" : locked || inactive ? "text-zinc-400" : "text-zinc-900"
-        }`}>
-          {title}
-        </h3>
-      </div>
-      {completed && completedNote && (
-        <p className="px-5 pb-4 text-xs text-green-700">{completedNote}</p>
-      )}
-      {completed && completedChildren && (
-        <div className="px-5 py-4">{completedChildren}</div>
-      )}
-      {(locked || inactive) && (inactive ? inactiveNote : null) && (
-        <p className="px-5 pb-4 text-xs text-zinc-400">{inactiveNote}</p>
-      )}
-      {isActive && children && (
-        <div className="px-5 py-4">{children}</div>
-      )}
     </div>
   );
 }

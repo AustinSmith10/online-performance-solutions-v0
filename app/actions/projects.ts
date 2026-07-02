@@ -422,7 +422,7 @@ export async function adminSetProjectNumberFromDashboard(
   return { success: true };
 }
 
-// ─── Consultant: enter project number and trigger PBDB generation ─────────────
+// ─── Consultant: set / edit project number ─────────────────────────────────
 
 export type ProjectNumberState = { error?: string; success?: boolean };
 
@@ -446,7 +446,8 @@ export async function saveProjectNumber(
 
   const { data: project } = await query.maybeSingle();
   if (!project) return { error: "Project not found or access denied." };
-  if (project.project_number) return { error: "Project number is already set." };
+
+  const previousNumber = project.project_number as string | null;
 
   const rawNumber = (formData.get("project_number") as string | null)?.trim();
   if (!rawNumber) return { error: "Project number is required." };
@@ -461,12 +462,17 @@ export async function saveProjectNumber(
   await auditLog("project.number_set", actor.id, actor.email as string, {
     projectId,
     orgId: project.client_id as string,
-    metadata: { project_number: rawNumber },
+    metadata: {
+      project_number: rawNumber,
+      ...(previousNumber && previousNumber !== rawNumber
+        ? { previous_number: previousNumber }
+        : {}),
+    },
   });
 
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
-  redirect(`/ops/projects/${projectId}`);
+  return { success: true };
 }
 
 // ─── Consultant / Admin / Super Admin: manual PBDB generation ────────────────
