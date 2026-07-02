@@ -6,8 +6,6 @@ import { FileUploadForm } from "./_components/FileUploadForm";
 import { ProjectNumberForm } from "./_components/ProjectNumberForm";
 import { PbdbQaUploadForm } from "./_components/PbdbQaUploadForm";
 import { QaUploadedBanner } from "./_components/QaUploadedBanner";
-import { PbdbResentBanner } from "./_components/PbdbResentBanner";
-import { ResendPbdbForm } from "./_components/ResendPbdbForm";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { DownloadCard } from "@/components/DownloadCard";
@@ -63,7 +61,6 @@ export default async function ConsultantProjectDetailPage({
   const sp = await searchParams;
   const justPickedUp = sp.picked_up === "1";
   const justUploadedQa = sp.qa_uploaded === "1";
-  const justResentPbdb = sp.pbdb_resent === "1";
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
 
@@ -253,13 +250,23 @@ export default async function ConsultantProjectDetailPage({
   const step1Completed = !!project.project_number;
   const step2Locked = !project.project_number;
   const canRegeneratePbdb = (["assigned", "in_progress"] as ProjectStatus[]).includes(project.status);
-  const step3Locked = !latestPbdb;
-  const step3Completed = !!project.qa_completed_by;
-  const step4Active = (["dispatched", "revision_required"] as ProjectStatus[]).includes(project.status as ProjectStatus);
-  const step4Completed = isTerminal;
 
   const currentCycleReviews = reviewsByCycle.get(project.review_cycle) ?? [];
   const currentCycleComments = currentCycleReviews.filter((r) => r.comments);
+  const pendingCount = currentCycleReviews.filter((r) => r.status === "pending").length;
+
+  const pbdbCardState: "locked" | "upload" | "pending" | "revision" | "approved" = !latestPbdb
+    ? "locked"
+    : project.status === "dispatched"
+    ? "pending"
+    : project.status === "revision_required"
+    ? "revision"
+    : isTerminal || project.status === "converting"
+    ? "approved"
+    : "upload";
+
+  const UPLOAD_NEW_VERSION_COPY =
+    "Uploading a new version will reset all stakeholder approvals and resend the approval email with the updated document.";
 
   const infoContent = (
     <>
@@ -594,50 +601,73 @@ export default async function ConsultantProjectDetailPage({
         )}
       </div>
 
-      {/* Step 3: Upload completed PBDB */}
-      <StepCard
-        step={3}
-        title="Upload completed PBDB"
-        completed={step3Completed}
-        locked={step3Locked}
-        completedNote="Completed PBDB uploaded — dispatched to stakeholders for approval."
-      >
-        <PbdbQaUploadForm projectId={id} />
-      </StepCard>
+      {/* Step 3: PBDB completion & approval — transforms through Locked / Upload / Pending / Revision / Approved */}
+      <div className={`rounded-lg border ${
+        pbdbCardState === "locked"
+          ? "border-zinc-200 bg-zinc-50"
+          : pbdbCardState === "approved"
+          ? "border-green-200 bg-green-50"
+          : "border-zinc-200 bg-white"
+      }`}>
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-100 last:border-b-0">
+          <StepIndicator step={3} completed={pbdbCardState === "approved"} locked={pbdbCardState === "locked"} />
+          <h3 className={`text-sm font-semibold ${
+            pbdbCardState === "locked"
+              ? "text-zinc-400"
+              : pbdbCardState === "approved"
+              ? "text-green-800"
+              : "text-zinc-900"
+          }`}>
+            PBDB completion & approval
+          </h3>
+          {pbdbCardState === "pending" && (
+            <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+              Awaiting {pendingCount} of {currentCycleReviews.length} approvals
+            </span>
+          )}
+          {pbdbCardState === "revision" && (
+            <span className="ml-auto shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+              Revision required
+            </span>
+          )}
+          {pbdbCardState === "approved" && (
+            <span className="ml-auto shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+              {project.status === "converting" ? "Converting…" : "Approved"}
+            </span>
+          )}
+        </div>
 
-      {/* Step 4: Stakeholder approvals */}
-      <StepCard
-        step={4}
-        title="Stakeholder approvals"
-        completed={step4Completed}
-        inactive={!step4Active && !step4Completed}
-        completedNote={project.status === "converting" ? "All stakeholders approved — converting to PBDR." : undefined}
-        completedChildren={
-          project.status !== "converting" && pbdrFiles.length > 0 ? (
-            <div className="space-y-3">
-              <p className="text-xs font-medium text-green-800">PBDR ready for download</p>
-              {pbdrFiles.map((f) => (
-                <DownloadCard
-                  key={f.id as string}
-                  href={f.signedUrl}
-                  filename={f.original_filename as string}
-                  originalFilename={f.original_filename as string}
-                  wrapperClassName="flex items-center justify-between rounded-md border border-green-200 bg-white px-4 py-3"
-                  buttonClassName="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
-                >
-                  <p className="text-sm font-medium text-zinc-900">PBDR</p>
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    v{f.version as number} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </DownloadCard>
-              ))}
+        {pbdbCardState === "locked" && (
+          <p className="px-5 py-4 text-sm text-zinc-400">
+            Waiting for the PBDB to be generated.
+          </p>
+        )}
+
+        {pbdbCardState === "upload" && (
+          <div className="px-5 py-4">
+            <PbdbQaUploadForm projectId={id} />
+          </div>
+        )}
+
+        {pbdbCardState === "pending" && (
+          <div className="px-5 py-4 space-y-4">
+            <div className="flex items-center gap-2 rounded-md border border-blue-100 bg-blue-50 px-4 py-3">
+              <svg className="h-4 w-4 shrink-0 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm text-blue-700">PBDB dispatched — awaiting stakeholder responses.</p>
             </div>
-          ) : undefined
-        }
-        inactiveNote="Awaiting PBDB upload and dispatch."
-      >
-        {project.status === "revision_required" ? (
-          <div className="space-y-4">
+            <PbdbQaUploadForm
+              projectId={id}
+              submitLabel="Upload new version"
+              requireConfirmation
+              confirmCopy={UPLOAD_NEW_VERSION_COPY}
+            />
+          </div>
+        )}
+
+        {pbdbCardState === "revision" && (
+          <div className="px-5 py-4 space-y-4">
             {currentCycleComments.length > 0 && (
               <div className="space-y-3">
                 {currentCycleComments.map((r) => (
@@ -651,20 +681,41 @@ export default async function ConsultantProjectDetailPage({
             <PbdbQaUploadForm
               projectId={id}
               submitLabel="Upload revised PBDB and re-submit to stakeholders"
+              requireConfirmation
+              confirmCopy={UPLOAD_NEW_VERSION_COPY}
             />
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 rounded-md border border-blue-100 bg-blue-50 px-4 py-3">
-              <svg className="h-4 w-4 shrink-0 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clipRule="evenodd" />
-              </svg>
-              <p className="text-sm text-blue-700">PBDB dispatched — awaiting stakeholder responses.</p>
-            </div>
-            <ResendPbdbForm projectId={id} stakeholderCount={currentCycleReviews.length} />
+        )}
+
+        {pbdbCardState === "approved" && (
+          <div className="px-5 py-4">
+            {project.status === "converting" ? (
+              <p className="text-xs text-green-700">
+                All stakeholders approved — converting to PBDR.
+              </p>
+            ) : pbdrFiles.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-green-800">PBDR ready for download</p>
+                {pbdrFiles.map((f) => (
+                  <DownloadCard
+                    key={f.id as string}
+                    href={f.signedUrl}
+                    filename={f.original_filename as string}
+                    originalFilename={f.original_filename as string}
+                    wrapperClassName="flex items-center justify-between rounded-md border border-green-200 bg-white px-4 py-3"
+                    buttonClassName="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
+                  >
+                    <p className="text-sm font-medium text-zinc-900">PBDR</p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      v{f.version as number} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                    </p>
+                  </DownloadCard>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
-      </StepCard>
+      </div>
     </>
   );
 
@@ -672,7 +723,6 @@ export default async function ConsultantProjectDetailPage({
     <div className="space-y-6">
       {justPickedUp && <PickedUpBanner projectId={id} />}
       {justUploadedQa && <QaUploadedBanner cleanUrl={`/ops/projects/${id}`} />}
-      {justResentPbdb && <PbdbResentBanner cleanUrl={`/ops/projects/${id}`} />}
 
       <div>
         <Link href="/ops" className="text-sm text-zinc-500 hover:text-zinc-700">
