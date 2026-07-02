@@ -14,7 +14,7 @@ const ALL_NAV_ITEMS = [
   { href: "/admin/projects", label: "Projects", superAdminOnly: false },
   { href: "/admin/templates", label: "Templates", superAdminOnly: false },
   { href: "/admin/credits", label: "Credits", superAdminOnly: false },
-  { href: "/admin/audit", label: "Audit", superAdminOnly: true },
+  { href: "/admin/audit", label: "Audit", superAdminOnly: false },
   { href: "/admin/recovery", label: "Recovery Bin", superAdminOnly: false },
 ];
 

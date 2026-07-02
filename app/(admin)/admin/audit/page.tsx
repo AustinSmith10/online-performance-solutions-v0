@@ -17,12 +17,14 @@ const CATEGORIES: Record<string, { label: string; color: string; events: string[
     events: [
       "project.submitted",
       "project.pbdb_generated",
+      "project.pbdb_regenerated",
       "project.pbdb_qa_uploaded",
       "project.qa_complete",
       "project.revision_complete",
       "project.dispatched",
       "project.purged",
       "project.soft_deleted",
+      "project.admin_deleted",
       "project.restored",
       "project.fields_updated",
       "assignment.created",
@@ -97,12 +99,14 @@ const EVENT_LABELS: Record<string, string> = {
   "auth.2fa_required": "2FA enforced",
   "project.submitted": "Project submitted",
   "project.pbdb_generated": "PBDB generated",
+  "project.pbdb_regenerated": "PBDB regenerated",
   "project.pbdb_qa_uploaded": "QA document uploaded",
   "project.qa_complete": "QA marked complete",
   "project.revision_complete": "Revision complete",
   "project.dispatched": "Project dispatched to stakeholders",
   "project.purged": "Project permanently deleted",
   "project.soft_deleted": "Project archived",
+  "project.admin_deleted": "Project archived by admin",
   "project.restored": "Project restored",
   "project.fields_updated": "Project fields edited",
   "assignment.created": "Consultant assigned",
@@ -179,6 +183,10 @@ function formatDetails(
       if (s(metadata.project_number)) parts.push(`Project #${s(metadata.project_number)}`);
       break;
 
+    case "project.pbdb_regenerated":
+      if (s(metadata.actor)) parts.push(`By ${s(metadata.actor).replace(/_/g, " ")}`);
+      break;
+
     case "project.revision_complete": {
       const cycle = n(metadata.review_cycle);
       const ver = n(metadata.version);
@@ -205,6 +213,10 @@ function formatDetails(
 
     case "project.purged":
       if (s(metadata.deletedBy)) parts.push(`Deleted by ${s(metadata.deletedBy)}`);
+      break;
+
+    case "project.admin_deleted":
+      if (s(metadata.status_at_deletion)) parts.push(`Status: ${s(metadata.status_at_deletion)}`);
       break;
 
     case "assignment.created":
@@ -428,7 +440,7 @@ export default async function AuditPage({
     page?: string;
   }>;
 }) {
-  await requireRole("super_admin");
+  await requireRole("super_admin", "admin");
 
   const { email, category, event_type, org_name, from, to, sort, order, page } =
     await searchParams;
