@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AssignForm, type ConsultantOption } from "./_components/AssignForm";
 import { OverrideForm } from "./_components/OverrideForm";
-import { FieldsForm } from "./_components/FieldsForm";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { WaiveForm } from "./_components/WaiveForm";
 import { ResendTokenButton } from "./_components/ResendTokenButton";
@@ -24,6 +23,10 @@ import { GeneratePbdbButton, RegeneratePbdbButton } from "@/components/PbdbGener
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { HighlightRing } from "@/components/HighlightRing";
+import { ProjectNumberForm as ConsultantProjectNumberForm } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectNumberForm";
+import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
+import { StepIndicator as ConsultantStepIndicator } from "@/app/(consultant)/ops/projects/[id]/_components/StepIndicator";
+import { ProjectDetailsEditor } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectDetailsEditor";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -107,9 +110,9 @@ export default async function ProjectDetailPage({
   const justReviewWaived = sp.review_waived === "1";
   const justEmailUpdated = sp.email_updated ?? null;
 
-  const initialTab: "overview" | "workflow" | "controls" =
+  const initialTab: "overview" | "admin_workflow" | "consultant_workflow" | "controls" =
     justSavedNumber || justAssigned || justDispatched || justPbdrResent || justReviewWaived || justEmailUpdated
-      ? "workflow"
+      ? "admin_workflow"
       : justPaused || justResumed || justPaymentOverridden || justPaymentReconciled
       ? "controls"
       : "overview";
@@ -139,7 +142,7 @@ export default async function ProjectDetailPage({
         review_cycle,
         strip_token_color,
         qa_completed_by,
-        clients(id, name),
+        clients(id, name, client_config),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
       `)
       .eq("id", id)
@@ -172,7 +175,7 @@ export default async function ProjectDetailPage({
     updated_at: string;
     source: "portal" | "email";
     strip_token_color: boolean;
-    clients: { id: string; name: string } | null;
+    clients: { id: string; name: string; client_config: Record<string, string> } | null;
     assigned: {
       id: string;
       first_name: string | null;
@@ -326,11 +329,26 @@ export default async function ProjectDetailPage({
   );
 
   const extractedFields = project.extracted_fields ?? {};
-  const fieldEntries = Object.entries(extractedFields).map(([token, value]) => ({
-    token,
-    label: labelMap.get(token) ?? prettifyToken(token),
-    value: value as string,
-  }));
+  const clientFieldEntries = Object.entries(extractedFields)
+    .filter(([token]) => token.startsWith("EXTRACT_") || token.startsWith("CLIENT_"))
+    .map(([token, value]) => ({
+      token,
+      label: labelMap.get(token) ?? prettifyToken(token),
+      value: value as string,
+    }));
+
+  const orgConfig = (project.clients?.client_config ?? {}) as Record<string, string>;
+  const orgMerged: Record<string, string> = { ...orgConfig };
+  for (const [k, v] of Object.entries(extractedFields)) {
+    if (k.startsWith("ORG_")) orgMerged[k] = v as string;
+  }
+  const orgTokenEntries = Object.entries(orgMerged)
+    .filter(([k]) => k.startsWith("ORG_"))
+    .map(([token, value]) => ({
+      token,
+      label: labelMap.get(token) ?? prettifyToken(token),
+      value: value as string,
+    }));
 
   const assignedName = project.assigned
     ? [project.assigned.first_name, project.assigned.last_name].filter(Boolean).join(" ") || project.assigned.email
@@ -349,6 +367,21 @@ export default async function ProjectDetailPage({
     isTerminal;
   const step5Locked = !step4Completed;
   const step5Completed = project.status === "converting" || isTerminal;
+
+  // ── Consultant-workflow tab state (mirrors app/(consultant)/ops/projects/[id]/page.tsx) ──
+  const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
+  const currentCycleComments = currentCycleReviews.filter((r) => r.comments);
+  const pbdbCardState: "locked" | "upload" | "pending" | "revision" | "approved" = !latestPbdb
+    ? "locked"
+    : project.status === "dispatched"
+    ? "pending"
+    : project.status === "revision_required"
+    ? "revision"
+    : isTerminal || project.status === "converting"
+    ? "approved"
+    : "upload";
+  const UPLOAD_NEW_VERSION_COPY =
+    "Uploading a new version will reset all stakeholder approvals and resend the approval email with the updated document.";
 
   // ── Page title ──────────────────────────────────────────────────────────────
   const pageTitle = (() => {
@@ -439,11 +472,14 @@ export default async function ProjectDetailPage({
 
       {/* Right column: content */}
       <div className="min-w-0 space-y-6">
-        {/* Field values */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-zinc-900">Field values</h2>
-          <FieldsForm projectId={id} poNumber={project.po_number} fields={fieldEntries} />
-        </div>
+        {/* Submitted details / Client values — same read-only-with-pencil-edit
+            component the consultant workflow uses, see #38. */}
+        <ProjectDetailsEditor
+          projectId={id}
+          poNumber={project.po_number}
+          fieldEntries={clientFieldEntries}
+          orgEntries={orgTokenEntries}
+        />
 
         {/* Stakeholder review history */}
         {reviews.length > 0 && (
@@ -526,8 +562,202 @@ export default async function ProjectDetailPage({
     </div>
   );
 
-  // ── Tab: Workflow ───────────────────────────────────────────────────────────
-  const workflowContent = (
+  // ── Tab: Consultant Workflow ────────────────────────────────────────────────
+  // Mirrors app/(consultant)/ops/projects/[id]/page.tsx `stepsContent` exactly —
+  // same components, same step states — so admins see precisely what the
+  // assigned consultant sees.
+  const consultantWorkflowContent = (
+    <div className="space-y-3">
+      {/* Step 1: Set project number */}
+      <ConsultantProjectNumberForm projectId={id} projectNumber={project.project_number} />
+
+      {/* Step 2: Generate PBDB */}
+      <div className={`rounded-lg border ${step2Locked ? "border-zinc-200 bg-zinc-50" : "border-zinc-200 bg-white"}`}>
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-100 last:border-b-0">
+          <ConsultantStepIndicator step={2} completed={false} locked={step2Locked} />
+          <h3 className={`text-sm font-semibold ${step2Locked ? "text-zinc-400" : "text-zinc-900"}`}>
+            PBDB
+          </h3>
+        </div>
+        {step2Locked ? (
+          <p className="px-5 py-4 text-sm text-zinc-400">
+            Set the project number first to unlock PBDB generation.
+          </p>
+        ) : pbdbFiles.length === 0 ? (
+          <div className="px-5 py-4">
+            <GeneratePbdbButton projectId={id} />
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {pbdbFiles.map((f, i) => {
+              const version = f.version as number;
+              const isLatest = i === pbdbFiles.length - 1;
+              const showDispatchedBadge =
+                isLatest &&
+                (["dispatched", "revision_required"] as ProjectStatus[]).includes(
+                  project.status as ProjectStatus
+                );
+              return (
+                <DownloadCard
+                  key={f.id as string}
+                  id={showDispatchedBadge ? "consultant-qa-pbdb-row" : undefined}
+                  href={`/api/download/pbdb/${f.id as string}`}
+                  filename={f.original_filename as string}
+                  wrapperClassName="flex items-center justify-between px-5 py-3 transition-shadow duration-700"
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
+                    {showDispatchedBadge && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                        Dispatched PBDB
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    v{version} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                  </p>
+                </DownloadCard>
+              );
+            })}
+            <div className="flex items-center justify-between gap-3 px-5 py-3">
+              {canRegeneratePbdb && (
+                <p className="text-xs text-zinc-500">
+                  Need to fix something? Regenerating creates a new version — existing versions are kept.
+                </p>
+              )}
+              <RegeneratePbdbButton
+                projectId={id}
+                disabledMessage={
+                  canRegeneratePbdb
+                    ? undefined
+                    : "Regeneration is only available before the PBDB is dispatched to stakeholders."
+                }
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Step 3: PBDB completion & approval — transforms through Locked / Upload / Pending / Revision / Approved */}
+      <div className={`rounded-lg border ${
+        pbdbCardState === "locked"
+          ? "border-zinc-200 bg-zinc-50"
+          : pbdbCardState === "approved"
+          ? "border-green-200 bg-green-50"
+          : "border-zinc-200 bg-white"
+      }`}>
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-100 last:border-b-0">
+          <ConsultantStepIndicator step={3} completed={pbdbCardState === "approved"} locked={pbdbCardState === "locked"} />
+          <h3 className={`text-sm font-semibold ${
+            pbdbCardState === "locked"
+              ? "text-zinc-400"
+              : pbdbCardState === "approved"
+              ? "text-green-800"
+              : "text-zinc-900"
+          }`}>
+            PBDB completion &amp; approval
+          </h3>
+          {pbdbCardState === "pending" && (
+            <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+              Awaiting {pendingReviews.length} of {currentCycleReviews.length} approvals
+            </span>
+          )}
+          {pbdbCardState === "revision" && (
+            <span className="ml-auto shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+              Revision required
+            </span>
+          )}
+          {pbdbCardState === "approved" && (
+            <span className="ml-auto shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+              {project.status === "converting" ? "Converting…" : "Approved"}
+            </span>
+          )}
+        </div>
+
+        {pbdbCardState === "locked" && (
+          <p className="px-5 py-4 text-sm text-zinc-400">
+            Waiting for the PBDB to be generated.
+          </p>
+        )}
+
+        {pbdbCardState === "upload" && (
+          <div className="px-5 py-4">
+            <PbdbQaUploadForm projectId={id} />
+          </div>
+        )}
+
+        {pbdbCardState === "pending" && (
+          <div className="px-5 py-4 space-y-4">
+            <div className="flex items-center gap-2 rounded-md border border-blue-100 bg-blue-50 px-4 py-3">
+              <svg className="h-4 w-4 shrink-0 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm text-blue-700">PBDB dispatched — awaiting stakeholder responses.</p>
+            </div>
+            <PbdbQaUploadForm
+              projectId={id}
+              submitLabel="Upload new version"
+              requireConfirmation
+              confirmCopy={UPLOAD_NEW_VERSION_COPY}
+            />
+          </div>
+        )}
+
+        {pbdbCardState === "revision" && (
+          <div className="px-5 py-4 space-y-4">
+            {currentCycleComments.length > 0 && (
+              <div className="space-y-3">
+                {currentCycleComments.map((r) => (
+                  <div key={r.id} className="rounded-md border border-red-100 bg-red-50 px-4 py-3">
+                    <p className="text-xs font-semibold text-red-800">{r.stakeholder_name}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-red-700">{r.comments}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <PbdbQaUploadForm
+              projectId={id}
+              submitLabel="Upload revised PBDB and re-submit to stakeholders"
+              requireConfirmation
+              confirmCopy={UPLOAD_NEW_VERSION_COPY}
+            />
+          </div>
+        )}
+
+        {pbdbCardState === "approved" && (
+          <div className="px-5 py-4">
+            {project.status === "converting" ? (
+              <p className="text-xs text-green-700">
+                All stakeholders approved — converting to PBDR.
+              </p>
+            ) : pbdrFiles.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-green-800">PBDR ready for download</p>
+                {pbdrFiles.map((f) => (
+                  <DownloadCard
+                    key={f.id as string}
+                    href={f.signedUrl}
+                    filename={f.original_filename as string}
+                    originalFilename={f.original_filename as string}
+                    wrapperClassName="flex items-center justify-between rounded-md border border-green-200 bg-white px-4 py-3"
+                    buttonClassName="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
+                  >
+                    <p className="text-sm font-medium text-zinc-900">PBDR</p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      v{f.version as number} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                    </p>
+                  </DownloadCard>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── Tab: Admin Workflow ─────────────────────────────────────────────────────
+  const adminWorkflowContent = (
     <div className="space-y-3">
       {/* Step 1: Set project number */}
       <div id="pbdb-section">
@@ -535,7 +765,7 @@ export default async function ProjectDetailPage({
           step={1}
           title="Set project number"
           completed={step1Completed}
-          completedNote={`Project number set: ${project.project_number}-S`}
+          completedChildren={<AdminProjectNumberForm projectId={id} currentNumber={project.project_number} />}
         >
           <AdminProjectNumberForm projectId={id} currentNumber={project.project_number} />
         </StepCard>
@@ -559,15 +789,28 @@ export default async function ProjectDetailPage({
           </div>
         ) : (
           <div className="divide-y divide-zinc-100">
-            {pbdbFiles.map((f) => {
+            {pbdbFiles.map((f, i) => {
               const version = f.version as number;
+              const isLatest = i === pbdbFiles.length - 1;
+              const showDispatchedBadge =
+                isLatest &&
+                (["dispatched", "revision_required"] as ProjectStatus[]).includes(
+                  project.status as ProjectStatus
+                );
               return (
                 <DownloadCard
                   key={f.id as string}
                   href={`/api/download/pbdb/${f.id as string}`}
                   filename={f.original_filename as string}
                 >
-                  <p className="truncate text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
+                    {showDispatchedBadge && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                        Dispatched PBDB
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-0.5 text-xs text-zinc-500">
                     Version {version}
                     {" · "}{new Date(f.created_at as string).toLocaleDateString("en-AU")}
@@ -1087,9 +1330,9 @@ export default async function ProjectDetailPage({
             Overdue by {daysOverdue} day{daysOverdue !== 1 ? "s" : ""}.
           </span>{" "}
           {project.status === "submitted"
-            ? "No consultant has been assigned — go to the Workflow tab to assign one."
+            ? "No consultant has been assigned — go to the Admin Workflow tab to assign one."
             : project.status === "dispatched" && pendingReviews.length > 0
-            ? `${pendingReviews.length} stakeholder${pendingReviews.length !== 1 ? "s" : ""} yet to respond — manage from the Workflow tab.`
+            ? `${pendingReviews.length} stakeholder${pendingReviews.length !== 1 ? "s" : ""} yet to respond — manage from the Admin Workflow tab.`
             : project.status === "revision_required"
             ? "A revision has been requested — the consultant must upload a corrected document."
             : `Expected delivery date has passed.`}
@@ -1099,7 +1342,8 @@ export default async function ProjectDetailPage({
       <AdminProjectTabs
         initialTab={initialTab}
         overview={overviewContent}
-        workflow={workflowContent}
+        adminWorkflow={adminWorkflowContent}
+        consultantWorkflow={consultantWorkflowContent}
         controls={controlsContent}
       />
     </div>

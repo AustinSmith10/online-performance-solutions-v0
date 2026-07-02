@@ -488,7 +488,7 @@ export async function updateProjectDetails(
   _prev: UpdateProjectDetailsState,
   formData: FormData
 ): Promise<UpdateProjectDetailsState> {
-  const actor = await requireRole("consultant", "super_admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   let query = supabase
@@ -915,70 +915,6 @@ export async function markQaComplete(
 
   revalidatePath(`/admin/projects/${projectId}`);
   redirect(`/ops/projects/${projectId}`);
-}
-
-// ─── Super Admin: update project field values ─────────────────────────────────
-
-export type UpdateFieldsState = { error?: string; success?: boolean };
-
-export async function updateProjectFields(
-  projectId: string,
-  _prev: UpdateFieldsState,
-  formData: FormData
-): Promise<UpdateFieldsState> {
-  const actor = await requireRole("super_admin", "admin");
-  const supabase = createAdminClient();
-
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, client_id, extracted_fields, po_number")
-    .eq("id", projectId)
-    .maybeSingle();
-
-  if (!project) return { error: "Project not found." };
-
-  // Merge submitted token values over existing fields
-  const existing = (project.extracted_fields as Record<string, string>) ?? {};
-  const updated: Record<string, string> = { ...existing };
-
-  for (const [key, rawVal] of formData.entries()) {
-    if (
-      key.startsWith("EXTRACT_") ||
-      key.startsWith("ORG_") ||
-      key.startsWith("CLIENT_")
-    ) {
-      updated[key] = (rawVal as string).trim();
-    }
-  }
-
-  const rawPo = (formData.get("po_number") as string | null)?.trim() ?? "";
-  const newPoNumber = rawPo || null;
-
-  const { error } = await supabase
-    .from("projects")
-    .update({ extracted_fields: updated, po_number: newPoNumber })
-    .eq("id", projectId);
-
-  if (error) return { error: error.message };
-
-  await auditLog(
-    "project.fields_updated",
-    actor.id,
-    actor.email as string,
-    {
-      orgId: project.client_id as string,
-      projectId,
-      metadata: {
-        updated,
-        ...(project.po_number !== newPoNumber
-          ? { previous_po_number: project.po_number, new_po_number: newPoNumber }
-          : {}),
-      },
-    }
-  );
-
-  revalidatePath(`/admin/projects/${projectId}`);
-  return { success: true };
 }
 
 // ─── Admin: soft-delete any project ──────────────────────────────────────────

@@ -2,23 +2,26 @@
 
 import { useState } from "react";
 
-type Tab = "overview" | "workflow" | "controls";
+type Tab = "overview" | "admin_workflow" | "consultant_workflow" | "controls";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
-  { id: "workflow", label: "Workflow" },
+  { id: "admin_workflow", label: "Admin Workflow" },
+  { id: "consultant_workflow", label: "Consultant Workflow" },
   { id: "controls", label: "Controls" },
 ];
 
 export function AdminProjectTabs({
   initialTab = "overview",
   overview,
-  workflow,
+  adminWorkflow,
+  consultantWorkflow,
   controls,
 }: {
   initialTab?: Tab;
   overview: React.ReactNode;
-  workflow: React.ReactNode;
+  adminWorkflow: React.ReactNode;
+  consultantWorkflow: React.ReactNode;
   controls: React.ReactNode;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -44,7 +47,13 @@ export function AdminProjectTabs({
         </nav>
       </div>
       <div>
-        {tab === "overview" ? overview : tab === "workflow" ? workflow : controls}
+        {tab === "overview"
+          ? overview
+          : tab === "consultant_workflow"
+          ? consultantWorkflow
+          : tab === "admin_workflow"
+          ? adminWorkflow
+          : controls}
       </div>
     </div>
   );
