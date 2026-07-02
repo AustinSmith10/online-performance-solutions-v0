@@ -239,6 +239,7 @@ const EditUserSchema = z.object({
 });
 
 export type EditUserState = {
+  saved?: boolean;
   errors?: {
     first_name?: string[];
     last_name?: string[];
@@ -295,21 +296,83 @@ export async function requireUserTotp(userId: string) {
   revalidatePath("/admin/users");
 }
 
+const EditUserEmailSchema = z.object({
+  email: z.string().email({ error: "Valid email required" }).trim().toLowerCase(),
+});
+
+export type EditUserEmailState = {
+  saved?: boolean;
+  errors?: {
+    email?: string[];
+  };
+};
+
+export async function updateUserEmail(
+  userId: string,
+  _prev: EditUserEmailState,
+  formData: FormData
+): Promise<EditUserEmailState> {
+  const actor = await requireRole("super_admin", "admin");
+
+  const validated = EditUserEmailSchema.safeParse({ email: formData.get("email") });
+  if (!validated.success) {
+    return { errors: validated.error.flatten().fieldErrors };
+  }
+
+  const { email } = validated.data;
+  const supabase = createAdminClient();
+
+  const { data: current } = await supabase.from("users").select("email").eq("id", userId).single();
+  if (!current) return { errors: { email: ["User not found."] } };
+
+  const { error: authError } = await supabase.auth.admin.updateUserById(userId, {
+    email,
+    email_confirm: true,
+  });
+  if (authError) return { errors: { email: [authError.message] } };
+
+  const { error } = await supabase.from("users").update({ email }).eq("id", userId);
+  if (error) return { errors: { email: [error.message] } };
+
+  await auditLog("user.email_updated", actor.id, actor.email, {
+    metadata: { target_user_id: userId, previous_email: current.email, new_email: email },
+  });
+
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+
+  return { saved: true };
+}
+
 export async function updateUserProfile(
   userId: string,
   _prev: EditUserState,
   formData: FormData
 ): Promise<EditUserState> {
-  await requireRole("super_admin", "admin");
+  const actor = await requireRole("super_admin", "admin");
 
-  const rawOrgId = formData.get("client_id") as string | null;
+  const supabase = createAdminClient();
+
+  // Fields are edited one at a time, so the submission only carries the key
+  // being changed — merge it over the current row before revalidating.
+  const { data: current } = await supabase
+    .from("users")
+    .select("first_name, last_name, phone, company_role, state_territory, client_id")
+    .eq("id", userId)
+    .single();
+
+  if (!current) return { errors: { form: ["User not found."] } };
+
   const validated = EditUserSchema.safeParse({
-    first_name: formData.get("first_name"),
-    last_name: formData.get("last_name"),
-    phone: formData.get("phone") || undefined,
-    company_role: formData.get("company_role") || undefined,
-    state_territory: formData.get("state_territory"),
-    client_id: rawOrgId || undefined,
+    first_name: formData.has("first_name") ? formData.get("first_name") : current.first_name,
+    last_name: formData.has("last_name") ? formData.get("last_name") : current.last_name,
+    phone: (formData.has("phone") ? formData.get("phone") : current.phone) || undefined,
+    company_role:
+      (formData.has("company_role") ? formData.get("company_role") : current.company_role) || undefined,
+    state_territory: formData.has("state_territory")
+      ? formData.get("state_territory")
+      : current.state_territory,
+    client_id: (formData.has("client_id") ? formData.get("client_id") : current.client_id) || undefined,
   });
 
   if (!validated.success) {
@@ -317,23 +380,6 @@ export async function updateUserProfile(
   }
 
   const { client_id, phone, company_role, ...rest } = validated.data;
-
-  const supabase = createAdminClient();
-
-  // Fetch current values to determine which fields actually changed
-  const { data: current } = await supabase
-    .from("users")
-    .select("first_name, last_name, phone, company_role, state_territory, client_id")
-    .eq("id", userId)
-    .single();
-
-  const changedFields: string[] = [];
-  if (rest.first_name !== (current?.first_name ?? "")) changedFields.push("first_name");
-  if (rest.last_name !== (current?.last_name ?? "")) changedFields.push("last_name");
-  if ((phone || "") !== (current?.phone ?? "")) changedFields.push("phone");
-  if ((company_role || "") !== (current?.company_role ?? "")) changedFields.push("company_role");
-  if (rest.state_territory !== (current?.state_territory ?? "")) changedFields.push("state_territory");
-  if ((client_id || "") !== (current?.client_id ?? "")) changedFields.push("client_id");
 
   const { error } = await supabase
     .from("users")
@@ -347,11 +393,13 @@ export async function updateUserProfile(
 
   if (error) return { errors: { form: [error.message] } };
 
+  await auditLog("user.profile_updated", actor.id, actor.email, {
+    metadata: { target_user_id: userId },
+  });
+
   revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");
   revalidatePath("/admin/consultants");
 
-  const params = new URLSearchParams({ saved: "1" });
-  if (changedFields.length) params.set("fields", changedFields.join(","));
-  redirect(`/admin/users/${userId}?${params}`);
+  return { saved: true };
 }

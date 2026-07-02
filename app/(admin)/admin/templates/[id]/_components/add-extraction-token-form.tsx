@@ -7,6 +7,7 @@ import {
   updateExtractionToken,
   type AddExtractionTokenState,
 } from "@/app/actions/templates";
+import { EditIconButton } from "@/components/EditIconButton";
 
 interface Row {
   id: string;
@@ -255,12 +256,7 @@ function ExtractionOnlyRow({ templateId, row, highlight }: { templateId: string;
       </td>
       <td className="px-5 py-3 text-right">
         <div className="flex items-center justify-end gap-3">
-          <button
-            onClick={() => setIsEditing(true)}
-            className="text-xs text-zinc-500 hover:text-zinc-800"
-          >
-            Edit
-          </button>
+          <EditIconButton onClick={() => setIsEditing(true)} label={`Edit ${row.placeholder_token}`} />
           <button
             onClick={handleDelete}
             disabled={isDeletePending}

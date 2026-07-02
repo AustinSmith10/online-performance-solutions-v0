@@ -38,6 +38,19 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   paused: "bg-amber-100 text-amber-700",
 };
 
+const STATUS_ACCENT: Record<ProjectStatus, string> = {
+  draft: "border-l-zinc-300",
+  submitted: "border-l-blue-400",
+  assigned: "border-l-blue-400",
+  in_progress: "border-l-purple-400",
+  dispatched: "border-l-amber-400",
+  revision_required: "border-l-red-400",
+  converting: "border-l-purple-400",
+  delivered: "border-l-green-500",
+  complete: "border-l-zinc-300",
+  paused: "border-l-amber-400",
+};
+
 const FILE_TYPE_LABELS: Record<string, string> = {
   building_plans: "Building Plans",
   building_drawing_plans: "Building Drawing Plans",
@@ -69,7 +82,7 @@ export default async function ClientProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at, source, assigned_consultant_id"
+      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at, source, assigned_consultant_id, review_cycle"
     )
     .eq("id", id)
     .eq("client_id", user.client_id as string)
@@ -88,6 +101,7 @@ export default async function ClientProjectDetailPage({
     deleted_at: string | null;
     source: "portal" | "email";
     assigned_consultant_id: string | null;
+    review_cycle: number;
   };
 
   const project = data as unknown as ProjectDetail;
@@ -232,16 +246,38 @@ export default async function ClientProjectDetailPage({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold text-zinc-900">{title}</h1>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}>
-          {STATUS_LABELS[project.status]}
-        </span>
-        {isOverdue && (
-          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-            Overdue
+      <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[project.status]} bg-white p-5`}>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-base font-semibold text-zinc-900">{title}</h1>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}>
+            {STATUS_LABELS[project.status]}
           </span>
-        )}
+          {isOverdue && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+              Overdue
+            </span>
+          )}
+        </div>
+        <p className="mt-3.5 border-t border-zinc-100 pt-3 text-sm leading-relaxed text-zinc-500">
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+            project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+          }`}>
+            {project.source === "email" ? "Email" : "Portal"}
+          </span>
+          {" · "}Review cycle <span className="font-medium text-zinc-900">{project.review_cycle}</span>
+          {" · "}Submitted{" "}
+          <span className="font-medium text-zinc-900">
+            {new Date(project.created_at).toLocaleDateString("en-AU")}
+          </span>
+          {project.expected_delivery_date && (
+            <>
+              {" · "}Due{" "}
+              <span className={`font-medium ${isOverdue ? "text-red-600" : "text-zinc-900"}`}>
+                {new Date(project.expected_delivery_date).toLocaleDateString("en-AU")}
+              </span>
+            </>
+          )}
+        </p>
       </div>
 
       {/* Draft resume prompt — full-width, above the grid */}
@@ -262,41 +298,8 @@ export default async function ClientProjectDetailPage({
 
       {/* Two-column layout */}
       <div className="project-two-col">
-        {/* Left column: project summary + documents */}
-        <div className="space-y-6">
-          {/* Project summary */}
-          <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
-            <Row
-              label="Submitted via"
-              value={
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                  project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                }`}>
-                  {project.source === "email" ? "Email" : "Portal"}
-                </span>
-              }
-            />
-            <Row
-              label="Submitted"
-              value={new Date(project.created_at).toLocaleDateString("en-AU", {
-                day: "numeric", month: "long", year: "numeric",
-              })}
-            />
-            <Row
-              label="Expected delivery"
-              value={
-                project.expected_delivery_date ? (
-                  <span className={isOverdue ? "text-red-600" : ""}>
-                    Your report is due by{" "}
-                    {new Date(project.expected_delivery_date).toLocaleDateString("en-AU", {
-                      day: "numeric", month: "short", year: "numeric",
-                    })}
-                  </span>
-                ) : "—"
-              }
-            />
-          </div>
-
+        {/* Left column: documents */}
+        <div className="min-w-0 space-y-6">
           {/* Documents */}
           <div className="rounded-lg border border-zinc-200 bg-white">
             <div className="border-b border-zinc-100 px-5 py-4">
@@ -382,7 +385,7 @@ export default async function ClientProjectDetailPage({
         </div>
 
         {/* Right column: review card + submitted field values */}
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {/* PBDB review — inline form when pending, locked card when responded */}
           {clientReview && clientReview.status === "pending" && (
             <PortalApprovalForm
@@ -425,15 +428,6 @@ export default async function ClientProjectDetailPage({
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline gap-4 px-5 py-3">
-      <span className="w-40 shrink-0 text-sm text-zinc-500">{label}</span>
-      <span className="text-sm text-zinc-900">{value}</span>
     </div>
   );
 }

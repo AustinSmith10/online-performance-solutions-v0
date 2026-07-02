@@ -8,6 +8,7 @@ import {
   updateExtractionToken,
   type AddExtractionTokenState,
 } from "@/app/actions/templates";
+import { EditIconButton } from "@/components/EditIconButton";
 
 interface Row {
   id: string;
@@ -230,13 +231,7 @@ function ExtractionTokenCard({
       <div className="flex items-start justify-between gap-2">
         <p className="font-mono text-xs text-zinc-400">{"{" + token.placeholder_token + "}"}</p>
         <div className="flex shrink-0 items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="text-xs text-zinc-500 hover:text-zinc-800"
-          >
-            Edit
-          </button>
+          <EditIconButton onClick={() => setEditing(true)} label={`Edit ${token.placeholder_token}`} />
           <button
             type="button"
             onClick={handleDelete}

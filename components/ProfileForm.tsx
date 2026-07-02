@@ -8,6 +8,7 @@ import {
   type UpdateProfileState,
   type ChangePasswordState,
 } from "@/app/actions/profile";
+import { EditIconButton } from "@/components/EditIconButton";
 
 const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
 
@@ -54,15 +55,7 @@ export function ProfileForm({ profile }: { profile: ProfileData }) {
           <h1 className="text-xl font-semibold text-zinc-900">My profile</h1>
           <p className="mt-1 text-sm text-zinc-500">Your account information.</p>
         </div>
-        {!editing && (
-          <button
-            type="button"
-            onClick={handleEdit}
-            className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-          >
-            Edit profile
-          </button>
-        )}
+        {!editing && <EditIconButton onClick={handleEdit} label="Edit profile" />}
       </div>
 
       {editing ? (

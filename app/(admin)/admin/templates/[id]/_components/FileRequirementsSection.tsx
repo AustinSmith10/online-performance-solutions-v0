@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { deleteFileRequirement, updateFileRequirement } from "@/app/actions/file-requirements";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
+import { EditIconButton } from "@/components/EditIconButton";
 
 type FileRequirement = {
   id: string;
@@ -163,13 +164,7 @@ function RequirementCard({
           <p className="mt-0.5 font-mono text-xs text-zinc-400">{requirement.slug}</p>
         </div>
         <div className="flex shrink-0 items-center gap-3 pt-0.5">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="text-xs text-zinc-500 hover:text-zinc-900"
-          >
-            Edit
-          </button>
+          <EditIconButton onClick={() => setEditing(true)} label={`Edit ${requirement.name}`} />
           <button
             onClick={handleDelete}
             disabled={isDeletePending}

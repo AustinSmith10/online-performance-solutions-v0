@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { EditUserForm } from "./edit-user-form";
+import { useEffect, useState } from "react";
+import { useActionState } from "react";
+import { updateUserProfile, type EditUserState } from "@/app/actions/admin-users";
+import { EditIconButton } from "@/components/EditIconButton";
 import type { User, Client, ConsultantAvailability } from "@/types";
 
 const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
@@ -10,34 +12,25 @@ const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
   at_capacity: "At capacity",
 };
 
+const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
+
 type Tab = "profile" | "availability";
 
 type Props = {
   user: User;
   clients: Pick<Client, "id" | "name">[];
-  saved: boolean;
-  savedFields: string[];
   availabilityActions: Record<ConsultantAvailability, () => Promise<void>>;
 };
 
-export function UserTabs({ user, clients, saved, savedFields, availabilityActions }: Props) {
+export function UserTabs({ user, clients, availabilityActions }: Props) {
   const [tab, setTab] = useState<Tab>("profile");
-  const [editing, setEditing] = useState(false);
 
   const isConsultant = user.role === "consultant";
   const hasEditableProfile =
     user.role === "consultant" || user.role === "stakeholder" || user.role === "admin";
 
   const profileContent = hasEditableProfile ? (
-    <ProfileSection
-      user={user}
-      clients={clients}
-      editing={editing}
-      onEdit={() => setEditing(true)}
-      onCancel={() => setEditing(false)}
-      saved={saved}
-      savedFields={savedFields}
-    />
+    <ProfileSection user={user} clients={clients} />
   ) : (
     <p className="text-sm text-zinc-500">No editable profile fields for this role.</p>
   );
@@ -93,92 +86,174 @@ export function UserTabs({ user, clients, saved, savedFields, availabilityAction
   );
 }
 
-const FIELD_LABELS: Record<string, string> = {
-  first_name: "First name",
-  last_name: "Last name",
-  phone: "Phone",
-  company_role: "Company role",
-  state_territory: "State / territory",
-  client_id: "Client",
-};
+type FieldKey = "first_name" | "last_name" | "phone" | "company_role" | "state_territory" | "client_id";
+
+type FieldDef =
+  | { key: FieldKey; label: string; kind: "text"; inputType?: "text" | "tel"; required?: boolean }
+  | {
+      key: FieldKey;
+      label: string;
+      kind: "select";
+      options: { value: string; label: string }[];
+      placeholder?: string;
+      required?: boolean;
+    };
+
+function displayValue(user: User, field: FieldDef): string {
+  if (field.kind === "select") {
+    const current = String(user[field.key] ?? "");
+    return field.options.find((o) => o.value === current)?.label ?? "—";
+  }
+  const raw = user[field.key];
+  return raw ? String(raw) : "—";
+}
 
 function ProfileSection({
   user,
   clients,
-  editing,
-  onEdit,
-  onCancel,
-  saved,
-  savedFields,
 }: {
   user: User;
   clients: Pick<Client, "id" | "name">[];
-  editing: boolean;
-  onEdit: () => void;
-  onCancel: () => void;
-  saved: boolean;
-  savedFields: string[];
 }) {
-  const readonlyRef = useRef<HTMLDivElement>(null);
-
-  const orgName = clients.find((o) => o.id === user.client_id)?.name ?? null;
   const showOrg = user.role === "stakeholder" || user.role === "consultant";
 
-  const rows: { field: string; value: string }[] = [
-    { field: "first_name", value: user.first_name ?? "—" },
-    { field: "last_name", value: user.last_name ?? "—" },
-    { field: "phone", value: user.phone ?? "—" },
-    { field: "company_role", value: user.company_role ?? "—" },
-    { field: "state_territory", value: user.state_territory ?? "—" },
-    ...(showOrg ? [{ field: "client_id", value: orgName ?? "—" }] : []),
+  const fields: FieldDef[] = [
+    { key: "first_name", label: "First name", kind: "text", required: true },
+    { key: "last_name", label: "Last name", kind: "text", required: true },
+    { key: "phone", label: "Phone", kind: "text", inputType: "tel" },
+    { key: "company_role", label: "Company role", kind: "text" },
+    {
+      key: "state_territory",
+      label: "State / territory",
+      kind: "select",
+      required: true,
+      placeholder: "Select…",
+      options: AU_STATES.map((s) => ({ value: s, label: s })),
+    },
+    ...(showOrg
+      ? ([
+          {
+            key: "client_id",
+            label: "Client",
+            kind: "select",
+            options: [{ value: "", label: "None" }, ...clients.map((c) => ({ value: c.id, label: c.name }))],
+          } satisfies FieldDef,
+        ] as FieldDef[])
+      : []),
   ];
 
-  // Highlight saved rows and scroll into view
-  useEffect(() => {
-    if (!saved || editing || !readonlyRef.current || !savedFields.length) return;
-    readonlyRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    savedFields.forEach((field) => {
-      const el = readonlyRef.current?.querySelector<HTMLElement>(`[data-field="${field}"]`);
-      if (!el) return;
-      el.classList.add("bg-green-50", "text-green-800");
-      setTimeout(() => el.classList.remove("bg-green-50", "text-green-800"), 2000);
-    });
-  }, [saved, savedFields, editing]);
+  return (
+    <div>
+      <p className="mb-4 text-sm text-zinc-500">Profile information</p>
+      <div className="divide-y divide-zinc-100">
+        {fields.map((field) => (
+          <EditableRow key={field.key} user={user} field={field} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  if (editing) {
+function EditableRow({ user, field }: { user: User; field: FieldDef }) {
+  const boundAction = updateUserProfile.bind(null, user.id);
+  const [state, formAction, pending] = useActionState<EditUserState, FormData>(boundAction, {});
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    if (state.saved) queueMicrotask(() => setEditing(false));
+  }, [state.saved]);
+
+  const errors = state.errors?.[field.key];
+
+  if (!editing) {
     return (
-      <EditUserForm
-        user={user}
-        clients={clients}
-        onCancel={onCancel}
-      />
+      <div className="group flex items-baseline gap-4 py-2.5">
+        <span className="w-40 shrink-0 text-xs text-zinc-400">{field.label}</span>
+        <span className="min-w-0 flex-1 text-sm text-zinc-900">{displayValue(user, field)}</span>
+        <EditIconButton
+          onClick={() => setEditing(true)}
+          label={`Edit ${field.label}`}
+          className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
+        />
+      </div>
     );
   }
 
   return (
-    <div ref={readonlyRef}>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-zinc-500">Profile information</p>
-        <button
-          type="button"
-          onClick={onEdit}
-          className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
-        >
-          Edit
-        </button>
-      </div>
-      <div className="divide-y divide-zinc-100">
-        {rows.map(({ field, value }) => (
-          <div
-            key={field}
-            data-field={field}
-            className="flex items-baseline gap-4 py-2.5 transition-colors duration-500 rounded px-1"
+    <form action={formAction} className="flex items-center gap-3 py-2.5">
+      <label className="w-40 shrink-0 text-xs text-zinc-400">{field.label}</label>
+      <div className="min-w-0 flex-1">
+        {field.kind === "select" ? (
+          <select
+            name={field.key}
+            defaultValue={String(user[field.key] ?? "")}
+            disabled={pending}
+            required={field.required}
+            autoFocus
+            className={inputClass}
           >
-            <span className="w-40 shrink-0 text-xs text-zinc-400">{FIELD_LABELS[field]}</span>
-            <span className="text-sm text-zinc-900">{value}</span>
-          </div>
+            {field.placeholder && (
+              <option value="" disabled>
+                {field.placeholder}
+              </option>
+            )}
+            {field.options.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            name={field.key}
+            type={field.inputType ?? "text"}
+            defaultValue={String(user[field.key] ?? "")}
+            disabled={pending}
+            required={field.required}
+            autoFocus
+            className={inputClass}
+          />
+        )}
+        {errors?.map((e) => (
+          <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
         ))}
       </div>
-    </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="submit"
+          disabled={pending}
+          aria-label="Save"
+          className="text-green-600 hover:text-green-700 disabled:opacity-50"
+        >
+          <CheckIcon />
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          disabled={pending}
+          aria-label="Cancel"
+          className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
+        >
+          <XIcon />
+        </button>
+      </div>
+    </form>
+  );
+}
+
+const inputClass =
+  "min-w-0 w-full rounded-md border border-zinc-300 px-2.5 py-1 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-60";
+
+function CheckIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+    </svg>
   );
 }

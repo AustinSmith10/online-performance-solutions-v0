@@ -5,6 +5,7 @@ import {
   adminSetProjectNumber,
   type AdminProjectNumberState,
 } from "@/app/actions/projects";
+import { EditIconButton } from "@/components/EditIconButton";
 
 interface Props {
   projectId: string;
@@ -113,13 +114,7 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
         </div>
 
         {currentNumber && !editing && (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="shrink-0 rounded border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-          >
-            Edit
-          </button>
+          <EditIconButton onClick={() => setEditing(true)} label="Edit project number" />
         )}
       </div>
     </>

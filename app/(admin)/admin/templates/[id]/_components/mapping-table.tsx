@@ -9,6 +9,7 @@ import {
 } from "@/app/actions/templates";
 import type { TokenSource } from "@/lib/documents/field-keys";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
+import { EditIconButton } from "@/components/EditIconButton";
 
 interface Row {
   id: string;
@@ -475,13 +476,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
             <p className="mt-1 text-xs text-zinc-400">Auto-filled</p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="shrink-0 text-xs text-zinc-500 hover:text-zinc-900"
-        >
-          Edit
-        </button>
+        <EditIconButton onClick={() => setEditing(true)} label="Edit token" />
       </div>
       {(isExtract || isClientInput) && row.is_required && (
         <span className="mt-2 inline-block rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">

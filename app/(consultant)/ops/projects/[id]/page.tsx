@@ -13,6 +13,7 @@ import { DownloadCard } from "@/components/DownloadCard";
 import { GeneratePbdbButton, RegeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
 import { CollapsibleSection } from "./_components/CollapsibleSection";
+import { ProjectDetailsEditor } from "./_components/ProjectDetailsEditor";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -39,6 +40,19 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
   delivered: "bg-green-100 text-green-700",
   complete: "bg-zinc-100 text-zinc-500",
   paused: "bg-amber-100 text-amber-700",
+};
+
+const STATUS_ACCENT: Record<ProjectStatus, string> = {
+  draft: "border-l-zinc-300",
+  submitted: "border-l-blue-400",
+  assigned: "border-l-yellow-400",
+  in_progress: "border-l-purple-400",
+  dispatched: "border-l-amber-400",
+  revision_required: "border-l-red-400",
+  converting: "border-l-purple-400",
+  delivered: "border-l-green-500",
+  complete: "border-l-zinc-300",
+  paused: "border-l-amber-400",
 };
 
 const FILE_TYPE_LABELS: Record<string, string> = {
@@ -270,41 +284,15 @@ export default async function ConsultantProjectDetailPage({
 
   const infoContent = (
     <>
-      {/* Project summary */}
-      <CollapsibleSection title="Project summary" defaultOpen>
-        <div className="divide-y divide-zinc-100">
-          <Row label="Client" value={project.clients?.name ?? "—"} />
-          <Row
-            label="Submitted via"
-            value={
-              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-              }`}>
-                {project.source === "email" ? "Email" : "Portal"}
-              </span>
-            }
-          />
-          <Row label="PO number" value={project.po_number ?? "—"} />
-          <Row
-            label="Submitted"
-            value={new Date(project.created_at).toLocaleDateString("en-AU", {
-              day: "numeric", month: "long", year: "numeric",
-            })}
-          />
-          <Row
-            label="Expected delivery"
-            value={
-              project.expected_delivery_date ? (
-                <span className={isOverdue ? "font-medium text-red-600" : ""}>
-                  {new Date(project.expected_delivery_date).toLocaleDateString("en-AU", {
-                    day: "numeric", month: "short", year: "numeric",
-                  })}
-                </span>
-              ) : "—"
-            }
-          />
-        </div>
-      </CollapsibleSection>
+      {/* Submitted details / Client values — editable by consultant, see #38.
+          Client / submitted-via / submitted / due / project number / PO number
+          now live in the header card (see #39) rather than duplicated here. */}
+      <ProjectDetailsEditor
+        projectId={id}
+        poNumber={project.po_number}
+        fieldEntries={clientFieldEntries}
+        orgEntries={orgTokenEntries}
+      />
 
       {/* Client contact */}
       <CollapsibleSection title="Client contact" defaultOpen>
@@ -350,28 +338,6 @@ export default async function ConsultantProjectDetailPage({
           )}
         </div>
       </CollapsibleSection>
-
-      {/* Submitted details */}
-      {clientFieldEntries.length > 0 && (
-        <CollapsibleSection title="Submitted details" defaultOpen>
-          <div className="divide-y divide-zinc-100">
-            {clientFieldEntries.map(({ token, label, value }) => (
-              <Row key={token} label={label} value={value || "—"} />
-            ))}
-          </div>
-        </CollapsibleSection>
-      )}
-
-      {/* Client values */}
-      {orgTokenEntries.length > 0 && (
-        <CollapsibleSection title="Client values" defaultOpen={false}>
-          <div className="divide-y divide-zinc-100">
-            {orgTokenEntries.map(({ token, label, value }) => (
-              <Row key={token} label={label} value={value || "—"} />
-            ))}
-          </div>
-        </CollapsibleSection>
-      )}
 
       {/* System values */}
       <CollapsibleSection title="System values" defaultOpen={false}>
@@ -713,16 +679,19 @@ export default async function ConsultantProjectDetailPage({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       {justPickedUp && <PickedUpBanner projectId={id} />}
       {justUploadedQa && <QaUploadedBanner cleanUrl={`/ops/projects/${id}`} />}
 
-      <div>
-        <Link href="/ops" className="text-sm text-zinc-500 hover:text-zinc-700">
-          ← My projects
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold text-zinc-900">{title}</h1>
+      {/* Breadcrumb */}
+      <Link href="/ops" className="text-sm text-zinc-500 hover:text-zinc-700">
+        ← My projects
+      </Link>
+
+      {/* Header card */}
+      <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[project.status]} bg-white p-5`}>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-base font-semibold text-zinc-900">{title}</h1>
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}>
             {STATUS_LABELS[project.status]}
           </span>
@@ -732,13 +701,35 @@ export default async function ConsultantProjectDetailPage({
             </span>
           )}
         </div>
+        <p className="mt-3.5 border-t border-zinc-100 pt-3 text-sm leading-relaxed text-zinc-500">
+          {project.clients?.name ?? "No organisation"}
+          {" · "}
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+            project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+          }`}>
+            {project.source === "email" ? "Email" : "Portal"}
+          </span>
+          {" · "}Review cycle <span className="font-medium text-zinc-900">{project.review_cycle}</span>
+          {" · "}Submitted{" "}
+          <span className="font-medium text-zinc-900">{fmtDMY(new Date(project.created_at))}</span>
+          {" · "}Due{" "}
+          <span className={`font-medium ${isOverdue ? "text-red-600" : "text-zinc-900"}`}>
+            {project.expected_delivery_date ? fmtDMY(new Date(project.expected_delivery_date)) : "—"}
+          </span>
+          {" · "}Project number{" "}
+          <span className="font-medium text-zinc-900">
+            {project.project_number ? `${project.project_number}-S` : "Not yet set"}
+          </span>
+          {" · "}PO number{" "}
+          <span className="font-medium text-zinc-900">{project.po_number ?? "—"}</span>
+        </p>
       </div>
 
       {/* Two-column layout: workflow steps (narrow, left) + project details (wide, right).
           Single column on mobile — steps stack above details. */}
       <div className="consultant-two-col">
-        <div className="space-y-3">{stepsContent}</div>
-        <div className="space-y-4">{infoContent}</div>
+        <div className="min-w-0 space-y-3">{stepsContent}</div>
+        <div className="min-w-0 space-y-4">{infoContent}</div>
       </div>
     </div>
   );
@@ -748,7 +739,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline gap-4 px-5 py-3">
       <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
-      <span className="text-sm text-zinc-900">{value}</span>
+      <span className="min-w-0 flex-1 truncate text-sm text-zinc-900">{value}</span>
     </div>
   );
 }

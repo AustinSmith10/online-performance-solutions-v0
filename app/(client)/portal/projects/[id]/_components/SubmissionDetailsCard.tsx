@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateStakeholderSubmission, type UpdateSubmissionState } from "@/app/actions/projects";
+import { EditIconButton } from "@/components/EditIconButton";
 
 interface FieldEntry {
   token: string;
@@ -38,13 +39,7 @@ export function SubmissionDetailsCard({ projectId, poNumber, fieldEntries, locke
       <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
         <h2 className="text-sm font-semibold text-zinc-900">Submitted details</h2>
         {!locked && !editing && (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="text-xs font-medium text-zinc-600 underline hover:text-zinc-900"
-          >
-            Edit submission
-          </button>
+          <EditIconButton onClick={() => setEditing(true)} label="Edit submission" />
         )}
       </div>
 

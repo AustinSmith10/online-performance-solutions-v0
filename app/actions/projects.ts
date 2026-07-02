@@ -475,6 +475,95 @@ export async function saveProjectNumber(
   return { success: true };
 }
 
+// ─── Consultant: edit project details (submitted details, PO, org values, project number) ──
+//
+// Org value ("ORG_"-prefixed) edits here are written into this project's own
+// extracted_fields, never into clients.client_config — so they override the
+// org's global config for this project only, per issue #38.
+
+export type UpdateProjectDetailsState = { error?: string; success?: boolean };
+
+export async function updateProjectDetails(
+  projectId: string,
+  _prev: UpdateProjectDetailsState,
+  formData: FormData
+): Promise<UpdateProjectDetailsState> {
+  const actor = await requireRole("consultant", "super_admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select("id, client_id, extracted_fields, po_number, project_number")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
+
+  const existingFields = (project.extracted_fields as Record<string, string>) ?? {};
+  const updatedFields: Record<string, string> = { ...existingFields };
+  const changedTokens: string[] = [];
+
+  for (const [key, rawVal] of formData.entries()) {
+    if (key.startsWith("EXTRACT_") || key.startsWith("ORG_") || key.startsWith("CLIENT_")) {
+      const newVal = (rawVal as string).trim();
+      if ((existingFields[key] ?? "") !== newVal) changedTokens.push(key);
+      updatedFields[key] = newVal;
+    }
+  }
+
+  // Fields are edited one at a time (see ProjectDetailsEditor), so a field
+  // absent from the submission means "not this one" — not "clear it".
+  const poProvided = formData.has("po_number");
+  const rawPo = (formData.get("po_number") as string | null)?.trim() ?? "";
+  const newPoNumber = poProvided ? rawPo || null : (project.po_number as string | null);
+  const poChanged = poProvided && (project.po_number ?? null) !== newPoNumber;
+
+  // Project number stays required once set (it gates PBDB generation), so a
+  // blank submission here leaves it untouched rather than clearing it.
+  const rawProjectNumber = (formData.get("project_number") as string | null)?.trim() ?? "";
+  const newProjectNumber = rawProjectNumber || (project.project_number as string | null);
+  const projectNumberChanged = (project.project_number ?? null) !== newProjectNumber;
+
+  if (changedTokens.length === 0 && !poChanged && !projectNumberChanged) {
+    return { error: "No changes were made." };
+  }
+
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update({
+      extracted_fields: updatedFields,
+      po_number: newPoNumber,
+      project_number: newProjectNumber,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", projectId);
+
+  if (updateError) return { error: updateError.message };
+
+  await auditLog("project.details_edited", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.client_id as string,
+    metadata: {
+      changed_fields: changedTokens,
+      ...(poChanged
+        ? { previous_po_number: project.po_number, new_po_number: newPoNumber }
+        : {}),
+      ...(projectNumberChanged
+        ? { previous_number: project.project_number, new_number: newProjectNumber }
+        : {}),
+    },
+  });
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { success: true };
+}
+
 // ─── Consultant / Admin / Super Admin: manual PBDB generation ────────────────
 //
 // Replaces the old auto-generation-on-number-save flow. First call generates
@@ -842,7 +931,7 @@ export async function updateProjectFields(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, client_id, extracted_fields")
+    .select("id, client_id, extracted_fields, po_number")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -862,9 +951,12 @@ export async function updateProjectFields(
     }
   }
 
+  const rawPo = (formData.get("po_number") as string | null)?.trim() ?? "";
+  const newPoNumber = rawPo || null;
+
   const { error } = await supabase
     .from("projects")
-    .update({ extracted_fields: updated })
+    .update({ extracted_fields: updated, po_number: newPoNumber })
     .eq("id", projectId);
 
   if (error) return { error: error.message };
@@ -876,7 +968,12 @@ export async function updateProjectFields(
     {
       orgId: project.client_id as string,
       projectId,
-      metadata: { updated },
+      metadata: {
+        updated,
+        ...(project.po_number !== newPoNumber
+          ? { previous_po_number: project.po_number, new_po_number: newPoNumber }
+          : {}),
+      },
     }
   );
 

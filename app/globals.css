@@ -56,7 +56,13 @@ body {
   animation: section-highlight 2.5s ease-out;
 }
 
-/* Two-column project layout — admin and client pages (md breakpoint) */
+/* Two-column project layout — admin and client pages (md breakpoint).
+   Columns use minmax(0, Nfr) rather than percentages: percentage tracks are
+   sized against the container width *before* gaps are subtracted, so
+   "40% 60%" plus a 1.5rem gap overflows the container by 1.5rem, making the
+   grid wider than the header card above it. fr tracks subtract gaps first,
+   and the minmax(0, …) floor stops long unbroken content (emails, tokens)
+   from growing a track past its share via the default min-width:auto. */
 @utility project-two-col {
   display: grid;
   grid-template-columns: 1fr;
@@ -65,12 +71,13 @@ body {
 
 @media (min-width: 768px) {
   .project-two-col {
-    grid-template-columns: 40% 60%;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   }
 }
 
 /* Two-column consultant project layout: steps (narrow, left) + details (wide, right).
-   Single column on mobile — DOM order (steps first) determines stacking order. */
+   Single column on mobile — DOM order (steps first) determines stacking order.
+   minmax(0, …) keeps long content from overflowing a track's fr share, see project-two-col above. */
 @utility consultant-two-col {
   display: grid;
   grid-template-columns: 1fr;
@@ -79,7 +86,7 @@ body {
 
 @media (min-width: 1024px) {
   .consultant-two-col {
-    grid-template-columns: 1fr 1.5fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
     align-items: start;
   }
 }

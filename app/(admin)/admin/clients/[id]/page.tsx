@@ -7,19 +7,17 @@ import { OrgDetailReadonly } from "./_components/org-detail-readonly";
 import { OrgConfigReadonly } from "./_components/org-config-readonly";
 import { EmailWhitelistDrawer } from "./_components/email-whitelist-drawer";
 import { OrgCreateAccountModal } from "./_components/org-create-account-modal";
-import { StakeholderList } from "./_components/stakeholder-list";
 import { DeleteOrgButton } from "./_components/delete-org-button";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import type { Client, User } from "@/types";
 
-const TABS = ["overview", "templates", "stakeholders", "users", "danger"] as const;
+const TABS = ["overview", "templates", "users", "danger"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
   overview: "Overview",
   templates: "Templates",
-  stakeholders: "Stakeholders",
-  users: "Users",
+  users: "Stakeholders",
   danger: "Delete",
 };
 
@@ -40,7 +38,7 @@ export default async function OrganisationDetailPage({
   const supabase = createAdminClient();
   const caller = await requireRole("super_admin", "admin");
 
-  const [{ data: org }, { data: users }, { data: templates }, { data: orgStakeholders }, { data: allOrgs }] =
+  const [{ data: org }, { data: users }, { data: templates }] =
     await Promise.all([
       supabase.from("clients").select("*").eq("id", id).maybeSingle(),
       supabase
@@ -53,13 +51,6 @@ export default async function OrganisationDetailPage({
         .select("id, name, status, created_at")
         .eq("client_id", id)
         .order("created_at", { ascending: false }),
-      supabase
-        .from("stakeholders")
-        .select("id, name, email, company")
-        .eq("scope", "org")
-        .eq("scope_id", id)
-        .order("sort_order", { ascending: true }),
-      supabase.from("clients").select("id, name").order("name"),
     ]);
 
   if (!org) notFound();
@@ -71,9 +62,6 @@ export default async function OrganisationDetailPage({
   >[];
   const orgTemplates = (templates ?? []) as {
     id: string; name: string; status: string; created_at: string;
-  }[];
-  const stakeholderRows = (orgStakeholders ?? []) as {
-    id: string; name: string; email: string; company: string | null;
   }[];
 
   // Only tokens genuinely present in the template file (in_template = true).
@@ -107,11 +95,11 @@ export default async function OrganisationDetailPage({
 
       {/* Breadcrumb */}
       <Link href="/admin/clients" className="text-sm text-zinc-500 hover:text-zinc-700">
-        ← Organisations
+        ← Clients
       </Link>
 
       {/* Header card */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-5">
+      <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${orgData.is_frozen ? "border-l-red-400" : "border-l-green-500"} bg-white p-5`}>
         <div className="flex items-center gap-4">
           {/* Avatar */}
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-600">
@@ -135,7 +123,6 @@ export default async function OrganisationDetailPage({
                 </span>
               )}
             </div>
-            <p className="mt-0.5 text-sm text-zinc-500">{orgData.slug}</p>
           </div>
 
           {/* Action buttons */}
@@ -144,7 +131,6 @@ export default async function OrganisationDetailPage({
             <OrgCreateAccountModal
               orgId={orgData.id}
               orgName={orgData.name}
-              orgs={(allOrgs ?? []) as Pick<Client, "id" | "name">[]}
               callerRole={caller.role as string}
             />
             {orgData.payment_method === "deferred" && (
@@ -164,29 +150,16 @@ export default async function OrganisationDetailPage({
           </div>
         </div>
 
-        {/* Stat row */}
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard
-            label="Credit balance"
-            value={orgData.credit_balance.toLocaleString()}
-            variant="neutral"
-          />
-          <StatCard
-            label="Credit limit"
-            value={orgData.credit_limit.toLocaleString()}
-            variant="neutral"
-          />
-          <StatCard
-            label="Delivery days"
-            value={String(orgData.delivery_working_days)}
-            variant="neutral"
-          />
-          <StatCard
-            label="Members"
-            value={String(orgUsers.length)}
-            variant="neutral"
-          />
-        </div>
+        <p className="mt-3.5 border-t border-zinc-100 pt-3 text-sm leading-relaxed text-zinc-500">
+          Credit balance{" "}
+          <span className="font-medium text-zinc-900">{orgData.credit_balance.toLocaleString()}</span>
+          {" · "}Credit limit{" "}
+          <span className="font-medium text-zinc-900">{orgData.credit_limit.toLocaleString()}</span>
+          {" · "}Delivery days{" "}
+          <span className="font-medium text-zinc-900">{orgData.delivery_working_days}</span>
+          {" · "}Members{" "}
+          <span className="font-medium text-zinc-900">{orgUsers.length}</span>
+        </p>
       </div>
 
       {/* Tab bar */}
@@ -276,18 +249,6 @@ export default async function OrganisationDetailPage({
         </div>
       )}
 
-      {/* Tab: Stakeholders */}
-      {activeTab === "stakeholders" && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Default stakeholders</h2>
-          <p className="mb-5 text-xs text-zinc-500">
-            These stakeholders receive the PBDB for approval when no project- or template-level
-            override is configured.
-          </p>
-          <StakeholderList orgId={orgData.id} stakeholders={stakeholderRows} />
-        </div>
-      )}
-
       {/* Tab: Users */}
       {activeTab === "users" && (
         <div className="rounded-lg border border-zinc-200 bg-white p-6">
@@ -367,32 +328,3 @@ export default async function OrganisationDetailPage({
   );
 }
 
-function StatCard({
-  label,
-  value,
-  variant,
-}: {
-  label: string;
-  value: string;
-  variant: "success" | "warning" | "neutral";
-}) {
-  const containerClass =
-    variant === "warning"
-      ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-amber-400 bg-white px-3 py-2.5"
-      : variant === "success"
-      ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-green-500 bg-white px-3 py-2.5"
-      : "rounded-lg border border-zinc-200 bg-white px-3 py-2.5";
-  const valueClass =
-    variant === "success"
-      ? "text-green-700"
-      : variant === "warning"
-      ? "text-amber-700"
-      : "text-zinc-900";
-
-  return (
-    <div className={containerClass}>
-      <p className="text-[10px] text-zinc-400">{label}</p>
-      <p className={`mt-0.5 text-sm font-medium ${valueClass}`}>{value}</p>
-    </div>
-  );
-}

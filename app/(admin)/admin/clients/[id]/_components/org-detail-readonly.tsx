@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useActionState } from "react";
 import { updateClient, type ClientFormState } from "@/app/actions/clients";
-import { OrgFormFields } from "@/app/(admin)/admin/clients/_components/org-form-fields";
+import { EditIconButton } from "@/components/EditIconButton";
 import type { Client } from "@/types";
+
+const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
 
 const PAYMENT_LABELS: Record<string, string> = {
   upfront: "Upfront",
@@ -13,114 +14,163 @@ const PAYMENT_LABELS: Record<string, string> = {
   deferred: "Deferred",
 };
 
+type FieldKey =
+  | "name"
+  | "payment_method"
+  | "state_territory"
+  | "delivery_working_days"
+  | "abandoned_draft_days"
+  | "credit_limit";
+
+type FieldDef =
+  | { key: FieldKey; label: string; kind: "text" }
+  | { key: FieldKey; label: string; kind: "number"; min?: number; max?: number }
+  | { key: FieldKey; label: string; kind: "select"; options: { value: string; label: string }[] };
+
+const FIELDS: FieldDef[] = [
+  { key: "name", label: "Name", kind: "text" },
+  {
+    key: "payment_method",
+    label: "Payment method",
+    kind: "select",
+    options: [
+      { value: "upfront", label: "Upfront" },
+      { value: "credit_deduction", label: "Credit deduction" },
+      { value: "deferred", label: "Deferred" },
+    ],
+  },
+  {
+    key: "state_territory",
+    label: "State / territory",
+    kind: "select",
+    options: AU_STATES.map((s) => ({ value: s, label: s })),
+  },
+  { key: "delivery_working_days", label: "Delivery working days", kind: "number", min: 1, max: 30 },
+  { key: "abandoned_draft_days", label: "Abandoned draft days", kind: "number", min: 1, max: 90 },
+  { key: "credit_limit", label: "Credit limit (deferred)", kind: "number", min: 0 },
+];
+
+function displayValue(org: Client, field: FieldDef): string {
+  if (field.key === "payment_method") return PAYMENT_LABELS[org.payment_method] ?? org.payment_method;
+  if (field.key === "credit_limit") return org.credit_limit?.toLocaleString() ?? "0";
+  const raw = org[field.key];
+  return raw !== null && raw !== undefined && raw !== "" ? String(raw) : "—";
+}
+
 interface Props {
   org: Client;
 }
 
 export function OrgDetailReadonly({ org }: Props) {
-  const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const boundAction = updateClient.bind(null, org.id);
-  const [state, action, pending] = useActionState<ClientFormState, FormData>(boundAction, {});
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white p-6">
+      <h2 className="mb-4 text-sm font-semibold text-zinc-900">Client details</h2>
+      <dl className="divide-y divide-zinc-100">
+        {FIELDS.map((field) => (
+          <EditableRow key={field.key} org={org} field={field} />
+        ))}
+      </dl>
+    </div>
+  );
+}
 
-  useEffect(() => { queueMicrotask(() => setMounted(true)); }, []);
+function EditableRow({ org, field }: { org: Client; field: FieldDef }) {
+  const boundAction = updateClient.bind(null, org.id);
+  const [state, formAction, pending] = useActionState<ClientFormState, FormData>(boundAction, {});
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
-    if (state.saved) queueMicrotask(() => setOpen(false));
+    if (state.saved) queueMicrotask(() => setEditing(false));
   }, [state.saved]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [open]);
+  const errors = state.errors?.[field.key];
 
-  const rows: { label: string; value: string | number | null | undefined }[] = [
-    { label: "Name", value: org.name },
-    { label: "Payment method", value: PAYMENT_LABELS[org.payment_method] ?? org.payment_method },
-    { label: "State / territory", value: org.state_territory || "—" },
-    { label: "Delivery working days", value: org.delivery_working_days },
-    { label: "Abandoned draft days", value: org.abandoned_draft_days },
-    { label: "Credit limit (deferred)", value: org.credit_limit?.toLocaleString() ?? "0" },
-  ];
-
-  const drawer = (
-    <>
-      <div
-        onClick={() => setOpen(false)}
-        aria-hidden="true"
-        style={{ opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none" }}
-        className="fixed inset-0 z-40 bg-black/20 transition-opacity duration-300"
-      />
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          width: "24rem",
-          height: "100dvh",
-          zIndex: 50,
-          transform: open ? "translateX(0)" : "translateX(100%)",
-          transition: "transform 300ms ease-in-out",
-        }}
-        className="flex flex-col border-l border-zinc-200 bg-white"
-      >
-        <div className="flex shrink-0 items-start justify-between border-b border-zinc-200 px-5 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">Edit organisation details</h2>
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            aria-label="Close panel"
-            className="ml-3 shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-          >
-            ✕
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5">
-          <form action={action} className="space-y-5">
-            <OrgFormFields state={state} defaults={org} />
-            {state.errors?.form?.map((e) => (
-              <p key={e} className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{e}</p>
-            ))}
-            <div className="pt-2">
-              <button
-                type="submit"
-                disabled={pending}
-                className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
-              >
-                {pending ? "Saving…" : "Save changes"}
-              </button>
-            </div>
-          </form>
+  if (!editing) {
+    return (
+      <div className="group flex items-baseline justify-between gap-4 py-2.5">
+        <dt className="text-sm text-zinc-500">{field.label}</dt>
+        <div className="flex items-center gap-2">
+          <dd className="text-sm font-medium text-zinc-900">{displayValue(org, field)}</dd>
+          <EditIconButton
+            onClick={() => setEditing(true)}
+            label={`Edit ${field.label}`}
+            className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
+          />
         </div>
       </div>
-    </>
-  );
+    );
+  }
 
   return (
-    <>
-      <div className="rounded-lg border border-zinc-200 bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-900">Client details</h2>
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+    <form action={formAction} className="flex items-center gap-3 py-2.5">
+      <label className="w-44 shrink-0 text-sm text-zinc-500">{field.label}</label>
+      <div className="min-w-0 flex-1">
+        {field.kind === "select" ? (
+          <select
+            name={field.key}
+            defaultValue={String(org[field.key] ?? "")}
+            disabled={pending}
+            autoFocus
+            className={inputClass}
           >
-            Edit
-          </button>
-        </div>
-        <dl className="divide-y divide-zinc-100">
-          {rows.map(({ label, value }) => (
-            <div key={label} className="flex items-baseline justify-between py-2.5">
-              <dt className="text-sm text-zinc-500">{label}</dt>
-              <dd className="text-sm font-medium text-zinc-900">{value ?? "—"}</dd>
-            </div>
-          ))}
-        </dl>
+            {field.options.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            name={field.key}
+            type={field.kind === "number" ? "number" : "text"}
+            min={field.kind === "number" ? field.min : undefined}
+            max={field.kind === "number" ? field.max : undefined}
+            defaultValue={String(org[field.key] ?? "")}
+            disabled={pending}
+            autoFocus
+            className={inputClass}
+          />
+        )}
+        {errors?.map((e) => (
+          <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+        ))}
       </div>
-      {mounted && createPortal(drawer, document.body)}
-    </>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="submit"
+          disabled={pending}
+          aria-label="Save"
+          className="text-green-600 hover:text-green-700 disabled:opacity-50"
+        >
+          <CheckIcon />
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          disabled={pending}
+          aria-label="Cancel"
+          className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
+        >
+          <XIcon />
+        </button>
+      </div>
+    </form>
+  );
+}
+
+const inputClass =
+  "min-w-0 w-full rounded-md border border-zinc-300 px-2.5 py-1 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-60";
+
+function CheckIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+    </svg>
   );
 }

@@ -105,20 +105,35 @@ export async function updateClient(
 ): Promise<ClientFormState> {
   const actor = await requireRole("super_admin", "admin");
 
+  const supabase = createAdminClient();
+
+  // Fields are edited one at a time, so the submission only carries the key
+  // being changed — merge it over the current row before revalidating.
+  const { data: current } = await supabase
+    .from("clients")
+    .select("name, payment_method, delivery_working_days, state_territory, abandoned_draft_days, credit_limit")
+    .eq("id", id)
+    .single();
+
+  if (!current) return { errors: { form: ["Client not found."] } };
+
   const validated = OrgSchema.safeParse({
-    name: formData.get("name"),
-    payment_method: formData.get("payment_method"),
-    delivery_working_days: formData.get("delivery_working_days"),
-    state_territory: formData.get("state_territory"),
-    abandoned_draft_days: formData.get("abandoned_draft_days"),
-    credit_limit: formData.get("credit_limit") || 0,
+    name: formData.has("name") ? formData.get("name") : current.name,
+    payment_method: formData.has("payment_method") ? formData.get("payment_method") : current.payment_method,
+    delivery_working_days: formData.has("delivery_working_days")
+      ? formData.get("delivery_working_days")
+      : current.delivery_working_days,
+    state_territory: formData.has("state_territory") ? formData.get("state_territory") : current.state_territory,
+    abandoned_draft_days: formData.has("abandoned_draft_days")
+      ? formData.get("abandoned_draft_days")
+      : current.abandoned_draft_days,
+    credit_limit: formData.has("credit_limit") ? formData.get("credit_limit") || 0 : current.credit_limit,
   });
 
   if (!validated.success) {
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const supabase = createAdminClient();
   const { error } = await supabase
     .from("clients")
     .update({ ...validated.data, updated_at: new Date().toISOString() })
@@ -145,14 +160,23 @@ export async function updateOrgConfig(
 ): Promise<ClientConfigState> {
   const actor = await requireRole("super_admin", "admin");
 
-  const config: Record<string, string> = {};
+  const supabase = createAdminClient();
+
+  // Tokens are edited one at a time, so merge the submitted key(s) over the
+  // existing config rather than replacing the whole object.
+  const { data: current } = await supabase
+    .from("clients")
+    .select("client_config")
+    .eq("id", orgId)
+    .single();
+
+  const config: Record<string, string> = { ...(current?.client_config as Record<string, string> ?? {}) };
   for (const [key, value] of formData.entries()) {
     if (key.startsWith("ORG_") && typeof value === "string") {
       config[key] = value.trim();
     }
   }
 
-  const supabase = createAdminClient();
   const { error } = await supabase
     .from("clients")
     .update({ client_config: config, updated_at: new Date().toISOString() })

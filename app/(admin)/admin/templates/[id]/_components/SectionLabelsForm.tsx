@@ -6,6 +6,7 @@ import {
   updateSingleSectionLabel,
 } from "@/app/actions/templates";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
+import { EditIconButton } from "@/components/EditIconButton";
 
 interface Props {
   templateId: string;
@@ -242,13 +243,7 @@ function SectionCard({
             {section.badgeLabel}
           </span>
           {!editing && (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="text-xs text-zinc-500 hover:text-zinc-900"
-            >
-              Edit
-            </button>
+            <EditIconButton onClick={() => setEditing(true)} label={`Edit ${section.title}`} />
           )}
         </div>
       </div>

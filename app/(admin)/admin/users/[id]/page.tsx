@@ -9,8 +9,8 @@ import {
 } from "@/app/actions/admin-users";
 import { UserTabs } from "./_components/user-tabs";
 import { UserHeaderActions } from "./_components/user-header-actions";
+import { UserHeaderMeta } from "./_components/user-header-meta";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
-import { UnsavedChangesProvider } from "@/components/UnsavedChangesProvider";
 import type { User, Client, ConsultantAvailability } from "@/types";
 
 export default async function UserDetailPage({
@@ -45,8 +45,6 @@ export default async function UserDetailPage({
 
   const cleanUrl = `/admin/users/${id}`;
   const created = sp.created === "1";
-  const saved = sp.saved === "1";
-  const savedFields = saved && sp.fields ? String(sp.fields).split(",") : [];
   const deleted = sp.deleted === "1";
   const restored = sp.restored === "1";
 
@@ -58,20 +56,19 @@ export default async function UserDetailPage({
   const displayName =
     u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email;
 
+  const accentColor = u.is_locked
+    ? "border-l-red-400"
+    : u.is_active
+    ? "border-l-green-500"
+    : "border-l-zinc-300";
+
   return (
-    <UnsavedChangesProvider>
+    <>
       {created && (
         <AdminSuccessBanner
           cleanUrl={cleanUrl}
           title="Account created"
           body="The account has been created and a welcome email with a password-setup link has been sent."
-        />
-      )}
-      {saved && (
-        <AdminSuccessBanner
-          cleanUrl={cleanUrl}
-          title="Profile updated"
-          body="The user's profile has been saved."
         />
       )}
       {deleted && (
@@ -96,7 +93,7 @@ export default async function UserDetailPage({
         </Link>
 
         {/* Header strip */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-5">
+        <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${accentColor} bg-white p-5`}>
           <div className="flex items-center gap-4">
             {/* Avatar */}
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-600">
@@ -125,17 +122,6 @@ export default async function UserDetailPage({
                   </span>
                 )}
               </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-zinc-500">
-                <span>{u.email}</span>
-                {u.clients && (
-                  <Link
-                    href={`/admin/clients/${u.clients.id}`}
-                    className="hover:text-zinc-700 hover:underline"
-                  >
-                    {u.clients.name}
-                  </Link>
-                )}
-              </div>
             </div>
 
             {/* Header action buttons */}
@@ -146,6 +132,8 @@ export default async function UserDetailPage({
               canDeactivate={u.role !== "super_admin" && u.role !== "admin"}
             />
           </div>
+
+          <UserHeaderMeta user={u} clients={clients} />
 
           {/* Stat row */}
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -170,11 +158,23 @@ export default async function UserDetailPage({
               variant="neutral"
             />
           </div>
+        </div>
 
-          {/* Security actions */}
-          <div className="mt-4 divide-y divide-zinc-100 border-t border-zinc-100">
+        {/* Tabbed sections */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-6">
+          <UserTabs
+            user={u}
+            clients={clients}
+            availabilityActions={availabilityActions}
+          />
+        </div>
+
+        {/* Security */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-6">
+          <h2 className="mb-4 text-sm font-semibold text-zinc-900">Security</h2>
+          <div className="divide-y divide-zinc-100">
             {/* 2FA */}
-            <div className="flex items-center justify-between py-3">
+            <div className="flex items-center justify-between py-3 first:pt-0">
               <div>
                 <p className="text-sm font-medium text-zinc-900">Two-factor authentication</p>
                 <p className="text-xs text-zinc-500 mt-0.5">
@@ -206,7 +206,7 @@ export default async function UserDetailPage({
 
             {/* Unlock (only when locked) */}
             {u.is_locked && (
-              <div className="flex items-center justify-between py-3">
+              <div className="flex items-center justify-between py-3 last:pb-0">
                 <div>
                   <p className="text-sm font-medium text-red-800">Account locked</p>
                   <p className="text-xs text-red-600 mt-0.5">
@@ -225,19 +225,8 @@ export default async function UserDetailPage({
             )}
           </div>
         </div>
-
-        {/* Tabbed sections */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-6">
-          <UserTabs
-            user={u}
-            clients={clients}
-            saved={saved}
-            savedFields={savedFields}
-            availabilityActions={availabilityActions}
-          />
-        </div>
       </div>
-    </UnsavedChangesProvider>
+    </>
   );
 }
 

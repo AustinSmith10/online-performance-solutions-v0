@@ -14,6 +14,12 @@ import { TemplateTabs } from "./_components/TemplateTabs";
 import { AddFileRequirementForm } from "./_components/AddFileRequirementForm";
 import { ClientProfileSection, type ClientProfileRow } from "./_components/ClientProfileSection";
 
+const TEMPLATE_ACCENT: Record<string, string> = {
+  active: "border-l-green-500",
+  draft: "border-l-amber-400",
+  inactive: "border-l-zinc-300",
+};
+
 type MappingRow = {
   id: string;
   placeholder_token: string;
@@ -108,30 +114,41 @@ export default async function TemplatePage({
       </Link>
 
       {/* Header card */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-5">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2.5">
+      <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${TEMPLATE_ACCENT[template.status] ?? "border-l-zinc-300"} bg-white p-5`}>
+        <div className="flex items-center gap-4">
+          {/* Avatar */}
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-600">
+            {template.name.slice(0, 2).toUpperCase()}
+          </div>
+
+          {/* Identity */}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-base font-semibold text-zinc-900">{template.name}</h1>
               <StatusBadge status={template.status} />
             </div>
-            <p className="mt-0.5 text-xs text-zinc-400">
-              {template.org ? (
-                <>
-                  <Link href={`/admin/clients/${template.org.id}`} className="hover:underline text-zinc-500">
-                    {template.org.name}
-                  </Link>
-                  {" · "}
-                </>
-              ) : null}
-              Uploaded {uploadedDate}
-            </p>
           </div>
+
+          {/* Action buttons */}
           <div className="flex shrink-0 items-center gap-2">
             <TemplateStatusActions templateId={id} status={template.status} canActivate={canActivate} />
             <DeleteButton templateId={id} />
           </div>
         </div>
+
+        <p className="mt-3.5 border-t border-zinc-100 pt-3 text-sm leading-relaxed text-zinc-500">
+          {template.org && (
+            <>
+              Organisation{" "}
+              <Link href={`/admin/clients/${template.org.id}`} className="font-medium text-zinc-900 hover:underline">
+                {template.org.name}
+              </Link>
+              {" · "}
+            </>
+          )}
+          Uploaded <span className="font-medium text-zinc-900">{uploadedDate}</span>
+        </p>
+
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="Tokens" value={String(rows.length)} variant="neutral" />
           <StatCard label="File requirements" value={String(requirements.length)} variant="neutral" />

@@ -11,24 +11,33 @@ interface FieldEntry {
 
 interface Props {
   projectId: string;
+  poNumber: string | null;
   fields: FieldEntry[];
 }
 
-export function FieldsForm({ projectId, fields }: Props) {
+export function FieldsForm({ projectId, poNumber, fields }: Props) {
   const boundAction = updateProjectFields.bind(null, projectId);
   const [state, formAction, pending] = useActionState<UpdateFieldsState, FormData>(
     boundAction,
     {}
   );
 
-  if (fields.length === 0) {
-    return (
-      <p className="text-sm text-zinc-500">No field values have been captured yet.</p>
-    );
-  }
-
   return (
     <form action={formAction} className="space-y-4">
+      <div>
+        <label className="block text-xs font-medium text-zinc-700 mb-1">PO number</label>
+        <input
+          type="text"
+          name="po_number"
+          defaultValue={poNumber ?? ""}
+          className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+        />
+      </div>
+
+      {fields.length === 0 && (
+        <p className="text-sm text-zinc-500">No field values have been captured yet.</p>
+      )}
+
       {fields.map(({ token, label, value }) => (
         <div key={token}>
           <label className="block text-xs font-medium text-zinc-700 mb-1">

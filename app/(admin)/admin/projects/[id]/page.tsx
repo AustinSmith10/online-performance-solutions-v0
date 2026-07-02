@@ -39,6 +39,19 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   paused: "Paused",
 };
 
+const STATUS_ACCENT: Record<ProjectStatus, string> = {
+  draft: "border-l-zinc-300",
+  submitted: "border-l-blue-400",
+  assigned: "border-l-yellow-400",
+  in_progress: "border-l-purple-400",
+  dispatched: "border-l-amber-400",
+  revision_required: "border-l-red-400",
+  converting: "border-l-purple-400",
+  delivered: "border-l-green-500",
+  complete: "border-l-zinc-300",
+  paused: "border-l-amber-400",
+};
+
 const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
   available: "Available",
   on_leave: "On leave",
@@ -346,36 +359,12 @@ export default async function ProjectDetailPage({
   })();
 
   // ── Tab: Overview ───────────────────────────────────────────────────────────
+  // Client / submitted-via / PO number / delivery recipient / expected delivery /
+  // created now live in the header card (see #39) instead of a duplicate box here.
   const overviewContent = (
     <div className="project-two-col">
       {/* Left column: metadata */}
-      <div className="space-y-6">
-        {/* Project details */}
-        <div className="rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
-          <Row label="Client" value={project.clients?.name ?? "—"} />
-          <Row
-            label="Submitted via"
-            value={
-              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-              }`}>
-                {project.source === "email" ? "Email" : "Portal"}
-              </span>
-            }
-          />
-          <Row label="PO number" value={project.po_number ?? "—"} />
-          <Row label="Delivery recipient" value={project.delivery_recipient_email ?? "—"} />
-          <Row
-            label="Expected delivery"
-            value={
-              project.expected_delivery_date
-                ? new Date(project.expected_delivery_date).toLocaleDateString("en-AU")
-                : "—"
-            }
-          />
-          <Row label="Created" value={new Date(project.created_at).toLocaleDateString("en-AU")} />
-        </div>
-
+      <div className="min-w-0 space-y-6">
         {/* Documents */}
         <div className="rounded-lg border border-zinc-200 bg-white">
           <div className="border-b border-zinc-100 px-5 py-4">
@@ -449,11 +438,11 @@ export default async function ProjectDetailPage({
       </div>
 
       {/* Right column: content */}
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         {/* Field values */}
         <div className="rounded-lg border border-zinc-200 bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold text-zinc-900">Field values</h2>
-          <FieldsForm projectId={id} fields={fieldEntries} />
+          <FieldsForm projectId={id} poNumber={project.po_number} fields={fieldEntries} />
         </div>
 
         {/* Stakeholder review history */}
@@ -848,7 +837,7 @@ export default async function ProjectDetailPage({
       {!isDeleted && (
         <div className="project-two-col">
           {/* Left column: payment gate + project controls */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             {/* Payment gate */}
             <div className="relative rounded-lg border border-zinc-200 bg-white p-5">
               {project.status === "paused" && (
@@ -925,7 +914,7 @@ export default async function ProjectDetailPage({
           </div>
 
           {/* Right column: project stakeholders */}
-          <div>
+          <div className="min-w-0">
             <div className="rounded-lg border border-zinc-200 bg-white p-5">
               <h2 className="mb-1 text-sm font-semibold text-zinc-900">Project stakeholders</h2>
               <p className="mb-4 text-xs text-zinc-500">
@@ -1018,62 +1007,58 @@ export default async function ProjectDetailPage({
       </Link>
 
       {/* Header card */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-base font-semibold text-zinc-900">{pageTitle}</h1>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                project.status === "paused" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600"
-              }`}>
-                {STATUS_LABELS[project.status]}
-              </span>
-              {project.payment_override && (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                  Override — Payment Pending
-                </span>
-              )}
-              {isOverdue && (
-                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                  Overdue
-                </span>
-              )}
-              {isDeleted && (
-                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">
-                  Deleted
-                </span>
-              )}
-            </div>
-            <p className="mt-0.5 text-xs text-zinc-400">
-              {project.clients?.name ?? "No organisation"}
-              {project.expected_delivery_date && (
-                <>{" · "}Delivery {new Date(project.expected_delivery_date).toLocaleDateString("en-AU")}</>
-              )}
-            </p>
-          </div>
+      <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[project.status]} bg-white p-5`}>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-base font-semibold text-zinc-900">{pageTitle}</h1>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+            project.status === "paused" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600"
+          }`}>
+            {STATUS_LABELS[project.status]}
+          </span>
+          {project.payment_override && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+              Override — Payment Pending
+            </span>
+          )}
+          {isOverdue && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+              Overdue
+            </span>
+          )}
+          {isDeleted && (
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">
+              Deleted
+            </span>
+          )}
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard
-            label="Client"
-            value={project.clients?.name ?? "—"}
-            variant="neutral"
-          />
-          <StatCard
-            label="Assigned to"
-            value={assignedName ?? "Unassigned"}
-            variant={assignedName ? "neutral" : "warning"}
-          />
-          <StatCard
-            label="Review cycle"
-            value={String(project.review_cycle)}
-            variant="neutral"
-          />
-          <StatCard
-            label="Submitted"
-            value={new Date(project.created_at).toLocaleDateString("en-AU")}
-            variant="neutral"
-          />
-        </div>
+        <p className="mt-3.5 border-t border-zinc-100 pt-3 text-sm leading-relaxed text-zinc-500">
+          {project.clients?.name ?? "No organisation"}
+          {" · "}
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+            project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+          }`}>
+            {project.source === "email" ? "Email" : "Portal"}
+          </span>
+          {" · "}Assigned to{" "}
+          <span className={`font-medium ${assignedName ? "text-zinc-900" : "text-amber-700"}`}>
+            {assignedName ?? "Unassigned"}
+          </span>
+          {" · "}Review cycle <span className="font-medium text-zinc-900">{project.review_cycle}</span>
+          {" · "}Submitted{" "}
+          <span className="font-medium text-zinc-900">
+            {new Date(project.created_at).toLocaleDateString("en-AU")}
+          </span>
+          {" · "}Due{" "}
+          <span className={`font-medium ${isOverdue ? "text-red-600" : "text-zinc-900"}`}>
+            {project.expected_delivery_date
+              ? new Date(project.expected_delivery_date).toLocaleDateString("en-AU")
+              : "—"}
+          </span>
+          {" · "}PO number{" "}
+          <span className="font-medium text-zinc-900">{project.po_number ?? "—"}</span>
+          {" · "}Delivery recipient{" "}
+          <span className="font-medium text-zinc-900">{project.delivery_recipient_email ?? "—"}</span>
+        </p>
       </div>
 
       {/* Status banners */}
@@ -1122,36 +1107,6 @@ export default async function ProjectDetailPage({
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function StatCard({
-  label,
-  value,
-  variant,
-}: {
-  label: string;
-  value: string;
-  variant: "success" | "warning" | "neutral";
-}) {
-  const valueClass =
-    variant === "success"
-      ? "text-green-700"
-      : variant === "warning"
-      ? "text-amber-700"
-      : "text-zinc-900";
-  const containerClass =
-    variant === "warning"
-      ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-amber-400 bg-white px-3 py-2.5"
-      : variant === "success"
-      ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-green-500 bg-white px-3 py-2.5"
-      : "rounded-lg border border-zinc-200 bg-white px-3 py-2.5";
-
-  return (
-    <div className={containerClass}>
-      <p className="text-[10px] text-zinc-400">{label}</p>
-      <p className={`mt-0.5 text-sm font-medium ${valueClass}`}>{value}</p>
-    </div>
-  );
-}
 
 function StepIndicator({
   step,
@@ -1227,15 +1182,6 @@ function StepCard({
       {isActive && children && (
         <div className="px-5 py-4">{children}</div>
       )}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline gap-4 px-5 py-3">
-      <span className="w-44 shrink-0 text-sm text-zinc-500">{label}</span>
-      <span className="text-sm text-zinc-900">{value}</span>
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useActionState } from "react";
 import { createUserAccount, type CreateAccountState } from "@/app/actions/admin-users";
-import type { Client } from "@/types";
 
 const input =
   "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500";
@@ -12,11 +11,10 @@ const input =
 interface Props {
   orgId: string;
   orgName: string;
-  orgs: Pick<Client, "id" | "name">[];
   callerRole: string;
 }
 
-export function OrgCreateAccountModal({ orgId, orgName, orgs, callerRole }: Props) {
+export function OrgCreateAccountModal({ orgId, orgName, callerRole }: Props) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [state, action, pending] = useActionState<CreateAccountState, FormData>(
