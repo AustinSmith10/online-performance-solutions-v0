@@ -229,7 +229,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
         <input type="hidden" name="project_id" value={projectId} />
         <input type="hidden" name="template_id" value={templateId} />
         <input type="hidden" name="extracted_po_number" value={poNumber.value} />
-        {adminOrgId && <input type="hidden" name="admin_client_id" value={adminOrgId} />}
+        {adminOrgId && <input type="hidden" name="admin_org_id" value={adminOrgId} />}
         {adminClientId && <input type="hidden" name="admin_client_id" value={adminClientId} />}
         {hasTrustee && (
           <input type="hidden" name="EXTRACT_TRUSTEE" value={selectedTrusteeEntity} />
@@ -645,7 +645,7 @@ export function SubmissionForm({
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-6">
       <form action={extractAction} className="space-y-6">
-        {adminOrgId && <input type="hidden" name="admin_client_id" value={adminOrgId} />}
+        {adminOrgId && <input type="hidden" name="admin_org_id" value={adminOrgId} />}
         {adminClientId && <input type="hidden" name="admin_client_id" value={adminClientId} />}
         {/* Template selector */}
         {showTemplateDropdown ? (

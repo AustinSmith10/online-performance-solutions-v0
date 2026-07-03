@@ -76,7 +76,7 @@ export async function extractFields(
 
   const isAdmin = actor.role === "super_admin" || actor.role === "admin";
   const orgId = isAdmin
-    ? ((formData.get("admin_client_id") as string | null)?.trim() ?? "")
+    ? ((formData.get("admin_org_id") as string | null)?.trim() ?? "")
     : (actor.client_id as string);
   if (!orgId) return { step: 1, error: "Client is required." };
   const adminClientId = isAdmin
@@ -405,7 +405,7 @@ export async function submitProject(
 
   const isAdmin = actor.role === "super_admin" || actor.role === "admin";
   const orgId = isAdmin
-    ? ((formData.get("admin_client_id") as string | null)?.trim() ?? "")
+    ? ((formData.get("admin_org_id") as string | null)?.trim() ?? "")
     : (actor.client_id as string);
   if (!orgId) return { error: "Client is required." };
   const adminClientId = isAdmin
