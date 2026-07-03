@@ -19,6 +19,19 @@ async function main() {
 
   console.log("[worker] OPS worker started — awaiting jobs");
 
+  // pg-boss v12 requires queues to exist (via createQueue) before they can be
+  // scheduled or sent to — schedule()/send() insert rows with a FK to queue.name.
+  for (const queue of [
+    "purge-recovery-bin",
+    "expire-draft",
+    "generate-pbdb",
+    "dispatch-pbdb",
+    "approval-buffer",
+    "deliver-pbdr",
+  ]) {
+    await boss.createQueue(queue);
+  }
+
   // Purge soft-deleted projects older than 30 days. Runs daily at midnight.
   await boss.schedule("purge-recovery-bin", "0 0 * * *", {});
   await boss.work("purge-recovery-bin", async () => {
