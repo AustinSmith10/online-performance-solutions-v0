@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
   "/auth/confirm",
   "/api/auth/signout",
   "/api/webhooks/email",
+  "/api/health",
 ];
 
 // Auth flow paths that require a valid session but skip TOTP/profile checks
