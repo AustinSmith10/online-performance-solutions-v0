@@ -1,4 +1,3 @@
-import "server-only";
 import { randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { addWorkingDays } from "@/lib/delivery/working-days";

@@ -1,4 +1,3 @@
-import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveStakeholders } from "./resolver";
 import { generateTokenString, computeTokenExpiry } from "./tokens";

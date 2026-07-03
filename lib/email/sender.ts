@@ -1,5 +1,3 @@
-import "server-only";
-
 const FROM = process.env.EMAIL_FROM ?? "OPS <noreply@ddeg.com.au>";
 
 export interface SendEmailOptions {

@@ -1,4 +1,3 @@
-import "server-only";
 import { spawn } from "child_process";
 import { writeFile, readFile, unlink, mkdtemp } from "fs/promises";
 import { join } from "path";
