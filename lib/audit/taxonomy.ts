@@ -118,6 +118,11 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
     color: "bg-sky-100 text-sky-700",
     events: ["audit.export_downloaded"],
   },
+  settings: {
+    label: "Settings",
+    color: "bg-teal-100 text-teal-700",
+    events: ["settings.digest_schedule_updated"],
+  },
 };
 
 export const EVENT_LABELS: Record<string, string> = {
@@ -188,6 +193,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "org.unfrozen": "Client unfrozen",
   "org.deleted": "Client deleted",
   "audit.export_downloaded": "Audit trail exported",
+  "settings.digest_schedule_updated": "Digest schedule changed",
 };
 
 export const EVENT_CATEGORY: Record<string, string> = {};
@@ -484,6 +490,11 @@ export function formatDetails(
     case "org.config_updated":
       if (Array.isArray(metadata.keys))
         parts.push(`Updated: ${(metadata.keys as string[]).join(", ")}`);
+      break;
+
+    case "settings.digest_schedule_updated":
+      if (s(metadata.morning)) parts.push(`Morning: ${s(metadata.morning)}`);
+      if (s(metadata.afternoon)) parts.push(`Afternoon: ${s(metadata.afternoon)}`);
       break;
 
     case "audit.export_downloaded": {

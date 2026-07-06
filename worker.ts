@@ -9,6 +9,11 @@ import { sendEmail } from "@/lib/email/sender";
 import { notify } from "@/lib/notifications/notify";
 import { renderStakeholderBufferUpdateEmail } from "@/lib/email/templates/StakeholderBufferUpdateEmail";
 import { deliverPbdr } from "@/lib/documents/delivery";
+import { sendAvailableRequestsDigest } from "@/lib/jobs/available-requests-digest";
+import {
+  reconcileDigestSchedule,
+  AVAILABLE_REQUESTS_DIGEST_QUEUE,
+} from "@/lib/jobs/digest-schedule-reconciler";
 
 async function main() {
   const boss = new PgBoss(process.env.DATABASE_URL!);
@@ -28,6 +33,8 @@ async function main() {
     "dispatch-pbdb",
     "approval-buffer",
     "deliver-pbdr",
+    AVAILABLE_REQUESTS_DIGEST_QUEUE,
+    "reconcile-digest-schedule",
   ]) {
     await boss.createQueue(queue);
   }
@@ -275,6 +282,27 @@ async function main() {
       }
     }
   );
+
+  // Twice-daily digest of available (submitted, unassigned) projects, sent to
+  // consultants/admins/super_admins. Send times are admin-configurable — see
+  // reconcile-digest-schedule below, which keeps this in sync without a restart.
+  await boss.work(AVAILABLE_REQUESTS_DIGEST_QUEUE, async () => {
+    const supabase = createAdminClient();
+    const result = await sendAvailableRequestsDigest(supabase);
+    console.log(
+      `[available-requests-digest] count=${result.count} sent=${result.sent} recipients=${result.recipients}`
+    );
+  });
+
+  // Keep the digest schedule in sync with admin-configured settings. Applied
+  // once at startup, then every minute — pg-boss schedule() upserts on
+  // (name, key), so this is a safe no-op when nothing has changed.
+  const settingsClient = createAdminClient();
+  await reconcileDigestSchedule(boss, settingsClient);
+  await boss.schedule("reconcile-digest-schedule", "*/1 * * * *", {});
+  await boss.work("reconcile-digest-schedule", async () => {
+    await reconcileDigestSchedule(boss, createAdminClient());
+  });
 }
 
 main().catch((error) => {

@@ -16,6 +16,7 @@ const ALL_NAV_ITEMS = [
   { href: "/admin/credits", label: "Credits", superAdminOnly: false },
   { href: "/admin/audit", label: "Audit", superAdminOnly: false },
   { href: "/admin/recovery", label: "Recovery Bin", superAdminOnly: false },
+  { href: "/admin/settings", label: "Settings", superAdminOnly: false },
 ];
 
 export default async function AdminShellLayout({

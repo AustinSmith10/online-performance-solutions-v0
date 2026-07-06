@@ -420,6 +420,10 @@ export async function submitProject(
     return { error: "Missing required submission data. Please start over." };
   }
 
+  if (formData.get("reviewed_confirmed") !== "true") {
+    return { error: "Please confirm that you have reviewed the details above before submitting." };
+  }
+
   const poNumber = (formData.get("extracted_po_number") as string | null)?.trim() || null;
   const deliveryEmail =
     (formData.get("delivery_recipient_email") as string | null)?.trim() || null;
@@ -575,29 +579,6 @@ export async function submitProject(
         emailHtml: submissionConfirmationEmail({ poNumber }),
       }).catch((err) => console.error("[submitProject] client notify failed:", err)),
 
-      (async () => {
-        try {
-          const { data: admins } = await supabase
-            .from("users")
-            .select("id")
-            .eq("role", "super_admin");
-          await Promise.all(
-            (admins ?? []).map((admin: { id: string }) =>
-              notify({
-                recipientId: admin.id,
-                type: "project_submitted",
-                message: `New project submission received for ${siteAddress ?? "unknown address"} from ${orgData?.name ?? orgId}.`,
-                projectId,
-                emailSubject: "New project submission — OPS",
-                emailHtml: adminSubmissionEmail({ poNumber, projectId }),
-              }).catch((err: unknown) => console.error("[submitProject] admin notify failed:", err))
-            )
-          );
-        } catch (err) {
-          console.error("[submitProject] admin notify setup failed:", err);
-        }
-      })(),
-
       auditLog("project.submitted", actor.id, actor.email as string, {
         orgId,
         projectId,
@@ -606,6 +587,14 @@ export async function submitProject(
           templateId,
           ...(correctedFields.length > 0 ? { corrected_fields: correctedFields } : {}),
         },
+      }),
+
+      // Logged as its own event (rather than folded into project.submitted's
+      // metadata) so the acknowledgement is visible as a distinct line in the
+      // audit trail, not buried in another event's details.
+      auditLog("project.review_confirmed", actor.id, actor.email as string, {
+        orgId,
+        projectId,
       }),
     ]);
   });
@@ -656,34 +645,6 @@ function duplicateSubmissionEmail({
   </p>
   <p style="color: #52525b; margin-bottom: 16px;">
     Please review and make a final call on whether a new record is required.
-  </p>
-  <p style="color: #a1a1aa; font-size: 13px;">OPS — Online Performance Solution</p>
-</body>
-</html>`;
-}
-
-function adminSubmissionEmail({
-  poNumber,
-  projectId,
-}: {
-  poNumber: string | null;
-  projectId: string;
-}) {
-  return `<!DOCTYPE html>
-<html>
-<body style="font-family: sans-serif; color: #18181b; max-width: 560px; margin: 0 auto; padding: 24px;">
-  <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">New project submission</h2>
-  <p style="color: #52525b; margin-bottom: 16px;">
-    A new project has been submitted${poNumber ? ` with PO number <strong>${escHtml(poNumber)}</strong>` : " (no PO number)"}.
-  </p>
-  <p style="color: #52525b; margin-bottom: 16px;">
-    Project ID: <code>${escHtml(projectId)}</code>
-  </p>
-  <p>
-    <a href="${process.env.NEXT_PUBLIC_APP_URL ?? ""}/admin/projects/${escHtml(projectId)}"
-       style="display: inline-block; background: #18181b; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-size: 14px;">
-      View project
-    </a>
   </p>
   <p style="color: #a1a1aa; font-size: 13px;">OPS — Online Performance Solution</p>
 </body>
