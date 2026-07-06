@@ -113,6 +113,11 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "org.deleted",
     ],
   },
+  audit: {
+    label: "Audit",
+    color: "bg-sky-100 text-sky-700",
+    events: ["audit.export_downloaded"],
+  },
 };
 
 export const EVENT_LABELS: Record<string, string> = {
@@ -182,6 +187,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "org.frozen": "Client frozen",
   "org.unfrozen": "Client unfrozen",
   "org.deleted": "Client deleted",
+  "audit.export_downloaded": "Audit trail exported",
 };
 
 export const EVENT_CATEGORY: Record<string, string> = {};
@@ -479,6 +485,15 @@ export function formatDetails(
       if (Array.isArray(metadata.keys))
         parts.push(`Updated: ${(metadata.keys as string[]).join(", ")}`);
       break;
+
+    case "audit.export_downloaded": {
+      if (s(metadata.format)) parts.push(s(metadata.format).toUpperCase());
+      const count = n(metadata.entry_count);
+      if (count !== null) parts.push(`${count} entr${count === 1 ? "y" : "ies"}`);
+      const sha = s(metadata.sha256);
+      if (sha) parts.push(`sha256:${sha.slice(0, 12)}…`);
+      break;
+    }
 
     default:
       break;

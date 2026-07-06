@@ -28,6 +28,8 @@ import { ProjectNumberForm as ConsultantProjectNumberForm } from "@/app/(consult
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
 import { StepIndicator as ConsultantStepIndicator } from "@/app/(consultant)/ops/projects/[id]/_components/StepIndicator";
 import { ProjectDetailsEditor } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectDetailsEditor";
+import { ProjectAuditTrail, type ProjectAuditRow } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectAuditTrail";
+import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -213,6 +215,7 @@ export default async function ProjectDetailPage({
     { data: rawReviews },
     { data: rawProjectStakeholders },
     { data: rawAssignments },
+    { data: rawFullAuditEntries },
   ] = await Promise.all([
     project.template_id
       ? supabase
@@ -263,7 +266,15 @@ export default async function ProjectDetailPage({
       .eq("project_id", id)
       .eq("event_type", "assignment.created")
       .order("created_at", { ascending: true }),
+    supabase
+      .from("audit_log")
+      .select("id, event_type, actor_email, metadata, created_at")
+      .eq("project_id", id)
+      .not("event_type", "in", `(${PROJECT_AUDIT_EXCLUDED_EVENTS.join(",")})`)
+      .order("created_at", { ascending: true }),
   ]);
+
+  const auditEntries = (rawFullAuditEntries ?? []) as ProjectAuditRow[];
 
   const [files, evidenceFiles, pbdrFiles] = await Promise.all([
     Promise.all(
@@ -1224,6 +1235,29 @@ export default async function ProjectDetailPage({
     </div>
   );
 
+  const auditContent = (
+    <div className="space-y-3">
+      {auditEntries.length > 0 && (
+        <div className="flex justify-end gap-2">
+          <a
+            href={`/api/download/audit-export/project/${id}?format=csv`}
+            className="rounded border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+          >
+            Export CSV
+          </a>
+          <a
+            href={`/api/download/audit-export/project/${id}?format=pdf`}
+            title="A locked-down PDF rendering, for when the export must not be trivially editable"
+            className="rounded border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+          >
+            Export PDF
+          </a>
+        </div>
+      )}
+      <ProjectAuditTrail entries={auditEntries} />
+    </div>
+  );
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -1397,6 +1431,7 @@ export default async function ProjectDetailPage({
         adminWorkflow={adminWorkflowContent}
         consultantWorkflow={consultantWorkflowContent}
         controls={controlsContent}
+        audit={auditContent}
       />
     </div>
   );

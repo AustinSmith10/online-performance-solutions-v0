@@ -1,13 +1,11 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CATEGORIES, EVENT_LABELS, getCategoryInfo, formatDetails } from "@/lib/audit/taxonomy";
+import { fetchAuditPage, SORT_COLS, type SortCol, type AuditRow } from "@/lib/audit/query";
 
 const PAGE_SIZE = 50;
 
 // ─── Sort helpers ────────────────────────────────────────────────────────────
-
-const SORT_COLS = ["created_at", "event_type", "actor_email"] as const;
-type SortCol = (typeof SORT_COLS)[number];
 
 function buildSortHref(
   current: Record<string, string | undefined>,
@@ -35,6 +33,18 @@ function buildPageHref(
   return `/admin/audit?${p.toString()}`;
 }
 
+function buildExportHref(
+  current: Record<string, string | undefined>,
+  format: "csv" | "pdf"
+): string {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(current)) {
+    if (v && k !== "page") p.set(k, v);
+  }
+  p.set("format", format);
+  return `/api/download/audit-export?${p.toString()}`;
+}
+
 function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" }) {
   if (!active)
     return (
@@ -46,21 +56,6 @@ function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" })
     <span className="ml-1 text-zinc-600">{order === "asc" ? "↑" : "↓"}</span>
   );
 }
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type AuditRow = {
-  id: string;
-  event_type: string;
-  actor_id: string | null;
-  actor_email: string | null;
-  project_id: string | null;
-  client_id: string | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-  project: { project_number: string | null } | null;
-  org: { name: string } | null;
-};
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -93,55 +88,14 @@ export default async function AuditPage({
 
   const supabase = createAdminClient();
 
-  // Resolve org name to IDs
-  let orgIds: string[] | null = null;
-  if (org_name?.trim()) {
-    const { data: orgs } = await supabase
-      .from("clients")
-      .select("id")
-      .ilike("name", `%${org_name.trim()}%`);
-    orgIds = orgs?.map((o) => o.id as string) ?? [];
-  }
-
-  let entries: AuditRow[] = [];
-  let totalCount = 0;
-
-  // Skip query if org filter matched nothing
-  if (orgIds === null || orgIds.length > 0) {
-    let query = supabase
-      .from("audit_log")
-      .select("*, project:projects(project_number), org:clients(name)", { count: "exact" })
-      .order(sortCol, { ascending: sortOrder === "asc" })
-      .range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
-
-    if (email?.trim()) {
-      query = query.ilike("actor_email", `%${email.trim()}%`);
-    }
-
-    // event_type takes precedence over category
-    if (event_type?.trim()) {
-      query = query.eq("event_type", event_type.trim());
-    } else if (category?.trim() && CATEGORIES[category.trim()]) {
-      query = query.in("event_type", CATEGORIES[category.trim()].events);
-    }
-
-    if (orgIds !== null && orgIds.length > 0) {
-      query = query.in("client_id", orgIds);
-    }
-
-    if (from?.trim()) {
-      query = query.gte("created_at", new Date(from.trim()).toISOString());
-    }
-    if (to?.trim()) {
-      const toDate = new Date(to.trim());
-      toDate.setDate(toDate.getDate() + 1);
-      query = query.lt("created_at", toDate.toISOString());
-    }
-
-    const { data, count } = await query;
-    entries = (data ?? []) as AuditRow[];
-    totalCount = count ?? 0;
-  }
+  const { entries, totalCount } = await fetchAuditPage(
+    supabase,
+    { email, category, event_type, org_name, from, to },
+    sortCol,
+    sortOrder,
+    currentPage,
+    PAGE_SIZE
+  );
 
   const hasFilter = email || category || event_type || org_name || from || to;
   const activeCat = category?.trim() && CATEGORIES[category.trim()] ? category.trim() : null;
@@ -151,14 +105,33 @@ export default async function AuditPage({
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-zinc-900">Audit trail</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Immutable system event log.{" "}
-          {totalCount > 0
-            ? `Showing ${rangeStart}–${rangeEnd} of ${totalCount.toLocaleString()} entries.`
-            : "No entries found."}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-zinc-900">Audit trail</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Immutable system event log.{" "}
+            {totalCount > 0
+              ? `Showing ${rangeStart}–${rangeEnd} of ${totalCount.toLocaleString()} entries.`
+              : "No entries found."}
+          </p>
+        </div>
+        {totalCount > 0 && (
+          <div className="mt-1 flex shrink-0 gap-2">
+            <a
+              href={buildExportHref(currentParams, "csv")}
+              className="rounded border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+            >
+              Export CSV
+            </a>
+            <a
+              href={buildExportHref(currentParams, "pdf")}
+              title="A locked-down PDF rendering, for when the export must not be trivially editable"
+              className="rounded border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+            >
+              Export PDF
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Filter form */}

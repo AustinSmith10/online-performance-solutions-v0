@@ -17,17 +17,8 @@ import { CollapsibleSection } from "./_components/CollapsibleSection";
 import { ProjectDetailsEditor } from "./_components/ProjectDetailsEditor";
 import { ConsultantProjectTabs } from "./_components/ConsultantProjectTabs";
 import { ProjectAuditTrail, type ProjectAuditRow } from "./_components/ProjectAuditTrail";
-import { CATEGORIES } from "@/lib/audit/taxonomy";
+import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
 import type { ProjectStatus } from "@/types";
-
-// Excluded from the project-scoped audit trail: financial ledger events (these
-// carry project_id but are not evidentiary for the consultant, see #43) and
-// email-deliverability internals that never reach a project's inbox anyway.
-const AUDIT_EXCLUDED_EVENTS = [
-  ...CATEGORIES.credit.events,
-  "email.thread_reply_invalid",
-  "email.whitelist_blocked",
-];
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -188,7 +179,7 @@ export default async function ConsultantProjectDetailPage({
       .from("audit_log")
       .select("id, event_type, actor_email, metadata, created_at")
       .eq("project_id", id)
-      .not("event_type", "in", `(${AUDIT_EXCLUDED_EVENTS.join(",")})`)
+      .not("event_type", "in", `(${PROJECT_AUDIT_EXCLUDED_EVENTS.join(",")})`)
       .order("created_at", { ascending: true }),
   ]);
 
@@ -803,7 +794,28 @@ export default async function ConsultantProjectDetailPage({
             <div className="min-w-0 space-y-4">{infoContent}</div>
           </div>
         }
-        audit={<ProjectAuditTrail entries={auditEntries} />}
+        audit={
+          <div className="space-y-3">
+            {auditEntries.length > 0 && (
+              <div className="flex justify-end gap-2">
+                <a
+                  href={`/api/download/audit-export/project/${id}?format=csv`}
+                  className="rounded border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                >
+                  Export CSV
+                </a>
+                <a
+                  href={`/api/download/audit-export/project/${id}?format=pdf`}
+                  title="A locked-down PDF rendering, for when the export must not be trivially editable"
+                  className="rounded border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                >
+                  Export PDF
+                </a>
+              </div>
+            )}
+            <ProjectAuditTrail entries={auditEntries} />
+          </div>
+        }
       />
     </div>
   );
