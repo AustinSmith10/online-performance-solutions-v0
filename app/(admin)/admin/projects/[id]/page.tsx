@@ -19,6 +19,7 @@ import { AdminProjectTabs } from "./_components/AdminProjectTabs";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { DownloadCard } from "@/components/DownloadCard";
+import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton, RegeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
@@ -206,6 +207,7 @@ export default async function ProjectDetailPage({
   const [
     { data: mappings },
     { data: rawSubmissionFiles },
+    { data: rawEvidenceFiles },
     { data: rawPbdbFiles },
     { data: rawPbdrFiles },
     { data: rawReviews },
@@ -225,6 +227,12 @@ export default async function ProjectDetailPage({
       .eq("project_id", id)
       .in("file_type", ["po", "purchase_order", "building_plans", "building_drawing_plans", "additional"])
       .order("created_at"),
+    supabase
+      .from("project_files")
+      .select("id, original_filename, storage_path, reference, created_at")
+      .eq("project_id", id)
+      .eq("file_type", "evidence")
+      .order("created_at", { ascending: false }),
     supabase
       .from("project_files")
       .select("id, original_filename, storage_path, version, created_at")
@@ -257,9 +265,17 @@ export default async function ProjectDetailPage({
       .order("created_at", { ascending: true }),
   ]);
 
-  const [files, pbdrFiles] = await Promise.all([
+  const [files, evidenceFiles, pbdrFiles] = await Promise.all([
     Promise.all(
       (rawSubmissionFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("submissions")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
+    Promise.all(
+      (rawEvidenceFiles ?? []).map(async (f) => {
         const { data: signed } = await supabase.storage
           .from("submissions")
           .createSignedUrl(f.storage_path as string, 3600);
@@ -427,6 +443,42 @@ export default async function ProjectDetailPage({
           {!isDeleted && (
             <div className="border-t border-zinc-100 px-5 py-4">
               <FileUploadForm projectId={id} />
+            </div>
+          )}
+        </div>
+
+        {/* Evidence & correspondence — see #57 */}
+        <div className="rounded-lg border border-zinc-200 bg-white">
+          <div className="border-b border-zinc-100 px-5 py-4">
+            <h2 className="text-sm font-semibold text-zinc-900">Evidence & correspondence</h2>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Forwarded emails, screenshots, or other proof attached to this project
+            </p>
+          </div>
+          {evidenceFiles.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-zinc-500">No evidence attached yet.</p>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {evidenceFiles.map((f) => (
+                <DownloadCard
+                  key={f.id as string}
+                  href={f.signedUrl}
+                  originalFilename={f.original_filename as string}
+                  external
+                >
+                  <p className="text-sm font-medium text-zinc-900">
+                    {(f.reference as string | null) ?? "General correspondence"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                  </p>
+                </DownloadCard>
+              ))}
+            </div>
+          )}
+          {!isDeleted && (
+            <div className="border-t border-zinc-100 px-5 py-4">
+              <AttachEvidenceForm projectId={id} />
             </div>
           )}
         </div>

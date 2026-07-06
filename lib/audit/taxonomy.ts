@@ -46,6 +46,7 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "project.complete",
       "project.pbdr_downloaded",
       "project.pbdb_downloaded",
+      "evidence.attached",
     ],
   },
   stakeholder: {
@@ -146,6 +147,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "project.complete": "Project marked complete",
   "project.pbdr_downloaded": "Client downloaded PBDR",
   "project.pbdb_downloaded": "PBDB downloaded",
+  "evidence.attached": "Evidence attached",
   "stakeholder.responded": "Stakeholder responded",
   "stakeholder.responded_via_portal": "Stakeholder responded via portal",
   "stakeholder.waived": "Stakeholder review waived",
@@ -382,6 +384,11 @@ export function formatDetails(
       if (s(metadata.role)) parts.push(s(metadata.role).replace(/_/g, " "));
       if (n(metadata.version) !== null) parts.push(`v${n(metadata.version)}`);
       if (s(metadata.filename)) parts.push(s(metadata.filename));
+      break;
+
+    case "evidence.attached":
+      if (s(metadata.filename)) parts.push(s(metadata.filename));
+      if (s(metadata.reference)) parts.push(`Re: ${s(metadata.reference)}`);
       break;
 
     case "credit.top_up": {

@@ -10,6 +10,7 @@ import { StepIndicator } from "./_components/StepIndicator";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { DownloadCard } from "@/components/DownloadCard";
+import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton, RegeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
 import { CollapsibleSection } from "./_components/CollapsibleSection";
@@ -135,6 +136,7 @@ export default async function ConsultantProjectDetailPage({
   const [
     { data: mappings },
     { data: rawSubmissionFiles },
+    { data: rawEvidenceFiles },
     { data: rawPbdbFiles },
     { data: rawPbdrFiles },
     { data: rawReviews },
@@ -152,8 +154,14 @@ export default async function ConsultantProjectDetailPage({
       .from("project_files")
       .select("id, file_type, original_filename, storage_path, created_at")
       .eq("project_id", id)
-      .not("file_type", "in", "(pbdb,pbdr)")
+      .not("file_type", "in", "(pbdb,pbdr,evidence)")
       .order("created_at"),
+    supabase
+      .from("project_files")
+      .select("id, original_filename, storage_path, reference, created_at")
+      .eq("project_id", id)
+      .eq("file_type", "evidence")
+      .order("created_at", { ascending: false }),
     supabase
       .from("project_files")
       .select("id, original_filename, storage_path, version, created_at")
@@ -190,9 +198,17 @@ export default async function ConsultantProjectDetailPage({
     (rawFileRequirements ?? []).map((r) => [r.slug as string, r.name as string])
   );
 
-  const [submissionFiles, pbdrFiles] = await Promise.all([
+  const [submissionFiles, evidenceFiles, pbdrFiles] = await Promise.all([
     Promise.all(
       (rawSubmissionFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("submissions")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
+    Promise.all(
+      (rawEvidenceFiles ?? []).map(async (f) => {
         const { data: signed } = await supabase.storage
           .from("submissions")
           .createSignedUrl(f.storage_path as string, 3600);
@@ -394,6 +410,38 @@ export default async function ConsultantProjectDetailPage({
         )}
         <div className="border-t border-zinc-100 px-5 py-4">
           <FileUploadForm projectId={id} />
+        </div>
+      </CollapsibleSection>
+
+      {/* Evidence & correspondence — see #57 */}
+      <CollapsibleSection
+        title="Evidence & correspondence"
+        subtitle="Forwarded emails, screenshots, or other proof attached to this project"
+        defaultOpen={evidenceFiles.length > 0}
+      >
+        {evidenceFiles.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-zinc-400">No evidence attached yet.</p>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {evidenceFiles.map((f) => (
+              <DownloadCard
+                key={f.id as string}
+                href={f.signedUrl}
+                originalFilename={f.original_filename as string}
+                external
+              >
+                <p className="text-sm font-medium text-zinc-900">
+                  {(f.reference as string | null) ?? "General correspondence"}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                </p>
+              </DownloadCard>
+            ))}
+          </div>
+        )}
+        <div className="border-t border-zinc-100 px-5 py-4">
+          <AttachEvidenceForm projectId={id} />
         </div>
       </CollapsibleSection>
 
