@@ -85,19 +85,25 @@ export async function performAssignment(
     null;
   const projectRef = address ?? project.project_number ?? project.id.slice(0, 8);
 
-  await notify({
-    recipientId: consultantId,
-    type: "consultant_assigned",
-    message: `You have been assigned to project ${projectRef}.`,
-    projectId,
-    emailSubject: `You've been assigned to project ${projectRef}`,
-    emailHtml: ConsultantAssignedEmail({
-      recipientName: consultantName,
-      projectRef,
-      orgName,
-      portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/ops`,
-    }),
-  });
+  // Self-assignment (consultant picking up their own project) doesn't need this email —
+  // they already know. Only notify when someone else (an admin) made the assignment.
+  if (consultantId !== actorId) {
+    await notify({
+      recipientId: consultantId,
+      type: "consultant_assigned",
+      message: `You have been assigned to project ${projectRef}.`,
+      projectId,
+      emailSubject: `You've been assigned to project ${projectRef}`,
+      emailHtml: ConsultantAssignedEmail({
+        recipientName: consultantName,
+        projectRef,
+        orgName,
+        portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/ops`,
+      }),
+    }).catch((err) => {
+      console.error("[performAssignment] notify failed (non-fatal):", err);
+    });
+  }
 
   await auditLog("assignment.created", actorId ?? null, actorEmail ?? null, {
     projectId,
