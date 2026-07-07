@@ -52,6 +52,7 @@ export default async function ConsultantsPage({
     .from("users")
     .select("id, email, first_name, last_name, availability, is_locked, clients(name)")
     .eq("role", "consultant")
+    .is("deleted_at", null)
     .order(sortCol, { ascending: sortOrder === "asc" });
 
   if (q?.trim()) {

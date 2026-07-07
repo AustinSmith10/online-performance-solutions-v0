@@ -50,6 +50,7 @@ export default async function ClientsPage({
     .from("users")
     .select("id, email, first_name, last_name, is_locked, invited_at, clients(name)")
     .eq("role", "stakeholder")
+    .is("deleted_at", null)
     .order(sortCol, { ascending: sortOrder === "asc" });
 
   if (q?.trim()) {

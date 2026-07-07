@@ -138,7 +138,7 @@ export default async function ClientProjectDetailPage({
       .from("project_files")
       .select("id, file_type, original_filename, storage_path, created_at")
       .eq("project_id", id)
-      .not("file_type", "in", '("pbdb","pbdr")')
+      .not("file_type", "in", '("pbdb","pbdr","pbdb_pdf")')
       .order("created_at"),
     pbdbVisible
       ? supabase

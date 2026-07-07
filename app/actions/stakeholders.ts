@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 import { deliverPbdr } from "@/lib/documents/delivery";
+import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
 import { sendEmail } from "@/lib/email/sender";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
@@ -76,17 +77,64 @@ export async function removeOrgStakeholder(
   orgId: string,
   stakeholderId: string
 ): Promise<void> {
-  await requireRole("super_admin", "admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
+
+  const { data: stakeholder } = await supabase
+    .from("stakeholders")
+    .select("name, email")
+    .eq("id", stakeholderId)
+    .eq("scope", "org")
+    .eq("scope_id", orgId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!stakeholder) return;
 
   await supabase
     .from("stakeholders")
-    .delete()
-    .eq("id", stakeholderId)
-    .eq("scope", "org")
-    .eq("scope_id", orgId);
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", stakeholderId);
+
+  await auditLog("stakeholder.soft_deleted", actor.id, actor.email as string, {
+    orgId,
+    metadata: { stakeholderId, name: stakeholder.name, email: stakeholder.email },
+  });
 
   revalidatePath(`/admin/clients/${orgId}`);
+  revalidatePath("/admin/recovery");
+}
+
+export async function restoreOrgStakeholder(
+  orgId: string,
+  stakeholderId: string
+): Promise<void> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: stakeholder } = await supabase
+    .from("stakeholders")
+    .select("name, email")
+    .eq("id", stakeholderId)
+    .eq("scope", "org")
+    .eq("scope_id", orgId)
+    .not("deleted_at", "is", null)
+    .maybeSingle();
+
+  if (!stakeholder) return;
+
+  await supabase
+    .from("stakeholders")
+    .update({ deleted_at: null })
+    .eq("id", stakeholderId);
+
+  await auditLog("stakeholder.restored", actor.id, actor.email as string, {
+    orgId,
+    metadata: { stakeholderId, name: stakeholder.name, email: stakeholder.email },
+  });
+
+  revalidatePath(`/admin/clients/${orgId}`);
+  revalidatePath("/admin/recovery");
 }
 
 // ─── Project stakeholder management ──────────────────────────────────────────
@@ -143,17 +191,64 @@ export async function removeProjectStakeholder(
   projectId: string,
   stakeholderId: string
 ): Promise<void> {
-  await requireRole("super_admin", "admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
+
+  const { data: stakeholder } = await supabase
+    .from("stakeholders")
+    .select("name, email")
+    .eq("id", stakeholderId)
+    .eq("scope", "project")
+    .eq("scope_id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!stakeholder) return;
 
   await supabase
     .from("stakeholders")
-    .delete()
-    .eq("id", stakeholderId)
-    .eq("scope", "project")
-    .eq("scope_id", projectId);
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", stakeholderId);
+
+  await auditLog("stakeholder.soft_deleted", actor.id, actor.email as string, {
+    projectId,
+    metadata: { stakeholderId, name: stakeholder.name, email: stakeholder.email },
+  });
 
   revalidatePath(`/admin/projects/${projectId}`);
+  revalidatePath("/admin/recovery");
+}
+
+export async function restoreProjectStakeholder(
+  projectId: string,
+  stakeholderId: string
+): Promise<void> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: stakeholder } = await supabase
+    .from("stakeholders")
+    .select("name, email")
+    .eq("id", stakeholderId)
+    .eq("scope", "project")
+    .eq("scope_id", projectId)
+    .not("deleted_at", "is", null)
+    .maybeSingle();
+
+  if (!stakeholder) return;
+
+  await supabase
+    .from("stakeholders")
+    .update({ deleted_at: null })
+    .eq("id", stakeholderId);
+
+  await auditLog("stakeholder.restored", actor.id, actor.email as string, {
+    projectId,
+    metadata: { stakeholderId, name: stakeholder.name, email: stakeholder.email },
+  });
+
+  revalidatePath(`/admin/projects/${projectId}`);
+  revalidatePath("/admin/recovery");
 }
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
@@ -284,7 +379,7 @@ export async function resendFreshToken(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("clients(state_territory), extracted_fields, project_number")
+    .select("client_id, review_cycle, strip_token_color, clients(state_territory), extracted_fields, project_number")
     .eq("id", projectId)
     .single();
 
@@ -311,19 +406,23 @@ export async function resendFreshToken(
 
   const approvalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
 
-  const { data: pbdbFile } = await supabase
-    .from("project_files")
-    .select("storage_path")
-    .eq("project_id", projectId)
-    .eq("file_type", "pbdb")
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const pbdbPdf = project
+    ? await getOrCreateDispatchPdf(
+        supabase,
+        {
+          id: projectId,
+          client_id: project.client_id as string,
+          review_cycle: project.review_cycle as number,
+          strip_token_color: project.strip_token_color as boolean | null,
+        },
+        actor.id
+      )
+    : null;
 
-  const pbdbUrl = pbdbFile
+  const pbdbUrl = pbdbPdf
     ? await supabase.storage
         .from("documents")
-        .createSignedUrl(pbdbFile.storage_path as string, 7 * 24 * 3600)
+        .createSignedUrl(pbdbPdf.storagePath, 7 * 24 * 3600)
         .then((r) => r.data?.signedUrl ?? null)
     : null;
 
@@ -397,7 +496,7 @@ export async function updateStakeholderEmail(
   // Resend the token to the new email address
   const { data: project } = await supabase
     .from("projects")
-    .select("clients(state_territory)")
+    .select("client_id, review_cycle, strip_token_color, clients(state_territory)")
     .eq("id", projectId)
     .single();
 
@@ -424,19 +523,23 @@ export async function updateStakeholderEmail(
 
   const approvalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
 
-  const { data: pbdbFile } = await supabase
-    .from("project_files")
-    .select("storage_path")
-    .eq("project_id", projectId)
-    .eq("file_type", "pbdb")
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const pbdbPdf = project
+    ? await getOrCreateDispatchPdf(
+        supabase,
+        {
+          id: projectId,
+          client_id: project.client_id as string,
+          review_cycle: project.review_cycle as number,
+          strip_token_color: project.strip_token_color as boolean | null,
+        },
+        actor.id
+      )
+    : null;
 
-  const pbdbUrl = pbdbFile
+  const pbdbUrl = pbdbPdf
     ? await supabase.storage
         .from("documents")
-        .createSignedUrl(pbdbFile.storage_path as string, 7 * 24 * 3600)
+        .createSignedUrl(pbdbPdf.storagePath, 7 * 24 * 3600)
         .then((r) => r.data?.signedUrl ?? null)
     : null;
 

@@ -37,23 +37,23 @@ export function DeleteOrgButton({ orgId, orgName, userCount }: Props) {
               Delete {orgName}?
             </p>
             <p className="mt-2 text-sm text-zinc-500 text-center">
-              This is permanent and cannot be undone.
+              This can be undone from the recovery bin.
             </p>
 
             <ul className="mt-3 space-y-1 text-sm text-zinc-600">
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 text-red-400">•</span>
-                All projects and associated data will be permanently removed
+                All in-progress projects will be deleted alongside the client (completed/delivered ones are kept)
               </li>
               {userCount > 0 && (
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 text-red-400">•</span>
-                  {userCount} user account{userCount === 1 ? "" : "s"} will lose org membership (accounts are kept)
+                  {userCount} user account{userCount === 1 ? "" : "s"} will remain — only the client record is deleted
                 </li>
               )}
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 text-red-400">•</span>
-                Templates and config will be deleted
+                Templates and stakeholders will be deleted, and restored together if you undo this
               </li>
             </ul>
 

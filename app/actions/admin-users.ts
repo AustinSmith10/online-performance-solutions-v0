@@ -99,6 +99,107 @@ export async function restoreUser(
   redirect(`/admin/users/${userId}?restored=1`);
 }
 
+// ─── Soft delete (distinct from the is_active deactivate toggle above) ──────
+// Deactivating suspends login without hiding the account; soft-deleting
+// removes it from listings entirely and moves it to the recovery bin.
+// Super admin accounts can never be soft-deleted, by anyone.
+
+export type SoftDeleteUserState = { error?: string };
+
+export async function softDeleteUser(
+  userId: string,
+  _prev: SoftDeleteUserState,
+  _formData: FormData
+): Promise<SoftDeleteUserState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: user } = await supabase
+    .from("users")
+    .select("email, role")
+    .eq("id", userId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!user) return { error: "User not found or already deleted." };
+
+  if (user.role === "super_admin") {
+    return { error: "Super admin accounts cannot be deleted." };
+  }
+
+  if (actor.role === "admin" && user.role === "admin") {
+    return { error: "Insufficient permissions to delete this account." };
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+
+  await supabase.auth.admin.updateUserById(userId, { ban_duration: "876600h" });
+
+  await auditLog("user.soft_deleted", actor.id, actor.email, {
+    metadata: { target_user_id: userId, target_email: user.email, role: user.role },
+  });
+
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/stakeholders");
+  revalidatePath("/admin/consultants");
+  revalidatePath("/admin/recovery");
+  redirect(`/admin/users/${userId}?removed=1`);
+}
+
+export type RestoreDeletedUserState = { error?: string };
+
+export async function restoreDeletedUser(
+  userId: string,
+  _prev: RestoreDeletedUserState,
+  _formData: FormData
+): Promise<RestoreDeletedUserState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: user } = await supabase
+    .from("users")
+    .select("email, role, is_active")
+    .eq("id", userId)
+    .not("deleted_at", "is", null)
+    .maybeSingle();
+
+  if (!user) return { error: "User not found in recovery bin." };
+
+  if (actor.role === "admin" && user.role === "admin") {
+    return { error: "Insufficient permissions to restore this account." };
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .update({ deleted_at: null })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+
+  // Only lift the auth ban if the account isn't independently deactivated —
+  // restoring from the recovery bin shouldn't also undo a deactivation.
+  if (user.is_active) {
+    await supabase.auth.admin.updateUserById(userId, { ban_duration: "none" });
+  }
+
+  await auditLog("user.recovered", actor.id, actor.email, {
+    metadata: { target_user_id: userId, target_email: user.email, role: user.role },
+  });
+
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/stakeholders");
+  revalidatePath("/admin/consultants");
+  revalidatePath("/admin/recovery");
+  return {};
+}
+
 export type ResetPasswordState = { link?: string; error?: string };
 
 export async function resetUserPassword(

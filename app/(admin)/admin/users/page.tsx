@@ -79,7 +79,8 @@ export default async function UsersPage({
 
   let query = supabase
     .from("users")
-    .select("id, email, first_name, last_name, role, availability, is_locked, created_at, clients(name)");
+    .select("id, email, first_name, last_name, role, availability, is_locked, created_at, clients(name)")
+    .is("deleted_at", null);
 
   if (isConsultantsTab) {
     const sortCol: ConsultantSortCol = CONSULTANT_SORT_COLS.includes(sort as ConsultantSortCol)

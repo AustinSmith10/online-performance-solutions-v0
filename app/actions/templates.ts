@@ -195,33 +195,66 @@ export async function deleteTemplate(
 
   const { data: template, error: tmplErr } = await supabase
     .from("templates")
-    .select("client_id, name, storage_path")
+    .select("client_id, name")
     .eq("id", templateId)
+    .is("deleted_at", null)
     .maybeSingle();
 
-  if (tmplErr || !template) return { error: "Template not found." };
+  if (tmplErr || !template) return { error: "Template not found or already deleted." };
 
-  // Delete DB record (cascades to template_field_mappings)
-  const { error: deleteErr } = await supabase
+  const { error } = await supabase
     .from("templates")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", templateId);
 
-  if (deleteErr) return { error: deleteErr.message };
+  if (error) return { error: error.message };
 
-  // Best-effort storage cleanup
-  await supabase.storage
-    .from("templates")
-    .remove([template.storage_path as string]);
-
-  await auditLog("template.deleted", actor.id, actor.email, {
+  await auditLog("template.soft_deleted", actor.id, actor.email, {
     orgId: template.client_id as string,
     metadata: { templateId, name: template.name },
   });
 
   revalidatePath("/admin/templates");
   revalidatePath(`/admin/clients/${template.client_id}`);
+  revalidatePath("/admin/recovery");
   redirect("/admin/templates?deleted=1");
+}
+
+export type RestoreTemplateState = { error?: string };
+
+export async function restoreTemplate(
+  templateId: string,
+  _prev: RestoreTemplateState,
+  _formData: FormData
+): Promise<RestoreTemplateState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: template, error: tmplErr } = await supabase
+    .from("templates")
+    .select("client_id, name")
+    .eq("id", templateId)
+    .not("deleted_at", "is", null)
+    .maybeSingle();
+
+  if (tmplErr || !template) return { error: "Template not found in recovery bin." };
+
+  const { error } = await supabase
+    .from("templates")
+    .update({ deleted_at: null })
+    .eq("id", templateId);
+
+  if (error) return { error: error.message };
+
+  await auditLog("template.restored", actor.id, actor.email, {
+    orgId: template.client_id as string,
+    metadata: { templateId, name: template.name },
+  });
+
+  revalidatePath("/admin/templates");
+  revalidatePath(`/admin/clients/${template.client_id}`);
+  revalidatePath("/admin/recovery");
+  return {};
 }
 
 export type ReuploadTemplateState = { error?: string };

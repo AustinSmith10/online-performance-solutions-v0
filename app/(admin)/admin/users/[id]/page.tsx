@@ -47,6 +47,7 @@ export default async function UserDetailPage({
   const created = sp.created === "1";
   const deleted = sp.deleted === "1";
   const restored = sp.restored === "1";
+  const removed = sp.removed === "1";
 
   const initials =
     u.first_name && u.last_name
@@ -83,6 +84,13 @@ export default async function UserDetailPage({
           cleanUrl={cleanUrl}
           title="Account restored"
           body="This user can now log in again."
+        />
+      )}
+      {removed && (
+        <AdminSuccessBanner
+          cleanUrl={cleanUrl}
+          title="Account deleted"
+          body="This account has been moved to the recovery bin and can be restored at any time."
         />
       )}
 
@@ -130,6 +138,8 @@ export default async function UserDetailPage({
               userEmail={u.email!}
               isActive={u.is_active}
               canDeactivate={u.role !== "super_admin" && u.role !== "admin"}
+              isDeleted={!!u.deleted_at}
+              canDelete={u.role !== "super_admin"}
             />
           </div>
 

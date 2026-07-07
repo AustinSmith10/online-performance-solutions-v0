@@ -43,6 +43,7 @@ export default async function CreditsPage({
   let query = supabase
     .from("clients")
     .select("id, name, payment_method, credit_balance, deferred_balance, credit_limit, is_frozen")
+    .is("deleted_at", null)
     .order(sortCol, { ascending: sortOrder === "asc" });
 
   if (q?.trim()) query = query.ilike("name", `%${q.trim()}%`);

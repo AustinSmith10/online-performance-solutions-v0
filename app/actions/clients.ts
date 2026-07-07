@@ -269,28 +269,68 @@ export async function deleteClient(
   const actor = await requireRole("super_admin");
   const supabase = createAdminClient();
 
-  // Read name before deletion for the audit entry
   const { data: org } = await supabase
     .from("clients")
     .select("name")
     .eq("id", orgId)
+    .is("deleted_at", null)
     .single();
 
-  if (!org) return { error: "Client not found." };
+  if (!org) return { error: "Client not found or already deleted." };
 
-  // Delegate to the SQL function — it validates, handles audit_log trigger, and deletes
-  const { error } = await supabase.rpc("admin_delete_client", { p_client_id: orgId });
+  // Delegate to the SQL function — it stamps one timestamp across the client,
+  // its templates, its org-scoped stakeholders, and its non-terminal projects
+  // so restore can later tell cascade-deleted rows apart from independently
+  // deleted ones.
+  const { error } = await supabase.rpc("soft_delete_client", { p_client_id: orgId });
   if (error) {
     return { error: error.message };
   }
 
-  await auditLog("org.deleted", actor.id, actor.email, {
+  await auditLog("org.soft_deleted", actor.id, actor.email, {
     orgId,
     metadata: { name: org.name },
   });
 
   revalidatePath("/admin/clients");
+  revalidatePath("/admin/templates");
+  revalidatePath("/admin/recovery");
   redirect("/admin/clients?deleted=1");
+}
+
+export type RestoreClientState = { error?: string };
+
+export async function restoreClient(
+  orgId: string,
+  _prev: RestoreClientState,
+  _formData: FormData
+): Promise<RestoreClientState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const { data: org } = await supabase
+    .from("clients")
+    .select("name")
+    .eq("id", orgId)
+    .not("deleted_at", "is", null)
+    .single();
+
+  if (!org) return { error: "Client not found in recovery bin." };
+
+  const { error } = await supabase.rpc("restore_client", { p_client_id: orgId });
+  if (error) {
+    return { error: error.message };
+  }
+
+  await auditLog("org.restored", actor.id, actor.email, {
+    orgId,
+    metadata: { name: org.name },
+  });
+
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin/templates");
+  revalidatePath("/admin/recovery");
+  return {};
 }
 
 export async function setOrgFrozen(id: string, frozen: boolean) {

@@ -21,6 +21,7 @@ export async function resolveStakeholders(
     .eq("scope", "project")
     .eq("scope_id", projectId)
     .eq("is_active", true)
+    .is("deleted_at", null)
     .order("sort_order", { ascending: true });
 
   if (projectRows && projectRows.length > 0) {
@@ -33,6 +34,7 @@ export async function resolveStakeholders(
     .eq("scope", "org")
     .eq("scope_id", orgId)
     .eq("is_active", true)
+    .is("deleted_at", null)
     .order("sort_order", { ascending: true });
 
   return (orgRows as StakeholderRow[]) ?? [];

@@ -103,12 +103,15 @@ export async function deliverPbdr(
   let pbdrVersion: number | null = null;
 
   try {
-    // Load QA'd PBDB (highest version)
+    // Load the QA'd PBDB for the final-approved cycle (highest version within it) —
+    // scoping by review_cycle avoids accidentally converting a stale earlier cycle's
+    // docx if one were ever left behind.
     const { data: pbdbFile } = await supabase
       .from("project_files")
       .select("storage_path, version")
       .eq("project_id", projectId)
       .eq("file_type", "pbdb")
+      .eq("review_cycle", project.review_cycle as number)
       .order("version", { ascending: false })
       .limit(1)
       .maybeSingle();

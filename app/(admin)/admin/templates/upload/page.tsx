@@ -15,6 +15,7 @@ export default async function UploadTemplatePage({
   const { data: orgs } = await supabase
     .from("clients")
     .select("id, name")
+    .is("deleted_at", null)
     .order("name", { ascending: true });
 
   const orgList = (orgs ?? []) as { id: string; name: string }[];

@@ -165,6 +165,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     original_filename: filename,
     uploaded_by: actorId,
     version,
+    review_cycle: (project.review_cycle as number) ?? 1,
   });
 
   if (insertError) {

@@ -8,9 +8,9 @@ const supabase = createClient(
 async function seed() {
   console.log("Seeding OPS database...");
 
-  // ── Org ────────────────────────────────────────────────────────────────────
+  // ── Client ─────────────────────────────────────────────────────────────────
   const { data: stockland, error: orgError } = await supabase
-    .from("organisations")
+    .from("clients")
     .upsert(
       {
         name: "Stockland",
@@ -50,10 +50,10 @@ async function seed() {
   // ── Users ──────────────────────────────────────────────────────────────────
   type UserSpec = {
     email: string;
-    role: "super_admin" | "admin" | "consultant" | "client";
+    role: "super_admin" | "admin" | "consultant" | "stakeholder";
     firstName: string;
     lastName: string;
-    orgId: string | null;
+    clientId: string | null;
     availability?: "available" | "on_leave" | "at_capacity";
   };
 
@@ -63,29 +63,29 @@ async function seed() {
       role: "super_admin",
       firstName: "Admin",
       lastName: "User",
-      orgId: null,
+      clientId: null,
     },
     {
       email: "admin2@ops.test",
       role: "admin",
       firstName: "Ops",
       lastName: "Admin",
-      orgId: null,
+      clientId: null,
     },
     {
       email: "consultant@ops.test",
       role: "consultant",
       firstName: "Test",
       lastName: "Consultant",
-      orgId: null,
+      clientId: null,
       availability: "available",
     },
     {
       email: "client@ops.test",
-      role: "client",
+      role: "stakeholder",
       firstName: "Test",
       lastName: "Client",
-      orgId: stockland.id,
+      clientId: stockland.id,
     },
   ];
 
@@ -105,7 +105,7 @@ async function seed() {
           email: u.email,
           password: "Ops@TestPass1!",
           email_confirm: true,
-          app_metadata: { role: u.role, org_id: u.orgId },
+          app_metadata: { role: u.role, client_id: u.clientId },
           user_metadata: { profile_complete: true },
         });
 
@@ -126,7 +126,7 @@ async function seed() {
         company_role: u.role,
         state_territory: "NSW",
         role: u.role,
-        org_id: u.orgId,
+        client_id: u.clientId,
         availability: u.availability ?? "available",
         profile_complete: true,
         totp_enabled: false,

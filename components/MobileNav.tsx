@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { SidebarNavLinks } from "@/components/NavLinks";
 
 interface NavItem {
   href: string;
   label: string;
+  group?: string;
 }
 
 export function MobileNav({
@@ -25,13 +26,6 @@ export function MobileNav({
   notifications?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
-
-  const activeHref = navItems
-    .filter(({ href }) => pathname === href || pathname.startsWith(href + "/"))
-    .reduce<string | null>((best, { href }) =>
-      best === null || href.length > best.length ? href : best
-    , null);
 
   return (
     <>
@@ -79,23 +73,7 @@ export function MobileNav({
           </button>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-          {navItems.map((item) => {
-            const active = item.href === activeHref;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className={
-                  active
-                    ? "block rounded px-3 py-2 text-sm font-medium bg-zinc-100 text-zinc-900"
-                    : "block rounded px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                }
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+          <SidebarNavLinks items={navItems} onItemClick={() => setOpen(false)} />
         </nav>
         <div className="border-t border-zinc-200 p-3">
           <p className="mb-2 truncate text-xs text-zinc-500">{userName}</p>

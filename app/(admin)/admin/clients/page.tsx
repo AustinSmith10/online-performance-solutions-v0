@@ -46,6 +46,7 @@ export default async function OrganisationsPage({
   let query = supabase
     .from("clients")
     .select("*")
+    .is("deleted_at", null)
     .order(sortCol, { ascending: sortOrder === "asc" });
 
   if (name?.trim()) query = query.ilike("name", `%${name.trim()}%`);
@@ -63,7 +64,7 @@ export default async function OrganisationsPage({
         <AdminSuccessBanner
           cleanUrl="/admin/clients"
           title="Client deleted"
-          body="The organisation and all its associated data have been permanently removed."
+          body="The client and its templates, stakeholders, and in-progress projects have been moved to the recovery bin."
         />
       )}
 

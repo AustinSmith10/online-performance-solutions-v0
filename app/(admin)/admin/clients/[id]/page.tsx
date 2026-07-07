@@ -50,6 +50,7 @@ export default async function OrganisationDetailPage({
         .from("templates")
         .select("id, name, status, created_at")
         .eq("client_id", id)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false }),
     ]);
 

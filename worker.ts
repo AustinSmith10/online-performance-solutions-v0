@@ -51,9 +51,9 @@ async function main() {
       .lt("deleted_at", cutoff);
     if (error) {
       console.error("[purge-recovery-bin] failed:", error);
-    } else {
-      console.log(`[purge-recovery-bin] permanently removed ${count ?? 0} project(s)`);
+      throw new Error(error.message);
     }
+    console.log(`[purge-recovery-bin] permanently removed ${count ?? 0} project(s)`);
   });
 
   // Expire abandoned email-sourced drafts. Runs daily at 02:00.
@@ -68,10 +68,11 @@ async function main() {
 
     if (orgError || !orgs) {
       console.error("[expire-draft] Failed to fetch organisations:", orgError);
-      return;
+      throw new Error(orgError?.message ?? "failed to fetch organisations");
     }
 
     let totalExpired = 0;
+    const failedOrgs: string[] = [];
 
     for (const org of orgs) {
       const days = (org.abandoned_draft_days as number) ?? 14;
@@ -87,12 +88,16 @@ async function main() {
 
       if (error) {
         console.error(`[expire-draft] Failed for org ${org.id}:`, error);
+        failedOrgs.push(org.id as string);
       } else {
         totalExpired += count ?? 0;
       }
     }
 
     console.log(`[expire-draft] Expired ${totalExpired} abandoned draft(s)`);
+    if (failedOrgs.length > 0) {
+      throw new Error(`failed for org(s): ${failedOrgs.join(", ")}`);
+    }
   });
 
   // Generate PBDB for a project. Job data: { projectId: string, actorId: string }
@@ -148,7 +153,7 @@ async function main() {
 
     if (error) {
       console.error("[approval-buffer] query failed:", error);
-      return;
+      throw new Error(error.message);
     }
 
     for (const project of projects ?? []) {

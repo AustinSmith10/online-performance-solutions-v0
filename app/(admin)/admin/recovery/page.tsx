@@ -1,8 +1,14 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RestoreButton } from "./_components/RestoreButton";
 import { PurgeButton } from "./_components/PurgeButton";
+import { EntityRestoreButton } from "./_components/EntityRestoreButton";
+import { StakeholderRestoreButton } from "./_components/StakeholderRestoreButton";
+import { restoreTemplate } from "@/app/actions/templates";
+import { restoreDeletedUser } from "@/app/actions/admin-users";
+import { restoreClient } from "@/app/actions/clients";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -26,6 +32,38 @@ type DeletedProject = {
   status: ProjectStatus;
   deleted_at: string;
   clients: { name: string } | null;
+};
+
+type DeletedTemplate = {
+  id: string;
+  name: string;
+  deleted_at: string;
+  clients: { name: string } | null;
+};
+
+type DeletedStakeholder = {
+  id: string;
+  name: string;
+  email: string;
+  scope: "org" | "project";
+  scope_id: string;
+  deleted_at: string;
+};
+
+type DeletedUser = {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  role: string;
+  deleted_at: string;
+  clients: { name: string } | null;
+};
+
+type DeletedClient = {
+  id: string;
+  name: string;
+  deleted_at: string;
 };
 
 function daysRemaining(deletedAt: string): number {
@@ -56,7 +94,7 @@ export default async function AdminRecoveryPage({
 }: {
   searchParams: Promise<{ q?: string; org?: string; status?: string; sort?: string; order?: string }>;
 }) {
-  await requireRole("super_admin", "admin");
+  const actor = await requireRole("super_admin", "admin");
 
   const { q, org, status, sort, order } = await searchParams;
 
@@ -65,6 +103,39 @@ export default async function AdminRecoveryPage({
   const params = { q, org, status, sort, order };
 
   const supabase = createAdminClient();
+
+  const [
+    { data: templateRows },
+    { data: stakeholderRows },
+    { data: userRows },
+    { data: clientRows },
+  ] = await Promise.all([
+    supabase
+      .from("templates")
+      .select("id, name, deleted_at, clients:client_id(name)")
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false }),
+    supabase
+      .from("stakeholders")
+      .select("id, name, email, scope, scope_id, deleted_at")
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false }),
+    supabase
+      .from("users")
+      .select("id, email, first_name, last_name, role, deleted_at, clients(name)")
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false }),
+    supabase
+      .from("clients")
+      .select("id, name, deleted_at")
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false }),
+  ]);
+
+  const deletedTemplates = (templateRows ?? []) as unknown as DeletedTemplate[];
+  const deletedStakeholders = (stakeholderRows ?? []) as unknown as DeletedStakeholder[];
+  const deletedUsers = (userRows ?? []) as unknown as DeletedUser[];
+  const deletedClients = (clientRows ?? []) as unknown as DeletedClient[];
 
   let orgIds: string[] | null = null;
   if (org?.trim()) {
@@ -87,7 +158,20 @@ export default async function AdminRecoveryPage({
   if (status?.trim()) query = query.eq("status", status.trim());
   if (orgIds !== null) {
     if (orgIds.length === 0) {
-      return <RecoveryLayout projects={[]} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter />;
+      return (
+        <RecoveryLayout
+          projects={[]}
+          params={params}
+          sortCol={sortCol}
+          sortOrder={sortOrder}
+          hasFilter
+          templates={deletedTemplates}
+          stakeholders={deletedStakeholders}
+          users={deletedUsers}
+          clients={deletedClients}
+          canRestoreClients={actor.role === "super_admin"}
+        />
+      );
     }
     query = query.in("client_id", orgIds);
   }
@@ -96,7 +180,20 @@ export default async function AdminRecoveryPage({
   const projects = (data ?? []) as unknown as DeletedProject[];
   const hasFilter = !!(q || org || status);
 
-  return <RecoveryLayout projects={projects} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} />;
+  return (
+    <RecoveryLayout
+      projects={projects}
+      params={params}
+      sortCol={sortCol}
+      sortOrder={sortOrder}
+      hasFilter={hasFilter}
+      templates={deletedTemplates}
+      stakeholders={deletedStakeholders}
+      users={deletedUsers}
+      clients={deletedClients}
+      canRestoreClients={actor.role === "super_admin"}
+    />
+  );
 }
 
 function RecoveryLayout({
@@ -105,12 +202,22 @@ function RecoveryLayout({
   sortCol,
   sortOrder,
   hasFilter,
+  templates,
+  stakeholders,
+  users,
+  clients,
+  canRestoreClients,
 }: {
   projects: DeletedProject[];
   params: Record<string, string | undefined>;
   sortCol: SortCol;
   sortOrder: "asc" | "desc";
   hasFilter: boolean;
+  templates: DeletedTemplate[];
+  stakeholders: DeletedStakeholder[];
+  users: DeletedUser[];
+  clients: DeletedClient[];
+  canRestoreClients: boolean;
 }) {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -225,6 +332,126 @@ function RecoveryLayout({
             </tbody>
           </table>
           <p className="px-5 py-3 text-xs text-zinc-400">{projects.length} deleted project{projects.length !== 1 ? "s" : ""}</p>
+        </div>
+      )}
+
+      <EntitySection
+        title="Deleted templates"
+        rows={templates}
+        empty="No deleted templates."
+        columns={["Name", "Client", "Deleted"]}
+        renderRow={(t) => (
+          <tr key={t.id}>
+            <td className="px-5 py-3 font-medium text-zinc-900">{t.name}</td>
+            <td className="px-5 py-3 text-zinc-600">{t.clients?.name ?? "—"}</td>
+            <td className="px-5 py-3 text-zinc-500">{new Date(t.deleted_at).toLocaleDateString("en-AU")}</td>
+            <td className="px-5 py-4 text-right">
+              <EntityRestoreButton action={restoreTemplate.bind(null, t.id)} />
+            </td>
+          </tr>
+        )}
+      />
+
+      <EntitySection
+        title="Deleted stakeholders"
+        rows={stakeholders}
+        empty="No deleted stakeholders."
+        columns={["Name", "Email", "Scope", "Deleted"]}
+        renderRow={(s) => (
+          <tr key={s.id}>
+            <td className="px-5 py-3 font-medium text-zinc-900">{s.name}</td>
+            <td className="px-5 py-3 text-zinc-600">{s.email}</td>
+            <td className="px-5 py-3 text-zinc-500 capitalize">{s.scope}</td>
+            <td className="px-5 py-3 text-zinc-500">{new Date(s.deleted_at).toLocaleDateString("en-AU")}</td>
+            <td className="px-5 py-4 text-right">
+              <StakeholderRestoreButton scope={s.scope} scopeId={s.scope_id} stakeholderId={s.id} />
+            </td>
+          </tr>
+        )}
+      />
+
+      <EntitySection
+        title="Deleted users"
+        rows={users}
+        empty="No deleted users."
+        columns={["Name", "Role", "Client", "Deleted"]}
+        renderRow={(u) => (
+          <tr key={u.id}>
+            <td className="px-5 py-3 font-medium text-zinc-900">
+              {[u.first_name, u.last_name].filter(Boolean).join(" ") || u.email}
+            </td>
+            <td className="px-5 py-3 text-zinc-500 capitalize">{u.role.replace("_", " ")}</td>
+            <td className="px-5 py-3 text-zinc-600">{u.clients?.name ?? "—"}</td>
+            <td className="px-5 py-3 text-zinc-500">{new Date(u.deleted_at).toLocaleDateString("en-AU")}</td>
+            <td className="px-5 py-4 text-right">
+              <EntityRestoreButton action={restoreDeletedUser.bind(null, u.id)} />
+            </td>
+          </tr>
+        )}
+      />
+
+      <EntitySection
+        title="Deleted clients"
+        rows={clients}
+        empty="No deleted clients."
+        columns={["Name", "Deleted"]}
+        renderRow={(c) => (
+          <tr key={c.id}>
+            <td className="px-5 py-3 font-medium text-zinc-900">{c.name}</td>
+            <td className="px-5 py-3 text-zinc-500">{new Date(c.deleted_at).toLocaleDateString("en-AU")}</td>
+            <td className="px-5 py-4 text-right">
+              {canRestoreClients ? (
+                <EntityRestoreButton action={restoreClient.bind(null, c.id)} />
+              ) : (
+                <span className="text-xs text-zinc-400">Super admin only</span>
+              )}
+            </td>
+          </tr>
+        )}
+      />
+      {clients.length > 0 && (
+        <p className="text-xs text-zinc-400">
+          Restoring a client also restores the templates, stakeholders, and projects that were
+          deleted alongside it.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function EntitySection<T>({
+  title,
+  rows,
+  empty,
+  columns,
+  renderRow,
+}: {
+  title: string;
+  rows: T[];
+  empty: string;
+  columns: string[];
+  renderRow: (row: T) => ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
+      {rows.length === 0 ? (
+        <div className="rounded-lg border border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500">
+          {empty}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+          <table className="w-full min-w-[480px] text-sm">
+            <thead className="border-b border-zinc-100 bg-zinc-50">
+              <tr>
+                {columns.map((c) => (
+                  <th key={c} className="px-5 py-3 text-left font-medium text-zinc-500">{c}</th>
+                ))}
+                <th className="px-5 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-50">{rows.map(renderRow)}</tbody>
+          </table>
         </div>
       )}
     </div>

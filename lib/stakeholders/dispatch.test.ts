@@ -11,6 +11,7 @@ vi.mock("@/lib/audit/log");
 vi.mock("@/lib/email/sender");
 vi.mock("@/lib/email/templates/ApprovalRequestEmail");
 vi.mock("@/lib/email/templates/RevisionNoticeEmail");
+vi.mock("@/lib/documents/pdf");
 
 import { dispatchPbdb } from "./dispatch";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,6 +22,8 @@ import { logUpfront } from "@/lib/payments/ledger";
 import { sendEmail } from "@/lib/email/sender";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { renderRevisionNoticeEmail } from "@/lib/email/templates/RevisionNoticeEmail";
+import { convertDocxToPdf } from "@/lib/documents/pdf";
+import { auditLog } from "@/lib/audit/log";
 
 const PROJECT_ID = "proj-abc";
 const ORG_ID = "org-xyz";
@@ -190,6 +193,86 @@ describe("dispatchPbdb — submitting client inclusion", () => {
   });
 });
 
+describe("dispatchPbdb — stakeholder-facing artifact is a PDF, never the docx", () => {
+  it("converts the current PBDB docx to PDF and dispatches the PDF link, not the docx", async () => {
+    const docxRow = {
+      storage_path: `${ORG_ID}/${PROJECT_ID}/pbdb/v1_OPS-001-S PBDB R0.docx`,
+      original_filename: "OPS-001-S PBDB R0.docx",
+      version: 1,
+    };
+    const insertFn = vi.fn().mockResolvedValue({ data: null, error: null });
+    const uploadFn = vi.fn().mockResolvedValue({ data: null, error: null });
+    const downloadFn = vi.fn().mockResolvedValue({
+      data: { arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer },
+      error: null,
+    });
+    const createSignedUrlFn = vi
+      .fn()
+      .mockResolvedValue({ data: { signedUrl: "https://signed/pdf" }, error: null });
+
+    const upsertFn = vi.fn().mockResolvedValue({ data: null, error: null });
+    let pfCalls = 0;
+
+    const mock = {
+      from: vi.fn((table: string) => {
+        if (table === "projects") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: BASE_PROJECT, error: null }),
+            update: vi.fn().mockReturnValue(chain(null)),
+          };
+        }
+        if (table === "users") {
+          return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: SUBMITTER_USER, error: null }), in: vi.fn().mockResolvedValue({ data: [], error: null }) };
+        }
+        if (table === "project_files") {
+          pfCalls++;
+          // 1st call: pbdb_pdf cache lookup — nothing cached yet.
+          if (pfCalls === 1) {
+            return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) };
+          }
+          // 2nd call: source pbdb docx lookup — found.
+          if (pfCalls === 2) {
+            return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: docxRow, error: null }) };
+          }
+          // 3rd call: insert the newly-created pbdb_pdf row.
+          return { insert: insertFn };
+        }
+        if (table === "stakeholder_reviews") return { upsert: upsertFn };
+        return chain(null);
+      }),
+      storage: {
+        from: vi.fn().mockReturnValue({
+          download: downloadFn,
+          upload: uploadFn,
+          createSignedUrl: createSignedUrlFn,
+        }),
+      },
+    };
+
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    vi.mocked(convertDocxToPdf).mockResolvedValue(Buffer.from("pdf-bytes"));
+
+    await dispatchPbdb(PROJECT_ID, ACTOR_ID);
+
+    const expectedPdfPath = `${ORG_ID}/${PROJECT_ID}/pbdb/v1_OPS-001-S PBDB R0.pdf`;
+
+    expect(vi.mocked(convertDocxToPdf)).toHaveBeenCalled();
+    expect(uploadFn).toHaveBeenCalledWith(
+      expectedPdfPath,
+      expect.anything(),
+      { contentType: "application/pdf" }
+    );
+    expect(insertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ file_type: "pbdb_pdf", storage_path: expectedPdfPath })
+    );
+    // The emailed link must point at the PDF path, never the raw docx path.
+    expect(createSignedUrlFn).toHaveBeenCalledWith(expectedPdfPath, 7 * 24 * 3600);
+    expect(createSignedUrlFn).not.toHaveBeenCalledWith(docxRow.storage_path, expect.anything());
+  });
+});
+
 describe("dispatchPbdb — revision cycle notice", () => {
   it("sends revision notices to prior-cycle acknowledged stakeholders on cycle 2", async () => {
     const cycle2Project = { ...BASE_PROJECT, review_cycle: 2 };
@@ -292,5 +375,28 @@ describe("dispatchPbdb — payment gate", () => {
     await dispatchPbdb(PROJECT_ID, ACTOR_ID);
 
     expect(vi.mocked(checkDispatchGate)).not.toHaveBeenCalled();
+  });
+});
+
+describe("dispatchPbdb — audit trail records who the review was sent to", () => {
+  it("logs project.pbdb_dispatched with the name and email of every recipient, including the prepended client", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(buildSupabaseMock() as never);
+
+    await dispatchPbdb(PROJECT_ID, ACTOR_ID);
+
+    expect(vi.mocked(auditLog)).toHaveBeenCalledWith(
+      "project.pbdb_dispatched",
+      ACTOR_ID,
+      null,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          stakeholder_count: 2,
+          stakeholders: expect.arrayContaining([
+            { name: "Planner", email: "planner@council.gov" },
+            { name: "John Doe", email: "client@acme.com" },
+          ]),
+        }),
+      })
+    );
   });
 });

@@ -158,6 +158,7 @@ export default async function ProjectDetailPage({
       .order("first_name"),
   ]);
 
+  if (projectResult.error) console.error(`[admin/projects/${id}] project query failed:`, projectResult.error);
   if (!projectResult.data) notFound();
 
   type ProjectDetail = {
@@ -259,6 +260,7 @@ export default async function ProjectDetailPage({
       .select("id, name, email, company")
       .eq("scope", "project")
       .eq("scope_id", id)
+      .is("deleted_at", null)
       .order("sort_order", { ascending: true }),
     supabase
       .from("audit_log")

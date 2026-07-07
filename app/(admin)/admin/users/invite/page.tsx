@@ -15,6 +15,7 @@ export default async function InviteUserPage({
   const { data } = await supabase
     .from("clients")
     .select("id, name")
+    .is("deleted_at", null)
     .order("name", { ascending: true });
 
   const orgs = (data ?? []) as Pick<Client, "id" | "name">[];

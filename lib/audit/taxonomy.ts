@@ -15,19 +15,34 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "auth.password_reset_generated",
     ],
   },
+  user: {
+    label: "Users",
+    color: "bg-cyan-100 text-cyan-700",
+    events: [
+      "user.account_created",
+      "user.deactivated",
+      "user.restored",
+      "user.email_updated",
+      "user.profile_updated",
+      "user.soft_deleted",
+      "user.recovered",
+    ],
+  },
   project: {
     label: "Projects",
     color: "bg-blue-100 text-blue-700",
     events: [
       "project.draft_created",
       "project.submitted",
+      "project.review_confirmed",
       "project.pbdb_generated",
       "project.pbdb_regenerated",
       "project.pbdb_resent",
       "project.pbdb_qa_uploaded",
       "project.qa_complete",
       "project.revision_complete",
-      "project.dispatched",
+      "project.pbdb_dispatched",
+      "project.dispatched", // legacy name for project.pbdb_dispatched — kept so pre-rename rows still render
       "project.purged",
       "project.soft_deleted",
       "project.admin_deleted",
@@ -60,6 +75,8 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "stakeholder.email_updated",
       "stakeholder.token_accessed",
       "stakeholder.pbdb_downloaded",
+      "stakeholder.soft_deleted",
+      "stakeholder.restored",
     ],
   },
   credit: {
@@ -94,6 +111,8 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "template.activated",
       "template.deactivated",
       "template.deleted",
+      "template.soft_deleted",
+      "template.restored",
       "template.reuploaded",
       "template.reactivated",
       "template.mapping_updated",
@@ -111,6 +130,8 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "org.frozen",
       "org.unfrozen",
       "org.deleted",
+      "org.soft_deleted",
+      "org.restored",
     ],
   },
   audit: {
@@ -121,7 +142,7 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
   settings: {
     label: "Settings",
     color: "bg-teal-100 text-teal-700",
-    events: ["settings.digest_schedule_updated"],
+    events: ["settings.digest_schedule_updated", "settings.admin_nav_restrictions_updated"],
   },
 };
 
@@ -130,15 +151,24 @@ export const EVENT_LABELS: Record<string, string> = {
   "auth.2fa_disabled": "2FA disabled",
   "auth.2fa_required": "2FA enforced",
   "auth.password_reset_generated": "Password reset link generated",
+  "user.account_created": "Account created",
+  "user.deactivated": "Account deactivated",
+  "user.restored": "Account restored",
+  "user.email_updated": "Account email changed",
+  "user.profile_updated": "Account profile updated",
+  "user.soft_deleted": "Account deleted",
+  "user.recovered": "Account restored from recovery bin",
   "project.draft_created": "New report request started",
   "project.submitted": "Project submitted",
+  "project.review_confirmed": "Client confirmed report details reviewed",
   "project.pbdb_generated": "PBDB generated",
   "project.pbdb_regenerated": "PBDB regenerated",
   "project.pbdb_resent": "PBDB re-sent to stakeholders",
   "project.pbdb_qa_uploaded": "QA document uploaded",
   "project.qa_complete": "QA marked complete",
   "project.revision_complete": "Revision complete",
-  "project.dispatched": "Project dispatched to stakeholders",
+  "project.pbdb_dispatched": "PBDB dispatched to stakeholders",
+  "project.dispatched": "PBDB dispatched to stakeholders",
   "project.purged": "Project permanently deleted",
   "project.soft_deleted": "Project archived",
   "project.admin_deleted": "Project archived by admin",
@@ -165,6 +195,8 @@ export const EVENT_LABELS: Record<string, string> = {
   "stakeholder.email_updated": "Stakeholder email changed",
   "stakeholder.token_accessed": "Stakeholder opened approval link",
   "stakeholder.pbdb_downloaded": "Stakeholder downloaded PBDB",
+  "stakeholder.soft_deleted": "Stakeholder deleted",
+  "stakeholder.restored": "Stakeholder restored",
   "credit.top_up": "Credits added",
   "credit.deduction": "Credits deducted",
   "credit.deferred_debit": "Deferred debit recorded",
@@ -181,6 +213,8 @@ export const EVENT_LABELS: Record<string, string> = {
   "template.activated": "Template activated",
   "template.deactivated": "Template deactivated",
   "template.deleted": "Template deleted",
+  "template.soft_deleted": "Template moved to recovery bin",
+  "template.restored": "Template restored",
   "template.reuploaded": "Template file replaced",
   "template.reactivated": "Template reactivated",
   "template.mapping_updated": "Template mappings updated",
@@ -192,8 +226,11 @@ export const EVENT_LABELS: Record<string, string> = {
   "org.frozen": "Client frozen",
   "org.unfrozen": "Client unfrozen",
   "org.deleted": "Client deleted",
+  "org.soft_deleted": "Client deleted",
+  "org.restored": "Client restored",
   "audit.export_downloaded": "Audit trail exported",
   "settings.digest_schedule_updated": "Digest schedule changed",
+  "settings.admin_nav_restrictions_updated": "Admin nav restrictions changed",
 };
 
 export const EVENT_CATEGORY: Record<string, string> = {};
@@ -282,6 +319,27 @@ export function formatDetails(
             filled.length > 3 ? `${preview}, +${filled.length - 3} more field${filled.length - 3 !== 1 ? "s" : ""}` : preview
           );
         }
+      }
+      break;
+    }
+
+    case "project.pbdb_dispatched":
+    case "project.dispatched": {
+      const stakeholders = metadata.stakeholders;
+      if (Array.isArray(stakeholders) && stakeholders.length > 0) {
+        const names = stakeholders
+          .map((sh) => {
+            if (!sh || typeof sh !== "object") return null;
+            const name = s((sh as Record<string, unknown>).name);
+            const email = s((sh as Record<string, unknown>).email);
+            if (name && email) return `${name} <${email}>`;
+            return name || email || null;
+          })
+          .filter((v): v is string => !!v);
+        if (names.length > 0) parts.push(`Sent to: ${names.join(", ")}`);
+      } else {
+        const count = n(metadata.stakeholder_count);
+        if (count !== null) parts.push(`Sent to ${count} stakeholder${count === 1 ? "" : "s"}`);
       }
       break;
     }
@@ -482,6 +540,8 @@ export function formatDetails(
     case "org.created":
     case "org.updated":
     case "org.deleted":
+    case "org.soft_deleted":
+    case "org.restored":
       if (s(metadata.name)) parts.push(s(metadata.name));
       if (s(metadata.payment_method))
         parts.push(`(${s(metadata.payment_method).replace(/_/g, " ")})`);
@@ -495,6 +555,16 @@ export function formatDetails(
     case "settings.digest_schedule_updated":
       if (s(metadata.morning)) parts.push(`Morning: ${s(metadata.morning)}`);
       if (s(metadata.afternoon)) parts.push(`Afternoon: ${s(metadata.afternoon)}`);
+      break;
+
+    case "settings.admin_nav_restrictions_updated":
+      if (Array.isArray(metadata.restricted)) {
+        parts.push(
+          metadata.restricted.length
+            ? `Restricted: ${(metadata.restricted as string[]).join(", ")}`
+            : "No restrictions"
+        );
+      }
       break;
 
     case "audit.export_downloaded": {

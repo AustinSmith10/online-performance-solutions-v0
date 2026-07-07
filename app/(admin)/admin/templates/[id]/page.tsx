@@ -6,6 +6,7 @@ import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { MappingTable } from "./_components/mapping-table";
 import { TemplateStatusActions } from "./_components/status-actions";
 import { DeleteButton } from "./_components/delete-button";
+import { RestoreButton } from "./_components/restore-button";
 import { ReuploadForm } from "./_components/reupload-form";
 import { ExtractionOnlyPanel } from "./_components/ExtractionOnlyPanel";
 import { FileRequirementsSection } from "./_components/FileRequirementsSection";
@@ -40,6 +41,7 @@ type TemplateDetail = {
   status: string;
   storage_path: string;
   created_at: string;
+  deleted_at: string | null;
   section_labels: { extract: string; org: string; client: string };
   org: { id: string; name: string; client_config: Record<string, string> } | null;
 };
@@ -59,7 +61,7 @@ export default async function TemplatePage({
   const [{ data: tmpl }, { data: mappings }, { data: fileReqs }] = await Promise.all([
     supabase
       .from("templates")
-      .select("id, name, status, storage_path, created_at, section_labels, org:client_id(id, name, client_config)")
+      .select("id, name, status, storage_path, created_at, deleted_at, section_labels, org:client_id(id, name, client_config)")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -131,10 +133,22 @@ export default async function TemplatePage({
 
           {/* Action buttons */}
           <div className="flex shrink-0 items-center gap-2">
-            <TemplateStatusActions templateId={id} status={template.status} canActivate={canActivate} />
-            <DeleteButton templateId={id} />
+            {template.deleted_at ? (
+              <RestoreButton templateId={id} />
+            ) : (
+              <>
+                <TemplateStatusActions templateId={id} status={template.status} canActivate={canActivate} />
+                <DeleteButton templateId={id} />
+              </>
+            )}
           </div>
         </div>
+
+        {template.deleted_at && (
+          <p className="mt-3.5 border-t border-zinc-100 pt-3 text-sm font-medium text-red-600">
+            Deleted on {new Date(template.deleted_at).toLocaleDateString("en-AU")} — restore to reuse.
+          </p>
+        )}
 
         <p className="mt-3.5 border-t border-zinc-100 pt-3 text-sm leading-relaxed text-zinc-500">
           {template.org && (

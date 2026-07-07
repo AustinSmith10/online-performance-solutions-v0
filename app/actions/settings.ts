@@ -5,6 +5,11 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { setDigestSchedule, isValidTime } from "@/lib/settings/digest-schedule";
+import {
+  setAdminNavRestrictions,
+  RESTRICTABLE_NAV_ITEMS,
+  type AdminNavKey,
+} from "@/lib/settings/admin-nav-restrictions";
 
 const DigestScheduleSchema = z.object({
   morning: z.string().refine(isValidTime, { error: "Enter a valid time (HH:MM)" }),
@@ -43,6 +48,50 @@ export async function updateDigestScheduleAction(
   await auditLog("settings.digest_schedule_updated", actor.id as string, actor.email as string, {
     metadata: validated.data,
   });
+
+  return { saved: true };
+}
+
+const NAV_KEY_ENUM = RESTRICTABLE_NAV_ITEMS.map((item) => item.key) as [AdminNavKey, ...AdminNavKey[]];
+
+const AdminNavRestrictionsSchema = z.object({
+  restricted: z.array(z.enum(NAV_KEY_ENUM)),
+});
+
+export type UpdateAdminNavRestrictionsState = {
+  saved?: boolean;
+  errors?: { form?: string[] };
+};
+
+export async function updateAdminNavRestrictionsAction(
+  _prev: UpdateAdminNavRestrictionsState,
+  formData: FormData
+): Promise<UpdateAdminNavRestrictionsState> {
+  const actor = await requireRole("super_admin");
+
+  const validated = AdminNavRestrictionsSchema.safeParse({
+    restricted: formData.getAll("restricted"),
+  });
+
+  if (!validated.success) {
+    return { errors: { form: ["Invalid selection."] } };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await setAdminNavRestrictions(
+    supabase,
+    validated.data.restricted,
+    actor.id as string
+  );
+
+  if (error) return { errors: { form: [error] } };
+
+  await auditLog(
+    "settings.admin_nav_restrictions_updated",
+    actor.id as string,
+    actor.email as string,
+    { metadata: { restricted: validated.data.restricted } }
+  );
 
   return { saved: true };
 }

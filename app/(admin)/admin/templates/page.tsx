@@ -68,7 +68,8 @@ export default async function TemplatesPage({
 
   let query = supabase
     .from("templates")
-    .select("id, name, status, created_at, org:client_id(id, name)");
+    .select("id, name, status, created_at, org:client_id(id, name)")
+    .is("deleted_at", null);
   query = sortCol === "org"
     ? query.order("name", { referencedTable: "clients", ascending: sortOrder === "asc" })
     : query.order(sortCol, { ascending: sortOrder === "asc" });
@@ -214,7 +215,7 @@ function TemplatesLayout({
         <AdminSuccessBanner
           cleanUrl="/admin/templates"
           title="Template deleted"
-          body="The template has been permanently removed."
+          body="The template has been moved to the recovery bin and can be restored."
         />
       )}
     </div>

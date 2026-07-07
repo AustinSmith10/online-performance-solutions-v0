@@ -83,7 +83,7 @@ export default async function ConsultantProjectDetailPage({
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("projects")
     .select(
       "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, qa_completed_by, clients(name, state_territory, client_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
@@ -92,6 +92,7 @@ export default async function ConsultantProjectDetailPage({
     .eq("assigned_consultant_id", user.id)
     .maybeSingle();
 
+  if (error) console.error(`[ops/projects/${id}] project query failed:`, error);
   if (!data) notFound();
 
   type ProjectDetail = {
@@ -145,7 +146,7 @@ export default async function ConsultantProjectDetailPage({
       .from("project_files")
       .select("id, file_type, original_filename, storage_path, created_at")
       .eq("project_id", id)
-      .not("file_type", "in", "(pbdb,pbdr,evidence)")
+      .not("file_type", "in", "(pbdb,pbdr,evidence,pbdb_pdf)")
       .order("created_at"),
     supabase
       .from("project_files")
@@ -155,7 +156,7 @@ export default async function ConsultantProjectDetailPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("project_files")
-      .select("id, original_filename, storage_path, version, created_at")
+      .select("id, original_filename, storage_path, version, review_cycle, created_at")
       .eq("project_id", id)
       .eq("file_type", "pbdb")
       .order("version", { ascending: true }),
@@ -458,7 +459,7 @@ export default async function ConsultantProjectDetailPage({
         >
           {reviewCycles.map((cycle) => {
             const cycleReviews = reviewsByCycle.get(cycle)!;
-            const pbdbForCycle = pbdbFiles.find((f) => (f.version as number) === cycle);
+            const pbdbForCycle = pbdbFiles.find((f) => (f.review_cycle as number) === cycle);
             const isCurrent = cycle === project.review_cycle;
             return (
               <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
@@ -466,11 +467,11 @@ export default async function ConsultantProjectDetailPage({
                   <span className="text-xs font-semibold text-zinc-700">Cycle {cycle}</span>
                   {pbdbForCycle ? (
                     <span className="text-xs text-zinc-400">
-                      · PBDB v{cycle}
+                      · PBDB v{pbdbForCycle.version as number}
                       · {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
                     </span>
                   ) : (
-                    <span className="text-xs text-zinc-400">· PBDB v{cycle}</span>
+                    <span className="text-xs text-zinc-400">· No PBDB for this cycle</span>
                   )}
                   {isCurrent && (
                     <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">

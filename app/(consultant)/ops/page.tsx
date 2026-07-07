@@ -74,7 +74,7 @@ export default async function ConsultantOpsPage({
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("projects")
     .select(`
       id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle,
@@ -86,6 +86,7 @@ export default async function ConsultantOpsPage({
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
+  if (error) console.error("[ops] project list query failed:", error);
   const projects = (data ?? []) as unknown as ProjectRow[];
   const todayIso = new Date().toISOString().slice(0, 10);
 
@@ -106,7 +107,7 @@ export default async function ConsultantOpsPage({
         .order("responded_at", { ascending: true }),
       supabase
         .from("project_files")
-        .select("id, project_id, original_filename, version")
+        .select("id, project_id, original_filename, version, review_cycle")
         .in("project_id", revisionIds)
         .eq("file_type", "pbdb")
         .order("version", { ascending: false }),
@@ -117,11 +118,13 @@ export default async function ConsultantOpsPage({
       reviewsByProject[r.project_id].push(r);
     }
 
-    // Keep only the highest-version PBDB per project (first row after DESC ordering)
-    for (const f of (rawPbdbFiles ?? []) as { id: string; project_id: string; original_filename: string | null; version: number }[]) {
-      if (!pbdbFileByProject[f.project_id]) {
-        pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version };
-      }
+    // Serve the docx matching each project's current review cycle — the one that
+    // was just rejected — not just whichever version happens to sort highest.
+    const cycleByProject = new Map(revisionRequired.map((p) => [p.id, p.review_cycle]));
+    for (const f of (rawPbdbFiles ?? []) as { id: string; project_id: string; original_filename: string | null; version: number; review_cycle: number }[]) {
+      if (pbdbFileByProject[f.project_id]) continue;
+      if (f.review_cycle !== cycleByProject.get(f.project_id)) continue;
+      pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version };
     }
   }
   const active = projects.filter((p) =>
@@ -266,7 +269,11 @@ export default async function ConsultantOpsPage({
             </div>
           )}
 
-          <RevisionRequiredPanel projects={revisionRequired} reviewsByProject={reviewsByProject} pbdbFileByProject={pbdbFileByProject} />
+          <RevisionRequiredPanel
+            projects={revisionRequired}
+            reviewsByProject={reviewsByProject}
+            pbdbFileByProject={pbdbFileByProject}
+          />
 
           <ProjectSection title="Active" projects={active} todayIso={todayIso} />
           <ProjectSection

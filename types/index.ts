@@ -78,6 +78,26 @@ export interface Notification {
   created_at: string;
 }
 
+export interface FailedJob {
+  id: string;
+  name: string;
+  data: Record<string, unknown> | null;
+  output: { message?: string } | null;
+  retry_count: number;
+  retry_limit: number;
+  created_on: string;
+  completed_on: string | null;
+}
+
+export interface BounceEvent {
+  id: string;
+  email: string;
+  project_id: string | null;
+  reason: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -96,6 +116,7 @@ export interface User {
   failed_login_count: number;
   invited_at: string | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface Client {
@@ -114,6 +135,7 @@ export interface Client {
   client_config: Record<string, string>;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface Project {

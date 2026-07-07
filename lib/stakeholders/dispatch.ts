@@ -8,6 +8,7 @@ import { auditLog } from "@/lib/audit/log";
 import { sendEmail } from "@/lib/email/sender";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { renderRevisionNoticeEmail } from "@/lib/email/templates/RevisionNoticeEmail";
+import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 
 function e(s: string): string {
   return s
@@ -23,7 +24,7 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
   const { data: project, error: projErr } = await supabase
     .from("projects")
     .select(
-      "id, client_id, template_id, submitted_by, status, review_cycle, credit_deducted, project_number, extracted_fields, clients(state_territory, payment_method, name)"
+      "id, client_id, template_id, submitted_by, status, review_cycle, credit_deducted, project_number, extracted_fields, strip_token_color, clients(state_territory, payment_method, name)"
     )
     .eq("id", projectId)
     .single();
@@ -107,17 +108,20 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
     year: "numeric",
   });
 
-  // Fetch signed PBDB URL and portal user map in parallel
+  // Fetch the stakeholder-facing locked PDF (never the editable docx) and the
+  // portal user map in parallel.
   const stakeholderEmails = stakeholders.map((s) => s.email.toLowerCase());
-  const [pbdbFileResult, portalUsersResult] = await Promise.all([
-    supabase
-      .from("project_files")
-      .select("storage_path, original_filename")
-      .eq("project_id", projectId)
-      .eq("file_type", "pbdb")
-      .order("version", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+  const [pbdbPdf, portalUsersResult] = await Promise.all([
+    getOrCreateDispatchPdf(
+      supabase,
+      {
+        id: projectId,
+        client_id: orgId,
+        review_cycle: reviewCycle,
+        strip_token_color: project.strip_token_color as boolean | null,
+      },
+      actorId
+    ),
     supabase
       .from("users")
       .select("id, email, role")
@@ -128,11 +132,10 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
     console.error("[dispatch-pbdb] portal user lookup failed:", portalUsersResult.error);
   }
 
-  const pbdbFile = pbdbFileResult.data;
-  const pbdbUrl = pbdbFile
+  const pbdbUrl = pbdbPdf
     ? await supabase.storage
         .from("documents")
-        .createSignedUrl(pbdbFile.storage_path as string, 7 * 24 * 3600)
+        .createSignedUrl(pbdbPdf.storagePath, 7 * 24 * 3600)
         .then((r) => r.data?.signedUrl ?? null)
     : null;
 
@@ -244,10 +247,14 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
     .update({ status: "dispatched", updated_at: now.toISOString() })
     .eq("id", projectId);
 
-  await auditLog("project.dispatched", actorId, null, {
+  await auditLog("project.pbdb_dispatched", actorId, null, {
     projectId,
     orgId,
-    metadata: { review_cycle: reviewCycle, stakeholder_count: stakeholders.length },
+    metadata: {
+      review_cycle: reviewCycle,
+      stakeholder_count: stakeholders.length,
+      stakeholders: stakeholders.map((s) => ({ name: s.name, email: s.email })),
+    },
   });
 
   console.log(

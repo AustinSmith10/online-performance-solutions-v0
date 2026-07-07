@@ -159,6 +159,8 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
   const [modified, setModified] = useState<Set<string>>(new Set());
   const mark = (key: string) => setModified((prev) => new Set(prev).add(key));
 
+  const [reviewedConfirmed, setReviewedConfirmed] = useState(false);
+
   const [bannerVisible, setBannerVisible] = useState(showBanner ?? false);
   useEffect(() => {
     if (!showBanner) return;
@@ -319,6 +321,22 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
           </div>
         </div>
 
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 has-[:checked]:border-blue-400">
+          <input
+            type="checkbox"
+            name="reviewed_confirmed"
+            value="true"
+            checked={reviewedConfirmed}
+            onChange={(e) => setReviewedConfirmed(e.target.checked)}
+            disabled={submitPending}
+            className="mt-0.5 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-blue-900">
+            <span className="font-medium">I confirm I have reviewed the details in this form</span> and
+            that they are correct.
+          </span>
+        </label>
+
         {submitState.duplicateProjectId ? (
           <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
             {submitState.error}{" "}
@@ -336,7 +354,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
         <div className="flex items-center gap-3">
           <button
             type="submit"
-            disabled={submitPending}
+            disabled={submitPending || !reviewedConfirmed}
             className="flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
             {submitPending && <Spinner className="h-4 w-4" />}

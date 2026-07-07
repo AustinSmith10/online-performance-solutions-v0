@@ -20,7 +20,7 @@ export function DeleteButton({ templateId }: { templateId: string }) {
           <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl text-center">
             <p className="text-base font-semibold text-zinc-900">Delete this template?</p>
             <p className="mt-2 text-sm text-zinc-500">
-              This is permanent and cannot be undone. Any projects using this template will be unaffected but the template cannot be reused.
+              The template will be moved to the recovery bin and can be restored later. Any projects using this template will be unaffected but the template cannot be reused while deleted.
             </p>
             <div className="mt-6 flex gap-3">
               <button

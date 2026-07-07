@@ -20,6 +20,7 @@ function buildMock(projectRows: unknown[], orgRows: unknown[]) {
   const chain = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
     order: vi.fn().mockImplementation(() => {
       callCount++;
       return Promise.resolve({ data: callCount === 1 ? projectRows : orgRows, error: null });

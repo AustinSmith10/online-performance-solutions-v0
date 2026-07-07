@@ -1,13 +1,17 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDigestSchedule } from "@/lib/settings/digest-schedule";
+import { getAdminNavRestrictions } from "@/lib/settings/admin-nav-restrictions";
 import { DigestScheduleForm } from "./_components/DigestScheduleForm";
+import { AdminNavRestrictionsForm } from "./_components/AdminNavRestrictionsForm";
 
 export default async function AdminSettingsPage() {
-  await requireRole("super_admin", "admin");
+  const user = await requireRole("super_admin", "admin");
 
   const supabase = createAdminClient();
   const schedule = await getDigestSchedule(supabase);
+  const navRestrictions =
+    user.role === "super_admin" ? await getAdminNavRestrictions(supabase) : [];
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -17,6 +21,9 @@ export default async function AdminSettingsPage() {
       </div>
 
       <DigestScheduleForm schedule={schedule} />
+      {user.role === "super_admin" && (
+        <AdminNavRestrictionsForm restricted={navRestrictions} />
+      )}
     </div>
   );
 }

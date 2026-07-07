@@ -31,6 +31,7 @@ export default async function ResumeDraftPage({
       .select("id, name")
       .eq("client_id", orgId)
       .eq("status", "active")
+      .is("deleted_at", null)
       .order("name"),
   ]);
 

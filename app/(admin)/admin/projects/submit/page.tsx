@@ -34,6 +34,7 @@ export default async function AdminSubmitPage({
   const { data: orgs } = await supabase
     .from("clients")
     .select("id, name")
+    .is("deleted_at", null)
     .order("name");
 
   const clients = (orgs ?? []) as { id: string; name: string }[];
@@ -177,6 +178,7 @@ export default async function AdminSubmitPage({
     .select("id, name")
     .eq("client_id", orgId)
     .eq("status", "active")
+    .is("deleted_at", null)
     .order("name");
 
   const activeTemplates = (templates ?? []) as { id: string; name: string }[];

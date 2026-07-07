@@ -739,6 +739,10 @@ export async function uploadQaPbdb(
     original_filename: storedFilename,
     uploaded_by: actor.id,
     version: nextVersion,
+    // A reupload's docx is the corrected version for the *next* cycle (about to be
+    // redispatched); an initial QA correction stays on the current cycle — mirrors
+    // the rIndex logic above.
+    review_cycle: isReupload ? cycle + 1 : cycle,
   });
 
   if (insertError) {

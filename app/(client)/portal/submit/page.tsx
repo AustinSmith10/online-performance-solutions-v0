@@ -24,6 +24,7 @@ export default async function SubmitPage() {
     .select("id, name")
     .eq("client_id", orgId)
     .eq("status", "active")
+    .is("deleted_at", null)
     .order("name");
 
   const activeTemplates = templates ?? [];
