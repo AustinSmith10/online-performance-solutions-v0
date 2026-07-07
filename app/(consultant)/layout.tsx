@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { logout } from "@/app/actions/auth";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
+import { NotificationToasts } from "@/components/NotificationToasts";
 import { MobileNav } from "@/components/MobileNav";
 import { SidebarNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
@@ -61,6 +62,11 @@ export default async function ConsultantLayout({
       {/* Main — min-w-0 prevents flex children from overflowing */}
       <main className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-8">{children}</main>
       <RealtimeRefresh userId={user.id as string} />
+      <NotificationToasts
+        userId={user.id as string}
+        projectBasePath="/ops/projects"
+        align="right"
+      />
     </div>
   );
 }

@@ -1,9 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import type { Notification } from "@/lib/notifications/types";
+import { createClient } from "@/lib/supabase/client";
+import type { TrayEntry } from "@/lib/notifications/tray";
+import {
+  sortEntries,
+  notificationToEntry,
+  failedJobToEntry,
+  bounceEventToEntry,
+  stalledProjectToEntry,
+  pendingReviewToEntry,
+  expiringTokenToEntry,
+  NEEDS_ATTENTION_POLL_MS,
+} from "@/lib/notifications/tray";
+import type { Notification, FailedJob, BounceEvent } from "@/types";
+import type { StalledProjectSignal, StakeholderReviewSignal } from "@/lib/admin/needs-attention";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -15,8 +28,16 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+const DOT_COLOR: Record<TrayEntry["kind"], string> = {
+  notification: "#3b82f6",
+  hard_error: "#dc2626",
+  needs_attention: "#d97706",
+};
+
 // ── Dismissed-ID persistence (localStorage) ───────────────────────────────────
-// Only read notifications can be dismissed. Unread ones always show through.
+// Only read notifications can be dismissed. Unread notifications, and all
+// hard-error/needs-attention entries (which have no read state — they clear
+// themselves once the underlying issue resolves server-side), always show through.
 
 const STORAGE_KEY = "ops-dismissed-notif";
 
@@ -37,33 +58,37 @@ function saveDismissed(ids: string[]) {
   } catch {}
 }
 
-function applyDismissed(notifs: Notification[]): Notification[] {
+function applyDismissed(entries: TrayEntry[]): TrayEntry[] {
   const dismissed = getDismissed();
-  // Unread notifications always show regardless of dismissed state.
-  return notifs.filter((n) => !n.is_read || !dismissed.has(n.id));
+  return entries.filter((e) => e.kind !== "notification" || !e.isRead || !dismissed.has(e.id));
 }
 
 export function NotificationTray({
-  initialNotifications,
+  initialEntries,
   projectBasePath,
+  userId,
+  includeNeedsAttention = false,
   align = "left",
 }: {
-  initialNotifications: Notification[];
+  initialEntries: TrayEntry[];
   projectBasePath: string;
+  userId: string;
+  includeNeedsAttention?: boolean;
   align?: "left" | "right";
 }) {
   // Lazy initialiser: filter dismissed IDs on first render so server-passed
-  // notifications that were already cleared don't flash back on mount.
-  const [notifications, setNotifications] = useState<Notification[]>(() =>
-    applyDismissed(initialNotifications)
-  );
+  // entries that were already cleared don't flash back on mount.
+  const [entries, setEntries] = useState<TrayEntry[]>(() => applyDismissed(initialEntries));
   const [openAtPathname, setOpenAtPathname] = useState<string | null>(null);
   const [useFixed, setUseFixed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  // NotificationTray is often rendered twice per layout (mobile nav +
+  // desktop sidebar). Supabase reuses/collides on a channel of an already-
+  // subscribed topic name, so each mounted instance needs its own topic.
+  const instanceId = useId();
   const open = openAtPathname !== null && openAtPathname === pathname;
 
-  // Close when clicking outside the tray
   useEffect(() => {
     if (!open) return;
     function handleMouseDown(e: MouseEvent) {
@@ -75,43 +100,109 @@ export function NotificationTray({
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [open]);
 
-  const unread = notifications.filter((n) => !n.is_read).length;
+  const badgeCount = entries.filter((e) => e.kind !== "notification" || !e.isRead).length;
 
-  async function refresh() {
-    const res = await fetch("/api/notifications");
-    if (res.ok) {
-      const data = await res.json();
-      // Re-apply dismissed filter so cleared notifications don't reappear.
-      setNotifications(applyDismissed(data as Notification[]));
+  const refresh = useCallback(async () => {
+    const requests: Promise<Response>[] = [fetch("/api/notifications")];
+    if (includeNeedsAttention) requests.push(fetch("/api/system-errors"));
+    const responses = await Promise.all(requests);
+
+    const merged: TrayEntry[] = [];
+    if (responses[0].ok) {
+      const notifs = (await responses[0].json()) as Notification[];
+      merged.push(...notifs.map((n) => notificationToEntry(n, projectBasePath)));
     }
-  }
+    if (includeNeedsAttention && responses[1]?.ok) {
+      const signals = await responses[1].json();
+      merged.push(
+        ...(signals.failedJobs as FailedJob[]).map((j) => failedJobToEntry(j, projectBasePath)),
+        ...(signals.bounceEvents as BounceEvent[]).map((b) =>
+          bounceEventToEntry(b, projectBasePath)
+        ),
+        ...(signals.stalledProjects as StalledProjectSignal[]).map((p) =>
+          stalledProjectToEntry(p, projectBasePath)
+        ),
+        ...(signals.pendingReviews as StakeholderReviewSignal[]).map((r) =>
+          pendingReviewToEntry(r, projectBasePath)
+        ),
+        ...(signals.expiringTokens as StakeholderReviewSignal[]).map((r) =>
+          expiringTokenToEntry(r, projectBasePath)
+        )
+      );
+    }
+    setEntries(applyDismissed(sortEntries(merged)));
+  }, [includeNeedsAttention, projectBasePath]);
+
+  // Keep the badge/list current without requiring the tray to be opened.
+  // Real notifications push instantly over realtime; the admin-only
+  // needs-attention/hard-error signals fall back to a short-interval poll
+  // (see NotificationToasts.tsx for why those can't ride on realtime).
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`notification-tray-${userId}-${instanceId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${userId}`,
+        },
+        () => void refresh()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, instanceId, refresh]);
+
+  useEffect(() => {
+    if (!includeNeedsAttention) return;
+    const interval = setInterval(() => void refresh(), NEEDS_ATTENTION_POLL_MS);
+    return () => clearInterval(interval);
+  }, [includeNeedsAttention, refresh]);
 
   async function markAllRead() {
     const res = await fetch("/api/notifications/mark-read", {
       method: "POST",
       body: JSON.stringify({}),
     });
-    if (res.ok) setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-  }
-
-  async function markOneRead(id: string) {
-    const res = await fetch("/api/notifications/mark-read", {
-      method: "POST",
-      body: JSON.stringify({ ids: [id] }),
-    });
     if (res.ok) {
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+      setEntries((prev) =>
+        prev.map((e) => (e.kind === "notification" ? { ...e, isRead: true } : e))
       );
     }
   }
 
+  async function markOneRead(id: string) {
+    const rawId = id.replace(/^notif-/, "");
+    const res = await fetch("/api/notifications/mark-read", {
+      method: "POST",
+      body: JSON.stringify({ ids: [rawId] }),
+    });
+    if (res.ok) {
+      setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, isRead: true } : e)));
+    }
+  }
+
+  async function resolveEntry(id: string) {
+    const res = await fetch("/api/system-errors/resolve", {
+      method: "POST",
+      body: JSON.stringify({ signalId: id }),
+    });
+    if (res.ok) setEntries((prev) => prev.filter((e) => e.id !== id));
+  }
+
   function handleClear() {
     // Persist the IDs of all currently-read notifications so refresh() won't
-    // bring them back. Unread notifications are left untouched.
-    const readIds = notifications.filter((n) => n.is_read).map((n) => n.id);
+    // bring them back. Everything else is left untouched.
+    const readIds = entries
+      .filter((e) => e.kind === "notification" && e.isRead)
+      .map((e) => e.id);
     saveDismissed(readIds);
-    setNotifications((prev) => prev.filter((n) => !n.is_read));
+    setEntries((prev) => prev.filter((e) => e.kind !== "notification" || !e.isRead));
   }
 
   function handleToggle() {
@@ -124,12 +215,15 @@ export function NotificationTray({
     }
   }
 
+  const hasReadNotification = entries.some((e) => e.kind === "notification" && e.isRead);
+  const hasUnreadNotification = entries.some((e) => e.kind === "notification" && !e.isRead);
+
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <button onClick={handleToggle} aria-label="Notifications" style={bellButton}>
         <BellIcon />
-        {unread > 0 && (
-          <span style={badge}>{unread > 99 ? "99+" : unread}</span>
+        {badgeCount > 0 && (
+          <span style={badge}>{badgeCount > 99 ? "99+" : badgeCount}</span>
         )}
       </button>
 
@@ -141,51 +235,77 @@ export function NotificationTray({
           <div style={trayHeader}>
             <span style={trayTitle}>Notifications</span>
             <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-              {unread > 0 && (
+              {hasUnreadNotification && (
                 <button onClick={() => void markAllRead()} style={markAllBtn}>
                   Mark all read
                 </button>
               )}
-              {notifications.some((n) => n.is_read) && (
+              {hasReadNotification && (
                 <button onClick={handleClear} style={clearBtn}>
                   Clear
                 </button>
+              )}
+              {includeNeedsAttention && (
+                <Link href="/admin/system-health" style={markAllBtn}>
+                  Details →
+                </Link>
               )}
             </div>
           </div>
 
           <div style={list}>
-            {notifications.length === 0 ? (
-              <p style={empty}>No notifications</p>
+            {entries.length === 0 ? (
+              <p style={empty}>Nothing needs attention</p>
             ) : (
-              notifications.map((n) => {
-                const href = n.project_id ? `${projectBasePath}/${n.project_id}` : null;
-                return (
+              entries.map((e) => (
+                <div
+                  key={e.id}
+                  role="button"
+                  tabIndex={0}
+                  style={{
+                    ...item,
+                    backgroundColor: e.kind === "notification" && !e.isRead ? "#f0f9ff" : "#fff",
+                  }}
+                  onClick={() => {
+                    if (e.kind === "notification" && !e.isRead) void markOneRead(e.id);
+                  }}
+                  onKeyDown={(ev) => {
+                    if (ev.key === "Enter" && e.kind === "notification" && !e.isRead) {
+                      void markOneRead(e.id);
+                    }
+                  }}
+                >
                   <div
-                    key={n.id}
-                    role="button"
-                    tabIndex={0}
-                    style={{ ...item, backgroundColor: n.is_read ? "#fff" : "#f0f9ff" }}
-                    onClick={() => { if (!n.is_read) void markOneRead(n.id); }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !n.is_read) void markOneRead(n.id);
+                    style={{
+                      ...dot,
+                      backgroundColor:
+                        e.kind === "notification" && e.isRead ? "transparent" : DOT_COLOR[e.kind],
                     }}
-                  >
-                    <div style={{ ...dot, backgroundColor: n.is_read ? "transparent" : "#3b82f6" }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={itemText}>{n.message}</p>
-                      <div style={itemMeta}>
-                        <span style={itemTime}>{timeAgo(n.created_at)}</span>
-                        {href && (
-                          <Link href={href} style={viewLink}>
-                            View →
-                          </Link>
-                        )}
-                      </div>
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={itemText}>{e.message}</p>
+                    <div style={itemMeta}>
+                      <span style={itemTime}>{timeAgo(e.timestamp)}</span>
+                      {e.href && (
+                        <Link href={e.href} style={viewLink}>
+                          View →
+                        </Link>
+                      )}
                     </div>
+                    {e.resolvable && (
+                      <button
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          void resolveEntry(e.id);
+                        }}
+                        style={resolveBtn}
+                      >
+                        ✓ Mark resolved
+                      </button>
+                    )}
                   </div>
-                );
-              })
+                </div>
+              ))
             )}
           </div>
         </div>
@@ -313,6 +433,20 @@ const itemMeta: React.CSSProperties = {
 const itemTime: React.CSSProperties = { fontSize: "11px", color: "#a1a1aa" };
 
 const viewLink: React.CSSProperties = { fontSize: "11px", color: "#3b82f6" };
+
+const resolveBtn: React.CSSProperties = {
+  marginTop: "8px",
+  display: "inline-flex",
+  alignItems: "center",
+  cursor: "pointer",
+  fontSize: "11px",
+  fontWeight: 600,
+  color: "#15803d",
+  backgroundColor: "#f0fdf4",
+  border: "1px solid #bbf7d0",
+  borderRadius: "6px",
+  padding: "4px 10px",
+};
 
 function BellIcon() {
   return (

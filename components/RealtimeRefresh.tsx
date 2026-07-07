@@ -3,7 +3,17 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { NEEDS_ATTENTION_POLL_MS } from "@/lib/notifications/tray";
 
+// Realtime postgres_changes only fires for rows the subscribing user's RLS
+// policies let them SELECT. A plain `admin` role (as opposed to
+// `super_admin`) has no direct RLS access to several admin-only tables
+// (bounce_events, pgboss.job via get_failed_jobs) — see
+// NotificationToasts.tsx for the full explanation. Rather than push that
+// same caveat into every page that shows admin-only data, this component
+// polls on a fallback interval in addition to reacting to the realtime
+// events it *can* see, so every page under a layout that mounts this
+// component stays reasonably current without a manual refresh.
 export function RealtimeRefresh({ userId }: { userId: string }) {
   const router = useRouter();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -28,11 +38,14 @@ export function RealtimeRefresh({ userId }: { userId: string }) {
       }, scheduleRefresh)
       .subscribe();
 
+    const pollInterval = setInterval(() => router.refresh(), NEEDS_ATTENTION_POLL_MS);
+
     return () => {
       if (timer.current) clearTimeout(timer.current);
+      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
-  }, [userId, scheduleRefresh]);
+  }, [userId, scheduleRefresh, router]);
 
   return null;
 }
