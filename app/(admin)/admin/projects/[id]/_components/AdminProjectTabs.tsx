@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { UnsavedChangesProvider, useRequestNavigate } from "@/components/UnsavedChangesProvider";
 
 type Tab = "overview" | "admin_workflow" | "consultant_workflow" | "controls" | "audit";
 
@@ -12,7 +13,22 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "audit", label: "Audit trail" },
 ];
 
-export function AdminProjectTabs({
+export function AdminProjectTabs(props: {
+  initialTab?: Tab;
+  overview: React.ReactNode;
+  adminWorkflow: React.ReactNode;
+  consultantWorkflow: React.ReactNode;
+  controls: React.ReactNode;
+  audit: React.ReactNode;
+}) {
+  return (
+    <UnsavedChangesProvider>
+      <AdminProjectTabsInner {...props} />
+    </UnsavedChangesProvider>
+  );
+}
+
+function AdminProjectTabsInner({
   initialTab = "overview",
   overview,
   adminWorkflow,
@@ -28,6 +44,7 @@ export function AdminProjectTabs({
   audit: React.ReactNode;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
+  const requestNavigate = useRequestNavigate();
 
   return (
     <div className="space-y-6">
@@ -37,7 +54,7 @@ export function AdminProjectTabs({
             <button
               key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => requestNavigate(() => setTab(t.id))}
               className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
                 tab === t.id
                   ? "border-zinc-900 text-zinc-900"

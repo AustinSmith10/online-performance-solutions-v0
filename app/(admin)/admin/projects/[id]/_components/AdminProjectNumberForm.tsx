@@ -6,6 +6,7 @@ import {
   type AdminProjectNumberState,
 } from "@/app/actions/projects";
 import { EditIconButton } from "@/components/EditIconButton";
+import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 
 interface Props {
   projectId: string;
@@ -20,6 +21,7 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
   );
   const [editing, setEditing] = useState(!currentNumber);
   const [overlayVisible, setOverlayVisible] = useState(false);
+  useUnsavedChanges("admin-project-number", editing && !!currentNumber);
 
   useEffect(() => {
     if (!state.success) return;

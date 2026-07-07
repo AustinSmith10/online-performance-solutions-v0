@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useActionState } from "react";
 import { updateOrgConfig, type ClientConfigState } from "@/app/actions/clients";
 import { EditIconButton } from "@/components/EditIconButton";
+import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 
 interface Props {
   orgId: string;
@@ -53,6 +54,7 @@ function EditableRow({ orgId, token, value }: { orgId: string; token: string; va
   const boundAction = updateOrgConfig.bind(null, orgId);
   const [state, formAction, pending] = useActionState<ClientConfigState, FormData>(boundAction, {});
   const [editing, setEditing] = useState(false);
+  useUnsavedChanges(`org-config-${token}`, editing);
 
   useEffect(() => {
     if (state.saved) queueMicrotask(() => setEditing(false));

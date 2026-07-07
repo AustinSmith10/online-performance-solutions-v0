@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateStakeholderSubmission, type UpdateSubmissionState } from "@/app/actions/projects";
 import { EditIconButton } from "@/components/EditIconButton";
+import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 
 interface FieldEntry {
   token: string;
@@ -26,6 +27,7 @@ export function SubmissionDetailsCard({ projectId, poNumber, fieldEntries, locke
     {}
   );
   const [editing, setEditing] = useState(false);
+  useUnsavedChanges("submission-details", editing);
 
   useEffect(() => {
     if (state.success) {

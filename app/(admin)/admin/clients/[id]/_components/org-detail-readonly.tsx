@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useActionState } from "react";
 import { updateClient, type ClientFormState } from "@/app/actions/clients";
 import { EditIconButton } from "@/components/EditIconButton";
+import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import type { Client } from "@/types";
 
 const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
@@ -78,6 +79,7 @@ function EditableRow({ org, field }: { org: Client; field: FieldDef }) {
   const boundAction = updateClient.bind(null, org.id);
   const [state, formAction, pending] = useActionState<ClientFormState, FormData>(boundAction, {});
   const [editing, setEditing] = useState(false);
+  useUnsavedChanges(`org-detail-${field.key}`, editing);
 
   useEffect(() => {
     if (state.saved) queueMicrotask(() => setEditing(false));

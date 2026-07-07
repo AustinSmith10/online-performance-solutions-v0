@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateProjectDetails, type UpdateProjectDetailsState } from "@/app/actions/projects";
 import { EditIconButton } from "@/components/EditIconButton";
+import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { CollapsibleSection } from "./CollapsibleSection";
 
 interface FieldEntry {
@@ -73,6 +74,7 @@ function EditableRow({
     {}
   );
   const [editing, setEditing] = useState(false);
+  useUnsavedChanges(`project-detail-${id}`, editing);
 
   useEffect(() => {
     if (state.success) {

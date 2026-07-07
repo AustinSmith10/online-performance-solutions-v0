@@ -9,6 +9,7 @@ import { EmailWhitelistDrawer } from "./_components/email-whitelist-drawer";
 import { OrgCreateAccountModal } from "./_components/org-create-account-modal";
 import { DeleteOrgButton } from "./_components/delete-org-button";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
+import { UnsavedChangesProvider } from "@/components/UnsavedChangesProvider";
 import type { Client, User } from "@/types";
 
 const TABS = ["overview", "templates", "users", "danger"] as const;
@@ -184,14 +185,14 @@ export default async function OrganisationDetailPage({
 
       {/* Tab: Overview */}
       {activeTab === "overview" && (
-        <>
+        <UnsavedChangesProvider>
           <OrgDetailReadonly org={orgData} />
           <OrgConfigReadonly
             orgId={orgData.id}
             tokens={orgConfigTokens}
             currentConfig={orgData.client_config ?? {}}
           />
-        </>
+        </UnsavedChangesProvider>
       )}
 
       {/* Tab: Templates */}

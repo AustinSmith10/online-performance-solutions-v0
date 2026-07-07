@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveProjectNumber, type ProjectNumberState } from "@/app/actions/projects";
 import { EditIconButton } from "@/components/EditIconButton";
+import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { StepIndicator } from "./StepIndicator";
 
 export function ProjectNumberForm({
@@ -20,6 +21,8 @@ export function ProjectNumberForm({
     {}
   );
   const [editing, setEditing] = useState(false);
+  const completed = !!projectNumber;
+  useUnsavedChanges("consultant-project-number", editing && completed);
 
   useEffect(() => {
     if (state.success) {
@@ -28,7 +31,6 @@ export function ProjectNumberForm({
     }
   }, [state.success, router]);
 
-  const completed = !!projectNumber;
   const showForm = !completed || editing;
 
   return (

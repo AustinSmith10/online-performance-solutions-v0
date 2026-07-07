@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { replaceProjectFile, type ReplaceFileState } from "@/app/actions/projects";
 import { UploadDropzone } from "@/components/UploadDropzone";
+import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 
 interface Props {
   projectId: string;
@@ -19,6 +20,7 @@ export function ReplaceDocumentControl({ projectId, fileId }: Props) {
   );
   const [open, setOpen] = useState(false);
   const [hasFile, setHasFile] = useState(false);
+  useUnsavedChanges(`replace-document-${fileId}`, hasFile);
 
   useEffect(() => {
     if (state.success) {

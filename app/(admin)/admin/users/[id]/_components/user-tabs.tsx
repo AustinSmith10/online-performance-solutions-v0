@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import { useActionState } from "react";
 import { updateUserProfile, type EditUserState } from "@/app/actions/admin-users";
 import { EditIconButton } from "@/components/EditIconButton";
+import {
+  UnsavedChangesProvider,
+  useUnsavedChanges,
+  useRequestNavigate,
+} from "@/components/UnsavedChangesProvider";
 import type { User, Client, ConsultantAvailability } from "@/types";
 
 const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
@@ -23,7 +28,16 @@ type Props = {
 };
 
 export function UserTabs({ user, clients, availabilityActions }: Props) {
+  return (
+    <UnsavedChangesProvider>
+      <UserTabsInner user={user} clients={clients} availabilityActions={availabilityActions} />
+    </UnsavedChangesProvider>
+  );
+}
+
+function UserTabsInner({ user, clients, availabilityActions }: Props) {
   const [tab, setTab] = useState<Tab>("profile");
+  const requestNavigate = useRequestNavigate();
 
   const isConsultant = user.role === "consultant";
   const hasEditableProfile =
@@ -47,7 +61,7 @@ export function UserTabs({ user, clients, availabilityActions }: Props) {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => requestNavigate(() => setTab(t.id))}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab === t.id
                 ? "border-zinc-900 text-zinc-900"
@@ -158,6 +172,7 @@ function EditableRow({ user, field }: { user: User; field: FieldDef }) {
   const boundAction = updateUserProfile.bind(null, user.id);
   const [state, formAction, pending] = useActionState<EditUserState, FormData>(boundAction, {});
   const [editing, setEditing] = useState(false);
+  useUnsavedChanges(`user-profile-${field.key}`, editing);
 
   useEffect(() => {
     if (state.saved) queueMicrotask(() => setEditing(false));

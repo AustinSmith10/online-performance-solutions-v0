@@ -10,6 +10,7 @@ import { SubmissionDetailsCard } from "./_components/SubmissionDetailsCard";
 import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { DownloadCard } from "@/components/DownloadCard";
+import { UnsavedChangesProvider } from "@/components/UnsavedChangesProvider";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -297,6 +298,7 @@ export default async function ClientProjectDetailPage({
       )}
 
       {/* Two-column layout */}
+      <UnsavedChangesProvider>
       <div className="project-two-col">
         {/* Left column: documents */}
         <div className="min-w-0 space-y-6">
@@ -428,6 +430,7 @@ export default async function ClientProjectDetailPage({
           )}
         </div>
       </div>
+      </UnsavedChangesProvider>
     </div>
   );
 }
