@@ -32,6 +32,7 @@ async function main() {
     "generate-pbdb",
     "dispatch-pbdb",
     "approval-buffer",
+    "assignment-accept-overdue",
     "deliver-pbdr",
     AVAILABLE_REQUESTS_DIGEST_QUEUE,
     "reconcile-digest-schedule",
@@ -270,6 +271,75 @@ async function main() {
       console.log(
         `[approval-buffer] project ${projectId}: ${responded}/${total} responded, ${freshTokensMap.size} fresh token(s) issued`
       );
+    }
+  });
+
+  // Assignment accept-window overdue alert: daily at 09:15 weekdays.
+  // Alert-only (issue #53) — an admin-pushed assignment left unanswered past
+  // its client's configured accept_window_working_days (default 1) gets an
+  // admin notification, but assigned_consultant_id/accepted_at/status are
+  // never touched here. There's no dedicated "assigned at" timestamp (see
+  // migrations 57/58); updated_at is reused since nothing else writes to an
+  // unaccepted "awaiting response" project between the push and accept/decline.
+  await boss.schedule("assignment-accept-overdue", "15 9 * * 1-5", {});
+  await boss.work("assignment-accept-overdue", async () => {
+    const supabase = createAdminClient();
+
+    const { data: projects, error } = await supabase
+      .from("projects")
+      .select(
+        "id, project_number, po_number, site_address, extracted_fields, updated_at, clients(accept_window_working_days, state_territory)"
+      )
+      .not("assigned_consultant_id", "is", null)
+      .is("accepted_at", null)
+      .is("accept_overdue_alert_fired_at", null);
+
+    if (error) {
+      console.error("[assignment-accept-overdue] query failed:", error);
+      throw new Error(error.message);
+    }
+
+    for (const project of projects ?? []) {
+      const projectId = project.id as string;
+      const client = project.clients as unknown as
+        | { accept_window_working_days: number; state_territory: string | null }
+        | null;
+      const windowDays = client?.accept_window_working_days ?? 1;
+      const assignedAt = new Date(project.updated_at as string);
+
+      const holidays = await getPublicHolidays(client?.state_territory ?? null, assignedAt.getUTCFullYear());
+      const deadline = addWorkingDays(assignedAt, windowDays, holidays);
+      if (new Date() < deadline) continue;
+
+      // Mark fired before notifying so a failed notify() doesn't re-trigger a repeat alert.
+      await supabase
+        .from("projects")
+        .update({ accept_overdue_alert_fired_at: new Date().toISOString() })
+        .eq("id", projectId);
+
+      const fields = project.extracted_fields as Record<string, string> | null;
+      const projectRef =
+        (project.site_address as string | null) ??
+        fields?.["EXTRACT_ADDRESS"] ??
+        (project.project_number as string | null) ??
+        (project.po_number as string | null) ??
+        projectId.slice(0, 8);
+
+      const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
+      await Promise.all(
+        (admins ?? []).map((a) =>
+          notify({
+            recipientId: a.id as string,
+            type: "assignment_overdue",
+            message: `The assignment for ${projectRef} has not been accepted or declined within the ${windowDays}-working-day window.`,
+            projectId,
+            emailSubject: `Assignment overdue — ${projectRef}`,
+            emailHtml: `<p style="font-family:sans-serif">The assignment for project <strong>${projectRef}</strong> has not been accepted or declined within the client's configured ${windowDays}-working-day window. It has not been changed automatically — review and follow up with the assigned consultant if needed.</p>`,
+          }).catch(() => {})
+        )
+      );
+
+      console.log(`[assignment-accept-overdue] fired alert for project ${projectId}`);
     }
   });
 

@@ -11,4 +11,5 @@ export const trayId = {
   stalled: (id: string) => `stalled-${id}`,
   pending: (id: string) => `pending-${id}`,
   expiring: (id: string) => `expiring-${id}`,
+  overdue: (id: string) => `overdue-${id}`,
 };

@@ -55,7 +55,7 @@ export function OrgFormFields({ state, defaults, firstFieldRef }: Props) {
         </Field>
 
         <Field
-          label="Delivery working days"
+          label="Delivery deadline (working days)"
           error={state.errors?.delivery_working_days}
         >
           <input
@@ -71,7 +71,7 @@ export function OrgFormFields({ state, defaults, firstFieldRef }: Props) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
-          label="Abandoned draft days"
+          label="Draft auto-expiry (days)"
           error={state.errors?.abandoned_draft_days}
         >
           <input
@@ -90,6 +90,22 @@ export function OrgFormFields({ state, defaults, firstFieldRef }: Props) {
             type="number"
             min={0}
             defaultValue={defaults?.credit_limit ?? 0}
+            className={input()}
+          />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field
+          label="Assignment accept window (working days)"
+          error={state.errors?.accept_window_working_days}
+        >
+          <input
+            name="accept_window_working_days"
+            type="number"
+            min={0}
+            max={10}
+            defaultValue={defaults?.accept_window_working_days ?? 1}
             className={input()}
           />
         </Field>

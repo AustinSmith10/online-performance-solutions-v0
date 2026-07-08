@@ -9,6 +9,7 @@ import {
   stalledProjectToEntry,
   pendingReviewToEntry,
   expiringTokenToEntry,
+  overdueAssignmentToEntry,
   type TrayEntry,
 } from "@/lib/notifications/tray";
 import { NotificationTray } from "./NotificationTray";
@@ -48,7 +49,8 @@ export async function NotificationTrayServer({
       ...signals.bounceEvents.map((b) => bounceEventToEntry(b, projectBasePath)),
       ...signals.stalledProjects.map((p) => stalledProjectToEntry(p, projectBasePath)),
       ...signals.pendingReviews.map((r) => pendingReviewToEntry(r, projectBasePath)),
-      ...signals.expiringTokens.map((r) => expiringTokenToEntry(r, projectBasePath))
+      ...signals.expiringTokens.map((r) => expiringTokenToEntry(r, projectBasePath)),
+      ...signals.overdueAssignments.map((p) => overdueAssignmentToEntry(p, projectBasePath))
     );
   }
 

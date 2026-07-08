@@ -38,12 +38,22 @@ export interface StakeholderReviewSignal {
   expires_at: string;
 }
 
+export interface OverdueAssignmentSignal {
+  id: string;
+  project_number: string | null;
+  po_number: string | null;
+  site_address: string | null;
+  extracted_fields: Record<string, string> | null;
+  accept_overdue_alert_fired_at: string;
+}
+
 export interface NeedsAttentionSignals {
   failedJobs: FailedJob[];
   bounceEvents: BounceEvent[];
   stalledProjects: StalledProjectSignal[];
   pendingReviews: StakeholderReviewSignal[];
   expiringTokens: StakeholderReviewSignal[];
+  overdueAssignments: OverdueAssignmentSignal[];
 }
 
 export async function getNeedsAttentionSignals(
@@ -64,6 +74,7 @@ export async function getNeedsAttentionSignals(
     { data: stalledProjects, error: stalledError },
     { data: pendingReviews, error: pendingError },
     { data: expiringTokens, error: expiringError },
+    { data: overdueAssignments, error: overdueError },
     { data: resolved, error: resolvedError },
   ] = await Promise.all([
     supabase.rpc("get_failed_jobs"),
@@ -97,6 +108,13 @@ export async function getNeedsAttentionSignals(
       .lt("expires_at", expiringSoonCutoff)
       .order("expires_at", { ascending: true })
       .limit(50),
+    supabase
+      .from("projects")
+      .select("id, project_number, po_number, site_address, extracted_fields, accept_overdue_alert_fired_at")
+      .not("accept_overdue_alert_fired_at", "is", null)
+      .is("accepted_at", null)
+      .order("accept_overdue_alert_fired_at", { ascending: true })
+      .limit(50),
     supabase.from("resolved_signals").select("signal_id"),
   ]);
 
@@ -106,6 +124,7 @@ export async function getNeedsAttentionSignals(
     stalledError?.message ??
     pendingError?.message ??
     expiringError?.message ??
+    overdueError?.message ??
     resolvedError?.message ??
     null;
 
@@ -129,6 +148,9 @@ export async function getNeedsAttentionSignals(
       ),
       expiringTokens: ((expiringTokens ?? []) as StakeholderReviewSignal[]).filter(
         (r) => !resolvedIds.has(trayId.expiring(r.id))
+      ),
+      overdueAssignments: ((overdueAssignments ?? []) as OverdueAssignmentSignal[]).filter(
+        (p) => !resolvedIds.has(trayId.overdue(p.id))
       ),
     },
     error,

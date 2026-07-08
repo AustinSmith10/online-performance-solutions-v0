@@ -23,6 +23,11 @@ const OrgSchema = z.object({
     .int()
     .min(1, { error: "Must be at least 1 day" })
     .max(90, { error: "Must be 90 days or fewer" }),
+  accept_window_working_days: z.coerce
+    .number()
+    .int()
+    .min(0, { error: "Must be 0 or more days" })
+    .max(10, { error: "Must be 10 days or fewer" }),
   credit_limit: z.coerce.number().int().min(0).default(0),
 });
 
@@ -34,6 +39,7 @@ export type ClientFormState = {
     delivery_working_days?: string[];
     state_territory?: string[];
     abandoned_draft_days?: string[];
+    accept_window_working_days?: string[];
     credit_limit?: string[];
     form?: string[];
   };
@@ -58,6 +64,7 @@ export async function createClient(
     delivery_working_days: formData.get("delivery_working_days"),
     state_territory: formData.get("state_territory"),
     abandoned_draft_days: formData.get("abandoned_draft_days"),
+    accept_window_working_days: formData.get("accept_window_working_days") || 1,
     credit_limit: formData.get("credit_limit") || 0,
   });
 
@@ -111,7 +118,9 @@ export async function updateClient(
   // being changed — merge it over the current row before revalidating.
   const { data: current } = await supabase
     .from("clients")
-    .select("name, payment_method, delivery_working_days, state_territory, abandoned_draft_days, credit_limit")
+    .select(
+      "name, payment_method, delivery_working_days, state_territory, abandoned_draft_days, accept_window_working_days, credit_limit"
+    )
     .eq("id", id)
     .single();
 
@@ -127,6 +136,9 @@ export async function updateClient(
     abandoned_draft_days: formData.has("abandoned_draft_days")
       ? formData.get("abandoned_draft_days")
       : current.abandoned_draft_days,
+    accept_window_working_days: formData.has("accept_window_working_days")
+      ? formData.get("accept_window_working_days")
+      : current.accept_window_working_days,
     credit_limit: formData.has("credit_limit") ? formData.get("credit_limit") || 0 : current.credit_limit,
   });
 

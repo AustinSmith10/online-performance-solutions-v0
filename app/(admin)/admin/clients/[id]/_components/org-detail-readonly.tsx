@@ -21,6 +21,7 @@ type FieldKey =
   | "state_territory"
   | "delivery_working_days"
   | "abandoned_draft_days"
+  | "accept_window_working_days"
   | "credit_limit";
 
 type FieldDef =
@@ -46,8 +47,15 @@ const FIELDS: FieldDef[] = [
     kind: "select",
     options: AU_STATES.map((s) => ({ value: s, label: s })),
   },
-  { key: "delivery_working_days", label: "Delivery working days", kind: "number", min: 1, max: 30 },
-  { key: "abandoned_draft_days", label: "Abandoned draft days", kind: "number", min: 1, max: 90 },
+  { key: "delivery_working_days", label: "Delivery deadline (working days)", kind: "number", min: 1, max: 30 },
+  { key: "abandoned_draft_days", label: "Draft auto-expiry (days)", kind: "number", min: 1, max: 90 },
+  {
+    key: "accept_window_working_days",
+    label: "Assignment accept window (working days)",
+    kind: "number",
+    min: 0,
+    max: 10,
+  },
   { key: "credit_limit", label: "Credit limit (deferred)", kind: "number", min: 0 },
 ];
 

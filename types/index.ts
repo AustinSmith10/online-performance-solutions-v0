@@ -37,6 +37,7 @@ export type NotificationType =
   | "review_response_recorded"
   | "submission_edited"
   | "assignment_declined"
+  | "assignment_overdue"
   | "system_error";
 
 export type CreditEventType =
@@ -131,6 +132,7 @@ export interface Client {
   delivery_working_days: number;
   state_territory: string | null;
   abandoned_draft_days: number;
+  accept_window_working_days: number;
   is_frozen: boolean;
   show_consultant_name: boolean;
   email_whitelist: string[];
@@ -159,6 +161,7 @@ export interface Project {
   review_cycle: number;
   first_response_at: string | null;
   review_buffer_fired_at: string | null;
+  accept_overdue_alert_fired_at: string | null;
   deleted_at: string | null;
   paused_at: string | null;
   paused_previous_status: string | null;

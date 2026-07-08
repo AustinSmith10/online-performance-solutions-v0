@@ -1,5 +1,9 @@
 import type { Notification, FailedJob, BounceEvent } from "@/types";
-import type { StalledProjectSignal, StakeholderReviewSignal } from "@/lib/admin/needs-attention";
+import type {
+  StalledProjectSignal,
+  StakeholderReviewSignal,
+  OverdueAssignmentSignal,
+} from "@/lib/admin/needs-attention";
 import { trayId } from "@/lib/notifications/tray-id";
 
 export { trayId };
@@ -100,6 +104,23 @@ export function expiringTokenToEntry(
     message: `Approval link for ${r.stakeholder_name} expires soon`,
     href: `${projectBasePath}/${r.project_id}`,
     timestamp: r.expires_at,
+    isRead: false,
+    resolvable: true,
+  };
+}
+
+export function overdueAssignmentToEntry(
+  p: OverdueAssignmentSignal,
+  projectBasePath: string
+): TrayEntry {
+  const ref =
+    p.site_address ?? p.extracted_fields?.["EXTRACT_ADDRESS"] ?? p.project_number ?? p.po_number ?? p.id.slice(0, 8);
+  return {
+    id: trayId.overdue(p.id),
+    kind: "needs_attention",
+    message: `Assignment for ${ref} hasn't been accepted or declined within the accept window`,
+    href: `${projectBasePath}/${p.id}`,
+    timestamp: p.accept_overdue_alert_fired_at,
     isRead: false,
     resolvable: true,
   };
