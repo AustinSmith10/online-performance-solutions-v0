@@ -8,17 +8,20 @@ import { OrgConfigReadonly } from "./_components/org-config-readonly";
 import { EmailWhitelistDrawer } from "./_components/email-whitelist-drawer";
 import { OrgCreateAccountModal } from "./_components/org-create-account-modal";
 import { DeleteOrgButton } from "./_components/delete-org-button";
+import { MetricsTablesPanel } from "./_components/metrics-tables-panel";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { UnsavedChangesProvider } from "@/components/UnsavedChangesProvider";
 import type { Client, User } from "@/types";
+import type { MetricsTable, MetricsRow } from "@/app/actions/client-metrics";
 
-const TABS = ["overview", "templates", "users", "danger"] as const;
+const TABS = ["overview", "templates", "users", "metrics", "danger"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
   overview: "Overview",
   templates: "Templates",
   users: "Stakeholders",
+  metrics: "Data tables",
   danger: "Delete",
 };
 
@@ -56,6 +59,55 @@ export default async function OrganisationDetailPage({
     ]);
 
   if (!org) notFound();
+
+  const { data: metricsTables } = await supabase
+    .from("client_metrics_tables")
+    .select("id, client_id, name, created_at")
+    .eq("client_id", id)
+    .order("created_at", { ascending: true });
+
+  const metricsTableIds = (metricsTables ?? []).map((t) => t.id as string);
+
+  let metricsColumns: { id: string; table_id: string; name: string; data_type: string; position: number }[] = [];
+  let metricsRows: { id: string; table_id: string; data: Record<string, string | number | null> }[] = [];
+  if (metricsTableIds.length > 0) {
+    const [{ data: cols }, { data: rowsData }] = await Promise.all([
+      supabase
+        .from("client_metrics_columns")
+        .select("id, table_id, name, data_type, position")
+        .in("table_id", metricsTableIds)
+        .order("position", { ascending: true }),
+      supabase
+        .from("client_metrics_rows")
+        .select("id, table_id, data")
+        .in("table_id", metricsTableIds)
+        .order("created_at", { ascending: true }),
+    ]);
+    metricsColumns = cols ?? [];
+    metricsRows = rowsData ?? [];
+  }
+
+  const metricsTablesWithColumns: MetricsTable[] = (metricsTables ?? []).map((t) => ({
+    id: t.id as string,
+    client_id: t.client_id as string,
+    name: t.name as string,
+    created_at: t.created_at as string,
+    columns: metricsColumns
+      .filter((c) => c.table_id === t.id)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        data_type: c.data_type as MetricsTable["columns"][number]["data_type"],
+        position: c.position,
+      })),
+  }));
+
+  const rowsByTable: Record<string, MetricsRow[]> = {};
+  for (const table of metricsTablesWithColumns) {
+    rowsByTable[table.id] = metricsRows
+      .filter((r) => r.table_id === table.id)
+      .map((r) => ({ id: r.id, table_id: r.table_id, data: r.data }));
+  }
 
   const orgData = org as Client;
   const orgUsers = (users ?? []) as Pick<
@@ -304,6 +356,15 @@ export default async function OrganisationDetailPage({
             </div>
           )}
         </div>
+      )}
+
+      {/* Tab: Data tables */}
+      {activeTab === "metrics" && (
+        <MetricsTablesPanel
+          clientId={id}
+          tables={metricsTablesWithColumns}
+          rowsByTable={rowsByTable}
+        />
       )}
 
       {/* Tab: Delete */}
