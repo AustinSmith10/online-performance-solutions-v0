@@ -64,12 +64,18 @@ export async function performAssignment(
   const earlyStatuses = ["submitted", "draft"];
   const newStatus = earlyStatuses.includes(project.status) ? "assigned" : project.status;
 
+  // Self-assignment (consultant picking up their own project) IS the acceptance —
+  // no separate confirm step. Admin-pushed assignment leaves accepted_at null
+  // until the consultant explicitly accepts (see acceptAssignment/declineAssignment).
+  const isSelfAssign = consultantId === actorId;
+
   const { error: updateErr } = await supabase
     .from("projects")
     .update({
       assigned_consultant_id: consultantId,
       status: newStatus,
       updated_at: new Date().toISOString(),
+      accepted_at: isSelfAssign ? new Date().toISOString() : null,
       ...(deliveryDate && !project.expected_delivery_date ? { expected_delivery_date: deliveryDate } : {}),
     })
     .eq("id", projectId);
@@ -87,7 +93,7 @@ export async function performAssignment(
 
   // Self-assignment (consultant picking up their own project) doesn't need this email —
   // they already know. Only notify when someone else (an admin) made the assignment.
-  if (consultantId !== actorId) {
+  if (!isSelfAssign) {
     await notify({
       recipientId: consultantId,
       type: "consultant_assigned",

@@ -36,6 +36,7 @@ export type NotificationType =
   | "stakeholder_waived"
   | "review_response_recorded"
   | "submission_edited"
+  | "assignment_declined"
   | "system_error";
 
 export type CreditEventType =

@@ -78,6 +78,117 @@ export async function assignConsultantFromForm(
   redirect(`/admin/projects/${projectId}?assigned=1`);
 }
 
+export type AcceptDeclineState = { error?: string; success?: boolean };
+
+export async function acceptAssignment(
+  projectId: string,
+  _prev: AcceptDeclineState,
+  _formData: FormData
+): Promise<AcceptDeclineState> {
+  const actor = await requireRole("consultant", "super_admin");
+  const supabase = createAdminClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, client_id, accepted_at")
+    .eq("id", projectId)
+    .eq("assigned_consultant_id", actor.id)
+    .is("accepted_at", null)
+    .maybeSingle();
+
+  if (!project) {
+    return { error: "This assignment is no longer awaiting your response." };
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ accepted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", projectId);
+
+  if (error) return { error: error.message };
+
+  await auditLog("assignment.accepted", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.client_id as string,
+  });
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath("/ops");
+  redirect(`/ops/projects/${projectId}?picked_up=1`);
+}
+
+export async function declineAssignment(
+  projectId: string,
+  _prev: AcceptDeclineState,
+  _formData: FormData
+): Promise<AcceptDeclineState> {
+  const actor = await requireRole("consultant", "super_admin");
+  const supabase = createAdminClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, client_id, status, extracted_fields, project_number, po_number, site_address")
+    .eq("id", projectId)
+    .eq("assigned_consultant_id", actor.id)
+    .is("accepted_at", null)
+    .maybeSingle();
+
+  if (!project) {
+    return { error: "This assignment is no longer awaiting your response." };
+  }
+
+  // Undo the "submitted" → "assigned" transition performAssignment made on push,
+  // so the project reappears in the unassigned "Available jobs" pool. Only
+  // touch status if it's still at that early stage — don't rewind a project
+  // that's progressed further (e.g. admin reassigning mid-workflow).
+  const revertedStatus = project.status === "assigned" ? "submitted" : project.status;
+
+  const { error } = await supabase
+    .from("projects")
+    .update({
+      assigned_consultant_id: null,
+      accepted_at: null,
+      status: revertedStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", projectId);
+
+  if (error) return { error: error.message };
+
+  await auditLog("assignment.declined", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.client_id as string,
+  });
+
+  const fields = project.extracted_fields as Record<string, string> | null;
+  const projectRef =
+    (project.site_address as string | null) ??
+    fields?.["EXTRACT_ADDRESS"] ??
+    (project.project_number as string | null) ??
+    (project.po_number as string | null) ??
+    projectId.slice(0, 8);
+
+  const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
+  if (admins && admins.length > 0) {
+    await Promise.all(
+      admins.map((a) =>
+        notify({
+          recipientId: a.id as string,
+          type: "assignment_declined",
+          message: `The assignment for ${projectRef} was declined and has returned to the unassigned pool.`,
+          projectId,
+          emailSubject: `Assignment declined — ${projectRef}`,
+          emailHtml: `<p style="font-family:sans-serif">The consultant declined the assignment for project <strong>${projectRef}</strong>. It has returned to the unassigned pool and needs a new consultant.</p>`,
+        }).catch(() => {})
+      )
+    );
+  }
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  redirect("/ops?declined=1");
+}
+
 // ─── Upload a file to an existing project ────────────────────────────────────
 
 export type UploadFileState = { error?: string; success?: boolean };

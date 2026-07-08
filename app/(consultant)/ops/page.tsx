@@ -5,6 +5,8 @@ import { ConsultantProjectCard } from "./_components/ConsultantProjectCard";
 import type { ReviewRow, PbdbFile } from "./_components/RevisionReviewDrawer";
 import { RealtimeProjectRefresher } from "./_components/RealtimeProjectRefresher";
 import { SelfAssignButton } from "./_components/SelfAssignButton";
+import { DeclinedBanner } from "./_components/DeclinedBanner";
+import { PendingAssignmentCard } from "./_components/PendingAssignmentCard";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -44,6 +46,7 @@ type ProjectRow = {
   expected_delivery_date: string | null;
   created_at: string;
   review_cycle: number;
+  accepted_at: string | null;
   clients: { name: string } | null;
   submitter: { first_name: string | null; last_name: string | null; email: string } | null;
 };
@@ -65,9 +68,9 @@ type AvailableProject = {
 export default async function ConsultantOpsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; declined?: string }>;
 }) {
-  const { tab } = await searchParams;
+  const { tab, declined } = await searchParams;
   const isArchive = tab === "archive";
   const isAvailable = tab === "available";
 
@@ -77,7 +80,7 @@ export default async function ConsultantOpsPage({
   const { data, error } = await supabase
     .from("projects")
     .select(`
-      id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle,
+      id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle, accepted_at,
       clients(name),
       submitter:users!projects_submitted_by_fkey(first_name, last_name, email)
     `)
@@ -87,8 +90,16 @@ export default async function ConsultantOpsPage({
     .order("created_at", { ascending: false });
 
   if (error) console.error("[ops] project list query failed:", error);
-  const projects = (data ?? []) as unknown as ProjectRow[];
+  const allAssigned = (data ?? []) as unknown as ProjectRow[];
   const todayIso = new Date().toISOString().slice(0, 10);
+
+  // Admin-pushed assignments awaiting this consultant's response surface as their
+  // own attention-needed cards (oldest first) rather than in the lists below —
+  // clicking one opens the accept/decline modal.
+  const pendingAssignments = allAssigned
+    .filter((p) => !p.accepted_at)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const projects = allAssigned.filter((p) => p.accepted_at);
 
   const revisionRequired = projects.filter((p) => p.status === "revision_required");
 
@@ -153,6 +164,28 @@ export default async function ConsultantOpsPage({
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <RealtimeProjectRefresher userId={user.id as string} />
+      {declined === "1" && <DeclinedBanner />}
+      {pendingAssignments.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            Needs your response ({pendingAssignments.length})
+          </h2>
+          <div className="flex flex-col gap-3">
+            {pendingAssignments.map((p) => (
+              <PendingAssignmentCard
+                key={p.id}
+                projectId={p.id}
+                label={projectLabel(p)}
+                clientName={p.clients?.name ?? "—"}
+                submittedLabel={formatAuDate(p.created_at)}
+                expectedDeliveryLabel={
+                  p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : "—"
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
       {/* Header + tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-zinc-900">My projects</h1>

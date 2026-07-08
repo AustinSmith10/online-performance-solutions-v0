@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { FileUploadForm } from "./_components/FileUploadForm";
@@ -86,7 +86,7 @@ export default async function ConsultantProjectDetailPage({
   const { data, error } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, qa_completed_by, clients(name, state_territory, client_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, qa_completed_by, accepted_at, clients(name, state_territory, client_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -108,6 +108,7 @@ export default async function ConsultantProjectDetailPage({
     source: "portal" | "email";
     strip_token_color: boolean;
     qa_completed_by: string | null;
+    accepted_at: string | null;
     clients: { name: string; state_territory: string | null; client_config: Record<string, string> } | null;
     submitter: {
       first_name: string | null;
@@ -120,6 +121,15 @@ export default async function ConsultantProjectDetailPage({
 
   const project = data as unknown as ProjectDetail;
   const todayIso = new Date().toISOString().slice(0, 10);
+
+  // Admin-pushed assignment awaiting the consultant's response — accept/decline
+  // happens via a modal on the workspace list (/ops), not here. Send them there
+  // rather than exposing full project details (this is templated work; the
+  // consultant only needs to judge bandwidth, not the specific project).
+  if (!project.accepted_at) {
+    redirect("/ops");
+  }
+
   const isOverdue =
     !!project.expected_delivery_date &&
     project.expected_delivery_date < todayIso &&
