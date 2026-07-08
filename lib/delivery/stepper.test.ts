@@ -166,8 +166,17 @@ describe("resolveStepperState", () => {
       expect(result.showRevisionLoop).toBe(false);
     });
 
-    it("captions with the placeholder revision message", () => {
+    it("captions with the consultant's name reviewing the comments", () => {
       const result = resolveStepperState(base({ status: "revision_required" }));
+      expect(result.caption).toBe(
+        "Priya will review your comments and make the appropriate changes"
+      );
+    });
+
+    it("omits the consultant's name when the org has disabled show_consultant_name", () => {
+      const result = resolveStepperState(
+        base({ status: "revision_required", showConsultantName: false })
+      );
       expect(result.caption).toBe(
         "Consultant will review your comments and make the appropriate changes"
       );

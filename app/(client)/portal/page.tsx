@@ -4,7 +4,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DownloadCard } from "@/components/DownloadCard";
 import { DeletedBanner } from "./_components/DeletedBanner";
 import { RestoredBanner } from "./_components/RestoredBanner";
-import { PendingReviewModal } from "./_components/PendingReviewModal";
 import { ProjectCard } from "./_components/ProjectListRow";
 import { resolveStepperState, type StepperResult } from "@/lib/delivery/stepper";
 import type { ProjectStatus, PaymentMethod } from "@/types";
@@ -200,8 +199,12 @@ export default async function ClientPortalPage({
     return workingDaysElapsed(from, todayIso) < PBDR_WINDOW_DAYS;
   });
 
-  // Main table: exclude complete projects (they live in history or the ready banner)
-  const activeProjects = projects.filter((p) => p.status !== "complete");
+  // Main list: exclude complete projects (they live in history or the ready banner).
+  // Projects awaiting the stakeholder's own acknowledgement float to the top — with only
+  // a handful of active projects at a time, that's more visible than a duplicate banner.
+  const activeProjects = projects
+    .filter((p) => p.status !== "complete")
+    .sort((a, b) => Number(pendingReviewMap.has(b.id)) - Number(pendingReviewMap.has(a.id)));
 
   // Consultant first names — for the "assessing"/"working on"/"applying changes" captions
   const consultantIds = [
@@ -289,36 +292,6 @@ export default async function ClientPortalPage({
               </p>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Approval tray */}
-      {pendingApprovals.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-5">
-          <h2 className="text-sm font-semibold text-amber-900">
-            Awaiting your acknowledgement ({pendingApprovals.length})
-          </h2>
-          <p className="mt-0.5 text-xs text-amber-700">
-            Please review and acknowledge the following reports before they can be finalised.
-          </p>
-          <ul className="mt-3 space-y-2">
-            {pendingApprovals.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between rounded-md border border-amber-100 bg-white px-4 py-2.5"
-              >
-                <span className="text-sm text-zinc-900">{projectLabel(p)}</span>
-                <PendingReviewModal
-                  projectLabel={projectLabel(p)}
-                  reviewId={pendingReviewMap.get(p.id)!.id}
-                  projectId={p.id}
-                  pbdbDownloadUrl={`/api/download/pbdb-client/${p.id}`}
-                  pbdbFilename={pbdbFilenameMap.get(p.id)}
-                  expiresAt={pendingReviewMap.get(p.id)!.expires_at}
-                />
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 
@@ -431,6 +404,16 @@ export default async function ClientPortalPage({
               isDelivered={p.status === "delivered"}
               projectId={p.id}
               pbdrFilename={pbdrFilenameMap.get(p.id)}
+              pendingReview={
+                pendingReviewMap.has(p.id)
+                  ? {
+                      reviewId: pendingReviewMap.get(p.id)!.id,
+                      expiresAt: pendingReviewMap.get(p.id)!.expires_at,
+                      pbdbDownloadUrl: `/api/download/pbdb-client/${p.id}`,
+                      pbdbFilename: pbdbFilenameMap.get(p.id),
+                    }
+                  : undefined
+              }
             />
           ))}
         </div>

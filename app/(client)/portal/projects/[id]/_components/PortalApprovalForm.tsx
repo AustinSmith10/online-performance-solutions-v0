@@ -104,7 +104,7 @@ export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownlo
     <div className={bare ? undefined : "rounded-lg border border-amber-200 bg-amber-50 p-5"}>
       <h2 className="text-sm font-semibold text-amber-900">Your PBDB review is required</h2>
       <p className="mt-1 text-sm text-amber-800">
-        Please review the document below and submit your response before{" "}
+        A quick response helps keep your report on schedule. Please review and reply before{" "}
         <strong>{expiryLabel}</strong>.
       </p>
 

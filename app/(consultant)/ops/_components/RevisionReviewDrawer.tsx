@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Drawer } from "./Drawer";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
 import { DownloadCard } from "@/components/DownloadCard";
@@ -32,7 +32,7 @@ export interface ReviewRow {
   review_cycle: number;
 }
 
-function projectLabel(p: Pick<RevisionProject, "project_number" | "extracted_fields" | "po_number" | "id">) {
+export function projectLabel(p: Pick<RevisionProject, "project_number" | "extracted_fields" | "po_number" | "id">) {
   const addr = (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ?? null;
   if (p.project_number && addr) return `${p.project_number} — ${addr}`;
   return addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
@@ -155,72 +155,53 @@ function DrawerContent({
   );
 }
 
-export function RevisionRequiredPanel({
-  projects,
-  reviewsByProject,
-  pbdbFileByProject,
+// Self-contained trigger + drawer — mirrors the stakeholder portal's PendingReviewModal so a
+// project needing the consultant's attention gets its own CTA right on its card, not a
+// separate tray duplicating the same project.
+export function RevisionReviewDrawer({
+  project,
+  reviews,
+  pbdbFile,
 }: {
-  projects: RevisionProject[];
-  reviewsByProject: Record<string, ReviewRow[]>;
-  pbdbFileByProject: Record<string, PbdbFile>;
+  project: RevisionProject;
+  reviews: ReviewRow[];
+  pbdbFile: PbdbFile | null;
 }) {
-  const [active, setActive] = useState<RevisionProject | null>(null);
-  const close = useCallback(() => setActive(null), []);
-
-  if (projects.length === 0) return null;
+  const [open, setOpen] = useState(false);
 
   return (
     <>
-      <div className="rounded-lg border border-red-200 bg-white">
-        <div className="flex items-center gap-2 border-b border-red-100 bg-red-50 px-5 py-3">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-semibold text-white">
-            {projects.length}
-          </span>
-          <span className="text-sm font-medium text-red-900">
-            Revision required — stakeholder{projects.length !== 1 ? "s have" : " has"} rejected the
-            PBDB
-          </span>
-        </div>
-        <ul className="divide-y divide-zinc-100">
-          {projects.map((p) => (
-            <li
-              key={p.id}
-              className="flex items-center justify-between gap-4 px-5 py-3.5 hover:bg-zinc-50"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-zinc-900">{projectLabel(p)}</p>
-                <p className="mt-0.5 text-xs text-zinc-500">
-                  {p.clients?.name ?? "—"}
-                  {" · "}
-                  <span className="font-medium text-red-600">Cycle {p.review_cycle}</span>
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActive(p)}
-                className="shrink-0 rounded border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
-              >
-                View →
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-red-700"
+      >
+        Review
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-3 w-3"
+          aria-hidden="true"
+        >
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
+      </button>
 
       <Drawer
-        isOpen={active !== null}
-        onClose={close}
-        title={active ? projectLabel(active) : ""}
-        subtitle={active?.clients?.name}
-        projectId={active?.id ?? ""}
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title={projectLabel(project)}
+        subtitle={project.clients?.name ?? undefined}
+        projectId={project.id}
       >
-        {active && (
-          <DrawerContent
-            project={active}
-            reviews={reviewsByProject[active.id] ?? []}
-            pbdbFile={pbdbFileByProject[active.id] ?? null}
-          />
-        )}
+        <DrawerContent project={project} reviews={reviews} pbdbFile={pbdbFile} />
       </Drawer>
     </>
   );

@@ -139,13 +139,16 @@ export function stepperBadge(result: StepperResult): { label: string; className:
 }
 
 // Compact stepper used inline (e.g. an expanded list row) where the caption/round badge
-// is already shown by the caller — this renders only the circle row + loop-back arrow.
+// is already shown by the caller — this renders only the circle row, with a soft highlight
+// capsule grouping the Revising/Review pair when the project is mid-revision-loop.
 export function MiniStepper({
   stages,
   showRevisionLoop,
+  roundBadge,
 }: {
   stages: StepperStage[];
   showRevisionLoop: boolean;
+  roundBadge?: number | null;
 }) {
   const activeIndex = stepperActiveIndexOf(stages);
   const trackFillPct = (activeIndex / (stages.length - 1)) * 80;
@@ -153,11 +156,30 @@ export function MiniStepper({
   return (
     <div className="max-w-xl">
       <div className="relative flex justify-between">
+        {showRevisionLoop && (
+          <div
+            className="absolute rounded-2xl bg-amber-50"
+            style={{ top: "-4px", left: "20%", width: "40%", height: "50px" }}
+            aria-hidden="true"
+          />
+        )}
         <div className="absolute top-[13px] left-[8%] right-[8%] h-0.5 bg-zinc-300" />
         <div
           className="absolute top-[13px] left-[8%] h-0.5 bg-green-600"
           style={{ width: `${trackFillPct}%` }}
         />
+        {showRevisionLoop && (
+          <div
+            className="absolute z-20 flex h-[18px] min-w-[18px] -translate-x-1/2 items-center justify-center rounded-full bg-amber-200 px-1 text-amber-800"
+            style={{ top: "-8px", left: "58%" }}
+          >
+            {roundBadge ? (
+              <span className="text-[10px] font-semibold leading-none">{roundBadge}</span>
+            ) : (
+              <StepperIcon name="refresh" className="h-2.5 w-2.5" />
+            )}
+          </div>
+        )}
         {stages.map((stage) => {
           // A plain "current" review stage (first-pass dispatch) gets the same amber/
           // message-circle treatment as the mid-revision "revision-pending" circle —
@@ -180,38 +202,6 @@ export function MiniStepper({
           );
         })}
       </div>
-
-      {showRevisionLoop && (
-        <div className="relative h-6">
-          <svg
-            viewBox="0 0 100 36"
-            preserveAspectRatio="none"
-            className="absolute top-0 h-8 w-1/5"
-            style={{ left: "30%" }}
-            aria-hidden="true"
-          >
-            <path
-              d="M 100 4 C 100 30, 0 30, 0 4"
-              fill="none"
-              stroke="#B45309"
-              strokeWidth="1.5"
-              markerEnd="url(#mini-stepper-loop-arrow)"
-            />
-            <defs>
-              <marker
-                id="mini-stepper-loop-arrow"
-                markerWidth="6"
-                markerHeight="6"
-                refX="3"
-                refY="3"
-                orient="auto"
-              >
-                <path d="M0,0 L6,3 L0,6 z" fill="#B45309" />
-              </marker>
-            </defs>
-          </svg>
-        </div>
-      )}
     </div>
   );
 }

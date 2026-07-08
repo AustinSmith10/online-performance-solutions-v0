@@ -120,7 +120,11 @@ function captionFor(status: ProjectStatus, input: StepperInput): string {
   if (status === "converting") return "Finalizing your report";
 
   if (status === "revision_required") {
-    return "Consultant will review your comments and make the appropriate changes";
+    const consultantName =
+      input.showConsultantName && input.consultantFirstName ? input.consultantFirstName : null;
+    return consultantName
+      ? `${consultantName} will review your comments and make the appropriate changes`
+      : "Consultant will review your comments and make the appropriate changes";
   }
 
   if (status === "delivered" || status === "complete") {

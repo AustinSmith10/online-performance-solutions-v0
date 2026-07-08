@@ -36,9 +36,21 @@ export function PendingReviewModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-sm font-medium text-amber-700 hover:text-amber-900"
+        className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-amber-700"
       >
-        Review →
+        Review
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-3 w-3"
+          aria-hidden="true"
+        >
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
       </button>
 
       {open && (

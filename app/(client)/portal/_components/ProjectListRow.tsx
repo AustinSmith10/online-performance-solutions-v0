@@ -9,6 +9,7 @@ import {
   stepperNeedsStakeholderAction,
 } from "@/components/delivery/StepperVisuals";
 import { DownloadPbdrLink } from "./DownloadPbdrLink";
+import { PendingReviewModal } from "./PendingReviewModal";
 import type { StepperResult } from "@/lib/delivery/stepper";
 
 // Purely visual — the whole card toggles expansion, this chevron is just an indicator, not its own button.
@@ -45,6 +46,13 @@ function captionClassName(stepper: StepperResult | null): string {
   return "text-blue-700";
 }
 
+interface PendingReview {
+  reviewId: string;
+  expiresAt: string;
+  pbdbDownloadUrl: string;
+  pbdbFilename?: string;
+}
+
 interface RowProps {
   href: string;
   label: string;
@@ -56,6 +64,7 @@ interface RowProps {
   isDelivered: boolean;
   projectId: string;
   pbdrFilename?: string;
+  pendingReview?: PendingReview;
 }
 
 export function ProjectCard({
@@ -69,13 +78,18 @@ export function ProjectCard({
   isDelivered,
   projectId,
   pbdrFilename,
+  pendingReview,
 }: RowProps) {
   const [expanded, setExpanded] = useState(false);
   const caption = statusCaption(stepper);
   const badge = stepper ? stepperBadge(stepper) : { label: statusLabel, className: statusClassName };
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3">
+    <div
+      className={`rounded-lg border px-4 py-3 ${
+        pendingReview ? "border-amber-300 bg-amber-50" : "border-zinc-200 bg-white"
+      }`}
+    >
       <button
         type="button"
         className="w-full cursor-pointer text-left"
@@ -108,7 +122,11 @@ export function ProjectCard({
       </button>
       {expanded && stepper && (
         <div className="mt-3 border-t border-zinc-100 pt-3">
-          <MiniStepper stages={stepper.stages} showRevisionLoop={stepper.showRevisionLoop} />
+          <MiniStepper
+            stages={stepper.stages}
+            showRevisionLoop={stepper.showRevisionLoop}
+            roundBadge={stepper.roundBadge}
+          />
         </div>
       )}
       {isDelivered && (
@@ -116,7 +134,21 @@ export function ProjectCard({
           <DownloadPbdrLink projectId={projectId} filename={pbdrFilename} />
         </div>
       )}
-      <div className="mt-2.5 border-t border-zinc-100 pt-2.5">
+      <div
+        className={`mt-2.5 flex items-center gap-2 border-t pt-2.5 ${
+          pendingReview ? "border-amber-200" : "border-zinc-100"
+        }`}
+      >
+        {pendingReview && (
+          <PendingReviewModal
+            projectLabel={label}
+            reviewId={pendingReview.reviewId}
+            projectId={projectId}
+            pbdbDownloadUrl={pendingReview.pbdbDownloadUrl}
+            pbdbFilename={pendingReview.pbdbFilename}
+            expiresAt={pendingReview.expiresAt}
+          />
+        )}
         <Link
           href={href}
           className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"

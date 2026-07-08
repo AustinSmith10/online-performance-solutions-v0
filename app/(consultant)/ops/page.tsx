@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ClickableRow } from "@/components/ClickableRow";
-import { RevisionRequiredPanel, type ReviewRow } from "./_components/RevisionRequiredPanel";
+import { ConsultantProjectCard } from "./_components/ConsultantProjectCard";
+import type { ReviewRow, PbdbFile } from "./_components/RevisionReviewDrawer";
 import { RealtimeProjectRefresher } from "./_components/RealtimeProjectRefresher";
 import { SelfAssignButton } from "./_components/SelfAssignButton";
 import type { ProjectStatus } from "@/types";
@@ -127,9 +127,11 @@ export default async function ConsultantOpsPage({
       pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version };
     }
   }
-  const active = projects.filter((p) =>
-    (["assigned", "in_progress", "revision_required"] as ProjectStatus[]).includes(p.status)
-  );
+  // Revision-required projects float to the top — same treatment as the portal's
+  // action-needed cards, so the consultant sees what needs them without a separate tray.
+  const active = projects
+    .filter((p) => (["assigned", "in_progress", "revision_required"] as ProjectStatus[]).includes(p.status))
+    .sort((a, b) => Number(b.status === "revision_required") - Number(a.status === "revision_required"));
   const withStakeholders = projects.filter((p) =>
     (["dispatched", "converting"] as ProjectStatus[]).includes(p.status)
   );
@@ -269,13 +271,13 @@ export default async function ConsultantOpsPage({
             </div>
           )}
 
-          <RevisionRequiredPanel
-            projects={revisionRequired}
+          <ProjectSection
+            title="Active"
+            projects={active}
+            todayIso={todayIso}
             reviewsByProject={reviewsByProject}
             pbdbFileByProject={pbdbFileByProject}
           />
-
-          <ProjectSection title="Active" projects={active} todayIso={todayIso} />
           <ProjectSection
             title="With stakeholders"
             projects={withStakeholders}
@@ -301,14 +303,28 @@ export default async function ConsultantOpsPage({
   );
 }
 
+function formatAuDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function projectLabel(p: Pick<ProjectRow, "project_number" | "extracted_fields" | "po_number" | "id">) {
+  const addr = (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ?? null;
+  if (p.project_number && addr) return `${p.project_number} — ${addr}`;
+  return addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
+}
+
 function ProjectSection({
   title,
   projects,
   todayIso,
+  reviewsByProject,
+  pbdbFileByProject,
 }: {
   title: string;
   projects: ProjectRow[];
   todayIso: string;
+  reviewsByProject?: Record<string, ReviewRow[]>;
+  pbdbFileByProject?: Record<string, PbdbFile>;
 }) {
   if (projects.length === 0) return null;
 
@@ -317,68 +333,36 @@ function ProjectSection({
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
         {title}
       </h2>
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-        <table className="w-full min-w-[700px] text-sm">
-          <thead className="border-b border-zinc-100 bg-zinc-50">
-            <tr>
-              <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
-              <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
-              <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
-              <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
-              <th className="px-5 py-3 text-left font-medium text-zinc-500">Expected delivery</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-50">
-            {projects.map((p) => {
-              const isOverdue =
-                !!p.expected_delivery_date &&
-                p.expected_delivery_date < todayIso &&
-                !TERMINAL_STATUSES.has(p.status);
-              return (
-                <ClickableRow key={p.id} href={`/ops/projects/${p.id}`}>
-                  <td className="max-w-[180px] truncate px-5 py-3 font-medium text-zinc-900">
-                    {(() => {
-                        const addr = p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined ?? null;
-                        if (p.project_number && addr) return `${p.project_number} — ${addr}`;
-                        return addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
-                      })()}
-                  </td>
-                  <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                    {p.clients?.name ?? <span className="text-zinc-400">—</span>}
-                  </td>
-                  <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                    {clientName(p.submitter) ?? <span className="text-zinc-400">—</span>}
-                  </td>
-                  <td className="px-5 py-3">
-                    <span
-                      className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}
-                    >
-                      {STATUS_LABELS[p.status]}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
-                    {p.expected_delivery_date ? (
-                      <span className={isOverdue ? "font-medium text-red-600" : ""}>
-                        {new Date(p.expected_delivery_date).toLocaleDateString("en-AU", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                        {isOverdue && (
-                          <span className="ml-1.5 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                            Overdue
-                          </span>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="text-zinc-300">—</span>
-                    )}
-                  </td>
-                </ClickableRow>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="flex flex-col gap-3">
+        {projects.map((p) => {
+          const isOverdue =
+            !!p.expected_delivery_date &&
+            p.expected_delivery_date < todayIso &&
+            !TERMINAL_STATUSES.has(p.status);
+          const isRevision = p.status === "revision_required";
+          return (
+            <ConsultantProjectCard
+              key={p.id}
+              href={`/ops/projects/${p.id}`}
+              label={projectLabel(p)}
+              clientName={p.clients?.name ?? null}
+              submitterName={clientName(p.submitter)}
+              statusLabel={STATUS_LABELS[p.status]}
+              statusClassName={STATUS_CLASSES[p.status]}
+              expectedDeliveryLabel={p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null}
+              isOverdue={isOverdue}
+              revisionReview={
+                isRevision
+                  ? {
+                      project: p,
+                      reviews: reviewsByProject?.[p.id] ?? [],
+                      pbdbFile: pbdbFileByProject?.[p.id] ?? null,
+                    }
+                  : undefined
+              }
+            />
+          );
+        })}
       </div>
     </section>
   );
