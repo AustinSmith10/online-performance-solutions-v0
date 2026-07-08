@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import {
   addMetricsRow,
   updateMetricsRow,
@@ -188,6 +188,18 @@ function ExcelImportForm({
   const boundAction = importMetricsExcel.bind(null, clientId, tableId);
   const [state, formAction, pending] = useActionState<ImportExcelState, FormData>(boundAction, {});
   const [formKey, setFormKey] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function applyFile(file: File | undefined) {
+    if (!file) return;
+    if (!/\.(xlsx|xls)$/i.test(file.name)) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    if (fileInputRef.current) fileInputRef.current.files = dt.files;
+    setSelectedFile(file);
+  }
 
   return (
     <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
@@ -199,16 +211,35 @@ function ExcelImportForm({
         action={async (fd) => {
           await formAction(fd);
           setFormKey((k) => k + 1);
+          setSelectedFile(null);
         }}
         className="flex items-center gap-3"
       >
-        <input
-          type="file"
-          name="file"
-          accept=".xlsx,.xls"
-          required
-          className="text-xs text-zinc-700"
-        />
+        <label
+          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragOver(false);
+            applyFile(e.dataTransfer.files?.[0]);
+          }}
+          className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed px-4 py-3 text-xs transition-colors ${
+            isDragOver
+              ? "border-zinc-400 bg-zinc-100 text-zinc-700"
+              : "border-zinc-300 bg-white text-zinc-500 hover:border-zinc-400 hover:text-zinc-600"
+          }`}
+        >
+          <span>{selectedFile ? selectedFile.name : "Drag & drop an .xlsx/.xls file here, or click to browse"}</span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            name="file"
+            accept=".xlsx,.xls"
+            required
+            className="hidden"
+            onChange={(e) => applyFile(e.target.files?.[0])}
+          />
+        </label>
         <button
           type="submit"
           disabled={pending}
