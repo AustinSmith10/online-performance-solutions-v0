@@ -8,9 +8,11 @@ import { PortalApprovalForm } from "./_components/PortalApprovalForm";
 import { ReplaceDocumentControl } from "./_components/ReplaceDocumentControl";
 import { SubmissionDetailsCard } from "./_components/SubmissionDetailsCard";
 import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
+import { DeliveryStepper } from "./_components/DeliveryStepper";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { DownloadCard } from "@/components/DownloadCard";
 import { UnsavedChangesProvider } from "@/components/UnsavedChangesProvider";
+import { resolveStepperState } from "@/lib/delivery/stepper";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -83,7 +85,7 @@ export default async function ClientProjectDetailPage({
   const { data } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at, source, assigned_consultant_id, review_cycle"
+      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at, source, assigned_consultant_id, review_cycle, paused_previous_status, pbdb_downloaded_at"
     )
     .eq("id", id)
     .eq("client_id", user.client_id as string)
@@ -103,6 +105,8 @@ export default async function ClientProjectDetailPage({
     source: "portal" | "email";
     assigned_consultant_id: string | null;
     review_cycle: number;
+    paused_previous_status: ProjectStatus | null;
+    pbdb_downloaded_at: string | null;
   };
 
   const project = data as unknown as ProjectDetail;
@@ -114,6 +118,24 @@ export default async function ClientProjectDetailPage({
     !!project.expected_delivery_date &&
     project.expected_delivery_date < todayIso &&
     !TERMINAL_STATUSES.has(project.status);
+
+  // Stepper — resolve stage/caption from real status only, no simulated progress
+  const [{ data: orgRow }, { data: consultant }] = await Promise.all([
+    supabase.from("clients").select("show_consultant_name").eq("id", user.client_id as string).maybeSingle(),
+    project.assigned_consultant_id
+      ? supabase.from("users").select("first_name").eq("id", project.assigned_consultant_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const stepperResult = resolveStepperState({
+    status: project.status,
+    pausedPreviousStatus: project.paused_previous_status,
+    reviewCycle: project.review_cycle,
+    pbdbDownloadedAt: project.pbdb_downloaded_at,
+    showConsultantName: orgRow?.show_consultant_name ?? true,
+    consultantFirstName: consultant?.first_name ?? null,
+    viewerFirstName: (user.first_name as string | null) ?? null,
+  });
 
   // Fetch this client's most recent review for this project (any status)
   const { data: clientReview } = await supabase
@@ -250,9 +272,11 @@ export default async function ClientProjectDetailPage({
       <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[project.status]} bg-white p-5`}>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-base font-semibold text-zinc-900">{title}</h1>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}>
-            {STATUS_LABELS[project.status]}
-          </span>
+          {project.status === "draft" && (
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}>
+              {STATUS_LABELS[project.status]}
+            </span>
+          )}
           {isOverdue && (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
               Overdue
@@ -280,6 +304,8 @@ export default async function ClientProjectDetailPage({
           )}
         </p>
       </div>
+
+      {!isDeleted && project.status !== "draft" && <DeliveryStepper result={stepperResult} />}
 
       {/* Draft resume prompt — full-width, above the grid */}
       {!isDeleted && project.status === "draft" && (

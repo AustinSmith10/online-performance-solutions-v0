@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ClickableRow } from "@/components/ClickableRow";
-import { DownloadPbdrLink } from "./_components/DownloadPbdrLink";
 import { DownloadCard } from "@/components/DownloadCard";
 import { DeletedBanner } from "./_components/DeletedBanner";
 import { RestoredBanner } from "./_components/RestoredBanner";
 import { PendingReviewModal } from "./_components/PendingReviewModal";
+import { ProjectCard } from "./_components/ProjectListRow";
+import { resolveStepperState, type StepperResult } from "@/lib/delivery/stepper";
 import type { ProjectStatus, PaymentMethod } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -45,11 +45,16 @@ type ProjectRow = {
   created_at: string;
   delivered_at: string | null;
   expected_delivery_date: string | null;
+  review_cycle: number;
+  paused_previous_status: ProjectStatus | null;
+  pbdb_downloaded_at: string | null;
+  assigned_consultant_id: string | null;
 };
 
 type OrgRow = {
   payment_method: PaymentMethod;
   credit_balance: number;
+  show_consultant_name: boolean;
 };
 
 function projectLabel(p: Pick<ProjectRow, "extracted_fields" | "po_number" | "id">): string {
@@ -57,6 +62,16 @@ function projectLabel(p: Pick<ProjectRow, "extracted_fields" | "po_number" | "id
     (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ??
     (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))
   );
+}
+
+// Formatted server-side (not in the client row components) so hydration never re-runs
+// Intl.DateTimeFormat in the browser — Node's and the browser's "en-AU" defaults can disagree.
+function formatAuDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 // Count Mon–Fri days between fromIso and todayIso (exclusive of today)
@@ -91,14 +106,14 @@ export default async function ClientPortalPage({
       supabase
         .from("projects")
         .select(
-          "id, po_number, extracted_fields, status, created_at, delivered_at, expected_delivery_date"
+          "id, po_number, extracted_fields, status, created_at, delivered_at, expected_delivery_date, review_cycle, paused_previous_status, pbdb_downloaded_at, assigned_consultant_id"
         )
         .eq("client_id", orgId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false }),
       supabase
         .from("clients")
-        .select("payment_method, credit_balance")
+        .select("payment_method, credit_balance, show_consultant_name")
         .eq("id", orgId)
         .single(),
       supabase
@@ -187,6 +202,41 @@ export default async function ClientPortalPage({
 
   // Main table: exclude complete projects (they live in history or the ready banner)
   const activeProjects = projects.filter((p) => p.status !== "complete");
+
+  // Consultant first names — for the "assessing"/"working on"/"applying changes" captions
+  const consultantIds = [
+    ...new Set(activeProjects.map((p) => p.assigned_consultant_id).filter((id): id is string => !!id)),
+  ];
+  const consultantNameMap = new Map<string, string | null>();
+  if (consultantIds.length > 0) {
+    const { data: consultantRows } = await supabase
+      .from("users")
+      .select("id, first_name")
+      .in("id", consultantIds);
+    for (const row of consultantRows ?? []) {
+      consultantNameMap.set(row.id as string, row.first_name as string | null);
+    }
+  }
+
+  // Real-status-only stepper state per row — draft has no stepper (stakeholders never see progress pre-submission)
+  const stepperMap = new Map<string, StepperResult>();
+  for (const p of activeProjects) {
+    if (p.status === "draft") continue;
+    stepperMap.set(
+      p.id,
+      resolveStepperState({
+        status: p.status,
+        pausedPreviousStatus: p.paused_previous_status,
+        reviewCycle: p.review_cycle,
+        pbdbDownloadedAt: p.pbdb_downloaded_at,
+        showConsultantName: org?.show_consultant_name ?? true,
+        consultantFirstName: p.assigned_consultant_id
+          ? consultantNameMap.get(p.assigned_consultant_id) ?? null
+          : null,
+        viewerFirstName: (user.first_name as string | null) ?? null,
+      })
+    );
+  }
 
   // Latest PBDR original_filename per project — shown under the download button
   const pbdrRelevantIds = [...new Set([...allDelivered, ...reportsReady].map((p) => p.id))];
@@ -365,96 +415,25 @@ export default async function ClientPortalPage({
           </Link>
         </div>
       ) : (
-        <>
-          {/* Mobile cards */}
-          <div className="flex flex-col gap-3 sm:hidden">
-            {activeProjects.map((p) => (
-              <div
-                key={p.id}
-                className="rounded-lg border border-zinc-200 bg-white px-4 py-4"
-              >
-                <Link href={`/portal/projects/${p.id}`} className="block">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-medium text-zinc-900 leading-snug">{projectLabel(p)}</p>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}
-                    >
-                      {STATUS_LABELS[p.status]}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-                    <span>Submitted {new Date(p.created_at).toLocaleDateString("en-AU")}</span>
-                    {p.expected_delivery_date ? (
-                      <span>
-                        Expected{" "}
-                        {new Date(p.expected_delivery_date).toLocaleDateString("en-AU", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </span>
-                    ) : (
-                      <span>No delivery date set</span>
-                    )}
-                  </div>
-                </Link>
-                {p.status === "delivered" && (
-                  <div className="mt-3 border-t border-zinc-100 pt-3">
-                    <DownloadPbdrLink projectId={p.id} filename={pbdrFilenameMap.get(p.id)} />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Desktop table */}
-          <div className="hidden sm:block overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead className="border-b border-zinc-100 bg-zinc-50">
-                <tr>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Submitted</th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Expected delivery</th>
-                  <th className="px-5 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-50">
-                {activeProjects.map((p) => (
-                  <ClickableRow key={p.id} href={`/portal/projects/${p.id}`}>
-                    <td className="px-5 py-3 font-medium text-zinc-900">{projectLabel(p)}</td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}
-                      >
-                        {STATUS_LABELS[p.status]}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
-                      {new Date(p.created_at).toLocaleDateString("en-AU")}
-                    </td>
-                    <td className="px-5 py-3 text-zinc-500">
-                      {p.expected_delivery_date ? (
-                        new Date(p.expected_delivery_date).toLocaleDateString("en-AU", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })
-                      ) : (
-                        <span className="text-zinc-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      {p.status === "delivered" && (
-                        <DownloadPbdrLink projectId={p.id} filename={pbdrFilenameMap.get(p.id)} />
-                      )}
-                    </td>
-                  </ClickableRow>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div className="flex flex-col gap-3">
+          {activeProjects.map((p) => (
+            <ProjectCard
+              key={p.id}
+              href={`/portal/projects/${p.id}`}
+              label={projectLabel(p)}
+              statusLabel={STATUS_LABELS[p.status]}
+              statusClassName={STATUS_CLASSES[p.status]}
+              stepper={stepperMap.get(p.id) ?? null}
+              submittedLabel={formatAuDate(p.created_at)}
+              expectedDeliveryLabel={
+                p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null
+              }
+              isDelivered={p.status === "delivered"}
+              projectId={p.id}
+              pbdrFilename={pbdrFilenameMap.get(p.id)}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

@@ -131,6 +131,7 @@ export interface Client {
   state_territory: string | null;
   abandoned_draft_days: number;
   is_frozen: boolean;
+  show_consultant_name: boolean;
   email_whitelist: string[];
   client_config: Record<string, string>;
   created_at: string;
@@ -161,6 +162,7 @@ export interface Project {
   paused_at: string | null;
   paused_previous_status: string | null;
   pause_reason: string | null;
+  pbdb_downloaded_at: string | null;
   created_at: string;
   updated_at: string;
 }
