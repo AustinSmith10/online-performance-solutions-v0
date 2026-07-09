@@ -59,16 +59,30 @@ const BASE_PROJECT = {
 
 function buildMock({
   reviewUpdateError = null,
+  reviewUpdateCount = 1,
   secondaryReviews = [] as unknown[],
   admins = [{ id: "admin-1" }] as unknown[],
   recipients = [{ id: "consultant-1", first_name: "Alex" }, { id: "admin-1", first_name: "Super" }] as unknown[],
+  guardProject = { status: "dispatched", review_cycle: 1 } as unknown,
 } = {}) {
   const calls: Record<string, number> = {};
 
   const updateReview = vi.fn().mockReturnValue({
-    eq: vi.fn().mockResolvedValue({ data: null, error: reviewUpdateError }),
+    eq: vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: reviewUpdateError, count: reviewUpdateCount }),
+    }),
   });
   const updateProject = vi.fn().mockReturnValue(chain(null));
+  const selectGuard = vi.fn().mockReturnValue({
+    eq: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: guardProject, error: null }),
+    }),
+  });
+  const selectProject = vi.fn().mockReturnValue({
+    eq: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: BASE_PROJECT, error: null }),
+    }),
+  });
 
   return {
     updateReview,
@@ -83,12 +97,11 @@ function buildMock({
       }
 
       if (table === "projects") {
-        if (n === 1) return { update: updateProject };
-        if (n === 2) return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: BASE_PROJECT, error: null }),
-        };
+        // Call order in submitApproval: 1) replay guard select, 2) first_response_at
+        // update, 3) select for downstream fields, 4) rejected-path status update.
+        if (n === 1) return { select: selectGuard };
+        if (n === 2) return { update: updateProject };
+        if (n === 3) return { select: selectProject };
         return { update: updateProject };
       }
 
@@ -156,7 +169,8 @@ describe("submitApproval — approved", () => {
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
     await submitApproval("tok", null, {}, makeFormData({ response: "approved" }));
     expect(mock.updateReview).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "approved_without_comments" })
+      expect.objectContaining({ status: "approved_without_comments" }),
+      { count: "exact" }
     );
   });
 
@@ -165,7 +179,8 @@ describe("submitApproval — approved", () => {
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
     await submitApproval("tok", null, {}, makeFormData({ response: "approved", comments: "Looks good overall." }));
     expect(mock.updateReview).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "approved_with_comments", comments: "Looks good overall." })
+      expect.objectContaining({ status: "approved_with_comments", comments: "Looks good overall." }),
+      { count: "exact" }
     );
   });
 
@@ -215,7 +230,8 @@ describe("submitApproval — rejected", () => {
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
     await submitApproval("tok", null, {}, makeFormData({ response: "rejected", comments: "Fix page 3." }));
     expect(mock.updateReview).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "rejected_with_comments", comments: "Fix page 3." })
+      expect.objectContaining({ status: "rejected_with_comments", comments: "Fix page 3." }),
+      { count: "exact" }
     );
   });
 
