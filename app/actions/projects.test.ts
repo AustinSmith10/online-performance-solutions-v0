@@ -9,10 +9,11 @@ vi.mock("@/lib/audit/log");
 vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/stakeholders/dispatch");
 
-import { uploadQaPbdb } from "./projects";
+import { uploadQaPbdb, adminDeleteProject } from "./projects";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
+import { auditLog } from "@/lib/audit/log";
 
 const PROJECT_ID = "proj-1";
 const CLIENT_ID = "org-1";
@@ -131,5 +132,111 @@ describe("uploadQaPbdb — review_cycle tagging across a multi-round rejection s
     expect(mock.insertFn).toHaveBeenCalledWith(
       expect.objectContaining({ review_cycle: 2, version: 2 })
     );
+  });
+});
+
+describe("adminDeleteProject", () => {
+  function buildDeleteMock({
+    status,
+    deletedAt = null,
+    found = true,
+  }: {
+    status: string;
+    deletedAt?: string | null;
+    found?: boolean;
+  }) {
+    const updateEqFn = vi.fn().mockResolvedValue({ error: null });
+    const updateFn = vi.fn().mockReturnValue({ eq: updateEqFn });
+
+    const project = found
+      ? { id: PROJECT_ID, client_id: CLIENT_ID, status, deleted_at: deletedAt }
+      : null;
+
+    const from = vi.fn((table: string) => {
+      if (table === "projects") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: project, error: null }),
+          update: updateFn,
+        };
+      }
+      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
+    });
+
+    return { from, updateFn, updateEqFn };
+  }
+
+  beforeEach(() => {
+    vi.mocked(requireRole).mockResolvedValue({ id: ACTOR_ID, role: "admin", email: "a@ddeg.com.au" } as never);
+  });
+
+  it("soft-deletes a draft project", async () => {
+    const mock = buildDeleteMock({ status: "draft" });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await adminDeleteProject(PROJECT_ID);
+
+    expect(result.error).toBeUndefined();
+    expect(mock.updateFn).toHaveBeenCalledWith(
+      expect.objectContaining({ deleted_at: expect.any(String) })
+    );
+    expect(auditLog).toHaveBeenCalledWith(
+      "project.admin_deleted",
+      ACTOR_ID,
+      "a@ddeg.com.au",
+      expect.objectContaining({ projectId: PROJECT_ID, orgId: CLIENT_ID })
+    );
+  });
+
+  it("soft-deletes a submitted project", async () => {
+    const mock = buildDeleteMock({ status: "submitted" });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await adminDeleteProject(PROJECT_ID);
+
+    expect(result.error).toBeUndefined();
+    expect(mock.updateFn).toHaveBeenCalled();
+  });
+
+  it("refuses to delete a project already assigned to a consultant", async () => {
+    const mock = buildDeleteMock({ status: "in_progress" });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await adminDeleteProject(PROJECT_ID);
+
+    expect(result.error).toMatch(/already been assigned/i);
+    expect(mock.updateFn).not.toHaveBeenCalled();
+    expect(auditLog).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete a project that is delivered", async () => {
+    const mock = buildDeleteMock({ status: "delivered" });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await adminDeleteProject(PROJECT_ID);
+
+    expect(result.error).toMatch(/already been assigned/i);
+    expect(mock.updateFn).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete a project already in the recovery bin", async () => {
+    const mock = buildDeleteMock({ status: "draft", deletedAt: "2026-01-01T00:00:00.000Z" });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await adminDeleteProject(PROJECT_ID);
+
+    expect(result.error).toMatch(/already in the recovery bin/i);
+    expect(mock.updateFn).not.toHaveBeenCalled();
+  });
+
+  it("returns an error when the project does not exist", async () => {
+    const mock = buildDeleteMock({ status: "draft", found: false });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await adminDeleteProject(PROJECT_ID);
+
+    expect(result.error).toMatch(/not found/i);
+    expect(mock.updateFn).not.toHaveBeenCalled();
   });
 });
