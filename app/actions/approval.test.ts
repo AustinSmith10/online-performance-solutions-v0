@@ -6,14 +6,19 @@ vi.mock("@/lib/stakeholders/tokens");
 vi.mock("@/lib/audit/log");
 vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/email/templates/ModificationsRequestedEmail");
+vi.mock("@/lib/email/templates/ApprovalRequestEmail");
+vi.mock("@/lib/email/sender", () => ({ sendEmail: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/documents/delivery", () => ({ deliverPbdr: vi.fn().mockResolvedValue({ success: true }) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { submitApproval } from "./approval";
+import { submitApproval, requestNewApprovalLink } from "./approval";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { validateToken } from "@/lib/stakeholders/tokens";
+import { validateToken, generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
+import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
+import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
+import { sendEmail } from "@/lib/email/sender";
 import { deliverPbdr } from "@/lib/documents/delivery";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -269,5 +274,140 @@ describe("submitApproval — rejected", () => {
     expect(call.modifications).toHaveLength(2);
     expect(call.modifications[0].stakeholderName).toBe("Jane");
     expect(call.modifications[1].stakeholderName).toBe("Bob");
+  });
+});
+
+// ─── requestNewApprovalLink ────────────────────────────────────────────────────
+
+describe("requestNewApprovalLink", () => {
+  const CURRENT_REVIEW = {
+    id: "review-current",
+    token: "expired-token",
+    status: "pending",
+    stakeholder_name: "Jane Smith",
+    stakeholder_email: "jane@example.com",
+  };
+
+  function buildReissueMock({
+    project = { review_cycle: 1, clients: { state_territory: "NSW" } } as unknown,
+    currentReview = CURRENT_REVIEW as unknown,
+    updateCount = 1,
+  } = {}) {
+    const updateReview = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: null, error: null, count: updateCount }),
+      }),
+    });
+    const selectProject = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: project, error: null }),
+      }),
+    });
+    const selectCurrentReview = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: currentReview, error: null }),
+          }),
+        }),
+      }),
+    });
+
+    return {
+      updateReview,
+      from: vi.fn((table: string) => {
+        if (table === "projects") return { select: selectProject };
+        if (table === "stakeholder_reviews") {
+          // First call resolves the current-cycle row; second issues the update.
+          return { select: selectCurrentReview, update: updateReview };
+        }
+        return chain(null);
+      }),
+    };
+  }
+
+  beforeEach(() => {
+    vi.mocked(generateTokenString).mockReturnValue("new-token");
+    vi.mocked(computeTokenExpiry).mockResolvedValue(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000));
+    vi.mocked(renderApprovalRequestEmail).mockReturnValue("<html>reissue</html>");
+  });
+
+  it("errors on an invalid token", async () => {
+    vi.mocked(validateToken).mockResolvedValue(null);
+    const result = await requestNewApprovalLink("bad", {}, makeFormData({}));
+    expect(result.error).toBeTruthy();
+  });
+
+  it("errors when the token is not actually expired", async () => {
+    vi.mocked(validateToken).mockResolvedValue({ review: VALID_REVIEW as never, isExpired: false });
+    const result = await requestNewApprovalLink("tok", {}, makeFormData({}));
+    expect(result.error).toMatch(/not eligible|no longer eligible/i);
+  });
+
+  it("errors when the review already has a recorded response", async () => {
+    vi.mocked(validateToken).mockResolvedValue({
+      review: { ...VALID_REVIEW, status: "approved_without_comments" } as never,
+      isExpired: true,
+    });
+    const result = await requestNewApprovalLink("tok", {}, makeFormData({}));
+    expect(result.error).toBeTruthy();
+  });
+
+  it("reissues a token and sends an email on success", async () => {
+    vi.mocked(validateToken).mockResolvedValue({ review: VALID_REVIEW as never, isExpired: true });
+    const mock = buildReissueMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await requestNewApprovalLink("expired-token", {}, makeFormData({}));
+
+    expect(result.sent).toBe(true);
+    expect(mock.updateReview).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "new-token" }),
+      { count: "exact" }
+    );
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "jane@example.com" })
+    );
+    expect(vi.mocked(auditLog)).toHaveBeenCalledWith(
+      "stakeholder.token_self_reissued",
+      null,
+      "jane@example.com",
+      expect.objectContaining({ projectId: "proj-1" })
+    );
+  });
+
+  it("reissues against the current cycle's row, not the stale expired one", async () => {
+    vi.mocked(validateToken).mockResolvedValue({
+      review: { ...VALID_REVIEW, review_cycle: 1 } as never,
+      isExpired: true,
+    });
+    const mock = buildReissueMock({
+      project: { review_cycle: 2, clients: { state_territory: "NSW" } },
+      currentReview: { ...CURRENT_REVIEW, id: "review-cycle-2" },
+    });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await requestNewApprovalLink("expired-token", {}, makeFormData({}));
+    expect(result.sent).toBe(true);
+  });
+
+  it("does not reissue when the current-cycle review is not pending", async () => {
+    vi.mocked(validateToken).mockResolvedValue({ review: VALID_REVIEW as never, isExpired: true });
+    const mock = buildReissueMock({ currentReview: { ...CURRENT_REVIEW, status: "waived" } });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await requestNewApprovalLink("expired-token", {}, makeFormData({}));
+    expect(result.error).toBeTruthy();
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+  });
+
+  it("does not leak enumeration info when the update race loses (count 0)", async () => {
+    vi.mocked(validateToken).mockResolvedValue({ review: VALID_REVIEW as never, isExpired: true });
+    const mock = buildReissueMock({ updateCount: 0 });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await requestNewApprovalLink("expired-token", {}, makeFormData({}));
+    expect(result.error).toBeTruthy();
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
   });
 });

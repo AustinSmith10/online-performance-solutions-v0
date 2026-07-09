@@ -75,6 +75,7 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "stakeholder.responded_via_portal",
       "stakeholder.waived",
       "stakeholder.token_resent",
+      "stakeholder.token_self_reissued",
       "stakeholder.email_updated",
       "stakeholder.token_accessed",
       "stakeholder.pbdb_downloaded",
@@ -198,6 +199,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "stakeholder.responded_via_portal": "Stakeholder responded via portal",
   "stakeholder.waived": "Stakeholder review waived",
   "stakeholder.token_resent": "Access link resent",
+  "stakeholder.token_self_reissued": "Stakeholder self-served a new access link",
   "stakeholder.email_updated": "Stakeholder email changed",
   "stakeholder.token_accessed": "Stakeholder opened approval link",
   "stakeholder.pbdb_downloaded": "Stakeholder downloaded PBDB",
@@ -436,6 +438,7 @@ export function formatDetails(
       break;
 
     case "stakeholder.token_resent":
+    case "stakeholder.token_self_reissued":
       if (s(metadata.email)) parts.push(s(metadata.email));
       break;
 

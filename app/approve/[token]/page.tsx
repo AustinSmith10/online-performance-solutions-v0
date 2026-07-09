@@ -4,6 +4,7 @@ import { validateToken } from "@/lib/stakeholders/tokens";
 import { auditLog } from "@/lib/audit/log";
 import { ApprovalForm } from "./_components/ApprovalForm";
 import { ApproveDownloadLink } from "./_components/ApproveDownloadLink";
+import { RequestNewLinkForm } from "./_components/RequestNewLinkForm";
 
 export default async function ApprovePage({
   params,
@@ -16,6 +17,44 @@ export default async function ApprovePage({
   if (!result) notFound();
 
   const { review, isExpired } = result;
+
+  const alreadyResponded = [
+    "approved_without_comments",
+    "approved_with_comments",
+    "rejected_with_comments",
+    "waived",
+  ].includes(review.status);
+
+  if (alreadyResponded) {
+    const recordedAt = review.status === "waived" ? review.waived_at : review.responded_at;
+    return (
+      <div style={styles.wrapper}>
+        <div style={styles.card}>
+          <h1 style={styles.heading}>Response recorded</h1>
+          <p style={styles.body}>
+            {review.status === "waived"
+              ? "This review was waived."
+              : `Thank you${review.status.startsWith("approved") ? " for your approval" : ""}.`}
+            {recordedAt && (
+              <>
+                {" "}
+                Recorded on{" "}
+                <strong>
+                  {new Date(recordedAt).toLocaleDateString("en-AU", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </strong>
+                .
+              </>
+            )}
+          </p>
+          <p style={styles.footer}>DDEG Online Performance Solution</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isExpired) {
     return (
@@ -31,38 +70,9 @@ export default async function ApprovePage({
                 year: "numeric",
               })}
             </strong>
-            . Please contact DDEG for a new link.
+            . Request a new link below, or contact DDEG if you need help.
           </p>
-          <p style={styles.footer}>DDEG Online Performance Solution</p>
-        </div>
-      </div>
-    );
-  }
-
-  const alreadyResponded = [
-    "approved_without_comments",
-    "approved_with_comments",
-    "rejected_without_comments",
-    "rejected_with_comments",
-  ].includes(review.status);
-
-  if (alreadyResponded) {
-    return (
-      <div style={styles.wrapper}>
-        <div style={styles.card}>
-          <h1 style={styles.heading}>Response recorded</h1>
-          <p style={styles.body}>
-            Thank you{review.status.startsWith("approved") ? " for your approval" : ""}.
-            Your response was recorded on{" "}
-            <strong>
-              {new Date(review.responded_at!).toLocaleDateString("en-AU", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </strong>
-            .
-          </p>
+          <RequestNewLinkForm token={tokenString} />
           <p style={styles.footer}>DDEG Online Performance Solution</p>
         </div>
       </div>

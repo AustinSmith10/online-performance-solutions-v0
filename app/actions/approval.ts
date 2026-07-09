@@ -1,11 +1,13 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { validateToken } from "@/lib/stakeholders/tokens";
+import { validateToken, generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
+import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { deliverPbdr } from "@/lib/documents/delivery";
+import { sendEmail } from "@/lib/email/sender";
 
 export interface ApprovalState {
   error?: string;
@@ -176,4 +178,97 @@ export async function submitApproval(
   }
 
   return { submitted: true, response };
+}
+
+// ─── Self-serve token reissue (expired link) ──────────────────────────────────
+
+export interface RequestNewLinkState {
+  error?: string;
+  sent?: boolean;
+}
+
+export async function requestNewApprovalLink(
+  tokenString: string,
+  _prevState: RequestNewLinkState,
+  _formData: FormData
+): Promise<RequestNewLinkState> {
+  const validated = await validateToken(tokenString);
+  if (!validated) return { error: "This link is no longer valid." };
+
+  const { review, isExpired } = validated;
+  if (!isExpired || review.status !== "pending") {
+    return { error: "This link is no longer eligible for a new one." };
+  }
+
+  const supabase = createAdminClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("review_cycle, clients(state_territory)")
+    .eq("id", review.project_id)
+    .single();
+
+  if (!project) return { error: "This link is no longer valid." };
+
+  // The expired token's review row may belong to a stale cycle if the project
+  // has since moved on — always reissue against the *current* cycle's row.
+  const currentCycle = project.review_cycle as number;
+  const { data: currentReview } = await supabase
+    .from("stakeholder_reviews")
+    .select("id, token, status, stakeholder_name, stakeholder_email")
+    .eq("project_id", review.project_id)
+    .eq("review_cycle", currentCycle)
+    .eq("stakeholder_email", review.stakeholder_email)
+    .maybeSingle();
+
+  if (!currentReview || (currentReview.status as string) !== "pending") {
+    return { error: "This link is no longer eligible for a new one." };
+  }
+
+  const stateTerritory =
+    (project.clients as unknown as { state_territory: string | null } | null)?.state_territory ??
+    null;
+
+  const token = generateTokenString();
+  const expiresAt = await computeTokenExpiry(new Date(), stateTerritory);
+  const expiresFormatted = expiresAt.toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  const { count } = await supabase
+    .from("stakeholder_reviews")
+    .update(
+      { token, expires_at: expiresAt.toISOString(), fresh_token_sent_at: new Date().toISOString() },
+      { count: "exact" }
+    )
+    .eq("id", currentReview.id)
+    .eq("token", currentReview.token as string);
+
+  if (!count) return { error: "This link is no longer eligible for a new one." };
+
+  const approvalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
+  const emailHtml = renderApprovalRequestEmail({
+    stakeholderName: currentReview.stakeholder_name as string,
+    projectId: review.project_id.slice(0, 8),
+    approvalUrl,
+    expiresAt: expiresFormatted,
+    isFreshToken: true,
+  });
+
+  await sendEmail({
+    to: currentReview.stakeholder_email as string,
+    subject: `Reminder: approval required (ref: ${review.project_id.slice(0, 8)})`,
+    html: emailHtml,
+  }).catch((err) => {
+    console.error(`[requestNewApprovalLink] email to ${currentReview.stakeholder_email} failed:`, err);
+  });
+
+  await auditLog("stakeholder.token_self_reissued", null, currentReview.stakeholder_email as string, {
+    projectId: review.project_id,
+    metadata: { review_id: currentReview.id, email: currentReview.stakeholder_email, review_cycle: currentCycle },
+  });
+
+  return { sent: true };
 }
