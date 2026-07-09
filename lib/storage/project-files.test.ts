@@ -30,21 +30,24 @@ function buildMock(files: Record<string, unknown>[]) {
 }
 
 describe("removeProjectStorageFiles", () => {
-  it("splits files across submissions and documents buckets by file_type", async () => {
+  it("splits files across submissions, documents, and evidence buckets by file_type", async () => {
     const { supabase, removeCalls } = buildMock([
       { storage_path: "org/proj-1/po/a.pdf", file_type: "po" },
       { storage_path: "org/proj-1/additional/b.pdf", file_type: "additional" },
       { storage_path: "org/proj-1/pbdb/v1_c.docx", file_type: "pbdb" },
       { storage_path: "org/proj-1/pbdr/d.pdf", file_type: "pbdr" },
+      { storage_path: "org/proj-1/evidence/e.eml", file_type: "evidence" },
     ]);
 
     await removeProjectStorageFiles(supabase, PROJECT_ID);
 
     const submissions = removeCalls.find((c) => c.bucket === "submissions");
     const documents = removeCalls.find((c) => c.bucket === "documents");
+    const evidence = removeCalls.find((c) => c.bucket === "evidence");
 
     expect(submissions?.paths).toEqual(["org/proj-1/po/a.pdf", "org/proj-1/additional/b.pdf"]);
     expect(documents?.paths).toEqual(["org/proj-1/pbdb/v1_c.docx", "org/proj-1/pbdr/d.pdf"]);
+    expect(evidence?.paths).toEqual(["org/proj-1/evidence/e.eml"]);
   });
 
   it("is a no-op when the project has no files", async () => {

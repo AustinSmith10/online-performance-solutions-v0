@@ -290,7 +290,7 @@ export default async function ProjectDetailPage({
     Promise.all(
       (rawEvidenceFiles ?? []).map(async (f) => {
         const { data: signed } = await supabase.storage
-          .from("submissions")
+          .from("evidence")
           .createSignedUrl(f.storage_path as string, 3600);
         return { ...f, signedUrl: signed?.signedUrl ?? null };
       })

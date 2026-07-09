@@ -1,10 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// Generated docs (pbdb/pbdr) live in the `documents` bucket; everything else
-// client uploads (po, building_plans, additional, evidence, dynamic
+// Generated docs (pbdb/pbdr) live in the `documents` bucket; evidence
+// attachments live in `evidence` (wider MIME allow-list, see #85); everything
+// else client uploads (po, building_plans, additional, dynamic
 // file_requirements slugs) lives in `submissions`. See lib/documents/generator.ts
 // and lib/documents/delivery.ts for the write side of this split.
 const DOCUMENTS_BUCKET_FILE_TYPES = new Set(["pbdb", "pbdr"]);
+const EVIDENCE_BUCKET_FILE_TYPES = new Set(["evidence"]);
 
 /**
  * Removes a project's files from storage ahead of a hard delete. Best-effort:
@@ -24,10 +26,14 @@ export async function removeProjectStorageFiles(
 
   const submissionsPaths: string[] = [];
   const documentsPaths: string[] = [];
+  const evidencePaths: string[] = [];
 
   for (const file of files) {
-    const bucket = DOCUMENTS_BUCKET_FILE_TYPES.has(file.file_type as string)
+    const fileType = file.file_type as string;
+    const bucket = DOCUMENTS_BUCKET_FILE_TYPES.has(fileType)
       ? documentsPaths
+      : EVIDENCE_BUCKET_FILE_TYPES.has(fileType)
+      ? evidencePaths
       : submissionsPaths;
     bucket.push(file.storage_path as string);
   }
@@ -43,6 +49,13 @@ export async function removeProjectStorageFiles(
     const { error } = await supabase.storage.from("documents").remove(documentsPaths);
     if (error) {
       console.error(`[removeProjectStorageFiles] documents bucket cleanup failed for ${projectId}:`, error);
+    }
+  }
+
+  if (evidencePaths.length > 0) {
+    const { error } = await supabase.storage.from("evidence").remove(evidencePaths);
+    if (error) {
+      console.error(`[removeProjectStorageFiles] evidence bucket cleanup failed for ${projectId}:`, error);
     }
   }
 }
