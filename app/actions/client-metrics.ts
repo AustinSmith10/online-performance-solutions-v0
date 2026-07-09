@@ -21,12 +21,34 @@ export interface MetricsTable {
   name: string;
   created_at: string;
   columns: MetricsColumn[];
+  autofill_enabled: boolean;
+  match_token: string | null;
+  match_column_id: string | null;
+  outputs: OutputMapping[];
 }
 
 export interface MetricsRow {
   id: string;
   table_id: string;
   data: Record<string, string | number | null>;
+}
+
+export interface OutputMapping {
+  id: string;
+  output_token: string;
+  output_column_id: string;
+}
+
+export interface AutofillConfig {
+  autofill_enabled: boolean;
+  match_token: string | null;
+  match_column_id: string | null;
+  outputs: OutputMapping[];
+}
+
+export interface ClientToken {
+  token: string;
+  label: string;
 }
 
 const VALID_TYPES: ColumnDataType[] = ["text", "number", "date"];
@@ -381,4 +403,126 @@ export async function importMetricsExcel(
 
   revalidatePath(`/admin/clients/${clientId}`);
   return { importedCount: rowsToInsert.length };
+}
+
+// ---------------------------------------------------------------------------
+// Autofill config (issue #51): opt-in match token/column + output token/column
+// mappings, generalizing the hardcoded halcyon_developments mechanism.
+// ---------------------------------------------------------------------------
+
+// A client's placeholder tokens live per-template (template_field_mappings),
+// but the autofill match/output happens purely by token name at submission
+// time regardless of which template a project uses — so tokens are deduped
+// across all of a client's templates.
+export async function getClientTemplateTokens(clientId: string): Promise<ClientToken[]> {
+  await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: templates } = await supabase
+    .from("templates")
+    .select("id")
+    .eq("client_id", clientId);
+
+  const templateIds = (templates ?? []).map((t) => t.id as string);
+  if (templateIds.length === 0) return [];
+
+  const { data: mappings } = await supabase
+    .from("template_field_mappings")
+    .select("placeholder_token, display_label")
+    .in("template_id", templateIds)
+    .eq("field_key", "extract")
+    .eq("is_mapped", true);
+
+  const byToken = new Map<string, ClientToken>();
+  for (const m of mappings ?? []) {
+    const token = m.placeholder_token as string;
+    if (!byToken.has(token)) {
+      byToken.set(token, { token, label: (m.display_label as string | null) || token });
+    }
+  }
+  return [...byToken.values()].sort((a, b) => a.token.localeCompare(b.token));
+}
+
+export type AutofillConfigState = { error?: string };
+
+export async function updateAutofillConfig(
+  clientId: string,
+  tableId: string,
+  _prev: AutofillConfigState,
+  formData: FormData
+): Promise<AutofillConfigState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const enabled = formData.get("autofill_enabled") === "on";
+  const matchToken = (formData.get("match_token") as string | null)?.trim() || null;
+  const matchColumnId = (formData.get("match_column_id") as string | null)?.trim() || null;
+  const outputTokens = formData.getAll("output_token") as string[];
+  const outputColumnIds = formData.getAll("output_column_id") as string[];
+
+  const { data: columns } = await supabase
+    .from("client_metrics_columns")
+    .select("id")
+    .eq("table_id", tableId);
+  const validColumnIds = new Set((columns ?? []).map((c) => c.id as string));
+
+  const outputs: { output_token: string; output_column_id: string }[] = [];
+  if (enabled) {
+    if (!matchToken) return { error: "A match token is required to enable auto-fill." };
+    if (!matchColumnId || !validColumnIds.has(matchColumnId)) {
+      return { error: "A valid match column is required to enable auto-fill." };
+    }
+
+    const seenTokens = new Set<string>([matchToken]);
+    for (let i = 0; i < outputTokens.length; i++) {
+      const token = outputTokens[i]?.trim();
+      const columnId = outputColumnIds[i]?.trim();
+      if (!token || !columnId) continue;
+      if (!validColumnIds.has(columnId)) {
+        return { error: `Output mapping for "${token}" references an unknown column.` };
+      }
+      if (seenTokens.has(token)) {
+        return { error: `"${token}" cannot be used more than once (already the match token or another output).` };
+      }
+      seenTokens.add(token);
+      outputs.push({ output_token: token, output_column_id: columnId });
+    }
+    if (outputs.length === 0) {
+      return { error: "At least one output token mapping is required to enable auto-fill." };
+    }
+  }
+
+  const { error: updateError } = await supabase
+    .from("client_metrics_tables")
+    .update({
+      autofill_enabled: enabled,
+      match_token: enabled ? matchToken : null,
+      match_column_id: enabled ? matchColumnId : null,
+    })
+    .eq("id", tableId)
+    .eq("client_id", clientId);
+
+  if (updateError) return { error: updateError.message };
+
+  const { error: deleteError } = await supabase
+    .from("client_metrics_output_mappings")
+    .delete()
+    .eq("table_id", tableId);
+
+  if (deleteError) return { error: deleteError.message };
+
+  if (outputs.length > 0) {
+    const { error: insertError } = await supabase.from("client_metrics_output_mappings").insert(
+      outputs.map((o) => ({ table_id: tableId, ...o }))
+    );
+    if (insertError) return { error: insertError.message };
+  }
+
+  await auditLog("client_metrics_table.autofill_updated", actor.id, actor.email, {
+    orgId: clientId,
+    metadata: { tableId, enabled, matchToken, outputCount: outputs.length },
+  });
+
+  revalidatePath(`/admin/clients/${clientId}`);
+  return {};
 }

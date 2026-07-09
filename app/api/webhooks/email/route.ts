@@ -13,9 +13,11 @@ import {
 } from "@/lib/email/parser";
 import { extractDocumentFields } from "@/lib/documents/extractor";
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
-
-// Tokens auto-resolved from halcyon_developments — never sent to AI extraction
-const HALCYON_TOKENS = new Set(["EXTRACT_TRUSTEE", "EXTRACT_RAINFALL_INTENSITY"]);
+import {
+  getMetricsAutofillConfigs,
+  getAutofillExclusionTokens,
+  resolveMetricsAutofill,
+} from "@/lib/documents/metrics-autofill";
 
 // Postmark retries on non-2xx — always return 200 so it doesn't retry on expected failures.
 
@@ -196,8 +198,8 @@ async function handleNewSubmission(
     try {
       // Load EXTRACT_ token mappings for the active template
       let extractTokens: { token: string; label: string; hint: string }[] = [];
-      let templateHasTrustee = false;
-      let templateHasRainfall = false;
+      const metricsAutofillConfigs = await getMetricsAutofillConfigs(supabase, org.id as string);
+      const metricsExclusionTokens = getAutofillExclusionTokens(metricsAutofillConfigs);
       if (templateId) {
         const { data: mappings } = await supabase
           .from("template_field_mappings")
@@ -206,14 +208,8 @@ async function handleNewSubmission(
           .eq("field_key", "extract")
           .order("sort_order")
           .order("placeholder_token");
-        templateHasTrustee = (mappings ?? []).some(
-          (m) => m.placeholder_token === "EXTRACT_TRUSTEE"
-        );
-        templateHasRainfall = (mappings ?? []).some(
-          (m) => m.placeholder_token === "EXTRACT_RAINFALL_INTENSITY"
-        );
         extractTokens = (mappings ?? [])
-          .filter((m) => !HALCYON_TOKENS.has(m.placeholder_token as string))
+          .filter((m) => !metricsExclusionTokens.has(m.placeholder_token as string))
           .map((m) => ({
             token: m.placeholder_token as string,
             label: (m.display_label as string | null) ?? (m.placeholder_token as string),
@@ -226,34 +222,11 @@ async function handleNewSubmission(
         extractTokens
       );
 
+      resolveMetricsAutofill(metricsAutofillConfigs, extracted.fields);
+
       const fieldValues = normalizeExtractedFields(
         Object.fromEntries(Object.entries(extracted.fields).map(([k, v]) => [k, v.value]))
       );
-
-      // Resolve halcyon-derived fields from dev name
-      if (templateHasTrustee || templateHasRainfall) {
-        const devName = (fieldValues["EXTRACT_DEV_NAME"] ?? "").trim();
-        if (devName) {
-          const { data: developments } = await supabase
-            .from("halcyon_developments")
-            .select("dev_name, trustee_entity, aep")
-            .order("dev_name");
-          const needle = devName.toLowerCase();
-          const matchedDev =
-            (developments ?? []).find((d) => (d.dev_name as string).toLowerCase() === needle) ??
-            (developments ?? []).find(
-              (d) =>
-                (d.dev_name as string).toLowerCase().includes(needle) ||
-                needle.includes((d.dev_name as string).toLowerCase())
-            );
-          if (matchedDev) {
-            if (templateHasTrustee)
-              fieldValues["EXTRACT_TRUSTEE"] = matchedDev.trustee_entity as string;
-            if (templateHasRainfall)
-              fieldValues["EXTRACT_RAINFALL_INTENSITY"] = String(matchedDev.aep);
-          }
-        }
-      }
 
       const siteAddress = (fieldValues["EXTRACT_ADDRESS"] ?? "").trim() || null;
 

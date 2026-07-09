@@ -2,9 +2,11 @@ import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SubmissionForm } from "../../_components/SubmissionForm";
-import type { ExtractState, Development, TokenField, SectionLabels } from "@/app/actions/submission";
+import type { ExtractState, TokenField, SectionLabels } from "@/app/actions/submission";
+import { getMetricsAutofillConfigs, resolveMetricsAutofill, buildMetricsPickRows } from "@/lib/documents/metrics-autofill";
 
 const RAINFALL_TOKEN = "EXTRACT_RAINFALL_INTENSITY";
+const TRUSTEE_TOKEN = "EXTRACT_TRUSTEE";
 import type { Confidence } from "@/lib/documents/extractor";
 
 export default async function ResumeDraftPage({
@@ -45,7 +47,7 @@ export default async function ResumeDraftPage({
     (project.template_id as string | null) ?? templates?.[0]?.id ?? "";
 
   // Load mappings and org config for this template
-  const [{ data: mappings }, { data: orgData }, { data: devsData }, { data: tmplData }] =
+  const [{ data: mappings }, { data: orgData }, { data: tmplData }] =
     await Promise.all([
       supabase
         .from("template_field_mappings")
@@ -60,10 +62,6 @@ export default async function ResumeDraftPage({
         .eq("id", orgId)
         .single(),
       supabase
-        .from("halcyon_developments")
-        .select("dev_name, trustee_entity, aep")
-        .order("dev_name"),
-      supabase
         .from("templates")
         .select("section_labels")
         .eq("id", templateId)
@@ -73,38 +71,31 @@ export default async function ResumeDraftPage({
   const allMappings = mappings ?? [];
   const orgConfig = ((orgData?.client_config ?? {}) as Record<string, string>);
   const savedFields: Record<string, string> = { ...((project.extracted_fields ?? {}) as Record<string, string>) };
-  const developments = (devsData ?? []) as Development[];
 
   const extractMappings = allMappings.filter((m) => m.field_key === "extract");
   const orgMappings = allMappings.filter((m) => m.field_key === "org");
   const clientMappings = allMappings.filter((m) => m.field_key === "client");
   const hasTrustee = extractMappings.some(
-    (m) => m.placeholder_token === "EXTRACT_TRUSTEE"
+    (m) => m.placeholder_token === TRUSTEE_TOKEN
   );
   const hasRainfall = extractMappings.some(
     (m) => m.placeholder_token === RAINFALL_TOKEN
   );
   const rainfallToken = hasRainfall ? RAINFALL_TOKEN : null;
-  const needsHalcyon = hasTrustee || hasRainfall;
 
-  // Re-resolve trustee and rainfall from Halcyon using saved dev name
-  if (needsHalcyon && developments.length > 0) {
-    const devName = (savedFields["EXTRACT_DEV_NAME"] ?? "").trim();
-    if (devName) {
-      const needle = devName.toLowerCase();
-      const matchedDev =
-        developments.find((d) => d.dev_name.toLowerCase() === needle) ??
-        developments.find(
-          (d) =>
-            d.dev_name.toLowerCase().includes(needle) ||
-            needle.includes(d.dev_name.toLowerCase())
-        );
-      if (matchedDev) {
-        if (hasTrustee) savedFields["EXTRACT_TRUSTEE"] = matchedDev.trustee_entity;
-        if (hasRainfall) savedFields[RAINFALL_TOKEN] = String(matchedDev.aep);
-      }
+  // Re-resolve any configured client metrics table autofill using saved fields
+  const metricsAutofillConfigs = await getMetricsAutofillConfigs(supabase, orgId);
+  if (metricsAutofillConfigs.length > 0) {
+    const metricsFields: Record<string, { value: string; confidence: string }> = Object.fromEntries(
+      Object.entries(savedFields).map(([k, v]) => [k, { value: v, confidence: "low" }])
+    );
+    resolveMetricsAutofill(metricsAutofillConfigs, metricsFields);
+    for (const [token, field] of Object.entries(metricsFields)) {
+      savedFields[token] = field.value;
     }
   }
+
+  const trusteePick = hasTrustee ? buildMetricsPickRows(metricsAutofillConfigs, TRUSTEE_TOKEN) : null;
 
   function makeField(
     m: { placeholder_token: string; display_label: string | null; field_key: string | null; is_required: boolean },
@@ -159,7 +150,8 @@ export default async function ResumeDraftPage({
     sectionLabels,
     hasTrustee,
     rainfallToken,
-    developments,
+    matchToken: trusteePick?.matchToken ?? null,
+    pickRows: trusteePick?.rows ?? [],
     projectId: id,
     templateId,
   };

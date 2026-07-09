@@ -6,9 +6,9 @@ import {
   submitProject,
   type ExtractState,
   type TokenField,
-  type Development,
 } from "@/app/actions/submission";
 import type { Confidence } from "@/lib/documents/extractor";
+import type { MetricsPickRow } from "@/lib/documents/metrics-autofill";
 
 interface Template {
   id: string;
@@ -127,16 +127,16 @@ function TokenInput({
   );
 }
 
-function resolveDefaultDevName(devName: string, developments: Development[]): string {
-  const needle = devName.trim().toLowerCase();
+function resolveDefaultMatchValue(extractedValue: string, pickRows: MetricsPickRow[]): string {
+  const needle = extractedValue.trim().toLowerCase();
   if (!needle) return "";
   return (
-    developments.find((d) => d.dev_name.toLowerCase() === needle)?.dev_name ??
-    developments.find(
-      (d) =>
-        d.dev_name.toLowerCase().includes(needle) ||
-        needle.includes(d.dev_name.toLowerCase())
-    )?.dev_name ??
+    pickRows.find((r) => r.matchValue.toLowerCase() === needle)?.matchValue ??
+    pickRows.find(
+      (r) =>
+        r.matchValue.toLowerCase().includes(needle) ||
+        needle.includes(r.matchValue.toLowerCase())
+    )?.matchValue ??
     ""
   );
 }
@@ -154,7 +154,7 @@ interface ReviewStepProps {
 }
 
 function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgId, adminClientId, projectBasePath, startOverHref, showBanner }: ReviewStepProps) {
-  const { poNumber, tokenGroups, sectionLabels, hasTrustee, rainfallToken, developments, projectId, templateId } = state;
+  const { poNumber, tokenGroups, sectionLabels, hasTrustee, rainfallToken, matchToken, pickRows, projectId, templateId } = state;
 
   const [modified, setModified] = useState<Set<string>>(new Set());
   const mark = (key: string) => setModified((prev) => new Set(prev).add(key));
@@ -168,14 +168,14 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
     return () => clearTimeout(t);
   }, [showBanner]);
 
-  const devNameField = tokenGroups.extract.find((t) => t.token === "EXTRACT_DEV_NAME");
+  const matchField = matchToken ? tokenGroups.extract.find((t) => t.token === matchToken) : undefined;
   const trusteeField = tokenGroups.extract.find((t) => t.token === "EXTRACT_TRUSTEE");
   const trusteeLabel = trusteeField?.label ?? "Trustee";
-  const [selectedDevName, setSelectedDevName] = useState(() =>
-    devNameField?.value ? resolveDefaultDevName(devNameField.value, developments) : ""
+  const [selectedMatchValue, setSelectedMatchValue] = useState(() =>
+    matchField?.value ? resolveDefaultMatchValue(matchField.value, pickRows) : ""
   );
   const selectedTrusteeEntity =
-    developments.find((d) => d.dev_name === selectedDevName)?.trustee_entity ?? "";
+    pickRows.find((r) => r.matchValue === selectedMatchValue)?.outputs["EXTRACT_TRUSTEE"] ?? "";
 
   const rainfallField = rainfallToken
     ? tokenGroups.extract.find((t) => t.token === rainfallToken)
@@ -265,15 +265,15 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
             <div>
               <label className="mb-1 block text-xs font-medium text-zinc-700">{trusteeLabel}</label>
               <select
-                value={selectedDevName}
-                onChange={(e) => setSelectedDevName(e.target.value)}
+                value={selectedMatchValue}
+                onChange={(e) => setSelectedMatchValue(e.target.value)}
                 disabled={submitPending}
                 className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {selectedDevName === "" && <option value="">— select trustee —</option>}
-                {developments.map((d) => (
-                  <option key={d.dev_name} value={d.dev_name}>
-                    {d.dev_name} — {d.trustee_entity}
+                {selectedMatchValue === "" && <option value="">— select trustee —</option>}
+                {pickRows.map((r) => (
+                  <option key={r.matchValue} value={r.matchValue}>
+                    {r.matchValue} — {r.outputs["EXTRACT_TRUSTEE"]}
                   </option>
                 ))}
               </select>

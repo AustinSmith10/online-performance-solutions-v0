@@ -11,17 +11,19 @@ import { extractDocumentFields, type ExtractedField, type Confidence } from "@/l
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { addWorkingDays } from "@/lib/delivery/working-days";
+import {
+  getMetricsAutofillConfigs,
+  getAutofillExclusionTokens,
+  resolveMetricsAutofill,
+  buildMetricsPickRows,
+  type MetricsPickRow,
+} from "@/lib/documents/metrics-autofill";
 
-export interface Development {
-  dev_name: string;
-  trustee_entity: string;
-  aep: number;
-}
-
-// Tokens auto-resolved from halcyon_developments — never sent to AI extraction
+// A client's metrics-table autofill config may resolve these — the review UI
+// shows the trustee as a correctable dropdown and rainfall intensity as a
+// plain extracted field, regardless of which table resolved them.
 const TRUSTEE_TOKEN = "EXTRACT_TRUSTEE";
 const RAINFALL_TOKEN = "EXTRACT_RAINFALL_INTENSITY";
-const HALCYON_LOOKUP_TOKEN = "EXTRACT_DEV_NAME";
 
 export interface TokenField {
   token: string;
@@ -57,7 +59,8 @@ export type ExtractState =
       sectionLabels: SectionLabels;
       hasTrustee: boolean;
       rainfallToken: string | null;
-      developments: Development[];
+      matchToken: string | null;
+      pickRows: MetricsPickRow[];
       projectId: string;
       templateId: string;
     };
@@ -205,12 +208,11 @@ export async function extractFields(
     (m) => m.placeholder_token === RAINFALL_TOKEN
   );
   const rainfallToken = rainfallMapping ? RAINFALL_TOKEN : null;
-  const needsHalcyon = hasTrustee || rainfallToken !== null;
 
-  // Exclude halcyon-resolved tokens from AI extraction (HOUSE_TYPE is extracted by AI, used as lookup key)
-  const halcyonTokens = new Set([TRUSTEE_TOKEN, RAINFALL_TOKEN]);
+  const metricsAutofillConfigs = await getMetricsAutofillConfigs(supabase, orgId);
+  const metricsExclusionTokens = getAutofillExclusionTokens(metricsAutofillConfigs);
   const extractTokens = extractMappings
-    .filter((m) => !halcyonTokens.has(m.placeholder_token))
+    .filter((m) => !metricsExclusionTokens.has(m.placeholder_token))
     .map((m) => ({
       token: m.placeholder_token,
       label: m.display_label ?? m.placeholder_token,
@@ -218,50 +220,10 @@ export async function extractFields(
     }));
 
   let extraction;
-  let developments: Development[] = [];
 
   try {
-    const [extractionResult, devsResult] = await Promise.all([
-      extractDocumentFields(extractionDocs, extractTokens),
-      needsHalcyon
-        ? supabase
-            .from("halcyon_developments")
-            .select("dev_name, trustee_entity, aep")
-            .order("dev_name")
-        : Promise.resolve({ data: [] }),
-    ]);
-    extraction = extractionResult;
-    developments = (devsResult.data ?? []) as Development[];
-
-    // Auto-resolve trustee and rainfall intensity from the Halcyon developments table
-    // using the extracted development name.
-    if (needsHalcyon && developments.length > 0) {
-      const devName = extraction.fields[HALCYON_LOOKUP_TOKEN]?.value?.trim() ?? "";
-      if (devName) {
-        const needle = devName.toLowerCase();
-        const matchedDev =
-          developments.find((d) => d.dev_name.toLowerCase() === needle) ??
-          developments.find(
-            (d) =>
-              d.dev_name.toLowerCase().includes(needle) ||
-              needle.includes(d.dev_name.toLowerCase())
-          );
-        if (matchedDev) {
-          if (hasTrustee) {
-            extraction.fields[TRUSTEE_TOKEN] = {
-              value: matchedDev.trustee_entity,
-              confidence: "high",
-            };
-          }
-          if (rainfallToken) {
-            extraction.fields[RAINFALL_TOKEN] = {
-              value: String(matchedDev.aep),
-              confidence: "high",
-            };
-          }
-        }
-      }
-    }
+    extraction = await extractDocumentFields(extractionDocs, extractTokens);
+    resolveMetricsAutofill(metricsAutofillConfigs, extraction.fields);
   } catch (err) {
     const pathsToRemove = uploadItems.map((i) => i.path);
     if (pathsToRemove.length) await supabase.storage.from("submissions").remove(pathsToRemove);
@@ -379,6 +341,8 @@ export async function extractFields(
     })),
   };
 
+  const trusteePick = hasTrustee ? buildMetricsPickRows(metricsAutofillConfigs, TRUSTEE_TOKEN) : null;
+
   return {
     step: 2,
     poNumber: extraction.po_number,
@@ -386,7 +350,8 @@ export async function extractFields(
     sectionLabels,
     hasTrustee,
     rainfallToken,
-    developments,
+    matchToken: trusteePick?.matchToken ?? null,
+    pickRows: trusteePick?.rows ?? [],
     projectId,
     templateId,
   };

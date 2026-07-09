@@ -6,10 +6,13 @@ import {
   updateMetricsRow,
   deleteMetricsRow,
   importMetricsExcel,
+  updateAutofillConfig,
   type RowMutationState,
   type ImportExcelState,
+  type AutofillConfigState,
   type MetricsTable,
   type MetricsRow,
+  type ClientToken,
 } from "@/app/actions/client-metrics";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { EditIconButton } from "@/components/EditIconButton";
@@ -18,11 +21,14 @@ interface Props {
   clientId: string;
   table: MetricsTable;
   rows: MetricsRow[];
+  clientTokens: ClientToken[];
 }
 
-export function MetricsTableEditor({ clientId, table, rows }: Props) {
+export function MetricsTableEditor({ clientId, table, rows, clientTokens }: Props) {
   return (
     <div className="space-y-6">
+      <AutofillConfigPanel clientId={clientId} table={table} clientTokens={clientTokens} />
+
       <ExcelImportForm clientId={clientId} tableId={table.id} table={table} />
 
       <div className="overflow-x-auto">
@@ -48,6 +54,164 @@ export function MetricsTableEditor({ clientId, table, rows }: Props) {
           <p className="mt-3 text-sm text-zinc-500">No rows yet — add one below or upload a spreadsheet.</p>
         )}
       </div>
+    </div>
+  );
+}
+
+function AutofillConfigPanel({
+  clientId,
+  table,
+  clientTokens,
+}: {
+  clientId: string;
+  table: MetricsTable;
+  clientTokens: ClientToken[];
+}) {
+  const boundAction = updateAutofillConfig.bind(null, clientId, table.id);
+  const [state, formAction, pending] = useActionState<AutofillConfigState, FormData>(boundAction, {});
+
+  const [enabled, setEnabled] = useState(table.autofill_enabled);
+  const [matchToken, setMatchToken] = useState(table.match_token ?? "");
+  const [matchColumnId, setMatchColumnId] = useState(table.match_column_id ?? "");
+  const [outputs, setOutputs] = useState<{ token: string; columnId: string }[]>(
+    table.outputs.length > 0
+      ? table.outputs.map((o) => ({ token: o.output_token, columnId: o.output_column_id }))
+      : [{ token: "", columnId: "" }]
+  );
+
+  const usedTokens = new Set([matchToken, ...outputs.map((o) => o.token)].filter(Boolean));
+  const availableTokensFor = (currentToken: string) =>
+    clientTokens.filter((t) => t.token === currentToken || !usedTokens.has(t.token));
+
+  function addOutput() {
+    setOutputs((o) => [...o, { token: "", columnId: "" }]);
+  }
+
+  function removeOutput(index: number) {
+    setOutputs((o) => o.filter((_, i) => i !== index));
+  }
+
+  function updateOutput(index: number, field: "token" | "columnId", value: string) {
+    setOutputs((o) => o.map((out, i) => (i === index ? { ...out, [field]: value } : out)));
+  }
+
+  return (
+    <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
+      <form action={formAction} className="space-y-4">
+        <label className="flex items-center gap-2 text-sm font-medium text-zinc-900">
+          <input
+            type="checkbox"
+            name="autofill_enabled"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-zinc-300"
+          />
+          Use this table to auto-fill document fields
+        </label>
+
+        {enabled && (
+          <div className="space-y-4 pl-6">
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600">Match token</label>
+                <select
+                  name="match_token"
+                  value={matchToken}
+                  onChange={(e) => setMatchToken(e.target.value)}
+                  className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                >
+                  <option value="">Select a token…</option>
+                  {availableTokensFor(matchToken).map((t) => (
+                    <option key={t.token} value={t.token}>
+                      {t.label} ({t.token})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600">Match column</label>
+                <select
+                  name="match_column_id"
+                  value={matchColumnId}
+                  onChange={(e) => setMatchColumnId(e.target.value)}
+                  className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                >
+                  <option value="">Select a column…</option>
+                  {table.columns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-600">Output token → column</label>
+              <div className="space-y-2">
+                {outputs.map((out, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <select
+                      name="output_token"
+                      value={out.token}
+                      onChange={(e) => updateOutput(index, "token", e.target.value)}
+                      className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                    >
+                      <option value="">Select a token…</option>
+                      {availableTokensFor(out.token).map((t) => (
+                        <option key={t.token} value={t.token}>
+                          {t.label} ({t.token})
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-xs text-zinc-400">→</span>
+                    <select
+                      name="output_column_id"
+                      value={out.columnId}
+                      onChange={(e) => updateOutput(index, "columnId", e.target.value)}
+                      className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                    >
+                      <option value="">Select a column…</option>
+                      {table.columns.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    {outputs.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeOutput(index)}
+                        className="shrink-0 text-xs text-zinc-400 hover:text-red-600"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={addOutput}
+                className="mt-2 text-xs font-medium text-zinc-600 hover:text-zinc-900"
+              >
+                + Add output mapping
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          >
+            {pending ? "Saving…" : "Save auto-fill settings"}
+          </button>
+          {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+        </div>
+      </form>
     </div>
   );
 }
