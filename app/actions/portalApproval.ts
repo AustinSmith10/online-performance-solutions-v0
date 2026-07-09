@@ -45,6 +45,20 @@ export async function submitPortalApproval(
     return { error: "You have already submitted a response for this review." };
   }
 
+  const { data: projectForGuard } = await supabase
+    .from("projects")
+    .select("status, review_cycle")
+    .eq("id", review.project_id)
+    .single();
+
+  if (!projectForGuard) return { error: "This review is no longer valid." };
+  if ((projectForGuard.review_cycle as number) !== review.review_cycle) {
+    return { error: "This review is no longer valid — the project has moved to a new review cycle." };
+  }
+  if ((projectForGuard.status as string) !== "dispatched") {
+    return { error: "This review is no longer valid — the project is no longer awaiting review." };
+  }
+
   const now = new Date().toISOString();
   const newStatus =
     response === "approved"
@@ -53,12 +67,16 @@ export async function submitPortalApproval(
         : "approved_without_comments"
       : "rejected_with_comments";
 
-  const { error: updateErr } = await supabase
+  const { error: updateErr, count } = await supabase
     .from("stakeholder_reviews")
-    .update({ status: newStatus, comments, responded_at: now })
-    .eq("id", review.id);
+    .update({ status: newStatus, comments, responded_at: now }, { count: "exact" })
+    .eq("id", review.id)
+    .eq("status", "pending");
 
   if (updateErr) return { error: "Failed to record your response. Please try again." };
+  if (count === 0) {
+    return { error: "You have already submitted a response for this review." };
+  }
 
   await supabase
     .from("projects")

@@ -38,18 +38,40 @@ export async function submitApproval(
   const supabase = createAdminClient();
   const now = new Date().toISOString();
 
+  if (review.status !== "pending") {
+    return { error: "This approval link is no longer valid — a response has already been recorded." };
+  }
+
+  const { data: projectForGuard } = await supabase
+    .from("projects")
+    .select("status, review_cycle")
+    .eq("id", review.project_id)
+    .single();
+
+  if (!projectForGuard) return { error: "This approval link is no longer valid." };
+  if ((projectForGuard.review_cycle as number) !== review.review_cycle) {
+    return { error: "This approval link is no longer valid — the project has moved to a new review cycle." };
+  }
+  if ((projectForGuard.status as string) !== "dispatched") {
+    return { error: "This approval link is no longer valid — the project is no longer awaiting review." };
+  }
+
   // Derive the four-state status from response + whether comments were provided
   const newStatus =
     response === "approved"
       ? comments ? "approved_with_comments" : "approved_without_comments"
       : "rejected_with_comments";
 
-  const { error: updateErr } = await supabase
+  const { error: updateErr, count } = await supabase
     .from("stakeholder_reviews")
-    .update({ status: newStatus, comments, responded_at: now })
-    .eq("id", review.id);
+    .update({ status: newStatus, comments, responded_at: now }, { count: "exact" })
+    .eq("id", review.id)
+    .eq("status", "pending");
 
   if (updateErr) return { error: "Failed to record your response. Please try again." };
+  if (count === 0) {
+    return { error: "This approval link is no longer valid — a response has already been recorded." };
+  }
 
   await supabase
     .from("projects")
