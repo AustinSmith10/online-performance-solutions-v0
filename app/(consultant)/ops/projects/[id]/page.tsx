@@ -217,16 +217,7 @@ export default async function ConsultantProjectDetailPage({
         return { ...f, signedUrl: signed?.signedUrl ?? null };
       })
     ),
-    Promise.all(
-      (rawPbdrFiles ?? []).map(async (f) => {
-        const { data: signed } = await supabase.storage
-          .from("documents")
-          .createSignedUrl(f.storage_path as string, 3600, {
-            download: (f.original_filename as string) || true,
-          });
-        return { ...f, signedUrl: signed?.signedUrl ?? null };
-      })
-    ),
+    Promise.resolve(rawPbdrFiles ?? []),
   ]);
 
   const pbdbFiles = rawPbdbFiles ?? [];
@@ -542,7 +533,7 @@ export default async function ConsultantProjectDetailPage({
             {pbdrFiles.map((f) => (
               <DownloadCard
                 key={f.id as string}
-                href={f.signedUrl}
+                href={`/api/download/pbdr/${id}`}
                 filename={f.original_filename as string}
                 originalFilename={f.original_filename as string}
               >
@@ -729,7 +720,7 @@ export default async function ConsultantProjectDetailPage({
                 {pbdrFiles.map((f) => (
                   <DownloadCard
                     key={f.id as string}
-                    href={f.signedUrl}
+                    href={`/api/download/pbdr/${id}`}
                     filename={f.original_filename as string}
                     originalFilename={f.original_filename as string}
                     wrapperClassName="flex items-center justify-between rounded-md border border-green-200 bg-white px-4 py-3"

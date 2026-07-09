@@ -185,7 +185,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "pbdr.redelivered": "PBDR re-delivered to client",
   "pbdr.conversion_failed": "PBDR conversion failed",
   "project.complete": "Project marked complete",
-  "project.pbdr_downloaded": "Client downloaded PBDR",
+  "project.pbdr_downloaded": "PBDR downloaded",
   "project.pbdb_downloaded": "PBDB downloaded",
   "evidence.attached": "Evidence attached",
   "stakeholder.responded": "Stakeholder responded",
@@ -447,6 +447,7 @@ export function formatDetails(
       break;
 
     case "project.pbdr_downloaded":
+      if (s(metadata.role)) parts.push(s(metadata.role).replace(/_/g, " "));
       if (s(metadata.filename)) parts.push(s(metadata.filename));
       break;
 

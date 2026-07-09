@@ -10,20 +10,44 @@ export async function GET(
   const { projectId } = await params;
 
   const user = await getSessionUser();
-  if (!user || user.role !== "stakeholder") {
+  const allowedRoles = ["stakeholder", "consultant", "admin", "super_admin"];
+  if (!user || !allowedRoles.includes(user.role as string)) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
   const supabase = createAdminClient();
 
-  // Verify the project belongs to the user's org and is in a delivered state
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, client_id")
-    .eq("id", projectId)
-    .eq("client_id", user.client_id as string)
-    .in("status", ["delivered", "complete"])
-    .maybeSingle();
+  // Verify the requester is allowed to see this project: an internal stakeholder
+  // scoped to their org on a delivered/complete project, the consultant assigned
+  // to it (any status, once a PBDR exists — they may want to sanity check their
+  // own QA work before it's officially delivered), or an admin/super_admin who
+  // can see any project.
+  let project: { id: string; client_id?: string } | null = null;
+  if (user.role === "consultant") {
+    const { data } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("id", projectId)
+      .eq("assigned_consultant_id", user.id as string)
+      .maybeSingle();
+    project = data;
+  } else if (user.role === "stakeholder") {
+    const { data } = await supabase
+      .from("projects")
+      .select("id, client_id")
+      .eq("id", projectId)
+      .eq("client_id", user.client_id as string)
+      .in("status", ["delivered", "complete"])
+      .maybeSingle();
+    project = data;
+  } else {
+    const { data } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("id", projectId)
+      .maybeSingle();
+    project = data;
+  }
 
   if (!project) {
     return new NextResponse("Not found", { status: 404 });
@@ -54,8 +78,8 @@ export async function GET(
 
   await auditLog("project.pbdr_downloaded", user.id as string, user.email as string, {
     projectId,
-    orgId: user.client_id as string,
-    metadata: { filename: pbdrFile.original_filename },
+    orgId: (user.client_id as string | null) ?? undefined,
+    metadata: { filename: pbdrFile.original_filename, role: user.role },
   });
 
   return NextResponse.redirect(signed.signedUrl);
