@@ -1,13 +1,43 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { attachEvidence, type AttachEvidenceState } from "@/app/actions/evidence";
+import {
+  attachEvidence,
+  requestEvidenceUploadUrl,
+  type AttachEvidenceState,
+} from "@/app/actions/evidence";
+import { createClient } from "@/lib/supabase/client";
 import { UploadDropzone } from "@/components/UploadDropzone";
 
 export function AttachEvidenceForm({ projectId }: { projectId: string }) {
-  const boundAction = attachEvidence.bind(null, projectId);
+  // Orchestrates the signed-upload-URL flow (#86): request a signed URL,
+  // upload the file straight from the browser to Supabase Storage, then
+  // record the metadata — no file body passes through a server action.
+  async function orchestrate(
+    _prev: AttachEvidenceState,
+    formData: FormData
+  ): Promise<AttachEvidenceState> {
+    const file = formData.get("file") as File | null;
+    if (!file || file.size === 0) return { error: "Please select a file." };
+
+    const reference = (formData.get("reference") as string | null)?.trim() || null;
+
+    const requested = await requestEvidenceUploadUrl(projectId, file.name, file.size);
+    if ("error" in requested) return { error: requested.error };
+
+    const supabase = createClient();
+    const { error: uploadError } = await supabase.storage
+      .from("evidence")
+      .uploadToSignedUrl(requested.path, requested.token, file, {
+        contentType: requested.contentType,
+      });
+    if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
+
+    return attachEvidence(projectId, requested.path, file.name, reference);
+  }
+
   const [state, formAction, pending] = useActionState<AttachEvidenceState, FormData>(
-    boundAction,
+    orchestrate,
     {}
   );
   const [hasFile, setHasFile] = useState(false);
@@ -15,8 +45,8 @@ export function AttachEvidenceForm({ projectId }: { projectId: string }) {
   return (
     <form action={formAction} className="space-y-3">
       <UploadDropzone
-        accept="application/pdf,image/png,image/jpeg,image/tiff"
-        hint="PDF, JPEG, PNG, or TIFF — 50 MB max"
+        accept="application/pdf,image/png,image/jpeg,image/tiff,message/rfc822,.eml,application/vnd.ms-outlook,.msg"
+        hint="PDF, JPEG, PNG, TIFF, or a forwarded email (.eml/.msg) — 50 MB max"
         pending={pending}
         success={state.success}
         error={state.error}

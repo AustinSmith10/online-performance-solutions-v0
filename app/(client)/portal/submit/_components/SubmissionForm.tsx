@@ -2,11 +2,15 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import {
-  extractFields,
+  requestSubmissionUploadUrls,
+  finalizeSubmission,
+  abortSubmissionUploads,
   submitProject,
   type ExtractState,
   type TokenField,
+  type UploadManifestItem,
 } from "@/app/actions/submission";
+import { createClient } from "@/lib/supabase/client";
 import type { Confidence } from "@/lib/documents/extractor";
 import type { MetricsPickRow } from "@/lib/documents/metrics-autofill";
 
@@ -602,8 +606,64 @@ export function SubmissionForm({
   startOverHref = "/portal/submit",
   showExtractionBanner = false,
 }: Props) {
+  // Orchestrates the signed-upload-URL flow (#86): request signed URLs for
+  // every file in the form, upload each straight from the browser to
+  // Supabase Storage, then finalize (extraction + draft creation). File
+  // bytes never pass through a server action body.
+  async function submitStep1(_prev: ExtractState, formData: FormData): Promise<ExtractState> {
+    const templateId = (formData.get("template_id") as string | null)?.trim() ?? "";
+    const submittedAdminOrgId = (formData.get("admin_org_id") as string | null) ?? null;
+    const submittedAdminClientId = (formData.get("admin_client_id") as string | null) ?? null;
+
+    const filesBySlug: Record<string, File[]> = {};
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File && value.size > 0) {
+        (filesBySlug[key] ??= []).push(value);
+      }
+    }
+
+    const manifestBySlug: Record<string, UploadManifestItem[]> = {};
+    for (const [slug, files] of Object.entries(filesBySlug)) {
+      manifestBySlug[slug] = files.map((f) => ({ name: f.name, size: f.size }));
+    }
+
+    const requested = await requestSubmissionUploadUrls(
+      templateId,
+      submittedAdminOrgId,
+      submittedAdminClientId,
+      manifestBySlug
+    );
+    if ("error" in requested) return { step: 1, error: requested.error };
+
+    const supabase = createClient();
+    const uploadedPaths: string[] = [];
+    for (const u of requested.uploads) {
+      const file = filesBySlug[u.slug]?.[u.index];
+      if (!file) {
+        return { step: 1, error: `Missing file for "${u.name}". Please try again.` };
+      }
+      const { error } = await supabase.storage
+        .from("submissions")
+        .uploadToSignedUrl(u.path, u.token, file, { contentType: file.type || "application/pdf" });
+      if (error) {
+        // best-effort cleanup of files that did upload before this one failed
+        void abortSubmissionUploads(uploadedPaths);
+        return { step: 1, error: `Failed to upload "${u.name}". Please try again.` };
+      }
+      uploadedPaths.push(u.path);
+    }
+
+    return finalizeSubmission(
+      requested.projectId,
+      templateId,
+      submittedAdminOrgId,
+      submittedAdminClientId,
+      requested.uploads.map((u) => ({ slug: u.slug, name: u.name, path: u.path }))
+    );
+  }
+
   const [extractState, extractAction, extractPending] = useActionState<ExtractState, FormData>(
-    extractFields,
+    submitStep1,
     initialState ?? { step: 1 }
   );
   const [submitState, submitAction, submitPending] = useActionState(submitProject, {});

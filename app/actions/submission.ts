@@ -65,63 +65,104 @@ export type ExtractState =
       templateId: string;
     };
 
-// ─── Step 1: upload + extract ───────────────────────────────────────────────
+// ─── Step 1a: derive an org id from actor role + admin fields (shared) ──────
 
-export async function extractFields(
-  _prev: ExtractState,
-  formData: FormData
-): Promise<ExtractState> {
-  const actor = await requireRole("stakeholder", "super_admin", "admin");
-  const supabase = createAdminClient();
+function resolveOrgId(
+  actor: { role: string; client_id?: unknown },
+  isAdmin: boolean,
+  adminOrgId: string | null
+): string {
+  return isAdmin ? (adminOrgId?.trim() ?? "") : (actor.client_id as string);
+}
 
-  const templateId = (formData.get("template_id") as string | null)?.trim();
-  if (!templateId) return { step: 1, error: "No template selected." };
+type FileReq = {
+  id: string; name: string; slug: string;
+  max_count: number; required: boolean; no_duplicates: boolean; extraction: boolean;
+};
 
-  const isAdmin = actor.role === "super_admin" || actor.role === "admin";
-  const orgId = isAdmin
-    ? ((formData.get("admin_org_id") as string | null)?.trim() ?? "")
-    : (actor.client_id as string);
-  if (!orgId) return { step: 1, error: "Client is required." };
-  const adminClientId = isAdmin
-    ? ((formData.get("admin_client_id") as string | null)?.trim() ?? "")
-    : "";
-  if (isAdmin && !adminClientId) return { step: 1, error: "Client account is required." };
-  const projectId = crypto.randomUUID();
-
-  // Load file requirements for this template
-  const { data: fileReqsData } = await supabase
+async function loadFileRequirements(
+  supabase: ReturnType<typeof createAdminClient>,
+  templateId: string
+): Promise<FileReq[]> {
+  const { data } = await supabase
     .from("file_requirements")
     .select("id, name, slug, max_count, required, no_duplicates, extraction")
     .eq("template_id", templateId)
     .order("sort_order");
+  return (data ?? []) as FileReq[];
+}
 
-  type FileReq = {
-    id: string; name: string; slug: string;
-    max_count: number; required: boolean; no_duplicates: boolean; extraction: boolean;
-  };
-  const fileReqs = (fileReqsData ?? []) as FileReq[];
+// ─── Step 1: request signed upload URLs ─────────────────────────────────────
+// The browser uploads file bytes directly to Supabase Storage using these
+// URLs — no file body passes through this server action, which keeps the
+// per-request payload metadata-only and removes the server-action body-size
+// ceiling as upload volume grows (#86).
 
-  // Collect uploaded files per requirement slot
-  const filesBySlug: Record<string, File[]> = {};
+export interface UploadManifestItem {
+  name: string;
+  size: number;
+}
+
+export type RequestUploadsResult =
+  | { error: string }
+  | {
+      projectId: string;
+      uploads: {
+        slug: string;
+        index: number;
+        name: string;
+        path: string;
+        signedUrl: string;
+        token: string;
+      }[];
+    };
+
+// Best-effort cleanup for files the browser already uploaded before a
+// sibling upload in the same batch failed — nothing references these paths
+// yet (no draft project exists), so they're safe to remove.
+export async function abortSubmissionUploads(paths: string[]): Promise<void> {
+  await requireRole("stakeholder", "super_admin", "admin");
+  if (!paths.length) return;
+  const supabase = createAdminClient();
+  await supabase.storage.from("submissions").remove(paths);
+}
+
+export async function requestSubmissionUploadUrls(
+  templateId: string,
+  adminOrgId: string | null,
+  adminClientId: string | null,
+  manifestBySlug: Record<string, UploadManifestItem[]>
+): Promise<RequestUploadsResult> {
+  const actor = await requireRole("stakeholder", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  if (!templateId) return { error: "No template selected." };
+
+  const isAdmin = actor.role === "super_admin" || actor.role === "admin";
+  const orgId = resolveOrgId(actor, isAdmin, adminOrgId);
+  if (!orgId) return { error: "Client is required." };
+  if (isAdmin && !adminClientId?.trim()) return { error: "Client account is required." };
+
+  const fileReqs = await loadFileRequirements(supabase, templateId);
+
+  // Collect manifest items per requirement slot (defensively re-sliced to max_count)
+  const itemsBySlug: Record<string, UploadManifestItem[]> = {};
   for (const req of fileReqs) {
-    const all = formData.getAll(req.slug) as (File | string)[];
-    filesBySlug[req.slug] = all
-      .filter((f): f is File => f instanceof File && f.size > 0)
-      .slice(0, req.max_count);
+    itemsBySlug[req.slug] = (manifestBySlug[req.slug] ?? []).slice(0, req.max_count);
   }
 
   // Validate required slots
   for (const req of fileReqs) {
-    if (req.required && !filesBySlug[req.slug]?.length) {
-      return { step: 1, error: `"${req.name}" is required. Please attach a file.` };
+    if (req.required && !itemsBySlug[req.slug]?.length) {
+      return { error: `"${req.name}" is required. Please attach a file.` };
     }
   }
 
   // Validate file sizes (50 MB per file)
   for (const req of fileReqs) {
-    for (const file of filesBySlug[req.slug] ?? []) {
-      if (file.size > 50 * 1024 * 1024) {
-        return { step: 1, error: `"${req.name}" — "${file.name}" exceeds the 50 MB limit.` };
+    for (const item of itemsBySlug[req.slug] ?? []) {
+      if (item.size > 50 * 1024 * 1024) {
+        return { error: `"${req.name}" — "${item.name}" exceeds the 50 MB limit.` };
       }
     }
   }
@@ -129,46 +170,113 @@ export async function extractFields(
   // Validate no_duplicates within each slot
   for (const req of fileReqs) {
     if (req.no_duplicates) {
-      const names = (filesBySlug[req.slug] ?? []).map((f) => f.name);
+      const names = (itemsBySlug[req.slug] ?? []).map((i) => i.name);
       if (new Set(names).size < names.length) {
-        return { step: 1, error: `"${req.name}" cannot contain files with duplicate names.` };
+        return { error: `"${req.name}" cannot contain files with duplicate names.` };
       }
     }
   }
 
-  // Read all file buffers and build upload manifest
-  type UploadItem = { req: FileReq; file: File; path: string; buffer: Buffer };
-  const uploadItems: UploadItem[] = await Promise.all(
-    fileReqs.flatMap((req) =>
-      (filesBySlug[req.slug] ?? []).map(async (file) => ({
-        req,
-        file,
-        path: `${orgId}/${projectId}/${req.slug}/${file.name}`,
-        buffer: Buffer.from(await file.arrayBuffer()),
-      }))
-    )
+  const projectId = crypto.randomUUID();
+
+  const uploadPlan = fileReqs.flatMap((req) =>
+    (itemsBySlug[req.slug] ?? []).map((item, index) => ({
+      slug: req.slug,
+      index,
+      name: item.name,
+      path: `${orgId}/${projectId}/${req.slug}/${item.name}`,
+    }))
   );
 
-  // Upload all files in parallel
-  const uploadResults = await Promise.all(
-    uploadItems.map(({ buffer, file, path }) =>
-      supabase.storage
-        .from("submissions")
-        .upload(path, buffer, { contentType: file.type || "application/pdf" })
-    )
+  const signedResults = await Promise.all(
+    uploadPlan.map((item) => supabase.storage.from("submissions").createSignedUploadUrl(item.path))
   );
 
-  const failedIdx = uploadResults.findIndex((r) => r.error);
-  if (failedIdx >= 0) {
-    const successPaths = uploadResults.slice(0, failedIdx).map((_, i) => uploadItems[i].path);
-    if (successPaths.length) await supabase.storage.from("submissions").remove(successPaths);
-    return { step: 1, error: `Failed to upload "${uploadItems[failedIdx].file.name}". Please try again.` };
+  const failed = signedResults.find((r) => r.error);
+  if (failed?.error) {
+    return { error: "Failed to prepare uploads. Please try again." };
   }
 
-  // Collect extraction documents (only slots with extraction = true)
-  const extractionDocs = uploadItems
-    .filter((item) => item.req.extraction)
-    .map((item) => ({ label: item.req.name, buffer: item.buffer }));
+  return {
+    projectId,
+    uploads: uploadPlan.map((item, i) => ({
+      ...item,
+      signedUrl: signedResults[i].data!.signedUrl,
+      token: signedResults[i].data!.token,
+    })),
+  };
+}
+
+// ─── Step 1b: finalize — download uploaded files for extraction, persist ────
+
+export interface FinalizeUploadItem {
+  slug: string;
+  name: string;
+  path: string;
+}
+
+export async function finalizeSubmission(
+  projectId: string,
+  templateId: string,
+  adminOrgId: string | null,
+  adminClientId: string | null,
+  uploads: FinalizeUploadItem[]
+): Promise<ExtractState> {
+  const actor = await requireRole("stakeholder", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const isAdmin = actor.role === "super_admin" || actor.role === "admin";
+  const orgId = resolveOrgId(actor, isAdmin, adminOrgId);
+  if (!orgId) return { step: 1, error: "Client is required." };
+  if (isAdmin && !adminClientId?.trim()) return { step: 1, error: "Client account is required." };
+
+  const fileReqs = await loadFileRequirements(supabase, templateId);
+  const reqBySlug = new Map(fileReqs.map((r) => [r.slug, r]));
+
+  const cleanupPaths = uploads.map((u) => u.path);
+  const cleanup = async () => {
+    if (cleanupPaths.length) await supabase.storage.from("submissions").remove(cleanupPaths);
+  };
+
+  // Defensive re-validation: confirm each uploaded object actually exists and
+  // is within the size limit (declared sizes were only checked client-side
+  // before the signed-URL request; the browser controls the actual bytes).
+  const byFolder = new Map<string, FinalizeUploadItem[]>();
+  for (const u of uploads) {
+    const folder = u.path.slice(0, u.path.lastIndexOf("/"));
+    byFolder.set(folder, [...(byFolder.get(folder) ?? []), u]);
+  }
+  for (const [folder, items] of byFolder) {
+    const { data: listing } = await supabase.storage.from("submissions").list(folder);
+    for (const item of items) {
+      const filename = item.path.slice(item.path.lastIndexOf("/") + 1);
+      const entry = listing?.find((f) => f.name === filename);
+      if (!entry) {
+        await cleanup();
+        return { step: 1, error: `Upload for "${item.name}" did not complete. Please try again.` };
+      }
+      if ((entry.metadata?.size ?? 0) > 50 * 1024 * 1024) {
+        await cleanup();
+        return { step: 1, error: `"${item.name}" exceeds the 50 MB limit.` };
+      }
+    }
+  }
+
+  // Download only the files needed for extraction (slots with extraction = true)
+  const extractionUploads = uploads.filter((u) => reqBySlug.get(u.slug)?.extraction);
+  const downloaded = await Promise.all(
+    extractionUploads.map(async (u) => {
+      const { data, error } = await supabase.storage.from("submissions").download(u.path);
+      if (error || !data) throw new Error(`Failed to read "${u.name}" for extraction.`);
+      return { label: reqBySlug.get(u.slug)!.name, buffer: Buffer.from(await data.arrayBuffer()) };
+    })
+  ).catch((err: Error) => err);
+
+  if (downloaded instanceof Error) {
+    await cleanup();
+    return { step: 1, error: downloaded.message };
+  }
+  const extractionDocs = downloaded;
 
   // Load template mappings, section labels, and org config in parallel
   const [mappingsResult, orgResult, templateResult] = await Promise.all([
@@ -225,9 +333,8 @@ export async function extractFields(
     extraction = await extractDocumentFields(extractionDocs, extractTokens);
     resolveMetricsAutofill(metricsAutofillConfigs, extraction.fields);
   } catch (err) {
-    const pathsToRemove = uploadItems.map((i) => i.path);
-    if (pathsToRemove.length) await supabase.storage.from("submissions").remove(pathsToRemove);
-    console.error("[extractFields] extraction failed:", err);
+    await cleanup();
+    console.error("[finalizeSubmission] extraction failed:", err);
     return {
       step: 1,
       error:
@@ -239,7 +346,6 @@ export async function extractFields(
   // for this org already has the same address (submitted or draft).
   const extractedAddress = extraction.fields["EXTRACT_ADDRESS"]?.value?.trim() ?? "";
   if (extractedAddress) {
-    const pathsToRemove = uploadItems.map((i) => i.path);
     const [{ data: byAddress }, { data: byDraft }] = await Promise.all([
       supabase
         .from("projects")
@@ -260,7 +366,7 @@ export async function extractFields(
     ]);
     const existing = byAddress ?? byDraft;
     if (existing) {
-      if (pathsToRemove.length) await supabase.storage.from("submissions").remove(pathsToRemove);
+      await cleanup();
       return {
         step: 1,
         error: `A project for ${extractedAddress} already exists. Please review the existing project instead of creating a new one.`,
@@ -277,25 +383,24 @@ export async function extractFields(
     id: projectId,
     client_id: orgId,
     template_id: templateId,
-    submitted_by: isAdmin ? adminClientId : actor.id,
+    submitted_by: isAdmin ? (adminClientId as string) : actor.id,
     status: "draft",
     po_number: extraction.po_number.value || null,
     extracted_fields: draftFields,
   });
 
   if (projectError) {
-    const pathsToRemove = uploadItems.map((i) => i.path);
-    if (pathsToRemove.length) await supabase.storage.from("submissions").remove(pathsToRemove);
-    console.error("[extractFields] draft project insert failed:", projectError);
+    await cleanup();
+    console.error("[finalizeSubmission] draft project insert failed:", projectError);
     return { step: 1, error: "Failed to save your draft. Please try again." };
   }
 
-  if (uploadItems.length > 0) {
-    const fileRecords = uploadItems.map(({ req, file, path }) => ({
+  if (uploads.length > 0) {
+    const fileRecords = uploads.map(({ slug, name, path }) => ({
       project_id: projectId,
-      file_type: req.slug,
+      file_type: slug,
       storage_path: path,
-      original_filename: file.name,
+      original_filename: name,
       uploaded_by: actor.id,
     }));
     await supabase.from("project_files").insert(fileRecords);
@@ -307,10 +412,10 @@ export async function extractFields(
     metadata: {
       templateId,
       templateName,
-      files: uploadItems.map(({ req, file }) => ({
-        slug: req.slug,
-        label: req.name,
-        filename: file.name,
+      files: uploads.map(({ slug, name }) => ({
+        slug,
+        label: reqBySlug.get(slug)?.name ?? slug,
+        filename: name,
       })),
       extracted_fields: draftFields,
       po_number: extraction.po_number.value || null,
