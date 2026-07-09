@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireRole, getSessionUser } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
+import { removeProjectStorageFiles } from "@/lib/storage/project-files";
 
 export async function purgeProject(
   projectId: string,
@@ -35,11 +36,8 @@ export async function purgeProject(
     return { error: "Project not found in recovery bin." };
   }
 
-  // Fetch storage paths before deleting
-  const { data: files } = await supabase
-    .from("project_files")
-    .select("storage_path")
-    .eq("project_id", projectId);
+  // Clean up storage files before deleting (best-effort)
+  await removeProjectStorageFiles(supabase, projectId);
 
   // Hard-delete via SQL function (handles audit_log trigger and credit_ledger FK)
   const { error: purgeError } = await supabase.rpc("purge_project", {
@@ -49,13 +47,6 @@ export async function purgeProject(
   if (purgeError) {
     console.error("[purgeProject]", purgeError);
     return { error: "Could not permanently delete project. Please try again." };
-  }
-
-  // Clean up storage files (best-effort)
-  if (files && files.length > 0) {
-    await supabase.storage
-      .from("submissions")
-      .remove(files.map((f) => f.storage_path as string));
   }
 
   await auditLog("project.purged", user.id, user.email as string, {

@@ -1,5 +1,6 @@
 import { PgBoss } from "pg-boss";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { purgeRecoveryBin } from "@/lib/jobs/purge-recovery-bin";
 import { generatePbdb } from "@/lib/documents/generator";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
@@ -44,17 +45,12 @@ async function main() {
   await boss.schedule("purge-recovery-bin", "0 0 * * *", {});
   await boss.work("purge-recovery-bin", async () => {
     const supabase = createAdminClient();
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { error, count } = await supabase
-      .from("projects")
-      .delete({ count: "exact" })
-      .not("deleted_at", "is", null)
-      .lt("deleted_at", cutoff);
-    if (error) {
-      console.error("[purge-recovery-bin] failed:", error);
-      throw new Error(error.message);
+    const { purgedCount, failedProjectIds } = await purgeRecoveryBin(supabase);
+
+    console.log(`[purge-recovery-bin] permanently removed ${purgedCount} project(s)`);
+    if (failedProjectIds.length > 0) {
+      throw new Error(`failed to purge project(s): ${failedProjectIds.join(", ")}`);
     }
-    console.log(`[purge-recovery-bin] permanently removed ${count ?? 0} project(s)`);
   });
 
   // Expire abandoned email-sourced drafts. Runs daily at 02:00.
