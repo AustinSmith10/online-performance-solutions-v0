@@ -22,6 +22,7 @@ export interface MetricsTable {
   created_at: string;
   columns: MetricsColumn[];
   autofill_enabled: boolean;
+  template_id: string | null;
   match_token: string | null;
   match_column_id: string | null;
   outputs: OutputMapping[];
@@ -39,16 +40,15 @@ export interface OutputMapping {
   output_column_id: string;
 }
 
-export interface AutofillConfig {
-  autofill_enabled: boolean;
-  match_token: string | null;
-  match_column_id: string | null;
-  outputs: OutputMapping[];
-}
-
 export interface ClientToken {
   token: string;
   label: string;
+}
+
+export interface TemplateTokenGroup {
+  templateId: string;
+  templateName: string;
+  tokens: ClientToken[];
 }
 
 const VALID_TYPES: ColumnDataType[] = ["text", "number", "date"];
@@ -410,37 +410,46 @@ export async function importMetricsExcel(
 // mappings, generalizing the hardcoded halcyon_developments mechanism.
 // ---------------------------------------------------------------------------
 
-// A client's placeholder tokens live per-template (template_field_mappings),
-// but the autofill match/output happens purely by token name at submission
-// time regardless of which template a project uses — so tokens are deduped
-// across all of a client's templates.
-export async function getClientTemplateTokens(clientId: string): Promise<ClientToken[]> {
+// A client's placeholder tokens live per-template (template_field_mappings).
+// Auto-fill resolution itself happens purely by token name at submission
+// time regardless of which template a project uses, but the admin picks
+// match/output tokens one template at a time, to avoid a single deduped
+// list across every template the client has.
+export async function getClientTemplateTokenGroups(clientId: string): Promise<TemplateTokenGroup[]> {
   await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: templates } = await supabase
     .from("templates")
-    .select("id")
-    .eq("client_id", clientId);
+    .select("id, name")
+    .eq("client_id", clientId)
+    .order("name");
 
-  const templateIds = (templates ?? []).map((t) => t.id as string);
-  if (templateIds.length === 0) return [];
+  const templateList = (templates ?? []) as { id: string; name: string }[];
+  if (templateList.length === 0) return [];
 
   const { data: mappings } = await supabase
     .from("template_field_mappings")
-    .select("placeholder_token, display_label")
-    .in("template_id", templateIds)
+    .select("template_id, placeholder_token, display_label")
+    .in("template_id", templateList.map((t) => t.id))
     .eq("field_key", "extract")
     .eq("is_mapped", true);
 
-  const byToken = new Map<string, ClientToken>();
-  for (const m of mappings ?? []) {
-    const token = m.placeholder_token as string;
-    if (!byToken.has(token)) {
-      byToken.set(token, { token, label: (m.display_label as string | null) || token });
+  return templateList.map((t) => {
+    const byToken = new Map<string, ClientToken>();
+    for (const m of mappings ?? []) {
+      if (m.template_id !== t.id) continue;
+      const token = m.placeholder_token as string;
+      if (!byToken.has(token)) {
+        byToken.set(token, { token, label: (m.display_label as string | null) || token });
+      }
     }
-  }
-  return [...byToken.values()].sort((a, b) => a.token.localeCompare(b.token));
+    return {
+      templateId: t.id,
+      templateName: t.name,
+      tokens: [...byToken.values()].sort((a, b) => a.token.localeCompare(b.token)),
+    };
+  });
 }
 
 export type AutofillConfigState = { error?: string };
@@ -455,6 +464,7 @@ export async function updateAutofillConfig(
   const supabase = createAdminClient();
 
   const enabled = formData.get("autofill_enabled") === "on";
+  const templateId = (formData.get("template_id") as string | null)?.trim() || null;
   const matchToken = (formData.get("match_token") as string | null)?.trim() || null;
   const matchColumnId = (formData.get("match_column_id") as string | null)?.trim() || null;
   const outputTokens = formData.getAll("output_token") as string[];
@@ -468,6 +478,7 @@ export async function updateAutofillConfig(
 
   const outputs: { output_token: string; output_column_id: string }[] = [];
   if (enabled) {
+    if (!templateId) return { error: "A template is required to enable auto-fill." };
     if (!matchToken) return { error: "A match token is required to enable auto-fill." };
     if (!matchColumnId || !validColumnIds.has(matchColumnId)) {
       return { error: "A valid match column is required to enable auto-fill." };
@@ -496,6 +507,7 @@ export async function updateAutofillConfig(
     .from("client_metrics_tables")
     .update({
       autofill_enabled: enabled,
+      template_id: enabled ? templateId : null,
       match_token: enabled ? matchToken : null,
       match_column_id: enabled ? matchColumnId : null,
     })

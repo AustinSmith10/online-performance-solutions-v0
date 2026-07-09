@@ -276,6 +276,7 @@ export type Database = {
           match_column_id: string | null
           match_token: string | null
           name: string
+          template_id: string | null
           updated_at: string
         }
         Insert: {
@@ -286,6 +287,7 @@ export type Database = {
           match_column_id?: string | null
           match_token?: string | null
           name: string
+          template_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -296,6 +298,7 @@ export type Database = {
           match_column_id?: string | null
           match_token?: string | null
           name?: string
+          template_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -311,6 +314,13 @@ export type Database = {
             columns: ["match_column_id"]
             isOneToOne: false
             referencedRelation: "client_metrics_columns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_metrics_tables_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
             referencedColumns: ["id"]
           },
         ]

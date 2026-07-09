@@ -8,7 +8,7 @@ import {
   type ColumnDataType,
   type MetricsTable,
   type MetricsRow,
-  type ClientToken,
+  type TemplateTokenGroup,
 } from "@/app/actions/client-metrics";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { MetricsTableEditor } from "./metrics-table-editor";
@@ -23,10 +23,10 @@ interface Props {
   clientId: string;
   tables: MetricsTable[];
   rowsByTable: Record<string, MetricsRow[]>;
-  clientTokens: ClientToken[];
+  templateTokenGroups: TemplateTokenGroup[];
 }
 
-export function MetricsTablesPanel({ clientId, tables, rowsByTable, clientTokens }: Props) {
+export function MetricsTablesPanel({ clientId, tables, rowsByTable, templateTokenGroups }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(tables[0]?.id ?? null);
 
   return (
@@ -65,7 +65,7 @@ export function MetricsTablesPanel({ clientId, tables, rowsByTable, clientTokens
                   clientId={clientId}
                   table={table}
                   rows={rowsByTable[table.id] ?? []}
-                  clientTokens={clientTokens}
+                  templateTokenGroups={templateTokenGroups}
                 />
                 <DeleteTableButton clientId={clientId} tableId={table.id} tableName={table.name} />
               </div>

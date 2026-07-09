@@ -12,7 +12,7 @@ import {
   type AutofillConfigState,
   type MetricsTable,
   type MetricsRow,
-  type ClientToken,
+  type TemplateTokenGroup,
 } from "@/app/actions/client-metrics";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { EditIconButton } from "@/components/EditIconButton";
@@ -21,13 +21,13 @@ interface Props {
   clientId: string;
   table: MetricsTable;
   rows: MetricsRow[];
-  clientTokens: ClientToken[];
+  templateTokenGroups: TemplateTokenGroup[];
 }
 
-export function MetricsTableEditor({ clientId, table, rows, clientTokens }: Props) {
+export function MetricsTableEditor({ clientId, table, rows, templateTokenGroups }: Props) {
   return (
     <div className="space-y-6">
-      <AutofillConfigPanel clientId={clientId} table={table} clientTokens={clientTokens} />
+      <AutofillConfigPanel clientId={clientId} table={table} templateTokenGroups={templateTokenGroups} />
 
       <ExcelImportForm clientId={clientId} tableId={table.id} table={table} />
 
@@ -61,16 +61,17 @@ export function MetricsTableEditor({ clientId, table, rows, clientTokens }: Prop
 function AutofillConfigPanel({
   clientId,
   table,
-  clientTokens,
+  templateTokenGroups,
 }: {
   clientId: string;
   table: MetricsTable;
-  clientTokens: ClientToken[];
+  templateTokenGroups: TemplateTokenGroup[];
 }) {
   const boundAction = updateAutofillConfig.bind(null, clientId, table.id);
   const [state, formAction, pending] = useActionState<AutofillConfigState, FormData>(boundAction, {});
 
   const [enabled, setEnabled] = useState(table.autofill_enabled);
+  const [templateId, setTemplateId] = useState(table.template_id ?? "");
   const [matchToken, setMatchToken] = useState(table.match_token ?? "");
   const [matchColumnId, setMatchColumnId] = useState(table.match_column_id ?? "");
   const [outputs, setOutputs] = useState<{ token: string; columnId: string }[]>(
@@ -79,9 +80,16 @@ function AutofillConfigPanel({
       : [{ token: "", columnId: "" }]
   );
 
+  const templateTokens = templateTokenGroups.find((g) => g.templateId === templateId)?.tokens ?? [];
   const usedTokens = new Set([matchToken, ...outputs.map((o) => o.token)].filter(Boolean));
   const availableTokensFor = (currentToken: string) =>
-    clientTokens.filter((t) => t.token === currentToken || !usedTokens.has(t.token));
+    templateTokens.filter((t) => t.token === currentToken || !usedTokens.has(t.token));
+
+  function selectTemplate(newTemplateId: string) {
+    setTemplateId(newTemplateId);
+    setMatchToken("");
+    setOutputs([{ token: "", columnId: "" }]);
+  }
 
   function addOutput() {
     setOutputs((o) => [...o, { token: "", columnId: "" }]);
@@ -97,6 +105,12 @@ function AutofillConfigPanel({
 
   return (
     <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
+      <h3 className="text-sm font-semibold text-zinc-900">Auto-fill document fields from this table</h3>
+      <p className="mt-0.5 mb-3 text-xs text-zinc-500">
+        When enabled, a value extracted from a submitted document (the match token) is looked up in this
+        table. Matching row values then fill in other document fields automatically, instead of those
+        fields being extracted by AI.
+      </p>
       <form action={formAction} className="space-y-4">
         <label className="flex items-center gap-2 text-sm font-medium text-zinc-900">
           <input
@@ -106,69 +120,58 @@ function AutofillConfigPanel({
             onChange={(e) => setEnabled(e.target.checked)}
             className="h-4 w-4 rounded border-zinc-300"
           />
-          Use this table to auto-fill document fields
+          Enable auto-fill for this table
         </label>
 
         {enabled && (
           <div className="space-y-4 pl-6">
-            <div className="flex flex-wrap items-end gap-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-600">Match token</label>
-                <select
-                  name="match_token"
-                  value={matchToken}
-                  onChange={(e) => setMatchToken(e.target.value)}
-                  className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
-                >
-                  <option value="">Select a token…</option>
-                  {availableTokensFor(matchToken).map((t) => (
-                    <option key={t.token} value={t.token}>
-                      {t.label} ({t.token})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-600">Match column</label>
-                <select
-                  name="match_column_id"
-                  value={matchColumnId}
-                  onChange={(e) => setMatchColumnId(e.target.value)}
-                  className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
-                >
-                  <option value="">Select a column…</option>
-                  {table.columns.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-zinc-600">
+                Template (which document tokens to choose from)
+              </label>
+              <select
+                name="template_id"
+                value={templateId}
+                onChange={(e) => selectTemplate(e.target.value)}
+                className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              >
+                <option value="">Select a template…</option>
+                {templateTokenGroups.map((g) => (
+                  <option key={g.templateId} value={g.templateId}>
+                    {g.templateName}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-600">Output token → column</label>
-              <div className="space-y-2">
-                {outputs.map((out, index) => (
-                  <div key={index} className="flex items-center gap-2">
+            {templateId && (
+              <>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-600">
+                      Match token (extracted from documents)
+                    </label>
                     <select
-                      name="output_token"
-                      value={out.token}
-                      onChange={(e) => updateOutput(index, "token", e.target.value)}
+                      name="match_token"
+                      value={matchToken}
+                      onChange={(e) => setMatchToken(e.target.value)}
                       className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                     >
                       <option value="">Select a token…</option>
-                      {availableTokensFor(out.token).map((t) => (
+                      {availableTokensFor(matchToken).map((t) => (
                         <option key={t.token} value={t.token}>
                           {t.label} ({t.token})
                         </option>
                       ))}
                     </select>
-                    <span className="text-xs text-zinc-400">→</span>
+                  </div>
+                  <span className="pb-2 text-xs text-zinc-400">looked up against</span>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-600">Match column</label>
                     <select
-                      name="output_column_id"
-                      value={out.columnId}
-                      onChange={(e) => updateOutput(index, "columnId", e.target.value)}
+                      name="match_column_id"
+                      value={matchColumnId}
+                      onChange={(e) => setMatchColumnId(e.target.value)}
                       className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                     >
                       <option value="">Select a column…</option>
@@ -178,26 +181,65 @@ function AutofillConfigPanel({
                         </option>
                       ))}
                     </select>
-                    {outputs.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeOutput(index)}
-                        className="shrink-0 text-xs text-zinc-400 hover:text-red-600"
-                      >
-                        Remove
-                      </button>
-                    )}
                   </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={addOutput}
-                className="mt-2 text-xs font-medium text-zinc-600 hover:text-zinc-900"
-              >
-                + Add output mapping
-              </button>
-            </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-600">
+                    Fields to auto-fill from the matched row
+                  </label>
+                  <div className="space-y-2">
+                    {outputs.map((out, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <select
+                          name="output_token"
+                          value={out.token}
+                          onChange={(e) => updateOutput(index, "token", e.target.value)}
+                          className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        >
+                          <option value="">Select a document token…</option>
+                          {availableTokensFor(out.token).map((t) => (
+                            <option key={t.token} value={t.token}>
+                              {t.label} ({t.token})
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-xs text-zinc-400">← filled from</span>
+                        <select
+                          name="output_column_id"
+                          value={out.columnId}
+                          onChange={(e) => updateOutput(index, "columnId", e.target.value)}
+                          className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        >
+                          <option value="">Select a column…</option>
+                          {table.columns.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                        {outputs.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeOutput(index)}
+                            className="shrink-0 text-xs text-zinc-400 hover:text-red-600"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addOutput}
+                    className="mt-2 text-xs font-medium text-zinc-600 hover:text-zinc-900"
+                  >
+                    + Add another field
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

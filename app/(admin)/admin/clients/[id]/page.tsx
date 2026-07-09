@@ -12,8 +12,8 @@ import { MetricsTablesPanel } from "./_components/metrics-tables-panel";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { UnsavedChangesProvider } from "@/components/UnsavedChangesProvider";
 import type { Client, User } from "@/types";
-import type { MetricsTable, MetricsRow, ClientToken } from "@/app/actions/client-metrics";
-import { getClientTemplateTokens } from "@/app/actions/client-metrics";
+import type { MetricsTable, MetricsRow, TemplateTokenGroup } from "@/app/actions/client-metrics";
+import { getClientTemplateTokenGroups } from "@/app/actions/client-metrics";
 
 const TABS = ["overview", "templates", "users", "metrics", "danger"] as const;
 type Tab = (typeof TABS)[number];
@@ -63,7 +63,7 @@ export default async function OrganisationDetailPage({
 
   const { data: metricsTables } = await supabase
     .from("client_metrics_tables")
-    .select("id, client_id, name, created_at, autofill_enabled, match_token, match_column_id")
+    .select("id, client_id, name, created_at, autofill_enabled, template_id, match_token, match_column_id")
     .eq("client_id", id)
     .order("created_at", { ascending: true });
 
@@ -72,9 +72,9 @@ export default async function OrganisationDetailPage({
   let metricsColumns: { id: string; table_id: string; name: string; data_type: string; position: number }[] = [];
   let metricsRows: { id: string; table_id: string; data: Record<string, string | number | null> }[] = [];
   let metricsOutputs: { id: string; table_id: string; output_token: string; output_column_id: string }[] = [];
-  let clientTokens: ClientToken[] = [];
+  let templateTokenGroups: TemplateTokenGroup[] = [];
   if (metricsTableIds.length > 0) {
-    const [{ data: cols }, { data: rowsData }, { data: outputsData }, tokens] = await Promise.all([
+    const [{ data: cols }, { data: rowsData }, { data: outputsData }, groups] = await Promise.all([
       supabase
         .from("client_metrics_columns")
         .select("id, table_id, name, data_type, position")
@@ -89,12 +89,12 @@ export default async function OrganisationDetailPage({
         .from("client_metrics_output_mappings")
         .select("id, table_id, output_token, output_column_id")
         .in("table_id", metricsTableIds),
-      getClientTemplateTokens(id),
+      getClientTemplateTokenGroups(id),
     ]);
     metricsColumns = cols ?? [];
     metricsRows = rowsData ?? [];
     metricsOutputs = outputsData ?? [];
-    clientTokens = tokens;
+    templateTokenGroups = groups;
   }
 
   const metricsTablesWithColumns: MetricsTable[] = (metricsTables ?? []).map((t) => ({
@@ -103,6 +103,7 @@ export default async function OrganisationDetailPage({
     name: t.name as string,
     created_at: t.created_at as string,
     autofill_enabled: t.autofill_enabled as boolean,
+    template_id: t.template_id as string | null,
     match_token: t.match_token as string | null,
     match_column_id: t.match_column_id as string | null,
     columns: metricsColumns
@@ -380,7 +381,7 @@ export default async function OrganisationDetailPage({
           clientId={id}
           tables={metricsTablesWithColumns}
           rowsByTable={rowsByTable}
-          clientTokens={clientTokens}
+          templateTokenGroups={templateTokenGroups}
         />
       )}
 
