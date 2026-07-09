@@ -11,6 +11,7 @@ import { extractDocumentFields, type ExtractedField, type Confidence } from "@/l
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { addWorkingDays } from "@/lib/delivery/working-days";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/config/support";
 import {
   getMetricsAutofillConfigs,
   getAutofillExclusionTokens,
@@ -691,7 +692,7 @@ function submissionConfirmationEmail({ poNumber }: { poNumber: string | null }) 
     Thank you — your report request${poNumber ? ` for PO <strong>${escHtml(poNumber)}</strong>` : ""} has been received and is being processed.
   </p>
   <p style="color: #52525b; margin-bottom: 16px;">
-    You will be notified once your report is ready. If you have any questions, please contact your account manager.
+    You will be notified once your report is ready. If you have any questions, please contact your account manager at <a href="${SUPPORT_MAILTO}" style="color: #18181b">${SUPPORT_EMAIL}</a>.
   </p>
   <p style="color: #a1a1aa; font-size: 13px;">OPS — Online Performance Solution</p>
 </body>

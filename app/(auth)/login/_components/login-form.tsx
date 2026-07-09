@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { login, type LoginState } from "@/app/actions/auth";
 import { useSearchParams } from "next/navigation";
+import { SUPPORT_MAILTO } from "@/lib/config/support";
 
 export function LoginForm() {
   const [state, action, pending] = useActionState<LoginState, FormData>(
@@ -27,6 +28,15 @@ export function LoginForm() {
           className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"
         >
           {e}
+          {state.locked && (
+            <>
+              {" "}
+              <a href={SUPPORT_MAILTO} className="underline hover:text-red-900">
+                Contact support
+              </a>{" "}
+              to regain access.
+            </>
+          )}
         </p>
       ))}
 

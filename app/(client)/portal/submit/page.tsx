@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SubmissionForm } from "./_components/SubmissionForm";
+import { SUPPORT_MAILTO } from "@/lib/config/support";
 
 type FileRequirement = {
   id: string;
@@ -34,7 +35,10 @@ export default async function SubmitPage() {
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <p className="text-sm font-medium text-zinc-900">No report types available</p>
         <p className="mt-1 text-sm text-zinc-500">
-          Contact your account manager to set up a report template before submitting.
+          <a href={SUPPORT_MAILTO} className="underline hover:text-zinc-700">
+            Contact your account manager
+          </a>{" "}
+          to set up a report template before submitting.
         </p>
       </div>
     );

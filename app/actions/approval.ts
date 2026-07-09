@@ -9,6 +9,7 @@ import { deliverPbdr } from "@/lib/documents/delivery";
 
 export interface ApprovalState {
   error?: string;
+  expired?: boolean;
   submitted?: boolean;
   response?: "approved" | "rejected";
 }
@@ -32,7 +33,7 @@ export async function submitApproval(
   const validated = await validateToken(tokenString);
   if (!validated) return { error: "Invalid approval link." };
   if (validated.isExpired)
-    return { error: "This approval link has expired. Please contact DDEG for a new link." };
+    return { error: "This approval link has expired.", expired: true };
 
   const { review } = validated;
   const supabase = createAdminClient();

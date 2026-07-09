@@ -1,3 +1,5 @@
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/config/support";
+
 export interface LowCreditEmailProps {
   recipientName: string;
   currentBalance: number;
@@ -17,7 +19,7 @@ export function LowCreditEmail({
         <p style={body}>Hi {recipientName},</p>
         <p style={body}>
           Your account credit balance has fallen to <strong>{currentBalance} credit{currentBalance !== 1 ? "s" : ""}</strong>.
-          Please contact DDEG to top up your balance before your next report submission.
+          Please <a href={SUPPORT_MAILTO} style={{ color: "#18181b" }}>contact DDEG</a> ({SUPPORT_EMAIL}) to top up your balance before your next report submission.
         </p>
         <a href={portalUrl} style={button}>
           View account

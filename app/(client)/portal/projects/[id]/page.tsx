@@ -13,6 +13,7 @@ import { prettifyToken } from "@/lib/tokens/prettify";
 import { DownloadCard } from "@/components/DownloadCard";
 import { UnsavedChangesProvider } from "@/components/UnsavedChangesProvider";
 import { resolveStepperState } from "@/lib/delivery/stepper";
+import { SUPPORT_MAILTO } from "@/lib/config/support";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -404,7 +405,7 @@ export default async function ClientProjectDetailPage({
           {!isDeleted && !["draft", "submitted"].includes(project.status) && (
             <p className="text-xs text-zinc-400">
               This report has been assigned to a consultant and can no longer be deleted. Contact{" "}
-              <a href="mailto:support@ddeg.com.au" className="underline hover:text-zinc-600">
+              <a href={SUPPORT_MAILTO} className="underline hover:text-zinc-600">
                 DDEG
               </a>{" "}
               if you need to cancel.
@@ -426,11 +427,11 @@ export default async function ClientProjectDetailPage({
           )}
           {clientReview && clientReview.status !== "pending" && (
             <div className="rounded-lg border border-green-200 bg-green-50 p-5">
-              <h2 className="text-sm font-semibold text-green-900">Your PBDB review has been recorded</h2>
+              <h2 className="text-sm font-semibold text-green-900">Your brief review has been recorded</h2>
               <p className="mt-1 text-sm text-green-800">
                 You{" "}
                 {(clientReview.status as string).startsWith("approved") ? "approved" : "requested changes to"}{" "}
-                this PBDB
+                this brief
                 {clientReview.responded_at
                   ? ` on ${new Date(clientReview.responded_at as string).toLocaleDateString("en-AU", {
                       day: "numeric", month: "long", year: "numeric",

@@ -61,7 +61,7 @@ export function PendingReviewModal({
           <div className="mx-4 w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-xl">
             <div className="flex items-start justify-between border-b border-zinc-100 px-6 py-4">
               <div className="min-w-0 pr-4">
-                <h2 className="text-base font-semibold text-zinc-900">PBDB Review</h2>
+                <h2 className="text-base font-semibold text-zinc-900">Brief Review</h2>
                 <p className="mt-0.5 truncate text-xs text-zinc-500">{projectLabel}</p>
               </div>
               <button

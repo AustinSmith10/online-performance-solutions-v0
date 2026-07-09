@@ -6,6 +6,7 @@ import { DeletedBanner } from "./_components/DeletedBanner";
 import { RestoredBanner } from "./_components/RestoredBanner";
 import { ProjectCard } from "./_components/ProjectListRow";
 import { resolveStepperState, type StepperResult } from "@/lib/delivery/stepper";
+import { SUPPORT_MAILTO } from "@/lib/config/support";
 import type { ProjectStatus, PaymentMethod } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -266,7 +267,10 @@ export default async function ClientPortalPage({
             </p>
             {org.credit_balance === 0 && (
               <p className="mt-0.5 text-xs text-red-500">
-                No credits remaining — contact your account manager
+                No credits remaining —{" "}
+                <a href={SUPPORT_MAILTO} className="underline hover:text-red-700">
+                  contact your account manager
+                </a>
               </p>
             )}
           </div>

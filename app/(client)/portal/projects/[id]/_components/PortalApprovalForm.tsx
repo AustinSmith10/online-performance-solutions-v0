@@ -74,12 +74,12 @@ export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownlo
             </div>
             <div className="min-w-0 flex-1">
               <p className={`text-sm font-semibold ${approved ? "text-green-900" : "text-amber-900"}`}>
-                {approved ? "PBDB approved — thank you" : "Changes requested — we'll be in touch"}
+                {approved ? "Brief approved — thank you" : "Changes requested — we'll be in touch"}
               </p>
               <p className={`mt-1 text-sm ${approved ? "text-green-800" : "text-amber-800"}`}>
                 {approved
                   ? "Your approval has been recorded. We'll finalise the report and deliver it to you shortly."
-                  : "Your comments have been sent to our team. We'll review your feedback and resubmit the PBDB for your approval."}
+                  : "Your comments have been sent to our team. We'll review your feedback and resubmit the brief for your approval."}
               </p>
             </div>
           </div>
@@ -102,7 +102,7 @@ export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownlo
 
   return (
     <div className={bare ? undefined : "rounded-lg border border-amber-200 bg-amber-50 p-5"}>
-      <h2 className="text-sm font-semibold text-amber-900">Your PBDB review is required</h2>
+      <h2 className="text-sm font-semibold text-amber-900">Your brief review is required</h2>
       <p className="mt-1 text-sm text-amber-800">
         A quick response helps keep your report on schedule. Please review and reply before{" "}
         <strong>{expiryLabel}</strong>.
@@ -114,10 +114,10 @@ export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownlo
             href={pbdbDownloadUrl}
             filename={pbdbFilename}
             originalFilename={pbdbFilename}
-            buttonLabel="Download PBDB document"
+            buttonLabel="Download brief"
             wrapperClassName="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-4 py-3"
           >
-            <p className="text-sm font-medium text-zinc-900">PBDB document</p>
+            <p className="text-sm font-medium text-zinc-900">Brief document</p>
           </DownloadCard>
         </div>
       )}
@@ -138,7 +138,7 @@ export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownlo
               />
               <div>
                 <span className="text-sm font-medium text-zinc-900">Approve</span>
-                <p className="text-xs text-zinc-500">I approve this PBDB as submitted.</p>
+                <p className="text-xs text-zinc-500">I approve this brief as submitted.</p>
               </div>
             </label>
 
@@ -206,7 +206,7 @@ export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownlo
               ? "Submitting…"
               : response === "rejected"
               ? "Submit — request changes"
-              : "Submit — approve PBDB"}
+              : "Submit — approve brief"}
           </button>
         </div>
       </form>

@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { submitApproval, type ApprovalState } from "@/app/actions/approval";
+import { SUPPORT_MAILTO } from "@/lib/config/support";
 
 interface Props {
   token: string;
@@ -90,7 +91,19 @@ export function ApprovalForm({ token, reviewId, redirectAfterSubmit }: Props) {
       </div>
 
       {state.error && (
-        <p style={{ marginTop: "12px", fontSize: "14px", color: "#dc2626" }}>{state.error}</p>
+        <p style={{ marginTop: "12px", fontSize: "14px", color: "#dc2626" }}>
+          {state.error}
+          {state.expired && (
+            <>
+              {" "}
+              Please{" "}
+              <a href={SUPPORT_MAILTO} style={{ color: "#dc2626" }}>
+                contact DDEG
+              </a>{" "}
+              for a new link.
+            </>
+          )}
+        </p>
       )}
 
       <button

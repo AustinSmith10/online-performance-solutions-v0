@@ -1,3 +1,5 @@
+import { SUPPORT_EMAIL } from "@/lib/config/support";
+
 export interface WelcomeAccountEmailProps {
   firstName: string;
   email: string;
@@ -55,7 +57,7 @@ export function WelcomeAccountEmail({
           After setting your password you will be prompted to set up two-factor authentication on first login.
         </p>
         <p style="font-size:13px;line-height:1.6;color:#71717a;margin:0">
-          If you were not expecting this email, please contact us at <a href="mailto:info@ddeg.com.au" style="color:#71717a">info@ddeg.com.au</a>.
+          If you were not expecting this email, please contact us at <a href="mailto:${SUPPORT_EMAIL}" style="color:#71717a">${SUPPORT_EMAIL}</a>.
         </p>
         <p style="font-size:12px;color:#a1a1aa;margin-top:24px;margin-bottom:0">DDEG Online Performance Solution</p>
       </div>

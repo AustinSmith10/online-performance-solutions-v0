@@ -57,6 +57,7 @@ function roleHomePath(role: string): string {
 
 export type LoginState = {
   errors?: { email?: string[]; password?: string[]; form?: string[] };
+  locked?: boolean;
 };
 
 export async function login(
@@ -99,8 +100,9 @@ export async function login(
       if (newCount >= 15) {
         return {
           errors: {
-            form: ["Account locked after repeated failed attempts. Contact your administrator."],
+            form: ["Account locked after repeated failed attempts."],
           },
+          locked: true,
         };
       }
     }
@@ -108,8 +110,9 @@ export async function login(
     if (userRow?.is_locked) {
       return {
         errors: {
-          form: ["Your account is locked. Contact your administrator to regain access."],
+          form: ["Your account is locked."],
         },
+        locked: true,
       };
     }
 
@@ -128,8 +131,9 @@ export async function login(
     await supabase.auth.signOut();
     return {
       errors: {
-        form: ["Your account is locked. Contact your administrator to regain access."],
+        form: ["Your account is locked."],
       },
+      locked: true,
     };
   }
 
