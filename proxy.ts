@@ -9,7 +9,9 @@ const SESSION_EXPIRY_COOKIE = "ops-session-expires";
 // Paths that bypass all auth checks
 const PUBLIC_PATHS = [
   "/login",
+  "/forgot-password",
   "/auth/confirm",
+  "/auth/update-password",
   "/api/auth/signout",
   "/api/webhooks/email",
   "/api/health",

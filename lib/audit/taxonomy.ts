@@ -13,6 +13,9 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "auth.2fa_disabled",
       "auth.2fa_required",
       "auth.password_reset_generated",
+      "auth.password_reset_requested",
+      "auth.password_reset_rate_limited",
+      "auth.password_reset_completed",
     ],
   },
   user: {
@@ -151,6 +154,9 @@ export const EVENT_LABELS: Record<string, string> = {
   "auth.2fa_disabled": "2FA disabled",
   "auth.2fa_required": "2FA enforced",
   "auth.password_reset_generated": "Password reset link generated",
+  "auth.password_reset_requested": "Self-serve password reset requested",
+  "auth.password_reset_rate_limited": "Password reset request throttled",
+  "auth.password_reset_completed": "Password reset completed",
   "user.account_created": "Account created",
   "user.deactivated": "Account deactivated",
   "user.restored": "Account restored",
@@ -264,6 +270,9 @@ export function formatDetails(
       break;
 
     case "auth.password_reset_generated":
+    case "auth.password_reset_requested":
+    case "auth.password_reset_rate_limited":
+    case "auth.password_reset_completed":
       if (s(metadata.target_email)) parts.push(s(metadata.target_email));
       break;
 

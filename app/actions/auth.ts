@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -170,6 +170,129 @@ export async function logout() {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_EXPIRY_COOKIE);
   redirect("/login");
+}
+
+// ─── Forgot password (self-serve) ──────────────────────────────────────────────
+
+const ForgotPasswordSchema = z.object({
+  email: z.string().email({ error: "Valid email required" }).trim().toLowerCase(),
+});
+
+// Always returned regardless of whether the email matches an account, so the
+// response can't be used to enumerate registered users.
+const RESET_REQUEST_NEUTRAL_MESSAGE =
+  "If an account exists for that email, we've sent a password reset link.";
+
+const RESET_EMAIL_WINDOW_MINUTES = 15;
+const RESET_EMAIL_MAX_ATTEMPTS = 3;
+const RESET_IP_WINDOW_MINUTES = 60;
+const RESET_IP_MAX_ATTEMPTS = 10;
+
+export type ForgotPasswordState = {
+  message?: string;
+  errors?: { email?: string[]; form?: string[] };
+};
+
+export async function requestPasswordReset(
+  _prev: ForgotPasswordState,
+  formData: FormData
+): Promise<ForgotPasswordState> {
+  const validated = ForgotPasswordSchema.safeParse({
+    email: formData.get("email"),
+  });
+
+  if (!validated.success) {
+    return { errors: validated.error.flatten().fieldErrors };
+  }
+
+  const { email } = validated.data;
+  const headerList = await headers();
+  const ip = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+
+  const adminClient = createAdminClient();
+  const windowStart = (minutes: number) =>
+    new Date(Date.now() - minutes * 60 * 1000).toISOString();
+
+  const [emailAttempts, ipAttempts] = await Promise.all([
+    adminClient
+      .from("password_reset_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("email", email)
+      .gte("created_at", windowStart(RESET_EMAIL_WINDOW_MINUTES)),
+    ip
+      ? adminClient
+          .from("password_reset_attempts")
+          .select("id", { count: "exact", head: true })
+          .eq("ip", ip)
+          .gte("created_at", windowStart(RESET_IP_WINDOW_MINUTES))
+      : Promise.resolve({ count: 0 }),
+  ]);
+
+  await adminClient.from("password_reset_attempts").insert({ email, ip });
+
+  const rateLimited =
+    (emailAttempts.count ?? 0) >= RESET_EMAIL_MAX_ATTEMPTS ||
+    (ipAttempts.count ?? 0) >= RESET_IP_MAX_ATTEMPTS;
+
+  if (rateLimited) {
+    await auditLog("auth.password_reset_rate_limited", null, email, { metadata: { ip } });
+    return { message: RESET_REQUEST_NEUTRAL_MESSAGE };
+  }
+
+  const supabase = await createClient();
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/update-password`,
+  });
+
+  await auditLog("auth.password_reset_requested", null, email, { metadata: { ip } });
+
+  return { message: RESET_REQUEST_NEUTRAL_MESSAGE };
+}
+
+// ─── Complete password reset (recovery-link landing page) ─────────────────────
+
+const CompletePasswordResetSchema = z
+  .object({
+    password: PasswordSchema,
+    confirm_password: z.string(),
+  })
+  .refine((d) => d.password === d.confirm_password, {
+    error: "Passwords do not match",
+    path: ["confirm_password"],
+  });
+
+export type CompletePasswordResetState = {
+  success?: boolean;
+  errors?: { password?: string[]; confirm_password?: string[]; form?: string[] };
+};
+
+export async function completePasswordReset(
+  _prev: CompletePasswordResetState,
+  formData: FormData
+): Promise<CompletePasswordResetState> {
+  const validated = CompletePasswordResetSchema.safeParse({
+    password: formData.get("password"),
+    confirm_password: formData.get("confirm_password"),
+  });
+
+  if (!validated.success) {
+    return { errors: validated.error.flatten().fieldErrors };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { errors: { form: ["Your reset link has expired. Please request a new one."] } };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: validated.data.password });
+  if (error) return { errors: { form: [error.message] } };
+
+  await auditLog("auth.password_reset_completed", user.id, user.email ?? null, {});
+
+  return { success: true };
 }
 
 // ─── Complete profile ─────────────────────────────────────────────────────────
