@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Mock all server-side and external dependencies ────────────────────────────
 // vi.mock() is hoisted to the top of the file — use vi.hoisted() so the mock
@@ -82,6 +82,62 @@ describe("POST /api/webhooks/email", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExtractDocumentFields.mockResolvedValue(EMPTY_EXTRACTION);
+  });
+
+  describe("Basic Auth", () => {
+    const ORIGINAL_USER = process.env.POSTMARK_INBOUND_WEBHOOK_USER;
+    const ORIGINAL_PASSWORD = process.env.POSTMARK_INBOUND_WEBHOOK_PASSWORD;
+
+    beforeEach(() => {
+      process.env.POSTMARK_INBOUND_WEBHOOK_USER = "webhook-user";
+      process.env.POSTMARK_INBOUND_WEBHOOK_PASSWORD = "webhook-pass";
+    });
+
+    afterEach(() => {
+      if (ORIGINAL_USER === undefined) delete process.env.POSTMARK_INBOUND_WEBHOOK_USER;
+      else process.env.POSTMARK_INBOUND_WEBHOOK_USER = ORIGINAL_USER;
+      if (ORIGINAL_PASSWORD === undefined) delete process.env.POSTMARK_INBOUND_WEBHOOK_PASSWORD;
+      else process.env.POSTMARK_INBOUND_WEBHOOK_PASSWORD = ORIGINAL_PASSWORD;
+    });
+
+    it("returns 401 with no Authorization header", async () => {
+      const res = await POST(makeRequest(BASE_PAYLOAD));
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 401 with incorrect credentials", async () => {
+      const req = new NextRequest("http://localhost/api/webhooks/email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Basic ${Buffer.from("webhook-user:wrong-pass").toString("base64")}`,
+        },
+        body: JSON.stringify(BASE_PAYLOAD),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(401);
+    });
+
+    it("processes the request with correct credentials", async () => {
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } }),
+        }),
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const req = new NextRequest("http://localhost/api/webhooks/email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Basic ${Buffer.from("webhook-user:webhook-pass").toString("base64")}`,
+        },
+        body: JSON.stringify(BASE_PAYLOAD),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+    });
   });
 
   it("returns 400 for invalid JSON body", async () => {

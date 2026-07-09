@@ -20,8 +20,38 @@ import {
 } from "@/lib/documents/metrics-autofill";
 
 // Postmark retries on non-2xx — always return 200 so it doesn't retry on expected failures.
+// This does not apply to auth failures below: Postmark won't retry with different
+// credentials, so a 401 there is safe and won't trigger a retry storm.
+
+function isAuthorized(req: NextRequest): boolean {
+  const user = process.env.POSTMARK_INBOUND_WEBHOOK_USER;
+  const password = process.env.POSTMARK_INBOUND_WEBHOOK_PASSWORD;
+  if (!user || !password) {
+    console.warn("[email-webhook] POSTMARK_INBOUND_WEBHOOK_* not set — skipping auth check (dev only)");
+    return true;
+  }
+
+  const header = req.headers.get("authorization") ?? "";
+  const [scheme, encoded] = header.split(" ");
+  if (scheme !== "Basic" || !encoded) {
+    return false;
+  }
+
+  let decoded: string;
+  try {
+    decoded = Buffer.from(encoded, "base64").toString("utf8");
+  } catch {
+    return false;
+  }
+
+  return decoded === `${user}:${password}`;
+}
 
 export async function POST(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   let body: unknown;
   try {
     body = await req.json();

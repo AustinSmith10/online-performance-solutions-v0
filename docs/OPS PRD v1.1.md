@@ -230,8 +230,8 @@ Three roles exist in OPS. Stakeholders (certifiers and other approval parties) a
 - **PDF conversion:** Gotenberg — Docker service deployed on Railway, converts .docx to PDF via LibreOffice headlessly, called via HTTP from OPS backend
 - **AI extraction:** Claude API (`claude-haiku-4-5`) with Files API — extracts project field values from uploaded Purchase Orders and building plans; returns per-field confidence scores
 - **Background job queue:** `pg-boss` — PostgreSQL-backed job queue on Supabase; handles async document generation, email dispatch, approval buffer timers, draft expiry, and Recovery Bin purges
-- **Email sending:** Resend — transactional emails, React Email templates
-- **Email inbound webhook:** Postmark Inbound — receives incoming client emails, parses them, fires HTTP webhook to OPS backend for processing; MailboxHash used for reply threading
+- **Email sending:** Postmark — transactional emails (consolidated from Resend; see `docs/email-provider-comparison.md` for the decision — Postmark handles both directions, keeping inbound exactly as already scoped)
+- **Email inbound webhook:** Postmark Inbound — receives incoming client emails, parses them, fires HTTP webhook to OPS backend for processing; MailboxHash used for reply threading. Authenticated via HTTP Basic Auth embedded in the webhook URL (issue #80).
 
 ### Security
 
@@ -792,7 +792,7 @@ ops/
 │   │   └── naming.ts                     # PBDR file naming + address sanitisation
 │   │
 │   ├── email/
-│   │   ├── sender.ts                     # Resend dispatch wrapper
+│   │   ├── sender.ts                     # Postmark dispatch wrapper
 │   │   ├── parser.ts                     # Postmark inbound payload parser
 │   │   ├── extractor.ts                  # Claude API field extraction from uploaded documents
 │   │   └── templates/                    # React Email components
@@ -1047,13 +1047,12 @@ NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 
-# Resend (email sending)
-RESEND_API_KEY
-EMAIL_FROM_ADDRESS
-
-# Postmark (email inbound)
-POSTMARK_WEBHOOK_TOKEN
-OPS_INBOUND_EMAIL_ADDRESS
+# Postmark (email sending + inbound webhook)
+POSTMARK_SERVER_TOKEN
+EMAIL_FROM
+POSTMARK_INBOUND_HASH
+POSTMARK_INBOUND_WEBHOOK_USER
+POSTMARK_INBOUND_WEBHOOK_PASSWORD
 
 # Gotenberg (PDF conversion)
 GOTENBERG_URL                   # internal Railway service URL

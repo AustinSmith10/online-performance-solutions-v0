@@ -8,13 +8,14 @@ Items to complete before going live. Not blocking development.
 
 ## Security
 
-- [ ] Rotate all keys and secrets — generate fresh `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, etc. for production. Do not reuse dev credentials.
+- [ ] Rotate all keys and secrets — generate fresh `SUPABASE_SERVICE_ROLE_KEY`, `POSTMARK_SERVER_TOKEN`, etc. for production. Do not reuse dev credentials.
 - [ ] Set `NEXT_PUBLIC_APP_URL` to the production domain in Railway environment variables.
 - [ ] Confirm `NODE_ENV=production` is set in Railway — this re-enables 2FA enforcement in the proxy.
+- [ ] Set `POSTMARK_INBOUND_WEBHOOK_USER` / `POSTMARK_INBOUND_WEBHOOK_PASSWORD` in Railway, and configure the matching Basic Auth credentials in the inbound webhook URL in the Postmark dashboard (`https://<user>:<password>@yourdomain.com/api/webhooks/email`).
 
 ## Email
 
-- [ ] Configure a verified sending domain in Resend for production invite and notification emails.
+- [ ] Configure a verified sending domain in Postmark for production invite and notification emails.
 - [ ] Test the invite email flow end-to-end with a real inbox.
 
 ## Infrastructure
