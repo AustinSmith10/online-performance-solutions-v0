@@ -58,46 +58,46 @@ async function main() {
   });
 
   // Expire abandoned email-sourced drafts. Runs daily at 02:00.
-  // Per-org cutoff derived from organisations.abandoned_draft_days (default 14).
+  // Per-client cutoff derived from clients.abandoned_draft_days (default 14).
   await boss.schedule("expire-draft", "0 2 * * *", {});
   await boss.work("expire-draft", async () => {
     const supabase = createAdminClient();
 
-    const { data: orgs, error: orgError } = await supabase
-      .from("organisations")
+    const { data: clients, error: clientError } = await supabase
+      .from("clients")
       .select("id, abandoned_draft_days");
 
-    if (orgError || !orgs) {
-      console.error("[expire-draft] Failed to fetch organisations:", orgError);
-      throw new Error(orgError?.message ?? "failed to fetch organisations");
+    if (clientError || !clients) {
+      console.error("[expire-draft] Failed to fetch clients:", clientError);
+      throw new Error(clientError?.message ?? "failed to fetch clients");
     }
 
     let totalExpired = 0;
-    const failedOrgs: string[] = [];
+    const failedClients: string[] = [];
 
-    for (const org of orgs) {
-      const days = (org.abandoned_draft_days as number) ?? 14;
+    for (const client of clients) {
+      const days = (client.abandoned_draft_days as number) ?? 14;
       const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
       const { error, count } = await supabase
         .from("projects")
         .update({ deleted_at: new Date().toISOString() }, { count: "exact" })
-        .eq("org_id", org.id)
+        .eq("client_id", client.id)
         .eq("status", "draft")
         .is("deleted_at", null)
         .lt("updated_at", cutoff);
 
       if (error) {
-        console.error(`[expire-draft] Failed for org ${org.id}:`, error);
-        failedOrgs.push(org.id as string);
+        console.error(`[expire-draft] Failed for client ${client.id}:`, error);
+        failedClients.push(client.id as string);
       } else {
         totalExpired += count ?? 0;
       }
     }
 
     console.log(`[expire-draft] Expired ${totalExpired} abandoned draft(s)`);
-    if (failedOrgs.length > 0) {
-      throw new Error(`failed for org(s): ${failedOrgs.join(", ")}`);
+    if (failedClients.length > 0) {
+      throw new Error(`failed for client(s): ${failedClients.join(", ")}`);
     }
   });
 
@@ -146,7 +146,7 @@ async function main() {
     const { data: projects, error } = await supabase
       .from("projects")
       .select(
-        "id, review_cycle, first_response_at, organisations(state_territory)"
+        "id, review_cycle, first_response_at, clients(state_territory)"
       )
       .eq("status", "dispatched")
       .not("first_response_at", "is", null)
@@ -162,7 +162,7 @@ async function main() {
       const reviewCycle = project.review_cycle as number;
       const firstResponseAt = new Date(project.first_response_at as string);
       const stateTerritory =
-        (project.organisations as unknown as { state_territory: string | null } | null)
+        (project.clients as unknown as { state_territory: string | null } | null)
           ?.state_territory ?? null;
 
       // Check if 1 working day has elapsed since first response
