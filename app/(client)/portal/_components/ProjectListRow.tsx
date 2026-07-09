@@ -87,7 +87,11 @@ export function ProjectCard({
   return (
     <div
       className={`rounded-lg border px-4 py-3 ${
-        pendingReview ? "border-amber-300 bg-amber-50" : "border-zinc-200 bg-white"
+        pendingReview
+          ? "border-amber-300 bg-amber-50"
+          : isDelivered
+            ? "border-green-300 bg-green-50"
+            : "border-zinc-200 bg-white"
       }`}
     >
       <button
@@ -130,13 +134,17 @@ export function ProjectCard({
         </div>
       )}
       {isDelivered && (
-        <div className="mt-3 border-t border-zinc-100 pt-3">
+        <div className={`mt-3 border-t pt-3 ${pendingReview ? "border-amber-200" : "border-green-200"}`}>
           <DownloadPbdrLink projectId={projectId} filename={pbdrFilename} />
         </div>
       )}
       <div
         className={`mt-2.5 flex items-center gap-2 border-t pt-2.5 ${
-          pendingReview ? "border-amber-200" : "border-zinc-100"
+          pendingReview
+            ? "border-amber-200"
+            : isDelivered
+              ? "border-green-200"
+              : "border-zinc-100"
         }`}
       >
         {pendingReview && (

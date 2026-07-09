@@ -171,40 +171,18 @@ export default async function ClientPortalPage({
   // Ready banner: recently complete + not yet downloaded by this user
   const reportsReady = recentlyComplete.filter((p) => !downloadedIds.has(p.id));
 
-  const PBDR_DOWNLOAD_LIMIT = 2;
-  const PBDR_WINDOW_DAYS = 2;
-
   // Projects currently in delivered status
   const allDelivered = projects.filter((p) => p.status === "delivered");
 
-  // Count how many times this user has downloaded the PBDR for each delivered project
-  const pbdrDownloadCounts = new Map<string, number>();
-  if (allDelivered.length > 0) {
-    const { data: pbdrDlRows } = await supabase
-      .from("audit_log")
-      .select("project_id")
-      .eq("event_type", "project.pbdr_downloaded")
-      .eq("actor_id", user.id as string)
-      .in("project_id", allDelivered.map((p) => p.id));
-    for (const row of pbdrDlRows ?? []) {
-      const id = row.project_id as string;
-      pbdrDownloadCounts.set(id, (pbdrDownloadCounts.get(id) ?? 0) + 1);
-    }
-  }
-
-  // Show banner only while within the download limit AND within the 2-working-day window
-  const deliveredProjects = allDelivered.filter((p) => {
-    if ((pbdrDownloadCounts.get(p.id) ?? 0) >= PBDR_DOWNLOAD_LIMIT) return false;
-    const from = p.delivered_at ?? p.created_at;
-    return workingDaysElapsed(from, todayIso) < PBDR_WINDOW_DAYS;
-  });
-
   // Main list: exclude complete projects (they live in history or the ready banner).
-  // Projects awaiting the stakeholder's own acknowledgement float to the top — with only
-  // a handful of active projects at a time, that's more visible than a duplicate banner.
+  // Projects needing stakeholder attention float to the top — pending review first
+  // (a decision is owed), then delivered/ready-to-download — with only a handful of
+  // active projects at a time, that's more visible than a duplicate banner.
+  const activeProjectPriority = (p: (typeof projects)[number]) =>
+    pendingReviewMap.has(p.id) ? 2 : p.status === "delivered" ? 1 : 0;
   const activeProjects = projects
     .filter((p) => p.status !== "complete")
-    .sort((a, b) => Number(pendingReviewMap.has(b.id)) - Number(pendingReviewMap.has(a.id)));
+    .sort((a, b) => activeProjectPriority(b) - activeProjectPriority(a));
 
   // Consultant first names — for the "assessing"/"working on"/"applying changes" captions
   const consultantIds = [
@@ -292,37 +270,6 @@ export default async function ClientPortalPage({
               </p>
             )}
           </div>
-        </div>
-      )}
-
-      {/* PBDR delivered — available to download */}
-      {deliveredProjects.length > 0 && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-5">
-          <h2 className="text-sm font-semibold text-green-900">
-            {deliveredProjects.length === 1 ? "Your PBDR is ready" : "PBDRs ready to download"} (
-            {deliveredProjects.length})
-          </h2>
-          <p className="mt-0.5 text-xs text-green-700">
-            Your Performance-Based Design Report{deliveredProjects.length > 1 ? "s have" : " has"}{" "}
-            been delivered. Download below.
-          </p>
-          <ul className="mt-3 space-y-2">
-            {deliveredProjects.map((p) => (
-              <DownloadCard
-                key={p.id}
-                href={`/api/download/pbdr/${p.id}`}
-                filename={pbdrFilenameMap.get(p.id)}
-                originalFilename={pbdrFilenameMap.get(p.id)}
-                buttonLabel="Download PBDR"
-                buttonClassName="shrink-0 inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
-                wrapperClassName="flex items-center justify-between gap-3 rounded-md border border-green-100 bg-white px-4 py-2.5"
-              >
-                <span className="min-w-0 truncate text-sm font-medium text-zinc-900">
-                  {projectLabel(p)}
-                </span>
-              </DownloadCard>
-            ))}
-          </ul>
         </div>
       )}
 
