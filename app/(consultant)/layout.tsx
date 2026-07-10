@@ -48,6 +48,12 @@ export default async function ConsultantLayout({
           >
             My profile
           </Link>
+          <Link
+            href="/ops?tour=1"
+            className="mb-1 block rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+          >
+            How this works
+          </Link>
           <form action={logout}>
             <button
               type="submit"

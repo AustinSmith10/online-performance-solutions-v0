@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ConsultantProjectCard } from "./_components/ConsultantProjectCard";
@@ -7,6 +8,8 @@ import { RealtimeProjectRefresher } from "./_components/RealtimeProjectRefresher
 import { SelfAssignButton } from "./_components/SelfAssignButton";
 import { DeclinedBanner } from "./_components/DeclinedBanner";
 import { PendingAssignmentCard } from "./_components/PendingAssignmentCard";
+import { TourInviteCard } from "./_components/TourInviteCard";
+import { ConsultantTour } from "@/components/onboarding-tour/ConsultantTour";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -164,6 +167,10 @@ export default async function ConsultantOpsPage({
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <RealtimeProjectRefresher userId={user.id as string} />
+      <Suspense fallback={null}>
+        <ConsultantTour />
+      </Suspense>
+      {!(user.onboarding_steps_seen ?? []).includes("consultant_tour") && <TourInviteCard />}
       {declined === "1" && <DeclinedBanner />}
       {pendingAssignments.length > 0 && (
         <section>

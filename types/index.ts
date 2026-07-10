@@ -115,6 +115,7 @@ export interface User {
   is_locked: boolean;
   totp_enabled: boolean;
   profile_complete: boolean;
+  onboarding_steps_seen: string[];
   failed_login_count: number;
   invited_at: string | null;
   created_at: string;

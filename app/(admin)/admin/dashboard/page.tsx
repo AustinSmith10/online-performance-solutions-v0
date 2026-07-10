@@ -3,6 +3,9 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ClickableRow } from "@/components/ClickableRow";
 import { ActionPanel } from "./_components/ActionPanel";
+import { OnboardingTourProvider } from "@/components/onboarding-tour/context";
+import { TourHighlight } from "@/components/onboarding-tour/TourHighlight";
+import { ADMIN_TOUR_STEPS } from "@/lib/onboarding/steps";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -77,8 +80,13 @@ function consultantName(c: { first_name: string | null; last_name: string | null
   return [c.first_name, c.last_name].filter(Boolean).join(" ") || c.email;
 }
 
-export default async function AdminDashboardPage() {
-  await requireRole("super_admin", "admin");
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tour?: string }>;
+}) {
+  const { tour } = await searchParams;
+  const user = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
   const todayIso = new Date().toISOString().slice(0, 10);
 
@@ -160,6 +168,12 @@ export default async function AdminDashboardPage() {
   const systemErrors = (systemErrorsResult.data ?? []) as SystemError[];
 
   return (
+    <OnboardingTourProvider
+      steps={ADMIN_TOUR_STEPS}
+      seenSteps={user.onboarding_steps_seen ?? []}
+      availableStepIds={["admin_intro", "admin_action_queue", "admin_active_projects"]}
+      replay={tour === "replay"}
+    >
     <div className="mx-auto max-w-5xl space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900">Dashboard</h1>
@@ -172,92 +186,97 @@ export default async function AdminDashboardPage() {
       </div>
 
       {/* Action required — client component owns interactivity */}
-      <ActionPanel
-        unassigned={unassigned as unknown as import("./_components/ActionPanel").DashboardProject[]}
-        overdue={overdue as unknown as import("./_components/ActionPanel").DashboardProject[]}
-        awaitingStakeholder={awaitingStakeholder as unknown as import("./_components/ActionPanel").DashboardProject[]}
-        overridePending={overridePending as unknown as import("./_components/ActionPanel").DashboardProject[]}
-        pendingCountByProject={pendingCountByProject}
-        pendingReviews={(pendingReviewsResult.data ?? []) as unknown as import("./_components/ActionPanel").PendingReview[]}
-        consultants={(consultantsResult.data ?? []) as unknown as import("./_components/ActionPanel").ConsultantOption[]}
-        todayIso={todayIso}
-        systemErrors={systemErrors}
-      />
+      <TourHighlight id="admin_action_queue">
+        <ActionPanel
+          unassigned={unassigned as unknown as import("./_components/ActionPanel").DashboardProject[]}
+          overdue={overdue as unknown as import("./_components/ActionPanel").DashboardProject[]}
+          awaitingStakeholder={awaitingStakeholder as unknown as import("./_components/ActionPanel").DashboardProject[]}
+          overridePending={overridePending as unknown as import("./_components/ActionPanel").DashboardProject[]}
+          pendingCountByProject={pendingCountByProject}
+          pendingReviews={(pendingReviewsResult.data ?? []) as unknown as import("./_components/ActionPanel").PendingReview[]}
+          consultants={(consultantsResult.data ?? []) as unknown as import("./_components/ActionPanel").ConsultantOption[]}
+          todayIso={todayIso}
+          systemErrors={systemErrors}
+        />
+      </TourHighlight>
 
       {/* ── Active projects overview ── */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
-            Active projects ({allActive.length})
-          </h2>
-          <Link
-            href="/admin/projects"
-            className="text-xs text-zinc-400 hover:text-zinc-700 hover:underline"
-          >
-            All projects →
-          </Link>
-        </div>
+      <TourHighlight id="admin_active_projects">
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+              Active projects ({allActive.length})
+            </h2>
+            <Link
+              href="/admin/projects"
+              className="text-xs text-zinc-400 hover:text-zinc-700 hover:underline"
+            >
+              All projects →
+            </Link>
+          </div>
 
-        {allActive.length === 0 ? (
-          <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
-            No active projects.
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="border-b border-zinc-100 bg-zinc-50">
-                <tr>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Consultant</th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
-                  <th className="whitespace-nowrap px-5 py-3 text-left font-medium text-zinc-500">Due</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-50">
-                {allActive.map((p) => {
-                  const isOverdue =
-                    p.expected_delivery_date && p.expected_delivery_date < todayIso;
-                  return (
-                    <ClickableRow key={p.id} href={`/admin/projects/${p.id}`}>
-                      <td className="max-w-[200px] truncate px-5 py-3 font-medium text-zinc-900">
-                        {projectLabel(p)}
-                      </td>
-                      <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                        {p.clients?.name ?? "—"}
-                      </td>
-                      <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                        {consultantName(p.consultant) ?? (
-                          <span className="text-zinc-400">Unassigned</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          <span
-                            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}
-                          >
-                            {STATUS_LABELS[p.status]}
-                          </span>
-                          {isOverdue && (
-                            <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                              Overdue
-                            </span>
+          {allActive.length === 0 ? (
+            <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+              No active projects.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead className="border-b border-zinc-100 bg-zinc-50">
+                  <tr>
+                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
+                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
+                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Consultant</th>
+                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
+                    <th className="whitespace-nowrap px-5 py-3 text-left font-medium text-zinc-500">Due</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50">
+                  {allActive.map((p) => {
+                    const isOverdue =
+                      p.expected_delivery_date && p.expected_delivery_date < todayIso;
+                    return (
+                      <ClickableRow key={p.id} href={`/admin/projects/${p.id}`}>
+                        <td className="max-w-[200px] truncate px-5 py-3 font-medium text-zinc-900">
+                          {projectLabel(p)}
+                        </td>
+                        <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
+                          {p.clients?.name ?? "—"}
+                        </td>
+                        <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
+                          {consultantName(p.consultant) ?? (
+                            <span className="text-zinc-400">Unassigned</span>
                           )}
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
-                        {p.expected_delivery_date
-                          ? new Date(p.expected_delivery_date).toLocaleDateString("en-AU")
-                          : "—"}
-                      </td>
-                    </ClickableRow>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                        </td>
+                        <td className="px-5 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            <span
+                              className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}
+                            >
+                              {STATUS_LABELS[p.status]}
+                            </span>
+                            {isOverdue && (
+                              <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                                Overdue
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
+                          {p.expected_delivery_date
+                            ? new Date(p.expected_delivery_date).toLocaleDateString("en-AU")
+                            : "—"}
+                        </td>
+                      </ClickableRow>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </TourHighlight>
     </div>
+    </OnboardingTourProvider>
   );
 }
