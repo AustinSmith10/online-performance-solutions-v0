@@ -1,14 +1,12 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import {
   addMetricsRow,
   updateMetricsRow,
   deleteMetricsRow,
-  importMetricsExcel,
   updateAutofillConfig,
   type RowMutationState,
-  type ImportExcelState,
   type AutofillConfigState,
   type MetricsTable,
   type MetricsRow,
@@ -16,6 +14,7 @@ import {
 } from "@/app/actions/client-metrics";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { EditIconButton } from "@/components/EditIconButton";
+import { MetricsSpreadsheetModal } from "./metrics-spreadsheet-modal";
 
 interface Props {
   clientId: string;
@@ -29,7 +28,26 @@ export function MetricsTableEditor({ clientId, table, rows, templateTokenGroups 
     <div className="space-y-6">
       <AutofillConfigPanel clientId={clientId} table={table} rows={rows} templateTokenGroups={templateTokenGroups} />
 
-      <ExcelImportForm clientId={clientId} tableId={table.id} table={table} />
+      <div className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3">
+        <p className="text-xs text-zinc-600">
+          Import rows from a spreadsheet — you&apos;ll map its columns to this table&apos;s columns.
+        </p>
+        <MetricsSpreadsheetModal
+          mode="append"
+          clientId={clientId}
+          tableId={table.id}
+          columns={table.columns}
+          trigger={(open) => (
+            <button
+              type="button"
+              onClick={open}
+              className="shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              Import spreadsheet
+            </button>
+          )}
+        />
+      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[420px] text-sm">
@@ -489,99 +507,3 @@ function NewRowLine({ clientId, table }: { clientId: string; table: MetricsTable
   );
 }
 
-function ExcelImportForm({
-  clientId,
-  tableId,
-  table,
-}: {
-  clientId: string;
-  tableId: string;
-  table: MetricsTable;
-}) {
-  const boundAction = importMetricsExcel.bind(null, clientId, tableId);
-  const [state, formAction, pending] = useActionState<ImportExcelState, FormData>(boundAction, {});
-  const [formKey, setFormKey] = useState(0);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  function applyFile(file: File | undefined) {
-    if (!file) return;
-    if (!/\.(xlsx|xls)$/i.test(file.name)) return;
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    if (fileInputRef.current) fileInputRef.current.files = dt.files;
-    setSelectedFile(file);
-  }
-
-  return (
-    <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
-      <p className="mb-2 text-xs font-medium text-zinc-600">
-        Upload Excel — headers must match column names: {table.columns.map((c) => c.name).join(", ")}
-      </p>
-      <form
-        key={formKey}
-        action={async (fd) => {
-          await formAction(fd);
-          setFormKey((k) => k + 1);
-          setSelectedFile(null);
-        }}
-        className="flex items-center gap-3"
-      >
-        <label
-          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-          onDragLeave={() => setIsDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setIsDragOver(false);
-            applyFile(e.dataTransfer.files?.[0]);
-          }}
-          className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed px-4 py-3 text-xs transition-colors ${
-            isDragOver
-              ? "border-zinc-400 bg-zinc-100 text-zinc-700"
-              : "border-zinc-300 bg-white text-zinc-500 hover:border-zinc-400 hover:text-zinc-600"
-          }`}
-        >
-          <span>{selectedFile ? selectedFile.name : "Drag & drop an .xlsx/.xls file here, or click to browse"}</span>
-          <input
-            ref={fileInputRef}
-            type="file"
-            name="file"
-            accept=".xlsx,.xls"
-            required
-            className="hidden"
-            onChange={(e) => applyFile(e.target.files?.[0])}
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={pending}
-          className="shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
-        >
-          {pending ? "Importing…" : "Import"}
-        </button>
-      </form>
-      {state.error && <p className="mt-2 text-xs text-red-600">{state.error}</p>}
-      {state.importedCount !== undefined && (
-        <p className="mt-2 text-xs text-green-700">Imported {state.importedCount} row(s).</p>
-      )}
-      {state.rowErrors && state.rowErrors.length > 0 && (
-        <div className="mt-3 rounded border border-red-200 bg-red-50 p-3">
-          <p className="mb-1 text-xs font-medium text-red-800">
-            Import failed — fix these {state.rowErrors.length} issue(s) and re-upload:
-          </p>
-          <ul className="space-y-0.5 text-xs text-red-700">
-            {state.rowErrors.slice(0, 20).map((e, i) => (
-              <li key={i}>
-                Row {e.row}, {e.column}: {e.message}
-              </li>
-            ))}
-          </ul>
-          {state.rowErrors.length > 20 && (
-            <p className="mt-1 text-xs text-red-500">…and {state.rowErrors.length - 20} more.</p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}

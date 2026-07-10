@@ -69,44 +69,103 @@ function validateCellValue(raw: string, type: ColumnDataType): { value: string |
   return { value: trimmed };
 }
 
+function cellToString(raw: unknown): string {
+  return raw === null || raw === undefined ? "" : String(raw);
+}
+
+// Guess a column's type from sampled cell values. Numbers win first (a plain
+// year like "2024" reads as a number, not a date), then dates, else text.
+// Kept consistent with validateCellValue's parsing so a guess never yields a
+// column the importer would then reject.
+function inferColumnType(samples: string[]): ColumnDataType {
+  const values = samples.map((s) => s.trim()).filter((s) => s !== "");
+  if (values.length === 0) return "text";
+  if (values.every((v) => !Number.isNaN(Number(v)))) return "number";
+  if (values.every((v) => !Number.isNaN(new Date(v).getTime()))) return "date";
+  return "text";
+}
+
+// Read the first sheet as a matrix of raw cells (row 0 is the header row).
+// Columns are addressed by index, which stays stable even when headers are
+// blank or duplicated — unlike the object form of sheet_to_json. Returns null
+// if the file cannot be parsed.
+function readSheetMatrix(buffer: ArrayBuffer): unknown[][] | null {
+  try {
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    return XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: "",
+      blankrows: false,
+    });
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Table CRUD
 // ---------------------------------------------------------------------------
 
-export type CreateTableState = { error?: string };
+// Column selection coming from the spreadsheet modal: which source column
+// (by index in the sheet's header row) becomes a table column, its final
+// name, and its type.
+type CreateColumnMapping = { index: number; label: string; data_type: ColumnDataType };
 
-export async function createMetricsTable(
+export async function createMetricsTableFromExcel(
   clientId: string,
-  _prev: CreateTableState,
+  _prev: ImportExcelState,
   formData: FormData
-): Promise<CreateTableState> {
+): Promise<ImportExcelState> {
   const actor = await requireRole("super_admin", "admin");
 
   const name = (formData.get("name") as string | null)?.trim();
   if (!name) return { error: "Table name is required." };
 
-  const columnNames = formData.getAll("column_name") as string[];
-  const columnTypes = formData.getAll("column_type") as string[];
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "An Excel file is required." };
+  if (!/\.(xlsx|xls)$/i.test(file.name)) return { error: "Only .xlsx or .xls files are supported." };
+  if (file.size > 10 * 1024 * 1024) return { error: "File must be under 10 MB." };
 
-  const columns: { name: string; data_type: ColumnDataType }[] = [];
-  for (let i = 0; i < columnNames.length; i++) {
-    const colName = columnNames[i]?.trim();
-    const colType = columnTypes[i];
-    if (!colName) continue;
-    if (!VALID_TYPES.includes(colType as ColumnDataType)) {
-      return { error: `Invalid column type for "${colName}".` };
-    }
-    columns.push({ name: colName, data_type: colType as ColumnDataType });
+  let mapping: CreateColumnMapping[];
+  try {
+    mapping = JSON.parse((formData.get("mapping") as string | null) ?? "[]");
+  } catch {
+    return { error: "Invalid column selection." };
   }
-
-  if (columns.length === 0) return { error: "At least one column is required." };
+  if (!Array.isArray(mapping) || mapping.length === 0) {
+    return { error: "Select at least one column to import." };
+  }
 
   const seen = new Set<string>();
-  for (const col of columns) {
-    const key = col.name.toLowerCase();
-    if (seen.has(key)) return { error: `Duplicate column name "${col.name}".` };
+  for (const m of mapping) {
+    const label = m.label?.trim();
+    if (!label) return { error: "Every selected column needs a name." };
+    if (!VALID_TYPES.includes(m.data_type)) return { error: `Invalid column type for "${label}".` };
+    const key = label.toLowerCase();
+    if (seen.has(key)) return { error: `Duplicate column name "${label}".` };
     seen.add(key);
+    m.label = label;
   }
+
+  const matrix = readSheetMatrix(await file.arrayBuffer());
+  if (matrix === null) {
+    return { error: "Could not parse the Excel file. Ensure it is a valid .xlsx/.xls spreadsheet." };
+  }
+  const dataRows = matrix.slice(1);
+
+  // Validate every cell before writing anything, so a bad value never leaves a
+  // half-created table behind.
+  const rowErrors: ImportRowError[] = [];
+  dataRows.forEach((row, rowIndex) => {
+    for (const m of mapping) {
+      const raw = cellToString(row[m.index]);
+      if (raw.trim() === "") continue;
+      const { error } = validateCellValue(raw, m.data_type);
+      if (error) rowErrors.push({ row: rowIndex + 2, column: m.label, message: `${raw} ${error}` });
+    }
+  });
+  if (rowErrors.length > 0) return { rowErrors };
 
   const supabase = createAdminClient();
 
@@ -118,27 +177,64 @@ export async function createMetricsTable(
 
   if (tableError || !table) return { error: `Failed to create table: ${tableError?.message}` };
 
-  const { error: columnsError } = await supabase.from("client_metrics_columns").insert(
-    columns.map((col, index) => ({
-      table_id: table.id as string,
-      name: col.name,
-      data_type: col.data_type,
-      position: index,
-    }))
-  );
+  const { data: insertedColumns, error: columnsError } = await supabase
+    .from("client_metrics_columns")
+    .insert(
+      mapping.map((m, index) => ({
+        table_id: table.id as string,
+        name: m.label,
+        data_type: m.data_type,
+        position: index,
+      }))
+    )
+    .select("id, position");
 
-  if (columnsError) {
+  if (columnsError || !insertedColumns) {
     await supabase.from("client_metrics_tables").delete().eq("id", table.id as string);
-    return { error: `Failed to save columns: ${columnsError.message}` };
+    return { error: `Failed to save columns: ${columnsError?.message}` };
+  }
+
+  // Align inserted column ids back to the mapping order via position.
+  const columnIdByMappingIndex = new Map<number, string>();
+  for (const col of insertedColumns) {
+    columnIdByMappingIndex.set(col.position as number, col.id as string);
+  }
+
+  const rowsToInsert = dataRows.map((row) => {
+    const data: Record<string, string | number | null> = {};
+    mapping.forEach((m, mappingIndex) => {
+      const columnId = columnIdByMappingIndex.get(mappingIndex);
+      if (!columnId) return;
+      const raw = cellToString(row[m.index]);
+      if (raw.trim() === "") {
+        data[columnId] = null;
+        return;
+      }
+      const { value } = validateCellValue(raw, m.data_type);
+      data[columnId] = value;
+    });
+    return { table_id: table.id as string, data };
+  });
+
+  if (rowsToInsert.length > 0) {
+    const { error: rowsError } = await supabase.from("client_metrics_rows").insert(rowsToInsert);
+    if (rowsError) {
+      await supabase.from("client_metrics_tables").delete().eq("id", table.id as string);
+      return { error: `Failed to import rows: ${rowsError.message}` };
+    }
   }
 
   await auditLog("client_metrics_table.created", actor.id, actor.email, {
     orgId: clientId,
-    metadata: { tableId: table.id, name, columnCount: columns.length },
+    metadata: { tableId: table.id, name, columnCount: mapping.length },
+  });
+  await auditLog("client_metrics_table.imported", actor.id, actor.email, {
+    orgId: clientId,
+    metadata: { tableId: table.id, rowCount: rowsToInsert.length },
   });
 
   revalidatePath(`/admin/clients/${clientId}`);
-  return {};
+  return { importedCount: rowsToInsert.length };
 }
 
 export type DeleteTableState = { error?: string };
@@ -309,6 +405,59 @@ export type ImportExcelState = {
   importedCount?: number;
 };
 
+export type PreviewExcelState = {
+  error?: string;
+  headers?: string[];
+  inferredTypes?: ColumnDataType[];
+  sampleRows?: string[][];
+};
+
+const PREVIEW_SAMPLE_ROWS = 10;
+
+// Parse an uploaded spreadsheet just enough to drive the column-picker modal:
+// the header row, a guessed type per column, and a handful of sample rows.
+// No DB writes — the file is re-sent and re-parsed on commit.
+export async function parseMetricsExcelPreview(
+  _prev: PreviewExcelState,
+  formData: FormData
+): Promise<PreviewExcelState> {
+  await requireRole("super_admin", "admin");
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "An Excel file is required." };
+  if (!/\.(xlsx|xls)$/i.test(file.name)) return { error: "Only .xlsx or .xls files are supported." };
+  if (file.size > 10 * 1024 * 1024) return { error: "File must be under 10 MB." };
+
+  const matrix = readSheetMatrix(await file.arrayBuffer());
+  if (matrix === null) {
+    return { error: "Could not parse the Excel file. Ensure it is a valid .xlsx/.xls spreadsheet." };
+  }
+  if (matrix.length < 2) {
+    return { error: "The spreadsheet needs a header row and at least one data row." };
+  }
+
+  const headerRow = matrix[0];
+  const dataRows = matrix.slice(1);
+  const columnCount = headerRow.length;
+
+  const headers = Array.from({ length: columnCount }, (_, i) => {
+    const raw = cellToString(headerRow[i]).trim();
+    return raw || `Column ${i + 1}`;
+  });
+  const inferredTypes = headers.map((_, i) =>
+    inferColumnType(dataRows.map((row) => cellToString(row[i])))
+  );
+  const sampleRows = dataRows
+    .slice(0, PREVIEW_SAMPLE_ROWS)
+    .map((row) => Array.from({ length: columnCount }, (_, i) => cellToString(row[i])));
+
+  return { headers, inferredTypes, sampleRows };
+}
+
+// Mapping from the append modal: which source column (by sheet index) feeds
+// each existing table column.
+type ImportColumnMapping = { index: number; column_id: string };
+
 export async function importMetricsExcel(
   clientId: string,
   tableId: string,
@@ -322,6 +471,16 @@ export async function importMetricsExcel(
   if (!/\.(xlsx|xls)$/i.test(file.name)) return { error: "Only .xlsx or .xls files are supported." };
   if (file.size > 10 * 1024 * 1024) return { error: "File must be under 10 MB." };
 
+  let mapping: ImportColumnMapping[];
+  try {
+    mapping = JSON.parse((formData.get("mapping") as string | null) ?? "[]");
+  } catch {
+    return { error: "Invalid column mapping." };
+  }
+  if (!Array.isArray(mapping) || mapping.length === 0) {
+    return { error: "Map at least one spreadsheet column to a table column." };
+  }
+
   const supabase = createAdminClient();
 
   const { data: columns } = await supabase
@@ -332,53 +491,36 @@ export async function importMetricsExcel(
 
   if (!columns || columns.length === 0) return { error: "Table has no columns defined." };
 
-  let sheetRows: Record<string, unknown>[];
-  try {
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array" });
-    const firstSheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[firstSheetName];
-    sheetRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-  } catch {
+  const columnById = new Map(columns.map((c) => [c.id as string, c]));
+  const seenColumns = new Set<string>();
+  for (const m of mapping) {
+    if (!columnById.has(m.column_id)) return { error: "Mapping references an unknown column." };
+    if (seenColumns.has(m.column_id)) return { error: "A table column is mapped more than once." };
+    seenColumns.add(m.column_id);
+  }
+
+  const matrix = readSheetMatrix(await file.arrayBuffer());
+  if (matrix === null) {
     return { error: "Could not parse the Excel file. Ensure it is a valid .xlsx/.xls spreadsheet." };
   }
-
-  if (sheetRows.length === 0) return { error: "The spreadsheet has no data rows." };
-
-  // Match spreadsheet headers to defined columns, case-insensitively.
-  const headerKeys = Object.keys(sheetRows[0]);
-  const columnByHeader = new Map<string, (typeof columns)[number]>();
-  for (const col of columns) {
-    const match = headerKeys.find((h) => h.trim().toLowerCase() === col.name.trim().toLowerCase());
-    if (match) columnByHeader.set(match, col);
-  }
-
-  const unmatchedColumns = columns.filter(
-    (col) => ![...columnByHeader.values()].some((c) => c.id === col.id)
-  );
-  if (unmatchedColumns.length === columns.length) {
-    return {
-      error: `No spreadsheet headers matched this table's columns (expected: ${columns
-        .map((c) => c.name)
-        .join(", ")}).`,
-    };
-  }
+  const dataRows = matrix.slice(1);
+  if (dataRows.length === 0) return { error: "The spreadsheet has no data rows." };
 
   const rowErrors: ImportRowError[] = [];
   const rowsToInsert: Record<string, string | number | null>[] = [];
 
-  sheetRows.forEach((sheetRow, index) => {
+  dataRows.forEach((row, index) => {
     const rowData: Record<string, string | number | null> = {};
-    for (const [header, col] of columnByHeader.entries()) {
-      const raw = sheetRow[header];
-      const rawStr = raw === null || raw === undefined ? "" : String(raw);
-      if (rawStr.trim() === "") {
+    for (const m of mapping) {
+      const col = columnById.get(m.column_id)!;
+      const raw = cellToString(row[m.index]);
+      if (raw.trim() === "") {
         rowData[col.id as string] = null;
         continue;
       }
-      const { value, error } = validateCellValue(rawStr, col.data_type as ColumnDataType);
+      const { value, error } = validateCellValue(raw, col.data_type as ColumnDataType);
       if (error) {
-        rowErrors.push({ row: index + 2, column: col.name, message: `${rawStr} ${error}` });
+        rowErrors.push({ row: index + 2, column: col.name as string, message: `${raw} ${error}` });
       } else {
         rowData[col.id as string] = value;
       }
