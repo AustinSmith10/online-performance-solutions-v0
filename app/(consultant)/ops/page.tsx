@@ -7,7 +7,6 @@ import type { ReviewRow, PbdbFile } from "./_components/RevisionReviewDrawer";
 import { RealtimeProjectRefresher } from "./_components/RealtimeProjectRefresher";
 import { SelfAssignButton } from "./_components/SelfAssignButton";
 import { DeclinedBanner } from "./_components/DeclinedBanner";
-import { PendingAssignmentCard } from "./_components/PendingAssignmentCard";
 import { TourInviteCard } from "./_components/TourInviteCard";
 import { ConsultantTour } from "@/components/onboarding-tour/ConsultantTour";
 import type { ProjectStatus } from "@/types";
@@ -96,9 +95,9 @@ export default async function ConsultantOpsPage({
   const allAssigned = (data ?? []) as unknown as ProjectRow[];
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  // Admin-pushed assignments awaiting this consultant's response surface as their
-  // own attention-needed cards (oldest first) rather than in the lists below —
-  // clicking one opens the accept/decline modal.
+  // Admin-pushed assignments awaiting this consultant's response (oldest first).
+  // These surface as highlighted amber cards at the top of the Active list below,
+  // each with inline Accept / Decline — not a separate "Needs your response" tray (#95).
   const pendingAssignments = allAssigned
     .filter((p) => !p.accepted_at)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -141,11 +140,13 @@ export default async function ConsultantOpsPage({
       pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version };
     }
   }
-  // Revision-required projects float to the top — same treatment as the portal's
-  // action-needed cards, so the consultant sees what needs them without a separate tray.
-  const active = projects
+  // One consistent "actionable = highlighted card" list, no separate tray (#95):
+  // admin-pushed assignments awaiting acceptance float to the very top (a decision
+  // is owed), then revision-required cards, then the rest of the active work.
+  const activeAccepted = projects
     .filter((p) => (["assigned", "in_progress", "revision_required"] as ProjectStatus[]).includes(p.status))
     .sort((a, b) => Number(b.status === "revision_required") - Number(a.status === "revision_required"));
+  const active = [...pendingAssignments, ...activeAccepted];
   const withStakeholders = projects.filter((p) =>
     (["dispatched", "converting"] as ProjectStatus[]).includes(p.status)
   );
@@ -172,27 +173,6 @@ export default async function ConsultantOpsPage({
       </Suspense>
       {!(user.onboarding_steps_seen ?? []).includes("consultant_tour") && <TourInviteCard />}
       {declined === "1" && <DeclinedBanner />}
-      {pendingAssignments.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Needs your response ({pendingAssignments.length})
-          </h2>
-          <div className="flex flex-col gap-3">
-            {pendingAssignments.map((p) => (
-              <PendingAssignmentCard
-                key={p.id}
-                projectId={p.id}
-                label={projectLabel(p)}
-                clientName={p.clients?.name ?? "—"}
-                submittedLabel={formatAuDate(p.created_at)}
-                expectedDeliveryLabel={
-                  p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : "—"
-                }
-              />
-            ))}
-          </div>
-        </section>
-      )}
       {/* Header + tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-zinc-900">My projects</h1>
@@ -302,7 +282,7 @@ export default async function ConsultantOpsPage({
       {/* Workspace tab */}
       {!isArchive && !isAvailable && (
         <>
-          {projects.filter((p) => !TERMINAL_STATUSES.has(p.status)).length === 0 && (
+          {active.length === 0 && withStakeholders.length === 0 && (
             <div className="rounded-lg border border-zinc-200 bg-white p-12 text-center">
               <p className="text-sm font-medium text-zinc-900">No active projects</p>
               <p className="mt-1 text-sm text-zinc-500">
@@ -379,6 +359,7 @@ function ProjectSection({
             !!p.expected_delivery_date &&
             p.expected_delivery_date < todayIso &&
             !TERMINAL_STATUSES.has(p.status);
+          const isPending = !p.accepted_at;
           const isRevision = p.status === "revision_required";
           return (
             <ConsultantProjectCard
@@ -391,8 +372,9 @@ function ProjectSection({
               statusClassName={STATUS_CLASSES[p.status]}
               expectedDeliveryLabel={p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null}
               isOverdue={isOverdue}
+              pendingAssignment={isPending ? { projectId: p.id } : undefined}
               revisionReview={
-                isRevision
+                isRevision && !isPending
                   ? {
                       project: p,
                       reviews: reviewsByProject?.[p.id] ?? [],

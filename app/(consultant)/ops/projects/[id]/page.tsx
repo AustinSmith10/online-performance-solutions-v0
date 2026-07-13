@@ -123,7 +123,8 @@ export default async function ConsultantProjectDetailPage({
   const todayIso = new Date().toISOString().slice(0, 10);
 
   // Admin-pushed assignment awaiting the consultant's response — accept/decline
-  // happens via a modal on the workspace list (/ops), not here. Send them there
+  // happens inline on the highlighted card in the workspace list (/ops), not here.
+  // The card isn't navigable, so this only guards stale links; send them back
   // rather than exposing full project details (this is templated work; the
   // consultant only needs to judge bandwidth, not the specific project).
   if (!project.accepted_at) {
