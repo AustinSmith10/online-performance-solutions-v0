@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { setDigestSchedule, isValidTime } from "@/lib/settings/digest-schedule";
+import { setBusinessHours } from "@/lib/settings/business-hours";
 import {
   setAdminNavRestrictions,
   RESTRICTABLE_NAV_ITEMS,
@@ -46,6 +47,47 @@ export async function updateDigestScheduleAction(
   if (error) return { errors: { form: [error] } };
 
   await auditLog("settings.digest_schedule_updated", actor.id as string, actor.email as string, {
+    metadata: validated.data,
+  });
+
+  return { saved: true };
+}
+
+const BusinessHoursSchema = z.object({
+  start: z.string().refine(isValidTime, { error: "Enter a valid time (HH:MM)" }),
+  end: z.string().refine(isValidTime, { error: "Enter a valid time (HH:MM)" }),
+});
+
+export type UpdateBusinessHoursState = {
+  saved?: boolean;
+  errors?: {
+    start?: string[];
+    end?: string[];
+    form?: string[];
+  };
+};
+
+export async function updateBusinessHoursAction(
+  _prev: UpdateBusinessHoursState,
+  formData: FormData
+): Promise<UpdateBusinessHoursState> {
+  const actor = await requireRole("super_admin", "admin");
+
+  const validated = BusinessHoursSchema.safeParse({
+    start: formData.get("start"),
+    end: formData.get("end"),
+  });
+
+  if (!validated.success) {
+    return { errors: validated.error.flatten().fieldErrors };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await setBusinessHours(supabase, validated.data, actor.id as string);
+
+  if (error) return { errors: { form: [error] } };
+
+  await auditLog("settings.business_hours_updated", actor.id as string, actor.email as string, {
     metadata: validated.data,
   });
 

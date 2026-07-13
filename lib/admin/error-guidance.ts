@@ -17,6 +17,8 @@ const JOB_GUIDANCE: Record<string, string> = {
     "Dispatching the PBDB to stakeholders failed. Check the outbound email configuration and the project's stakeholder list, then retry dispatch from the project detail page.",
   "deliver-pbdr":
     "Final PBDR delivery to the client failed. Check the delivery recipient email and the document conversion step, then retry delivery from the project detail page.",
+  "release-pending-deliveries":
+    "Releasing a business-hours-gated PBDR delivery failed (see #63). Check the project's document conversion step, then retry delivery from the project detail page — the staged pending_deliveries row is cleared before the attempt, so it won't retry automatically.",
 };
 
 export function jobGuidance(jobName: string, message?: string | null): string {

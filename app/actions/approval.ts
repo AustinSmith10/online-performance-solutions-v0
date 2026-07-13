@@ -6,7 +6,7 @@ import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
-import { deliverPbdr } from "@/lib/documents/delivery";
+import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 import { sendEmail } from "@/lib/email/sender";
 
 export interface ApprovalState {
@@ -171,7 +171,7 @@ export async function submitApproval(
 
     if (!outstanding || outstanding.length === 0) {
       // All stakeholders approved — auto-trigger PBDR conversion and delivery
-      deliverPbdr(review.project_id, null, null).catch((err) => {
+      scheduleOrDeliverPbdr(review.project_id).catch((err) => {
         console.error(`[submitApproval] auto-deliver-pbdr failed for ${review.project_id}:`, err);
       });
     }

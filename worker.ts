@@ -35,6 +35,7 @@ async function main() {
     "approval-buffer",
     "assignment-accept-overdue",
     "deliver-pbdr",
+    "release-pending-deliveries",
     AVAILABLE_REQUESTS_DIGEST_QUEUE,
     "reconcile-digest-schedule",
   ]) {
@@ -353,6 +354,37 @@ async function main() {
       }
     }
   );
+
+  // Release staged PBDR deliveries (#63): auto-triggered deliveries that landed
+  // outside business hours were staged in pending_deliveries by
+  // scheduleOrDeliverPbdr rather than run immediately. Sweep every 10 minutes
+  // and run any whose scheduled_for has arrived.
+  await boss.schedule("release-pending-deliveries", "*/10 * * * *", {});
+  await boss.work("release-pending-deliveries", async () => {
+    const supabase = createAdminClient();
+
+    const { data: due, error } = await supabase
+      .from("pending_deliveries")
+      .select("project_id")
+      .lte("scheduled_for", new Date().toISOString());
+
+    if (error) {
+      console.error("[release-pending-deliveries] query failed:", error);
+      throw new Error(error.message);
+    }
+
+    for (const row of due ?? []) {
+      const projectId = row.project_id as string;
+      await supabase.from("pending_deliveries").delete().eq("project_id", projectId);
+
+      const result = await deliverPbdr(projectId, null, null);
+      if (!result.success) {
+        console.error(`[release-pending-deliveries] delivery failed for ${projectId}: ${result.reason}`);
+        continue;
+      }
+      console.log(`[release-pending-deliveries] released delivery for ${projectId}`);
+    }
+  });
 
   // Twice-daily digest of available (submitted, unassigned) projects, sent to
   // consultants/admins/super_admins. Send times are admin-configurable — see

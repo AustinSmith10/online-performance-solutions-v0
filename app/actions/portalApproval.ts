@@ -6,7 +6,7 @@ import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
 import { renderReviewResponseConfirmationEmail } from "@/lib/email/templates/ReviewResponseConfirmationEmail";
-import { deliverPbdr } from "@/lib/documents/delivery";
+import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 
 export interface PortalApprovalState {
   error?: string;
@@ -169,7 +169,7 @@ export async function submitPortalApproval(
       .eq("status", "pending");
 
     if (!pending || pending.length === 0) {
-      deliverPbdr(review.project_id as string, null, null).catch((err) => {
+      scheduleOrDeliverPbdr(review.project_id as string).catch((err) => {
         console.error(`[submitPortalApproval] auto-deliver-pbdr failed for ${review.project_id}:`, err);
       });
     }
