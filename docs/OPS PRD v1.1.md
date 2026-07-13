@@ -792,7 +792,7 @@ ops/
 │   │   └── naming.ts                     # PBDR file naming + address sanitisation
 │   │
 │   ├── email/
-│   │   ├── sender.ts                     # Postmark dispatch wrapper
+│   │   ├── sender.ts                     # Resend dispatch wrapper
 │   │   ├── parser.ts                     # Postmark inbound payload parser
 │   │   ├── extractor.ts                  # Claude API field extraction from uploaded documents
 │   │   └── templates/                    # React Email components

@@ -8,6 +8,7 @@ import { NotificationToasts } from "@/components/NotificationToasts";
 import { MobileNav } from "@/components/MobileNav";
 import { SidebarNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
+import { ReplayTourButton } from "@/components/onboarding-tour/ReplayTourButton";
 
 const ALL_NAV_ITEMS: { href: string; label: string; group?: string; key?: AdminNavKey }[] = [
   { href: "/admin/dashboard", label: "Dashboard" },
@@ -73,6 +74,10 @@ export default async function AdminShellLayout({
           >
             My profile
           </Link>
+          <ReplayTourButton
+            href="/admin/dashboard"
+            className="mb-1 block w-full rounded px-3 py-1.5 text-left text-sm text-zinc-600 hover:bg-zinc-100"
+          />
           <form action={logout}>
             <button
               type="submit"

@@ -1051,12 +1051,9 @@ export async function adminDeleteProject(
   if (!project) return { error: "Project not found." };
   if (project.deleted_at) return { error: "Project is already in the recovery bin." };
 
-  if (!["draft", "submitted"].includes(project.status as string)) {
-    return {
-      error:
-        "This project has already been assigned to a consultant and can no longer be soft-deleted directly. Use pause or contact engineering if it needs to be cancelled.",
-    };
-  }
+  // Admins and super admins can soft-delete a project at any stage, including
+  // once a consultant has been assigned. The delete is reversible (30-day
+  // recovery bin), and status_at_deletion is captured in the audit log below.
 
   const { error } = await supabase
     .from("projects")
