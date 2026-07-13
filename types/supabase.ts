@@ -678,6 +678,7 @@ export type Database = {
           credit_deducted: boolean
           deleted_at: string | null
           delivered_at: string | null
+          delivery_delay_preset: string
           delivery_recipient_email: string | null
           expected_delivery_date: string | null
           extracted_fields: Json | null
@@ -713,6 +714,7 @@ export type Database = {
           credit_deducted?: boolean
           deleted_at?: string | null
           delivered_at?: string | null
+          delivery_delay_preset?: string
           delivery_recipient_email?: string | null
           expected_delivery_date?: string | null
           extracted_fields?: Json | null
@@ -748,6 +750,7 @@ export type Database = {
           credit_deducted?: boolean
           deleted_at?: string | null
           delivered_at?: string | null
+          delivery_delay_preset?: string
           delivery_recipient_email?: string | null
           expected_delivery_date?: string | null
           extracted_fields?: Json | null

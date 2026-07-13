@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { setDigestSchedule, isValidTime } from "@/lib/settings/digest-schedule";
 import { setBusinessHours } from "@/lib/settings/business-hours";
+import { setDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import {
   setAdminNavRestrictions,
   RESTRICTABLE_NAV_ITEMS,
@@ -90,6 +91,50 @@ export async function updateBusinessHoursAction(
   await auditLog("settings.business_hours_updated", actor.id as string, actor.email as string, {
     metadata: validated.data,
   });
+
+  return { saved: true };
+}
+
+const DeliveryDelayDurationsSchema = z.object({
+  normalHours: z.coerce.number({ error: "Enter a number of hours" }),
+  extendedHours: z.coerce.number({ error: "Enter a number of hours" }),
+});
+
+export type UpdateDeliveryDelayDurationsState = {
+  saved?: boolean;
+  errors?: {
+    normalHours?: string[];
+    extendedHours?: string[];
+    form?: string[];
+  };
+};
+
+export async function updateDeliveryDelayDurationsAction(
+  _prev: UpdateDeliveryDelayDurationsState,
+  formData: FormData
+): Promise<UpdateDeliveryDelayDurationsState> {
+  const actor = await requireRole("super_admin", "admin");
+
+  const validated = DeliveryDelayDurationsSchema.safeParse({
+    normalHours: formData.get("normalHours"),
+    extendedHours: formData.get("extendedHours"),
+  });
+
+  if (!validated.success) {
+    return { errors: validated.error.flatten().fieldErrors };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await setDeliveryDelayDurations(supabase, validated.data, actor.id as string);
+
+  if (error) return { errors: { form: [error] } };
+
+  await auditLog(
+    "settings.delivery_delay_durations_updated",
+    actor.id as string,
+    actor.email as string,
+    { metadata: validated.data }
+  );
 
   return { saved: true };
 }

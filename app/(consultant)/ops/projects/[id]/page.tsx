@@ -9,6 +9,8 @@ import { QaUploadedBanner } from "./_components/QaUploadedBanner";
 import { StepIndicator } from "./_components/StepIndicator";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
+import { ProjectDeliveryDelayPresetSelect } from "@/components/ProjectDeliveryDelayPresetSelect";
+import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { DownloadCard } from "@/components/DownloadCard";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton, RegeneratePbdbButton } from "@/components/PbdbGenerationButtons";
@@ -87,7 +89,7 @@ export default async function ConsultantProjectDetailPage({
   const { data, error } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, qa_completed_by, accepted_at, clients(name, state_territory, client_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, qa_completed_by, accepted_at, clients(name, state_territory, client_config), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -108,6 +110,7 @@ export default async function ConsultantProjectDetailPage({
     expected_delivery_date: string | null;
     source: "portal" | "email";
     strip_token_color: boolean;
+    delivery_delay_preset: DeliveryDelayPreset;
     qa_completed_by: string | null;
     accepted_at: string | null;
     clients: { name: string; state_territory: string | null; client_config: Record<string, string> } | null;
@@ -452,6 +455,20 @@ export default async function ConsultantProjectDetailPage({
           </div>
         </CollapsibleSection>
       )}
+
+      {/* Delivery delay preset */}
+      <CollapsibleSection title="Delivery timing" defaultOpen>
+        <div className="px-5 py-4">
+          <p className="mb-4 text-xs text-zinc-500">
+            Delay applied to PBDR generation and final client delivery, on top of business-hours
+            gating. Doesn&apos;t affect the earlier stakeholder-review dispatch step.
+          </p>
+          <ProjectDeliveryDelayPresetSelect
+            projectId={id}
+            initialValue={project.delivery_delay_preset}
+          />
+        </div>
+      </CollapsibleSection>
 
       {/* Stakeholder reviews */}
       {allReviews.length > 0 && (

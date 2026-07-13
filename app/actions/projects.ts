@@ -11,6 +11,7 @@ import { formatAddress } from "@/lib/documents/formatters";
 import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
+import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 
 export type AssignState = { error?: string; success?: boolean };
 
@@ -1188,6 +1189,31 @@ export async function setProjectStripTokenColor(
   const supabase = createAdminClient();
 
   let query = supabase.from("projects").update({ strip_token_color: strip }).eq("id", projectId);
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { error } = await query;
+  if (error) return { error: error.message };
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return {};
+}
+
+export type SetDeliveryDelayPresetState = { error?: string };
+
+export async function setProjectDeliveryDelayPreset(
+  projectId: string,
+  preset: DeliveryDelayPreset
+): Promise<SetDeliveryDelayPresetState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .update({ delivery_delay_preset: preset })
+    .eq("id", projectId);
   if (actor.role === "consultant") {
     query = query.eq("assigned_consultant_id", actor.id);
   }

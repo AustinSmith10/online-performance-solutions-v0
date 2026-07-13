@@ -18,6 +18,8 @@ import { AdminProjectNumberForm } from "./_components/AdminProjectNumberForm";
 import { AdminProjectTabs } from "./_components/AdminProjectTabs";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
+import { ProjectDeliveryDelayPresetSelect } from "@/components/ProjectDeliveryDelayPresetSelect";
+import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { DownloadCard } from "@/components/DownloadCard";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton, RegeneratePbdbButton } from "@/components/PbdbGenerationButtons";
@@ -144,6 +146,7 @@ export default async function ProjectDetailPage({
         source,
         review_cycle,
         strip_token_color,
+        delivery_delay_preset,
         qa_completed_by,
         clients(id, name, client_config),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
@@ -179,6 +182,7 @@ export default async function ProjectDetailPage({
     updated_at: string;
     source: "portal" | "email";
     strip_token_color: boolean;
+    delivery_delay_preset: DeliveryDelayPreset;
     clients: { id: string; name: string; client_config: Record<string, string> } | null;
     assigned: {
       id: string;
@@ -498,6 +502,19 @@ export default async function ProjectDetailPage({
             <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
           </div>
         )}
+
+        {/* Delivery delay preset */}
+        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Delivery timing</h2>
+          <p className="mb-4 text-xs text-zinc-500">
+            Delay applied to PBDR generation and final client delivery, on top of business-hours
+            gating. Doesn&apos;t affect the earlier stakeholder-review dispatch step.
+          </p>
+          <ProjectDeliveryDelayPresetSelect
+            projectId={id}
+            initialValue={project.delivery_delay_preset}
+          />
+        </div>
 
         {/* PBDR files — reference list */}
         {pbdrFiles.length > 0 && (
