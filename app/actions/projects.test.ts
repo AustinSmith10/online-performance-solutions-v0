@@ -199,25 +199,32 @@ describe("adminDeleteProject", () => {
     expect(mock.updateFn).toHaveBeenCalled();
   });
 
-  it("refuses to delete a project already assigned to a consultant", async () => {
+  it("soft-deletes a project already assigned to a consultant", async () => {
     const mock = buildDeleteMock({ status: "in_progress" });
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
 
     const result = await adminDeleteProject(PROJECT_ID);
 
-    expect(result.error).toMatch(/already been assigned/i);
-    expect(mock.updateFn).not.toHaveBeenCalled();
-    expect(auditLog).not.toHaveBeenCalled();
+    expect(result.error).toBeUndefined();
+    expect(mock.updateFn).toHaveBeenCalledWith(
+      expect.objectContaining({ deleted_at: expect.any(String) })
+    );
+    expect(auditLog).toHaveBeenCalledWith(
+      "project.admin_deleted",
+      ACTOR_ID,
+      "a@ddeg.com.au",
+      expect.objectContaining({ metadata: { status_at_deletion: "in_progress" } })
+    );
   });
 
-  it("refuses to delete a project that is delivered", async () => {
+  it("soft-deletes a project that is delivered", async () => {
     const mock = buildDeleteMock({ status: "delivered" });
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
 
     const result = await adminDeleteProject(PROJECT_ID);
 
-    expect(result.error).toMatch(/already been assigned/i);
-    expect(mock.updateFn).not.toHaveBeenCalled();
+    expect(result.error).toBeUndefined();
+    expect(mock.updateFn).toHaveBeenCalled();
   });
 
   it("refuses to delete a project already in the recovery bin", async () => {
