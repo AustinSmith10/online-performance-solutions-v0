@@ -17,6 +17,7 @@ import { CollapsibleSection } from "./_components/CollapsibleSection";
 import { ProjectDetailsEditor } from "./_components/ProjectDetailsEditor";
 import { ConsultantProjectTabs } from "./_components/ConsultantProjectTabs";
 import { ProjectAuditTrail, type ProjectAuditRow } from "./_components/ProjectAuditTrail";
+import { LogStakeholderResponseForm } from "./_components/LogStakeholderResponseForm";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
 import type { ProjectStatus } from "@/types";
 
@@ -457,7 +458,7 @@ export default async function ConsultantProjectDetailPage({
         <CollapsibleSection
           title="Stakeholder reviews"
           subtitle="All review cycles — each cycle corresponds to one version of the PBDB sent to stakeholders."
-          defaultOpen={false}
+          defaultOpen={pendingCount > 0}
         >
           {reviewCycles.map((cycle) => {
             const cycleReviews = reviewsByCycle.get(cycle)!;
@@ -490,6 +491,8 @@ export default async function ConsultantProjectDetailPage({
                       rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
                       waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
                     }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
+                    const canLogOnBehalf =
+                      isCurrent && r.status === "pending" && project.status === "dispatched";
                     return (
                       <div key={r.id} className="px-5 py-3">
                         <div className="flex items-start justify-between gap-3">
@@ -500,16 +503,26 @@ export default async function ConsultantProjectDetailPage({
                               <p className="mt-1.5 text-sm leading-relaxed text-zinc-700">{r.comments}</p>
                             )}
                           </div>
-                          <div className="shrink-0 text-right">
-                            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}>
-                              {statusConfig.label}
-                            </span>
-                            {r.responded_at && (
-                              <p className="mt-0.5 text-xs text-zinc-400">
-                                {new Date(r.responded_at).toLocaleDateString("en-AU", {
-                                  day: "numeric", month: "short", year: "numeric",
-                                })}
-                              </p>
+                          <div className="flex shrink-0 items-start gap-2">
+                            <div className="text-right">
+                              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}>
+                                {statusConfig.label}
+                              </span>
+                              {r.responded_at && (
+                                <p className="mt-0.5 text-xs text-zinc-400">
+                                  {new Date(r.responded_at).toLocaleDateString("en-AU", {
+                                    day: "numeric", month: "short", year: "numeric",
+                                  })}
+                                </p>
+                              )}
+                            </div>
+                            {canLogOnBehalf && (
+                              <LogStakeholderResponseForm
+                                reviewId={r.id}
+                                projectId={id}
+                                stakeholderName={r.stakeholder_name}
+                                stakeholderEmail={r.stakeholder_email}
+                              />
                             )}
                           </div>
                         </div>

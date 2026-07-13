@@ -11,6 +11,11 @@ import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
 import { sendEmail } from "@/lib/email/sender";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
+import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
+import { notify } from "@/lib/notifications/notify";
+import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
+import { attachEvidence } from "@/app/actions/evidence";
+import { parseEmlBody } from "@/lib/email/parseEml";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -561,5 +566,262 @@ export async function updateStakeholderEmail(
   });
 
   redirect(`/admin/projects/${projectId}?email_updated=${reviewId}`);
+}
+
+// ─── Log a decision on a stakeholder's behalf (#65) ───────────────────────────
+// For stakeholders who reply out-of-band (phone, email) instead of using the
+// portal. Requires an attached evidence file (#57) and, once recorded, has
+// the same downstream effect as that stakeholder approving/rejecting via the
+// portal themselves — see submitPortalApproval in app/actions/portalApproval.ts,
+// which this mirrors.
+
+export interface LogResponseState {
+  error?: string;
+  success?: boolean;
+}
+
+export async function logStakeholderResponseOnBehalf(
+  reviewId: string,
+  projectId: string,
+  response: "approved" | "rejected",
+  comments: string | null,
+  storagePath: string,
+  filename: string
+): Promise<LogResponseState> {
+  const actor = await requireRole("consultant", "admin", "super_admin");
+  const supabase = createAdminClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, client_id, assigned_consultant_id, status, review_cycle")
+    .eq("id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!project) return { error: "Project not found." };
+  if (actor.role === "consultant" && project.assigned_consultant_id !== actor.id) {
+    return { error: "Access denied." };
+  }
+
+  if (response !== "approved" && response !== "rejected") {
+    return { error: "Select approve or reject." };
+  }
+  const trimmedComments = comments?.trim() || null;
+  if (response === "rejected" && !trimmedComments) {
+    return { error: "Comments are required — describe what the stakeholder said." };
+  }
+
+  const { data: review } = await supabase
+    .from("stakeholder_reviews")
+    .select("id, project_id, stakeholder_name, stakeholder_email, status, review_cycle")
+    .eq("id", reviewId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (!review) return { error: "Review not found." };
+  if ((review.status as string) !== "pending") {
+    return { error: "This review has already been responded to." };
+  }
+  if ((review.review_cycle as number) !== (project.review_cycle as number)) {
+    return { error: "This review is no longer valid — the project has moved to a new review cycle." };
+  }
+  if ((project.status as string) !== "dispatched") {
+    return { error: "This project is no longer awaiting review." };
+  }
+
+  // Mandatory evidence attachment, linked to this specific review event
+  // (not just a generic project attachment) via the `reference` string.
+  const evidenceResult = await attachEvidence(
+    projectId,
+    storagePath,
+    filename,
+    `stakeholder_review:${reviewId}`
+  );
+  if (evidenceResult.error) return { error: evidenceResult.error };
+
+  const { data: evidenceFile } = await supabase
+    .from("project_files")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("storage_path", storagePath)
+    .maybeSingle();
+
+  const now = new Date().toISOString();
+  const newStatus =
+    response === "approved"
+      ? trimmedComments
+        ? "approved_with_comments"
+        : "approved_without_comments"
+      : "rejected_with_comments";
+
+  const { error: updateErr, count } = await supabase
+    .from("stakeholder_reviews")
+    .update({ status: newStatus, comments: trimmedComments, responded_at: now }, { count: "exact" })
+    .eq("id", reviewId)
+    .eq("status", "pending");
+
+  if (updateErr) return { error: "Failed to record the response. Please try again." };
+  if (count === 0) return { error: "This review has already been responded to." };
+
+  await auditLog("stakeholder.responded_on_behalf", actor.id, actor.email as string, {
+    projectId,
+    metadata: {
+      review_id: reviewId,
+      response: newStatus,
+      stakeholder_email: review.stakeholder_email,
+      stakeholder_name: review.stakeholder_name,
+      evidence_file_id: evidenceFile?.id ?? null,
+      reference: `stakeholder_review:${reviewId}`,
+    },
+  });
+
+  await supabase
+    .from("projects")
+    .update({ first_response_at: now, updated_at: now })
+    .eq("id", projectId)
+    .is("first_response_at", null);
+
+  const { data: projectDetail } = await supabase
+    .from("projects")
+    .select("review_cycle, extracted_fields, project_number, assigned_consultant_id, qa_completed_by")
+    .eq("id", projectId)
+    .single();
+
+  if (projectDetail) {
+    const cycle = projectDetail.review_cycle as number;
+    const projectRef =
+      (projectDetail.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ??
+      (projectDetail.project_number as string | null) ??
+      projectId.slice(0, 8);
+
+    if (response === "rejected") {
+      await supabase
+        .from("projects")
+        .update({ status: "revision_required", updated_at: now })
+        .eq("id", projectId);
+
+      const { data: allRejected } = await supabase
+        .from("stakeholder_reviews")
+        .select("stakeholder_name, comments")
+        .eq("project_id", projectId)
+        .eq("review_cycle", cycle)
+        .in("status", ["rejected_with_comments", "rejected_without_comments"]);
+
+      const modifications = (allRejected ?? [])
+        .filter((r) => r.comments)
+        .map((r) => ({
+          stakeholderName: r.stakeholder_name as string,
+          comments: r.comments as string,
+        }));
+
+      const consultantId =
+        (projectDetail.qa_completed_by as string | null) ??
+        (projectDetail.assigned_consultant_id as string | null);
+      const recipientIds: string[] = [...(consultantId ? [consultantId] : [])];
+      const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
+      for (const a of admins ?? []) recipientIds.push(a.id as string);
+
+      const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/ops/projects/${projectId}`;
+      const { data: recipientRows } = await supabase
+        .from("users")
+        .select("id, first_name")
+        .in("id", recipientIds);
+
+      await Promise.all(
+        (recipientRows ?? []).map((u) => {
+          const firstName = (u.first_name as string | null) ?? "there";
+          const emailHtml = renderModificationsRequestedEmail({
+            consultantName: firstName,
+            projectId: projectRef,
+            modifications,
+            projectUrl,
+          });
+          return notify({
+            recipientId: u.id as string,
+            type: "modifications_requested",
+            message: `${review.stakeholder_name} requested changes to ${projectRef}${trimmedComments ? ` — "${trimmedComments.slice(0, 80)}${trimmedComments.length > 80 ? "…" : ""}"` : "."}`,
+            projectId,
+            emailSubject: `Changes requested — ${projectRef}`,
+            emailHtml,
+          }).catch(() => {});
+        })
+      );
+    } else {
+      const { data: pending } = await supabase
+        .from("stakeholder_reviews")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("review_cycle", cycle)
+        .eq("status", "pending");
+
+      if (!pending || pending.length === 0) {
+        scheduleOrDeliverPbdr(projectId).catch((err) => {
+          console.error(`[logStakeholderResponseOnBehalf] auto-deliver-pbdr failed for ${projectId}:`, err);
+        });
+      }
+    }
+  }
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { success: true };
+}
+
+// ─── Extract comments from an uploaded email (#65, optional AI convenience) ──
+// Pure convenience read — no DB writes, no audit log. The consultant always
+// reviews and edits the result before submitting; this never determines the
+// approve/reject decision.
+
+export type ExtractEmailResult = { text: string } | { error: string };
+
+export async function extractStakeholderCommentsFromEmail(
+  emlText: string
+): Promise<ExtractEmailResult> {
+  await requireRole("consultant", "admin", "super_admin");
+
+  const body = parseEmlBody(emlText).slice(0, 8000).trim();
+  if (!body) return { error: "Could not find any text in this email." };
+
+  const prompt = `Below is the body of an email a stakeholder sent about a building compliance document review.
+
+--- EMAIL BODY ---
+${body}
+
+Extract only the substantive message the sender wrote — their actual reply — with quoted previous messages, signatures, and disclaimers removed. Return the extracted text only, as plain text, with no explanation, preamble, or formatting.`;
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const response = await client.messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
+      if (text) return { text };
+    } catch (err) {
+      console.error("[extractStakeholderCommentsFromEmail] Anthropic failed, falling back to OpenAI:", err);
+    }
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const OpenAI = (await import("openai")).default;
+      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const response = await client.chat.completions.create({
+        model: "gpt-4o",
+        max_tokens: 1024,
+        temperature: 0,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const text = response.choices[0]?.message?.content?.trim() ?? "";
+      if (text) return { text };
+    } catch (err) {
+      console.error("[extractStakeholderCommentsFromEmail] OpenAI also failed:", err);
+    }
+  }
+
+  return { text: body };
 }
 
