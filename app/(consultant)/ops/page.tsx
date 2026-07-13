@@ -176,44 +176,52 @@ export default async function ConsultantOpsPage({
       {/* Header + tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-zinc-900">My projects</h1>
-        <div className="flex gap-1 rounded-lg border border-zinc-200 bg-white p-1">
+        <div className="flex items-center gap-3">
           <Link
-            href="/ops"
-            className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-              !isArchive && !isAvailable
-                ? "bg-zinc-900 text-white"
-                : "text-zinc-600 hover:text-zinc-900"
-            }`}
+            href="/ops/projects/submit"
+            className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
           >
-            Workspace
+            Submit request
           </Link>
-          <Link
-            href="/ops?tab=available"
-            className={`relative rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-              isAvailable
-                ? "bg-zinc-900 text-white"
-                : "text-zinc-600 hover:text-zinc-900"
-            }`}
-          >
-            Available jobs
-            {availableProjects.length > 0 && (
-              <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-semibold ${
-                isAvailable ? "bg-white text-zinc-900" : "bg-blue-600 text-white"
-              }`}>
-                {availableProjects.length}
-              </span>
-            )}
-          </Link>
-          <Link
-            href="/ops?tab=archive"
-            className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-              isArchive
-                ? "bg-zinc-900 text-white"
-                : "text-zinc-600 hover:text-zinc-900"
-            }`}
-          >
-            Archive
-          </Link>
+          <div className="flex gap-1 rounded-lg border border-zinc-200 bg-white p-1">
+            <Link
+              href="/ops"
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                !isArchive && !isAvailable
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              Workspace
+            </Link>
+            <Link
+              href="/ops?tab=available"
+              className={`relative rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                isAvailable
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              Available jobs
+              {availableProjects.length > 0 && (
+                <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-semibold ${
+                  isAvailable ? "bg-white text-zinc-900" : "bg-blue-600 text-white"
+                }`}>
+                  {availableProjects.length}
+                </span>
+              )}
+            </Link>
+            <Link
+              href="/ops?tab=archive"
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                isArchive
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              Archive
+            </Link>
+          </div>
         </div>
       </div>
 

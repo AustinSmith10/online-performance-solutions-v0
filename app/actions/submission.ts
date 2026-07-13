@@ -12,6 +12,7 @@ import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { addWorkingDays } from "@/lib/delivery/working-days";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/config/support";
+import { performAssignment } from "@/lib/projects/assign";
 import {
   getMetricsAutofillConfigs,
   getAutofillExclusionTokens,
@@ -66,14 +67,16 @@ export type ExtractState =
       templateId: string;
     };
 
-// ─── Step 1a: derive an org id from actor role + admin fields (shared) ──────
+// ─── Step 1a: derive an org id from actor role + on-behalf-of fields (shared) ─
+// Admins and consultants both submit "on behalf of" a stakeholder they pick,
+// so they share the same org-id resolution and `submitted_by` pinning below.
 
 function resolveOrgId(
   actor: { role: string; client_id?: unknown },
-  isAdmin: boolean,
-  adminOrgId: string | null
+  actsOnBehalf: boolean,
+  onBehalfOrgId: string | null
 ): string {
-  return isAdmin ? (adminOrgId?.trim() ?? "") : (actor.client_id as string);
+  return actsOnBehalf ? (onBehalfOrgId?.trim() ?? "") : (actor.client_id as string);
 }
 
 type FileReq = {
@@ -122,7 +125,7 @@ export type RequestUploadsResult =
 // sibling upload in the same batch failed — nothing references these paths
 // yet (no draft project exists), so they're safe to remove.
 export async function abortSubmissionUploads(paths: string[]): Promise<void> {
-  await requireRole("stakeholder", "super_admin", "admin");
+  await requireRole("stakeholder", "consultant", "super_admin", "admin");
   if (!paths.length) return;
   const supabase = createAdminClient();
   await supabase.storage.from("submissions").remove(paths);
@@ -134,15 +137,16 @@ export async function requestSubmissionUploadUrls(
   adminClientId: string | null,
   manifestBySlug: Record<string, UploadManifestItem[]>
 ): Promise<RequestUploadsResult> {
-  const actor = await requireRole("stakeholder", "super_admin", "admin");
+  const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   if (!templateId) return { error: "No template selected." };
 
   const isAdmin = actor.role === "super_admin" || actor.role === "admin";
-  const orgId = resolveOrgId(actor, isAdmin, adminOrgId);
+  const actsOnBehalf = isAdmin || actor.role === "consultant";
+  const orgId = resolveOrgId(actor, actsOnBehalf, adminOrgId);
   if (!orgId) return { error: "Client is required." };
-  if (isAdmin && !adminClientId?.trim()) return { error: "Client account is required." };
+  if (actsOnBehalf && !adminClientId?.trim()) return { error: "Stakeholder account is required." };
 
   const fileReqs = await loadFileRequirements(supabase, templateId);
 
@@ -223,13 +227,14 @@ export async function finalizeSubmission(
   adminClientId: string | null,
   uploads: FinalizeUploadItem[]
 ): Promise<ExtractState> {
-  const actor = await requireRole("stakeholder", "super_admin", "admin");
+  const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   const isAdmin = actor.role === "super_admin" || actor.role === "admin";
-  const orgId = resolveOrgId(actor, isAdmin, adminOrgId);
+  const actsOnBehalf = isAdmin || actor.role === "consultant";
+  const orgId = resolveOrgId(actor, actsOnBehalf, adminOrgId);
   if (!orgId) return { step: 1, error: "Client is required." };
-  if (isAdmin && !adminClientId?.trim()) return { step: 1, error: "Client account is required." };
+  if (actsOnBehalf && !adminClientId?.trim()) return { step: 1, error: "Stakeholder account is required." };
 
   const fileReqs = await loadFileRequirements(supabase, templateId);
   const reqBySlug = new Map(fileReqs.map((r) => [r.slug, r]));
@@ -384,7 +389,7 @@ export async function finalizeSubmission(
     id: projectId,
     client_id: orgId,
     template_id: templateId,
-    submitted_by: isAdmin ? (adminClientId as string) : actor.id,
+    submitted_by: actsOnBehalf ? (adminClientId as string) : actor.id,
     status: "draft",
     po_number: extraction.po_number.value || null,
     extracted_fields: draftFields,
@@ -471,18 +476,20 @@ export async function submitProject(
   _prev: SubmitState,
   formData: FormData
 ): Promise<SubmitState> {
-  const actor = await requireRole("stakeholder", "super_admin", "admin");
+  const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   const isAdmin = actor.role === "super_admin" || actor.role === "admin";
-  const orgId = isAdmin
+  const isConsultant = actor.role === "consultant";
+  const actsOnBehalf = isAdmin || isConsultant;
+  const orgId = actsOnBehalf
     ? ((formData.get("admin_org_id") as string | null)?.trim() ?? "")
     : (actor.client_id as string);
   if (!orgId) return { error: "Client is required." };
-  const adminClientId = isAdmin
+  const adminClientId = actsOnBehalf
     ? ((formData.get("admin_client_id") as string | null)?.trim() ?? "")
     : "";
-  if (isAdmin && !adminClientId) return { error: "Client account is required." };
+  if (actsOnBehalf && !adminClientId) return { error: "Stakeholder account is required." };
 
   const projectId = (formData.get("project_id") as string | null)?.trim();
   const templateId = (formData.get("template_id") as string | null)?.trim();
@@ -631,8 +638,10 @@ export async function submitProject(
     .eq("id", projectId)
     .eq("client_id", orgId)
     .eq("status", "draft");
-  // Clients can only finalise their own draft; admins scoped by id+org is sufficient.
-  if (!isAdmin) updateQuery = updateQuery.eq("submitted_by", actor.id);
+  // Clients can only finalise their own draft; admins/consultants acting on
+  // behalf of a stakeholder are scoped by id+org instead (submitted_by is the
+  // stakeholder's id, not the acting actor's).
+  if (!actsOnBehalf) updateQuery = updateQuery.eq("submitted_by", actor.id);
   const { error: updateError, count } = await updateQuery;
 
   if (updateError) return { error: `Failed to submit project: ${updateError.message}` };
@@ -642,7 +651,7 @@ export async function submitProject(
   after(async () => {
     await Promise.all([
       notify({
-        recipientId: isAdmin ? adminClientId : actor.id,
+        recipientId: actsOnBehalf ? adminClientId : actor.id,
         type: "acknowledgement",
         message: `Your report request for ${siteAddress ?? "your property"} has been received and is being processed.`,
         projectId,
@@ -674,6 +683,18 @@ export async function submitProject(
     revalidatePath("/admin/projects");
     revalidatePath(`/admin/projects/${projectId}`);
     redirect(`/admin/projects/${projectId}`);
+  } else if (isConsultant) {
+    // A consultant uploading on a stakeholder's behalf is claiming the
+    // project themselves — self-assign immediately rather than leaving it
+    // in the unassigned "submitted" pool for another consultant to pick up.
+    try {
+      await performAssignment(projectId, actor.id, actor.id, actor.email as string);
+    } catch (err) {
+      console.error("[submitProject] consultant self-assign failed:", err);
+    }
+    revalidatePath("/ops");
+    revalidatePath(`/ops/projects/${projectId}`);
+    redirect(`/ops/projects/${projectId}`);
   } else {
     revalidatePath("/portal");
     revalidatePath(`/portal/projects/${projectId}`);

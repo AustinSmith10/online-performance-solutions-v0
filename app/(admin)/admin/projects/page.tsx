@@ -153,9 +153,9 @@ function ProjectsLayout({
         </div>
         <Link
           href="/admin/projects/submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
-          Submit project
+          Submit request
         </Link>
       </div>
 
