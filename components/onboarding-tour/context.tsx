@@ -69,6 +69,7 @@ export function OnboardingTourProvider({
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing tour position to sessionStorage, an external system
     resolve(replay);
     setHydrated(true);
 
@@ -106,6 +107,7 @@ export function OnboardingTourProvider({
     const here = window.location.pathname + window.location.search;
     if (currentStep.path && here !== currentStep.path) return; // still travelling there
     const upcoming = steps[index + 1] ?? null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- skipping to the next available step when the current one turns out not to apply here
     setCurrentId(upcoming?.id ?? null);
     if (upcoming) sessionStorage.setItem(KEY_POINTER, upcoming.id);
     else sessionStorage.removeItem(KEY_POINTER);

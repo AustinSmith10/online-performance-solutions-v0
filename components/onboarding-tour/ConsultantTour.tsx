@@ -39,6 +39,7 @@ export function ConsultantTour() {
   // reopen it and the URL stays clean.
   useEffect(() => {
     if (searchParams.get(CONSULTANT_TOUR_PARAM) === "1") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing tour state to the ?tour=1 URL param, an external system
       setStepIndex(0);
       setScreen(STEPS[0].screen);
       setListTab(STEPS[0].listTab ?? "workspace");
@@ -52,6 +53,7 @@ export function ConsultantTour() {
     if (!active) return;
     const s = STEPS[stepIndex];
     if (!s) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing fake-stage screen/tab to the current tour step
     if (s.screen !== screen) setScreen(s.screen);
     if (s.listTab && s.listTab !== listTab) setListTab(s.listTab);
   }, [active, stepIndex]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -148,6 +150,7 @@ function useViewportSpotlight(
 
   useLayoutEffect(() => {
     if (!active) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing spotlight geometry to the DOM, an external system
       setRect(null);
       return;
     }
