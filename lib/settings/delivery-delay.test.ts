@@ -25,51 +25,74 @@ describe("getDeliveryDelayDurations", () => {
   });
 
   it("returns the stored durations when present", async () => {
-    const supabase = supabaseWithRow({ normalHours: 12, extendedHours: 48 });
+    const stored = {
+      normal: { unit: "hours", value: 12 },
+      extended: { unit: "workingDays", value: 5 },
+    };
+    const supabase = supabaseWithRow(stored);
     const durations = await getDeliveryDelayDurations(supabase as never);
-    expect(durations).toEqual({ normalHours: 12, extendedHours: 48 });
+    expect(durations).toEqual(stored);
   });
 
   it("falls back to defaults when the stored value is malformed", async () => {
-    const supabase = supabaseWithRow({ normalHours: 12 });
+    const supabase = supabaseWithRow({ normal: { unit: "hours", value: 12 } });
+    const durations = await getDeliveryDelayDurations(supabase as never);
+    expect(durations).toEqual(DEFAULT_DELIVERY_DELAY_DURATIONS);
+  });
+
+  it("falls back to defaults when a unit is invalid", async () => {
+    const supabase = supabaseWithRow({
+      normal: { unit: "days", value: 1 },
+      extended: { unit: "workingDays", value: 7 },
+    });
     const durations = await getDeliveryDelayDurations(supabase as never);
     expect(durations).toEqual(DEFAULT_DELIVERY_DELAY_DURATIONS);
   });
 });
 
 describe("setDeliveryDelayDurations", () => {
-  it("rejects negative hours", async () => {
+  it("rejects a non-positive value", async () => {
     const supabase = supabaseWithRow(null);
     const result = await setDeliveryDelayDurations(supabase as never, {
-      normalHours: -1,
-      extendedHours: 48,
+      normal: { unit: "workingDays", value: 0 },
+      extended: { unit: "workingDays", value: 7 },
     });
     expect(result.error).toBeDefined();
   });
 
-  it("rejects extended shorter than normal", async () => {
+  it("rejects a fractional working-days value", async () => {
     const supabase = supabaseWithRow(null);
     const result = await setDeliveryDelayDurations(supabase as never, {
-      normalHours: 48,
-      extendedHours: 24,
+      normal: { unit: "workingDays", value: 1.5 },
+      extended: { unit: "workingDays", value: 7 },
     });
     expect(result.error).toBeDefined();
+  });
+
+  it("allows a fractional hours value", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const supabase = { from: vi.fn(() => ({ upsert })) };
+    const result = await setDeliveryDelayDurations(supabase as never, {
+      normal: { unit: "hours", value: 12.5 },
+      extended: { unit: "workingDays", value: 7 },
+    });
+    expect(result.error).toBeUndefined();
   });
 
   it("upserts valid durations under the expected key", async () => {
     const upsert = vi.fn().mockResolvedValue({ error: null });
     const supabase = { from: vi.fn(() => ({ upsert })) };
-    const result = await setDeliveryDelayDurations(
-      supabase as never,
-      { normalHours: 24, extendedHours: 72 },
-      "user-1"
-    );
+    const durations = {
+      normal: { unit: "workingDays" as const, value: 1 },
+      extended: { unit: "workingDays" as const, value: 7 },
+    };
+    const result = await setDeliveryDelayDurations(supabase as never, durations, "user-1");
     expect(result.error).toBeUndefined();
     expect(supabase.from).toHaveBeenCalledWith("app_settings");
     expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         key: DELIVERY_DELAY_DURATIONS_KEY,
-        value: { normalHours: 24, extendedHours: 72 },
+        value: durations,
         updated_by: "user-1",
       })
     );

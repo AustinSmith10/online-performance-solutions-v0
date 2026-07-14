@@ -5,7 +5,7 @@ import {
   updateDeliveryDelayDurationsAction,
   type UpdateDeliveryDelayDurationsState,
 } from "@/app/actions/settings";
-import type { DeliveryDelayDurations } from "@/lib/delivery/delivery-delay";
+import type { DeliveryDelayDurations, DelayUnit } from "@/lib/delivery/delivery-delay";
 
 export function DeliveryDelayDurationsForm({ durations }: { durations: DeliveryDelayDurations }) {
   const [state, action, pending] = useActionState<UpdateDeliveryDelayDurationsState, FormData>(
@@ -17,8 +17,10 @@ export function DeliveryDelayDurationsForm({ durations }: { durations: DeliveryD
     <div className="rounded-lg border border-zinc-200 bg-white p-5">
       <h2 className="text-sm font-semibold text-zinc-900">Delivery delay durations</h2>
       <p className="mt-0.5 text-xs text-zinc-500">
-        Duration of the Normal and Extended delivery delay presets, in hours. Expedited is always
-        immediate and isn&apos;t configurable. Set per-project on each project&apos;s detail page.
+        How long the Normal and Extended delivery-delay presets hold PBDR generation and final
+        client delivery — in whole working days by default, or hours for finer control. Expedited
+        is always immediate and isn&apos;t configurable. Set per-project on each project&apos;s
+        detail page.
       </p>
 
       {state.errors?.form?.map((e) => (
@@ -32,29 +34,23 @@ export function DeliveryDelayDurationsForm({ durations }: { durations: DeliveryD
       )}
 
       <form action={action} className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Normal delay (hours)" error={state.errors?.normalHours?.[0]}>
-          <input
-            name="normalHours"
-            type="number"
-            min={0}
-            step={1}
-            defaultValue={durations.normalHours}
-            required
-            className={input}
-          />
-        </Field>
+        <DurationField
+          label="Normal delay"
+          valueName="normalValue"
+          unitName="normalUnit"
+          defaultValue={durations.normal.value}
+          defaultUnit={durations.normal.unit}
+          error={state.errors?.normalValue?.[0]}
+        />
 
-        <Field label="Extended delay (hours)" error={state.errors?.extendedHours?.[0]}>
-          <input
-            name="extendedHours"
-            type="number"
-            min={0}
-            step={1}
-            defaultValue={durations.extendedHours}
-            required
-            className={input}
-          />
-        </Field>
+        <DurationField
+          label="Extended delay"
+          valueName="extendedValue"
+          unitName="extendedUnit"
+          defaultValue={durations.extended.value}
+          defaultUnit={durations.extended.unit}
+          error={state.errors?.extendedValue?.[0]}
+        />
 
         <div className="sm:col-span-2">
           <button
@@ -70,19 +66,39 @@ export function DeliveryDelayDurationsForm({ durations }: { durations: DeliveryD
   );
 }
 
-function Field({
+function DurationField({
   label,
+  valueName,
+  unitName,
+  defaultValue,
+  defaultUnit,
   error,
-  children,
 }: {
   label: string;
+  valueName: string;
+  unitName: string;
+  defaultValue: number;
+  defaultUnit: DelayUnit;
   error?: string;
-  children: React.ReactNode;
 }) {
   return (
     <div>
       <label className="block text-sm font-medium text-zinc-700">{label}</label>
-      <div className="mt-1">{children}</div>
+      <div className="mt-1 flex gap-2">
+        <input
+          name={valueName}
+          type="number"
+          min={1}
+          step={1}
+          defaultValue={defaultValue}
+          required
+          className={input}
+        />
+        <select name={unitName} defaultValue={defaultUnit} className={input}>
+          <option value="workingDays">Working days</option>
+          <option value="hours">Hours</option>
+        </select>
+      </div>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );

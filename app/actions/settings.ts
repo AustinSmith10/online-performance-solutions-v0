@@ -7,6 +7,7 @@ import { auditLog } from "@/lib/audit/log";
 import { setDigestSchedule, isValidTime } from "@/lib/settings/digest-schedule";
 import { setBusinessHours } from "@/lib/settings/business-hours";
 import { setDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
+import type { DeliveryDelayDurations } from "@/lib/delivery/delivery-delay";
 import {
   setAdminNavRestrictions,
   RESTRICTABLE_NAV_ITEMS,
@@ -95,16 +96,20 @@ export async function updateBusinessHoursAction(
   return { saved: true };
 }
 
+const DelayUnitSchema = z.enum(["hours", "workingDays"]);
+
 const DeliveryDelayDurationsSchema = z.object({
-  normalHours: z.coerce.number({ error: "Enter a number of hours" }),
-  extendedHours: z.coerce.number({ error: "Enter a number of hours" }),
+  normalUnit: DelayUnitSchema,
+  normalValue: z.coerce.number({ error: "Enter a number" }).positive(),
+  extendedUnit: DelayUnitSchema,
+  extendedValue: z.coerce.number({ error: "Enter a number" }).positive(),
 });
 
 export type UpdateDeliveryDelayDurationsState = {
   saved?: boolean;
   errors?: {
-    normalHours?: string[];
-    extendedHours?: string[];
+    normalValue?: string[];
+    extendedValue?: string[];
     form?: string[];
   };
 };
@@ -116,16 +121,29 @@ export async function updateDeliveryDelayDurationsAction(
   const actor = await requireRole("super_admin", "admin");
 
   const validated = DeliveryDelayDurationsSchema.safeParse({
-    normalHours: formData.get("normalHours"),
-    extendedHours: formData.get("extendedHours"),
+    normalUnit: formData.get("normalUnit"),
+    normalValue: formData.get("normalValue"),
+    extendedUnit: formData.get("extendedUnit"),
+    extendedValue: formData.get("extendedValue"),
   });
 
   if (!validated.success) {
-    return { errors: validated.error.flatten().fieldErrors };
+    const fieldErrors = validated.error.flatten().fieldErrors;
+    return {
+      errors: {
+        normalValue: fieldErrors.normalValue ?? fieldErrors.normalUnit,
+        extendedValue: fieldErrors.extendedValue ?? fieldErrors.extendedUnit,
+      },
+    };
   }
 
+  const durations: DeliveryDelayDurations = {
+    normal: { unit: validated.data.normalUnit, value: validated.data.normalValue },
+    extended: { unit: validated.data.extendedUnit, value: validated.data.extendedValue },
+  };
+
   const supabase = createAdminClient();
-  const { error } = await setDeliveryDelayDurations(supabase, validated.data, actor.id as string);
+  const { error } = await setDeliveryDelayDurations(supabase, durations, actor.id as string);
 
   if (error) return { errors: { form: [error] } };
 

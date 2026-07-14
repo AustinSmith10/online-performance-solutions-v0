@@ -1,4 +1,4 @@
-import { isWorkingDay } from "./working-days";
+import { isWorkingDay, addWorkingDays } from "./working-days";
 
 export interface BusinessHours {
   start: string; // HH:MM, 24h
@@ -81,6 +81,20 @@ export function nextBusinessHoursStart(
   } while (!isWorkingDay(probe, holidays));
 
   return localWindowStart(probe.toISOString().slice(0, 10), hours.start);
+}
+
+// Business-hours start of the Nth working day after `date`'s local calendar
+// day (walking forward, skipping weekends/holidays). Used for "N working
+// days" delivery-delay presets (#66).
+export function nthWorkingDayStart(
+  date: Date,
+  n: number,
+  hours: BusinessHours,
+  holidays: Set<string>
+): Date {
+  const { isoDate } = toLocalParts(date);
+  const target = addWorkingDays(localMidnightAsUtcDate(isoDate), n, holidays);
+  return localWindowStart(target.toISOString().slice(0, 10), hours.start);
 }
 
 // Builds the instant corresponding to `time` (HH:MM) on `isoDate` in BUSINESS_TIMEZONE.

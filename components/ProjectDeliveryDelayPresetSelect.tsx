@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { setProjectDeliveryDelayPreset } from "@/app/actions/projects";
-import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
+import {
+  formatDelayDuration,
+  type DeliveryDelayDurations,
+  type DeliveryDelayPreset,
+} from "@/lib/delivery/delivery-delay";
 
 const LABELS: Record<DeliveryDelayPreset, string> = {
   expedited: "Expedited (immediate)",
@@ -13,13 +17,23 @@ const LABELS: Record<DeliveryDelayPreset, string> = {
 export function ProjectDeliveryDelayPresetSelect({
   projectId,
   initialValue,
+  durations,
 }: {
   projectId: string;
   initialValue: DeliveryDelayPreset;
+  /** When provided, each option shows its actual configured duration inline
+   *  (e.g. "Normal — 1 working day") instead of just the bare preset name. */
+  durations?: DeliveryDelayDurations;
 }) {
   const [preset, setPreset] = useState<DeliveryDelayPreset>(initialValue);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  function optionLabel(value: DeliveryDelayPreset): string {
+    if (!durations) return LABELS[value];
+    if (value === "expedited") return "Expedited — sent immediately";
+    return `${LABELS[value]} — ${formatDelayDuration(durations[value])} after approval`;
+  }
 
   function handleChange(next: DeliveryDelayPreset) {
     const previous = preset;
@@ -45,7 +59,7 @@ export function ProjectDeliveryDelayPresetSelect({
       >
         {(Object.keys(LABELS) as DeliveryDelayPreset[]).map((value) => (
           <option key={value} value={value}>
-            {LABELS[value]}
+            {optionLabel(value)}
           </option>
         ))}
       </select>

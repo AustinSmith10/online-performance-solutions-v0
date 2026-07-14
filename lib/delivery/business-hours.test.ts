@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isWithinBusinessHours, nextBusinessHoursStart } from "./business-hours";
+import { isWithinBusinessHours, nextBusinessHoursStart, nthWorkingDayStart } from "./business-hours";
 
 const NO_HOLIDAYS = new Set<string>();
 const HOURS = { start: "09:00", end: "17:00" };
@@ -93,6 +93,27 @@ describe("nextBusinessHoursStart", () => {
       HOURS,
       holidays
     );
+    expect(result.toISOString()).toBe("2024-01-09T22:00:00.000Z");
+  });
+});
+
+describe("nthWorkingDayStart", () => {
+  it("lands on the next working day for n=1", () => {
+    // 2024-01-08T22:00:00Z = Tue 09:00 AEDT -> Wed 09:00 AEDT
+    const result = nthWorkingDayStart(new Date("2024-01-08T22:00:00.000Z"), 1, HOURS, NO_HOLIDAYS);
+    expect(result.toISOString()).toBe("2024-01-09T22:00:00.000Z");
+  });
+
+  it("skips weekends when counting working days", () => {
+    // Friday 2024-01-05 09:00 AEDT -> 1 working day later is Monday 2024-01-08 09:00 AEDT
+    const result = nthWorkingDayStart(new Date("2024-01-04T22:00:00.000Z"), 1, HOURS, NO_HOLIDAYS);
+    expect(result.toISOString()).toBe("2024-01-07T22:00:00.000Z");
+  });
+
+  it("skips public holidays when counting working days", () => {
+    const holidays = new Set(["2024-01-09"]); // Tuesday
+    // Monday 2024-01-08 -> Tue is a holiday -> lands on Wed 2024-01-10 09:00 AEDT
+    const result = nthWorkingDayStart(new Date("2024-01-08T12:00:00.000Z"), 1, HOURS, holidays);
     expect(result.toISOString()).toBe("2024-01-09T22:00:00.000Z");
   });
 });

@@ -1,12 +1,18 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DeliveryDelayDurations } from "@/lib/delivery/delivery-delay";
+import type { DelayDuration, DeliveryDelayDurations } from "@/lib/delivery/delivery-delay";
 
 export const DEFAULT_DELIVERY_DELAY_DURATIONS: DeliveryDelayDurations = {
-  normalHours: 24,
-  extendedHours: 72,
+  normal: { unit: "workingDays", value: 1 },
+  extended: { unit: "workingDays", value: 7 },
 };
 
 export const DELIVERY_DELAY_DURATIONS_KEY = "delivery_delay_durations";
+
+function isValidDuration(value: unknown): value is DelayDuration {
+  if (!value || typeof value !== "object") return false;
+  const d = value as Partial<DelayDuration>;
+  return (d.unit === "hours" || d.unit === "workingDays") && typeof d.value === "number" && d.value > 0;
+}
 
 export async function getDeliveryDelayDurations(
   supabase: SupabaseClient
@@ -18,10 +24,10 @@ export async function getDeliveryDelayDurations(
     .maybeSingle();
 
   const value = data?.value as Partial<DeliveryDelayDurations> | undefined;
-  if (typeof value?.normalHours !== "number" || typeof value?.extendedHours !== "number") {
+  if (!isValidDuration(value?.normal) || !isValidDuration(value?.extended)) {
     return DEFAULT_DELIVERY_DELAY_DURATIONS;
   }
-  return { normalHours: value.normalHours, extendedHours: value.extendedHours };
+  return { normal: value.normal, extended: value.extended };
 }
 
 export async function setDeliveryDelayDurations(
@@ -29,14 +35,17 @@ export async function setDeliveryDelayDurations(
   durations: DeliveryDelayDurations,
   updatedBy?: string | null
 ): Promise<{ error?: string }> {
-  if (!Number.isFinite(durations.normalHours) || durations.normalHours < 0) {
-    return { error: "Normal delay must be a non-negative number of hours." };
+  if (!isValidDuration(durations.normal)) {
+    return { error: "Enter a valid normal delay." };
   }
-  if (!Number.isFinite(durations.extendedHours) || durations.extendedHours < 0) {
-    return { error: "Extended delay must be a non-negative number of hours." };
+  if (!isValidDuration(durations.extended)) {
+    return { error: "Enter a valid extended delay." };
   }
-  if (durations.extendedHours < durations.normalHours) {
-    return { error: "Extended delay must be at least as long as the normal delay." };
+  if (durations.normal.unit === "workingDays" && !Number.isInteger(durations.normal.value)) {
+    return { error: "Working days must be a whole number." };
+  }
+  if (durations.extended.unit === "workingDays" && !Number.isInteger(durations.extended.value)) {
+    return { error: "Working days must be a whole number." };
   }
 
   const { error } = await supabase.from("app_settings").upsert({
