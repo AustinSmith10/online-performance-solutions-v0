@@ -49,7 +49,7 @@ type ProjectRow = {
   created_at: string;
   review_cycle: number;
   accepted_at: string | null;
-  clients: { name: string } | null;
+  clients: { name: string; revision_notes_required: boolean } | null;
   submitter: { first_name: string | null; last_name: string | null; email: string } | null;
 };
 
@@ -83,7 +83,7 @@ export default async function ConsultantOpsPage({
     .from("projects")
     .select(`
       id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle, accepted_at,
-      clients(name),
+      clients(name, revision_notes_required),
       submitter:users!projects_submitted_by_fkey(first_name, last_name, email)
     `)
     .eq("assigned_consultant_id", user.id)

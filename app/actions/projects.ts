@@ -764,7 +764,9 @@ export async function uploadQaPbdb(
 
   let query = supabase
     .from("projects")
-    .select("id, client_id, status, review_cycle, project_number, extracted_fields")
+    .select(
+      "id, client_id, status, review_cycle, project_number, extracted_fields, clients(revision_notes_required)"
+    )
     .eq("id", projectId)
     .in("status", ["assigned", "in_progress", "revision_required", "dispatched"])
     .is("deleted_at", null);
@@ -786,6 +788,10 @@ export async function uploadQaPbdb(
     project.status = "in_progress";
   }
 
+  const originStatus = project.status as string;
+  const isReupload = originStatus === "revision_required" || originStatus === "dispatched";
+  const cycle = (project.review_cycle as number) ?? 1;
+
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { error: "Please select a file." };
   if (file.size > 100 * 1024 * 1024) return { error: "File must be under 100 MB." };
@@ -794,6 +800,13 @@ export async function uploadQaPbdb(
     file.type !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   ) {
     return { error: "Only .docx files are accepted for PBDB re-upload." };
+  }
+
+  const revisionNote = ((formData.get("revision_note") as string | null) ?? "").trim();
+  const revisionNotesRequired =
+    (project.clients as unknown as { revision_notes_required: boolean } | null)?.revision_notes_required ?? false;
+  if (isReupload && revisionNotesRequired && !revisionNote) {
+    return { error: "This client requires a note describing what changed on every revision." };
   }
 
   const { data: existing } = await supabase
@@ -805,9 +818,6 @@ export async function uploadQaPbdb(
     .limit(1);
 
   const nextVersion = (existing?.[0]?.version ?? 0) + 1;
-  const originStatus = project.status as string;
-  const isReupload = originStatus === "revision_required" || originStatus === "dispatched";
-  const cycle = (project.review_cycle as number) ?? 1;
 
   const fileBuffer = Buffer.from(await file.arrayBuffer());
 
@@ -874,6 +884,15 @@ export async function uploadQaPbdb(
         updated_at: now,
       })
       .eq("id", projectId);
+
+    if (revisionNote) {
+      await supabase.from("revision_notes").insert({
+        project_id: projectId,
+        review_cycle: cycle + 1,
+        note: revisionNote,
+        created_by: actor.id,
+      });
+    }
 
     await auditLog(
       originStatus === "revision_required" ? "project.revision_complete" : "project.pbdb_resent",

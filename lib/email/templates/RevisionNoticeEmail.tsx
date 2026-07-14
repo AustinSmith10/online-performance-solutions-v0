@@ -1,6 +1,7 @@
 export interface RevisionNoticeEmailProps {
   stakeholderName: string;
   projectId: string;
+  note?: string | null;
 }
 
 function e(s: string): string {
@@ -8,7 +9,7 @@ function e(s: string): string {
 }
 
 export function renderRevisionNoticeEmail(props: RevisionNoticeEmailProps): string {
-  const { stakeholderName, projectId } = props;
+  const { stakeholderName, projectId, note } = props;
   return `
     <div style="background-color:#f4f4f5;padding:40px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
       <div style="background-color:#ffffff;border-radius:8px;max-width:560px;margin:0 auto;padding:40px">
@@ -18,6 +19,11 @@ export function renderRevisionNoticeEmail(props: RevisionNoticeEmailProps): stri
           The performance report (ref: <strong>${e(projectId)}</strong>) has been revised in response to stakeholder feedback.
           Your previous approval has been reset.
         </p>
+        ${
+          note
+            ? `<blockquote style="margin:0 0 24px;padding:12px 16px;border-left:3px solid #d4d4d8;background-color:#fafafa;font-size:14px;line-height:1.6;color:#3f3f46">${e(note)}</blockquote>`
+            : ""
+        }
         <p style="font-size:15px;line-height:1.6;color:#3f3f46;margin:0 0 24px">
           You will receive a separate email shortly with a new approval link for the revised document.
         </p>

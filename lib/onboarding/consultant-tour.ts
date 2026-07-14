@@ -63,23 +63,25 @@ export const CONSULTANT_TOUR_STEPS: ConsultantTourStep[] = [
   {
     id: 5,
     screen: "detail",
-    targetId: "t-step1",
-    title: "Step 1 · Project number",
+    targetId: "t-stage-rail",
+    title: "Track the whole workflow",
     caption:
-      "If Admin hasn't already set a project number, you can set the Project Number here yourself.",
+      "The stage rail shows where the project sits — project number, PBDB, stakeholder review, conversion, delivery — at a glance.",
   },
   {
     id: 6,
     screen: "detail",
-    targetId: "t-step2",
-    title: "Step 2 · Generate the PBDB",
-    caption: "Generate the PBDB document from the client's submission.",
+    targetId: "t-focus-card",
+    title: "Right now",
+    caption:
+      "Whatever's actionable shows up here, spotlighted. Set the project number, generate the PBDB, then QA and upload it — this card walks you through each one in turn.",
   },
   {
     id: 7,
     screen: "detail",
-    targetId: "t-step3",
-    title: "Step 3 · QA & upload",
-    caption: "Review it, then upload the corrected PBDB — that sends it to the stakeholders.",
+    targetId: "t-reference-cards",
+    title: "Reference info, always reachable",
+    caption:
+      "Project number and PBDB versions stay visible here once set, so you don't need to switch tabs to find them.",
   },
 ];

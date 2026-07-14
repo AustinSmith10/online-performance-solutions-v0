@@ -10,9 +10,12 @@ import { StepIndicator } from "./StepIndicator";
 export function ProjectNumberForm({
   projectId,
   projectNumber,
+  bare = false,
 }: {
   projectId: string;
   projectNumber: string | null;
+  /** Skip the outer border + numbered step header — for use inside a container that already frames it (e.g. FocusCard). */
+  bare?: boolean;
 }) {
   const router = useRouter();
   const boundAction = saveProjectNumber.bind(null, projectId);
@@ -33,17 +36,9 @@ export function ProjectNumberForm({
 
   const showForm = !completed || editing;
 
-  return (
-    <div className={`rounded-lg border ${completed ? "border-green-200 bg-green-50" : "border-zinc-200 bg-white"}`}>
-      <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-4">
-        <StepIndicator step={1} completed={completed} />
-        <h3 className={`text-sm font-semibold ${completed ? "text-green-800" : "text-zinc-900"}`}>
-          Set project number
-        </h3>
-      </div>
-
-      <div className="px-5 py-4">
-        {completed && !editing ? (
+  const body = (
+    <div className={bare ? "" : "px-5 py-4"}>
+      {completed && !editing ? (
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-green-700">
               Project number set: {projectNumber}-S
@@ -99,7 +94,20 @@ export function ProjectNumberForm({
             </div>
           </form>
         )}
+    </div>
+  );
+
+  if (bare) return body;
+
+  return (
+    <div className={`rounded-lg border ${completed ? "border-green-200 bg-green-50" : "border-zinc-200 bg-white"}`}>
+      <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-4">
+        <StepIndicator step={1} completed={completed} />
+        <h3 className={`text-sm font-semibold ${completed ? "text-green-800" : "text-zinc-900"}`}>
+          Set project number
+        </h3>
       </div>
+      {body}
     </div>
   );
 }

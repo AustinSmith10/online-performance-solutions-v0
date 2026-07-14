@@ -13,9 +13,10 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { markOnboardingStepSeen } from "@/app/actions/onboarding";
-import { StepIndicator } from "@/app/(consultant)/ops/projects/[id]/_components/StepIndicator";
-import { ConsultantProjectTabs } from "@/app/(consultant)/ops/projects/[id]/_components/ConsultantProjectTabs";
 import { CollapsibleSection } from "@/app/(consultant)/ops/projects/[id]/_components/CollapsibleSection";
+import { StageRail } from "@/app/(consultant)/ops/projects/[id]/_components/StageRail";
+import type { Stage } from "@/app/(consultant)/ops/projects/[id]/_components/StageRail";
+import { FocusCard } from "@/app/(consultant)/ops/projects/[id]/_components/FocusCard";
 import {
   CONSULTANT_TOUR_PARAM,
   CONSULTANT_TOUR_SEEN_KEY,
@@ -339,87 +340,70 @@ function FakeList({
   );
 }
 
+const FAKE_STAGES: Stage[] = [
+  { id: "number", label: "Project number", state: "current", icon: "number" },
+  { id: "pbdb", label: "PBDB generated", state: "upcoming", icon: "document" },
+  { id: "review", label: "Stakeholder review", state: "upcoming", icon: "people" },
+  { id: "converting", label: "Converting to PBDR", state: "upcoming", urgency: "green", icon: "refresh" },
+  { id: "delivered", label: "Delivered", state: "upcoming", icon: "flag" },
+];
+
 function FakeDetail() {
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <span className="text-sm text-zinc-500">← My projects</span>
 
       <div className="rounded-xl border border-zinc-200 border-l-[3px] border-l-yellow-400 bg-white p-5">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
           <h1 className="text-base font-semibold text-zinc-900">Site 228, 85 Twists Road, Burpengary East QLD</h1>
-          <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">Assigned</span>
+          <span className="text-sm text-zinc-400">Stockland</span>
+          <span className="self-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">Assigned</span>
+          <span className="self-center inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Portal</span>
         </div>
-        <p className="mt-3.5 border-t border-zinc-100 pt-3 text-sm leading-relaxed text-zinc-500">
-          Stockland{" · "}
-          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Portal</span>
-          {" · "}Review cycle <span className="font-medium text-zinc-900">1</span>
-          {" · "}Submitted <span className="font-medium text-zinc-900">10/07/2026</span>
-          {" · "}Due <span className="font-medium text-zinc-900">17/07/2026</span>
-          {" · "}Project number <span className="font-medium text-zinc-900">Not yet set</span>
-          {" · "}PO number <span className="font-medium text-zinc-900">2116-228/200-075.2</span>
-        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-zinc-100 pt-3 text-sm text-zinc-500">
+          <span>Review cycle <span className="font-medium text-zinc-900">1</span></span>
+          <span className="border-l border-zinc-100 pl-5">Submitted <span className="font-medium text-zinc-900">10/07/2026</span></span>
+          <span className="border-l border-zinc-100 pl-5">Due <span className="font-medium text-zinc-900">17/07/2026</span></span>
+        </div>
       </div>
 
-      <ConsultantProjectTabs
-        overview={
-          <div className="consultant-two-col">
-            <div className="min-w-0 space-y-3">
-              <FakeSteps />
-            </div>
-            <div className="min-w-0 space-y-4">
-              <FakeInfo />
-            </div>
+      <div id="t-stage-rail">
+        <StageRail stages={FAKE_STAGES} />
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-[22rem_1fr]">
+        <div className="min-w-0 space-y-3">
+          <div id="t-focus-card">
+            <FocusCard tone="neutral" title="Set the project number" subtitle="Unlocks PBDB generation.">
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700">DDEG project number</label>
+              <input readOnly placeholder="e.g. 25-001" className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm" />
+              <div className="mt-3">
+                <button className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white">Save</button>
+              </div>
+            </FocusCard>
           </div>
-        }
-        audit={<p className="text-sm text-zinc-500">Audit trail entries appear here.</p>}
-      />
+
+          <div id="t-reference-cards" className="rounded-xl border border-zinc-200 bg-white p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-500">
+                #
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Project number</p>
+            </div>
+            <p className="text-xs text-zinc-400">Not yet set — once it is, it stays here for quick edits.</p>
+          </div>
+        </div>
+
+        <div className="min-w-0 space-y-4">
+          <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 text-sm font-medium">
+            <span className="rounded-md bg-white px-3 py-1.5 shadow-sm text-zinc-900">Details</span>
+            <span className="px-3 py-1.5 text-zinc-500">Documents</span>
+            <span className="px-3 py-1.5 text-zinc-500">Stakeholders</span>
+          </div>
+          <FakeInfo />
+        </div>
+      </div>
     </div>
-  );
-}
-
-function FakeSteps() {
-  return (
-    <>
-      <div id="t-step1" className="rounded-lg border border-zinc-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-4">
-          <StepIndicator step={1} completed={false} />
-          <h3 className="text-sm font-semibold text-zinc-900">Set project number</h3>
-        </div>
-        <div className="px-5 py-4">
-          <label className="mb-1.5 block text-sm font-medium text-zinc-700">DDEG project number</label>
-          <input readOnly placeholder="e.g. 25-001" className="block w-full max-w-xs rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm" />
-          <p className="mt-1 text-xs text-zinc-400">
-            The suffix <span className="font-mono">-S</span> is appended automatically in generated documents.
-          </p>
-          <div className="mt-3">
-            <button className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white">Save</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="t-step2" className="rounded-lg border border-zinc-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-4">
-          <StepIndicator step={2} completed={false} />
-          <h3 className="text-sm font-semibold text-zinc-900">PBDB</h3>
-        </div>
-        <div className="px-5 py-4">
-          <button className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white">Generate PBDB</button>
-        </div>
-      </div>
-
-      <div id="t-step3" className="rounded-lg border border-zinc-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-4">
-          <StepIndicator step={3} completed={false} />
-          <h3 className="text-sm font-semibold text-zinc-900">PBDB completion &amp; approval</h3>
-        </div>
-        <div className="px-5 py-4">
-          <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center">
-            <p className="text-sm font-medium text-zinc-700">Drop corrected .docx here or browse</p>
-            <p className="mt-1 text-xs text-zinc-400">.docx only</p>
-          </div>
-        </div>
-      </div>
-    </>
   );
 }
 

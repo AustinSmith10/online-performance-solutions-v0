@@ -4,7 +4,7 @@ import { logout } from "@/app/actions/auth";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { NotificationToasts } from "@/components/NotificationToasts";
 import { MobileNav } from "@/components/MobileNav";
-import { SidebarNavLinks } from "@/components/NavLinks";
+import { ConsultantSidebar } from "@/components/ConsultantSidebar";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 
 const NAV_ITEMS = [
@@ -31,39 +31,13 @@ export default async function ConsultantLayout({
         notifications={<NotificationTrayServer projectBasePath="/ops/projects" align="right" />}
       />
 
-      {/* Desktop sidebar (hidden on mobile) */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-zinc-200 bg-white lg:flex">
-        <div className="flex h-14 items-center justify-between border-b border-zinc-200 px-4">
-          <span className="text-sm font-semibold text-zinc-900">OPS</span>
-          <NotificationTrayServer projectBasePath="/ops/projects" />
-        </div>
-        <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-          <SidebarNavLinks items={NAV_ITEMS} />
-        </nav>
-        <div className="border-t border-zinc-200 p-3">
-          <p className="mb-1 truncate text-xs text-zinc-500">{[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}</p>
-          <Link
-            href="/ops/profile"
-            className="mb-1 block rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
-          >
-            My profile
-          </Link>
-          <Link
-            href="/ops?tour=1"
-            className="mb-1 block rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
-          >
-            How this works
-          </Link>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="w-full rounded px-3 py-1.5 text-left text-sm text-zinc-600 hover:bg-zinc-100"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </aside>
+      {/* Desktop sidebar (hidden on mobile) — collapsible, only 2 nav items don't need a fixed 224px rail */}
+      <ConsultantSidebar
+        navItems={NAV_ITEMS}
+        userName={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
+        logoutAction={logout}
+        notifications={<NotificationTrayServer projectBasePath="/ops/projects" />}
+      />
 
       {/* Main — min-w-0 prevents flex children from overflowing */}
       <main className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-8">{children}</main>

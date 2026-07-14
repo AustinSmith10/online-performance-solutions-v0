@@ -9,11 +9,13 @@ export function PbdbQaUploadForm({
   submitLabel = "Upload completed PBDB",
   requireConfirmation = false,
   confirmCopy,
+  children,
 }: {
   projectId: string;
   submitLabel?: string;
   requireConfirmation?: boolean;
   confirmCopy?: string;
+  children?: React.ReactNode;
 }) {
   const boundAction = uploadQaPbdb.bind(null, projectId);
   const [state, formAction, pending] = useActionState<UploadQaPbdbState, FormData>(
@@ -32,6 +34,7 @@ export function PbdbQaUploadForm({
   return (
     <>
       <form ref={formRef} action={formAction} className="space-y-3">
+        {children}
         <UploadDropzone
           accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           prompt="Drop corrected .docx here or browse"

@@ -11,6 +11,7 @@
 @source inline("grid-cols-1 md:grid-cols-[2fr_3fr] lg:grid-cols-[2fr_3fr] lg:grid-cols-2 max-lg:hidden");
 @source inline("grid-cols-2 grid-cols-[3fr_2fr] gap-x-8 gap-y-6 min-w-0 items-start focus:h-20 transition-[height] duration-200 resize-none overflow-hidden");
 @source inline("translate-x-0 translate-x-full transition-transform transition-opacity ease-in-out duration-300 pointer-events-none overflow-y-auto line-clamp-2 shrink-0 opacity-0 opacity-100");
+@source inline("md:grid-cols-[22rem_1fr] md:sticky md:top-4 border-blue-300 bg-blue-50 text-blue-900 shadow-sm shadow-blue-100 max-w-7xl grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-3");
 
 :root {
   --background: #ffffff;

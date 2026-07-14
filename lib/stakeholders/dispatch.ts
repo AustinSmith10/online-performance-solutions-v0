@@ -168,10 +168,18 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
       .eq("review_cycle", reviewCycle - 1)
       .in("status", ["approved_without_comments", "approved_with_comments"]);
 
+    const { data: revisionNoteRow } = await supabase
+      .from("revision_notes")
+      .select("note")
+      .eq("project_id", projectId)
+      .eq("review_cycle", reviewCycle)
+      .maybeSingle();
+
     for (const prior of priorAcknowledged ?? []) {
       const noticeHtml = renderRevisionNoticeEmail({
         stakeholderName: prior.stakeholder_name as string,
         projectId: projectId.slice(0, 8),
+        note: revisionNoteRow?.note as string | undefined,
       });
       await sendEmail({
         to: prior.stakeholder_email as string,

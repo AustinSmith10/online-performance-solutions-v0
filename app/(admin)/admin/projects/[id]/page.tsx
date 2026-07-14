@@ -28,6 +28,7 @@ import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { HighlightRing } from "@/components/HighlightRing";
 import { ProjectNumberForm as ConsultantProjectNumberForm } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectNumberForm";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
+import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
 import { StepIndicator as ConsultantStepIndicator } from "@/app/(consultant)/ops/projects/[id]/_components/StepIndicator";
 import { ProjectDetailsEditor } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectDetailsEditor";
 import { ProjectAuditTrail, type ProjectAuditRow } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectAuditTrail";
@@ -148,7 +149,7 @@ export default async function ProjectDetailPage({
         strip_token_color,
         delivery_delay_preset,
         qa_completed_by,
-        clients(id, name, client_config),
+        clients(id, name, client_config, revision_notes_required),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
       `)
       .eq("id", id)
@@ -183,7 +184,12 @@ export default async function ProjectDetailPage({
     source: "portal" | "email";
     strip_token_color: boolean;
     delivery_delay_preset: DeliveryDelayPreset;
-    clients: { id: string; name: string; client_config: Record<string, string> } | null;
+    clients: {
+      id: string;
+      name: string;
+      client_config: Record<string, string>;
+      revision_notes_required: boolean;
+    } | null;
     assigned: {
       id: string;
       first_name: string | null;
@@ -772,7 +778,12 @@ export default async function ProjectDetailPage({
               submitLabel="Upload new version"
               requireConfirmation
               confirmCopy={UPLOAD_NEW_VERSION_COPY}
-            />
+            >
+              <RevisionNoteField
+                reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
+                required={project.clients?.revision_notes_required ?? false}
+              />
+            </PbdbQaUploadForm>
           </div>
         )}
 
@@ -793,7 +804,12 @@ export default async function ProjectDetailPage({
               submitLabel="Upload revised PBDB and re-submit to stakeholders"
               requireConfirmation
               confirmCopy={UPLOAD_NEW_VERSION_COPY}
-            />
+            >
+              <RevisionNoteField
+                reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
+                required={project.clients?.revision_notes_required ?? false}
+              />
+            </PbdbQaUploadForm>
           </div>
         )}
 

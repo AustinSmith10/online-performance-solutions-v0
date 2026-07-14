@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Drawer } from "./Drawer";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
+import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
 import { DownloadCard } from "@/components/DownloadCard";
 
 export interface RevisionProject {
@@ -12,7 +13,7 @@ export interface RevisionProject {
   po_number: string | null;
   review_cycle: number;
   created_at: string;
-  clients: { name: string } | null;
+  clients: { name: string; revision_notes_required: boolean } | null;
 }
 
 export interface PbdbFile {
@@ -149,7 +150,12 @@ function DrawerContent({
         <PbdbQaUploadForm
           projectId={project.id}
           submitLabel="Upload revised PBDB and re-submit to stakeholders"
-        />
+        >
+          <RevisionNoteField
+            reviewerNames={currentReviews.map((r) => r.stakeholder_name)}
+            required={project.clients?.revision_notes_required ?? false}
+          />
+        </PbdbQaUploadForm>
       </div>
     </div>
   );
