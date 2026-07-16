@@ -9,6 +9,7 @@ import { QaUploadedBanner } from "./_components/QaUploadedBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { ProjectDeliveryDelayPresetSelect } from "@/components/ProjectDeliveryDelayPresetSelect";
+import { PendingDeliveryPanel } from "@/components/PendingDeliveryPanel";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { DownloadCard } from "@/components/DownloadCard";
@@ -22,12 +23,12 @@ import { LogStakeholderResponseForm } from "./_components/LogStakeholderResponse
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
 import type { ProjectStatus } from "@/types";
 import { HeaderStatInline } from "./_components/HeaderStatInline";
-import { FocusCard } from "./_components/FocusCard";
+import { FocusCard } from "@/components/workspace/FocusCard";
 import { AltWorkspace } from "./_components/AltWorkspace";
 import { RevisionNoteField } from "./_components/RevisionNoteField";
 import { ProjectNumberCard } from "./_components/ProjectNumberCard";
 import { PbdbVersionsCard } from "./_components/PbdbVersionsCard";
-import type { Stage } from "./_components/StageRail";
+import type { Stage } from "@/components/workspace/StageRail";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -161,6 +162,7 @@ export default async function ConsultantProjectDetailPage({
     { data: rawFileRequirements },
     { data: rawAuditEntries },
     { data: rawRevisionNotes },
+    { data: pendingDelivery },
   ] = await Promise.all([
     project.template_id
       ? supabase
@@ -213,6 +215,7 @@ export default async function ConsultantProjectDetailPage({
       .from("revision_notes")
       .select("review_cycle, note")
       .eq("project_id", id),
+    supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).maybeSingle(),
   ]);
 
   const revisionNotesByCycle = new Map<number, string>(
@@ -403,7 +406,7 @@ export default async function ConsultantProjectDetailPage({
   );
 
   const deliveryDurations = await getDeliveryDelayDurations(supabase);
-  const deliveryLocked = isTerminal || project.status === "converting";
+  const deliveryLocked = isTerminal || project.status === "converting" || !!pendingDelivery;
 
   // --- Stage rail: whole workflow at a glance instead of 3 stacked step cards ---
   const reviewDone = pbdbCardState === "approved";
@@ -830,6 +833,11 @@ export default async function ConsultantProjectDetailPage({
           </p>
         )}
       </div>
+      {pendingDelivery && (
+        <div className="border-t border-zinc-100 pt-3">
+          <PendingDeliveryPanel projectId={id} scheduledFor={pendingDelivery.scheduled_for as string} />
+        </div>
+      )}
       {latestPbdb && (
         <div className="border-t border-zinc-100 pt-3">
           <p className="text-xs font-medium text-zinc-600">Client document colour</p>

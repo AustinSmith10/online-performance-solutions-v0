@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { UnsavedChangesProvider, useRequestNavigate } from "@/components/UnsavedChangesProvider";
-import type { Stage } from "./StageRail";
-import { StageRail } from "./StageRail";
+import type { Stage } from "@/components/workspace/StageRail";
+import { StageRail } from "@/components/workspace/StageRail";
 import { SettingsPill } from "./SettingsPill";
 
 type PrimaryTab = "workspace" | "audit";

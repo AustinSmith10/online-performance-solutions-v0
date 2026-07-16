@@ -1,25 +1,11 @@
 import { requireRole } from "@/lib/auth/session";
 import { setOwnAvailability } from "@/app/actions/consultant";
+import { AVAILABILITY_OPTIONS as OPTIONS } from "@/lib/consultant/availability-options";
 import type { ConsultantAvailability } from "@/types";
 
-const OPTIONS: { value: ConsultantAvailability; label: string; description: string }[] = [
-  {
-    value: "available",
-    label: "Available",
-    description: "You can receive new project assignments.",
-  },
-  {
-    value: "on_leave",
-    label: "On leave",
-    description: "You are temporarily unavailable. Super Admins will see this before assigning.",
-  },
-  {
-    value: "at_capacity",
-    label: "At capacity",
-    description: "Your current workload is full. Super Admins will see this before assigning.",
-  },
-];
-
+// Availability is also reachable everywhere in the consultant layout via the
+// floating AvailabilityPill (components/AvailabilityPill.tsx) — this route
+// stays as a direct-link fallback.
 export default async function AvailabilityPage() {
   const user = await requireRole("consultant");
   const current = user.availability as ConsultantAvailability;

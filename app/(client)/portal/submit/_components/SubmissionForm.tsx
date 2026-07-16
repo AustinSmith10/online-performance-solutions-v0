@@ -13,6 +13,10 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import type { Confidence } from "@/lib/documents/extractor";
 import type { MetricsPickRow } from "@/lib/documents/metrics-autofill";
+import { ClientWorkspace } from "../../_components/ClientWorkspace";
+import { ClientHeaderCard } from "../../_components/ClientHeaderCard";
+import { FocusCard } from "@/components/workspace/FocusCard";
+import { REQUEST_STAGES } from "../../_components/requestStages";
 
 interface Template {
   id: string;
@@ -39,6 +43,7 @@ interface Props {
   projectBasePath?: string;
   startOverHref?: string;
   showExtractionBanner?: boolean;
+  beforeTemplateFields?: React.ReactNode;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -199,6 +204,9 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
     return () => window.removeEventListener("beforeunload", handler);
   }, [submitPending]);
 
+  const addressField = tokenGroups.extract.find((t) => t.token === "EXTRACT_ADDRESS");
+  const title = addressField?.value || (poNumber.value ? `PO ${poNumber.value}` : "Review your request");
+
   return (
     <div className="relative">
       {bannerVisible && (
@@ -231,7 +239,12 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
         </div>
       )}
 
-      <form action={submitAction} className="space-y-6">
+      {/* The whole workspace lives inside one <form> — the confirm/submit
+          controls sit in the FocusCard (left column) while the actual field
+          inputs render in the Overview tab (right column), but since
+          ClientWorkspace is just JSX composed here, both are DOM descendants
+          of this single <form> and submit together as one payload. */}
+      <form action={submitAction}>
         <input type="hidden" name="project_id" value={projectId} />
         <input type="hidden" name="template_id" value={templateId} />
         <input type="hidden" name="extracted_po_number" value={poNumber.value} />
@@ -244,135 +257,159 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
           <input type="hidden" name={rainfallToken} value={rainfallField.value} />
         )}
 
-        {extractFieldsList.length > 0 && (
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.extract}</h2>
-            {sectionLabels.extractDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.extractDesc}</p>}
-            <div className="space-y-4">
-              {extractFieldsList.map((field) => (
-                <TokenInput
-                  key={field.token}
-                  field={field}
-                  modified={modified}
-                  onMark={mark}
-                  disabled={submitPending}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {hasTrustee && (
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h2 className="mb-1 text-sm font-semibold text-zinc-900">{trusteeLabel}</h2>
-            {sectionLabels.trusteeDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.trusteeDesc}</p>}
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700">{trusteeLabel}</label>
-              <select
-                value={selectedMatchValue}
-                onChange={(e) => setSelectedMatchValue(e.target.value)}
-                disabled={submitPending}
-                className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {selectedMatchValue === "" && <option value="">— select trustee —</option>}
-                {pickRows.map((r) => (
-                  <option key={r.matchValue} value={r.matchValue}>
-                    {r.matchValue} — {r.outputs["EXTRACT_TRUSTEE"]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {tokenGroups.org.length > 0 && (
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.org}</h2>
-            {sectionLabels.orgDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.orgDesc}</p>}
-            <div className="space-y-4">
-              {tokenGroups.org.map((field) => (
-                <TokenInput key={field.token} field={field} modified={modified} onMark={mark} disabled={submitPending} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tokenGroups.client.length > 0 && (
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.client}</h2>
-            {sectionLabels.clientDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.clientDesc}</p>}
-            <div className="space-y-4">
-              {tokenGroups.client.map((field) => (
-                <TokenInput key={field.token} field={field} modified={modified} onMark={mark} disabled={submitPending} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="rounded-lg border border-zinc-200 bg-white p-6">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Delivery</h2>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">
-              Also send final report to (optional)
-            </label>
-            <input
-              type="email"
-              name="delivery_recipient_email"
-              placeholder="additional@example.com"
-              disabled={submitPending}
-              className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
+        <ClientWorkspace
+          header={
+            <ClientHeaderCard
+              title={title}
+              subtitle="Review the extracted details on the right, then confirm and submit."
             />
-          </div>
-        </div>
+          }
+          stages={REQUEST_STAGES}
+          focusCard={
+            <FocusCard tone="neutral" title="Confirm & submit" subtitle="The last thing before we get started.">
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">
+                    Also send final report to (optional)
+                  </label>
+                  <input
+                    type="email"
+                    name="delivery_recipient_email"
+                    placeholder="additional@example.com"
+                    disabled={submitPending}
+                    className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
 
-        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 has-[:checked]:border-blue-400">
-          <input
-            type="checkbox"
-            name="reviewed_confirmed"
-            value="true"
-            checked={reviewedConfirmed}
-            onChange={(e) => setReviewedConfirmed(e.target.checked)}
-            disabled={submitPending}
-            className="mt-0.5 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
-          />
-          <span className="text-sm text-blue-900">
-            <span className="font-medium">I confirm I have reviewed the details in this form</span> and
-            that they are correct.
-          </span>
-        </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-3 has-[:checked]:border-blue-400">
+                  <input
+                    type="checkbox"
+                    name="reviewed_confirmed"
+                    value="true"
+                    checked={reviewedConfirmed}
+                    onChange={(e) => setReviewedConfirmed(e.target.checked)}
+                    disabled={submitPending}
+                    className="mt-0.5 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-blue-900">
+                    <span className="font-medium">I confirm I have reviewed the details</span> and that
+                    they are correct.
+                  </span>
+                </label>
 
-        {submitState.duplicateProjectId ? (
-          <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-            {submitState.error}{" "}
-            <a
-              href={`${projectBasePath}/${submitState.duplicateProjectId}`}
-              className="font-medium underline hover:text-red-900"
-            >
-              View existing project →
-            </a>
-          </div>
-        ) : submitState.error ? (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{submitState.error}</p>
-        ) : null}
+                {submitState.duplicateProjectId ? (
+                  <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {submitState.error}{" "}
+                    <a
+                      href={`${projectBasePath}/${submitState.duplicateProjectId}`}
+                      className="font-medium underline hover:text-red-900"
+                    >
+                      View existing project →
+                    </a>
+                  </div>
+                ) : submitState.error ? (
+                  <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{submitState.error}</p>
+                ) : null}
 
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={submitPending || !reviewedConfirmed}
-            className="flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
-          >
-            {submitPending && <Spinner className="h-4 w-4" />}
-            {submitPending ? "Submitting…" : "Submit report request"}
-          </button>
-          {!submitPending && (
-            <a href={startOverHref} className="text-sm text-zinc-500 hover:text-zinc-700">
-              Start over
-            </a>
-          )}
-        </div>
-        <p className="text-xs text-zinc-400">
-          Fields marked <span className="text-red-500">*</span> are required before submitting.
-        </p>
+                <button
+                  type="submit"
+                  disabled={submitPending || !reviewedConfirmed}
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+                >
+                  {submitPending && <Spinner className="h-4 w-4" />}
+                  {submitPending ? "Submitting…" : "Submit report request"}
+                </button>
+                {!submitPending && (
+                  <a href={startOverHref} className="block text-center text-sm text-zinc-500 hover:text-zinc-700">
+                    Start over
+                  </a>
+                )}
+              </div>
+            </FocusCard>
+          }
+          overviewTab={
+            <div className="space-y-3">
+              {extractFieldsList.length > 0 && (
+                <div className="rounded-lg border border-zinc-200 bg-white p-6">
+                  <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.extract}</h2>
+                  {sectionLabels.extractDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.extractDesc}</p>}
+                  <div className="space-y-4">
+                    {extractFieldsList.map((field) => (
+                      <TokenInput
+                        key={field.token}
+                        field={field}
+                        modified={modified}
+                        onMark={mark}
+                        disabled={submitPending}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {hasTrustee && (
+                <div className="rounded-lg border border-zinc-200 bg-white p-6">
+                  <h2 className="mb-1 text-sm font-semibold text-zinc-900">{trusteeLabel}</h2>
+                  {sectionLabels.trusteeDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.trusteeDesc}</p>}
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">{trusteeLabel}</label>
+                    <select
+                      value={selectedMatchValue}
+                      onChange={(e) => setSelectedMatchValue(e.target.value)}
+                      disabled={submitPending}
+                      className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {selectedMatchValue === "" && <option value="">— select trustee —</option>}
+                      {pickRows.map((r) => (
+                        <option key={r.matchValue} value={r.matchValue}>
+                          {r.matchValue} — {r.outputs["EXTRACT_TRUSTEE"]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {tokenGroups.org.length > 0 && (
+                <div className="rounded-lg border border-zinc-200 bg-white p-6">
+                  <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.org}</h2>
+                  {sectionLabels.orgDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.orgDesc}</p>}
+                  <div className="space-y-4">
+                    {tokenGroups.org.map((field) => (
+                      <TokenInput key={field.token} field={field} modified={modified} onMark={mark} disabled={submitPending} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {tokenGroups.client.length > 0 && (
+                <div className="rounded-lg border border-zinc-200 bg-white p-6">
+                  <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.client}</h2>
+                  {sectionLabels.clientDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.clientDesc}</p>}
+                  <div className="space-y-4">
+                    {tokenGroups.client.map((field) => (
+                      <TokenInput key={field.token} field={field} modified={modified} onMark={mark} disabled={submitPending} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-zinc-400">
+                Fields marked <span className="text-red-500">*</span> are required before submitting.
+              </p>
+            </div>
+          }
+          documentsTab={
+            <div className="rounded-lg border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">
+              Your uploaded documents have been received and are being processed — they&apos;ll be listed
+              here once your request is submitted.
+            </div>
+          }
+          reviewTab={
+            <div className="rounded-lg border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">
+              No review requested yet.
+            </div>
+          }
+        />
       </form>
     </div>
   );
@@ -605,6 +642,7 @@ export function SubmissionForm({
   projectBasePath = "/portal/projects",
   startOverHref = "/portal/submit",
   showExtractionBanner = false,
+  beforeTemplateFields,
 }: Props) {
   // Orchestrates the signed-upload-URL flow (#86): request signed URLs for
   // every file in the form, upload each straight from the browser to
@@ -721,10 +759,95 @@ export function SubmissionForm({
   const showTemplateDropdown = templates.length > 1;
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-6">
+    <ClientWorkspace
+      header={
+        <ClientHeaderCard
+          title="New report request"
+          subtitle="Tell us what you need — we'll set up your workspace as soon as you submit."
+        />
+      }
+      stages={REQUEST_STAGES}
+      focusCard={
+        <FocusCard tone="neutral" title="Start your request" subtitle="Two things and you're done.">
+          <RequestForm
+            extractAction={extractAction}
+            extractPending={extractPending}
+            extractState={extractState}
+            adminOrgId={adminOrgId}
+            adminClientId={adminClientId}
+            projectBasePath={projectBasePath}
+            showTemplateDropdown={showTemplateDropdown}
+            templates={templates}
+            selectedTemplateId={selectedTemplateId}
+            setSelectedTemplateId={setSelectedTemplateId}
+            currentRequirements={currentRequirements}
+            handleHasFile={handleHasFile}
+            requiredUnfilled={requiredUnfilled}
+            beforeTemplateFields={beforeTemplateFields}
+          />
+        </FocusCard>
+      }
+      overviewTab={
+        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-zinc-900">What&apos;s happening</h2>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+            Fill in the report type and attach your documents on the left. As soon as you submit,
+            this page becomes your project workspace — same tabs, same layout, just filled in with
+            your project&apos;s details. No new page to learn.
+          </p>
+        </div>
+      }
+      documentsTab={
+        <div className="rounded-lg border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">
+          Your uploaded documents and the reports we produce will appear here once you submit.
+        </div>
+      }
+      reviewTab={
+        <div className="rounded-lg border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">
+          No review requested yet.
+        </div>
+      }
+    />
+  );
+}
+
+function RequestForm({
+  extractAction,
+  extractPending,
+  extractState,
+  adminOrgId,
+  adminClientId,
+  projectBasePath,
+  showTemplateDropdown,
+  templates,
+  selectedTemplateId,
+  setSelectedTemplateId,
+  currentRequirements,
+  handleHasFile,
+  requiredUnfilled,
+  beforeTemplateFields,
+}: {
+  extractAction: (payload: FormData) => void;
+  extractPending: boolean;
+  extractState: Extract<ExtractState, { step: 1 }>;
+  adminOrgId?: string;
+  adminClientId?: string;
+  projectBasePath: string;
+  showTemplateDropdown: boolean;
+  templates: Template[];
+  selectedTemplateId: string;
+  setSelectedTemplateId: (id: string) => void;
+  currentRequirements: FileRequirement[];
+  handleHasFile: (slug: string, has: boolean) => void;
+  requiredUnfilled: boolean;
+  beforeTemplateFields?: React.ReactNode;
+}) {
+  return (
+    <div>
       <form action={extractAction} className="space-y-6">
         {adminOrgId && <input type="hidden" name="admin_org_id" value={adminOrgId} />}
         {adminClientId && <input type="hidden" name="admin_client_id" value={adminClientId} />}
+        {beforeTemplateFields}
         {/* Template selector */}
         {showTemplateDropdown ? (
           <div>

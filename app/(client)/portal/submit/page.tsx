@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SubmissionForm } from "./_components/SubmissionForm";
@@ -62,13 +63,10 @@ export default async function SubmitPage() {
   const defaultTemplateId = activeTemplates.length === 1 ? activeTemplates[0].id : null;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
-      <div className="mb-8">
-        <h1 className="text-xl font-semibold text-zinc-900">New report request</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Upload the required documents. We&apos;ll extract the details automatically.
-        </p>
-      </div>
+    <div className="mx-auto max-w-5xl px-4 py-10 space-y-6">
+      <Link href="/portal" className="text-sm text-zinc-500 hover:text-zinc-700">
+        ← My Reports
+      </Link>
       <SubmissionForm
         templates={activeTemplates}
         defaultTemplateId={defaultTemplateId}

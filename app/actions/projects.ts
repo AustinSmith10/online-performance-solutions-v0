@@ -12,6 +12,7 @@ import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
+import { expediteDelivery } from "@/lib/documents/pending-delivery";
 
 export type AssignState = { error?: string; success?: boolean };
 
@@ -1218,6 +1219,57 @@ export async function setProjectStripTokenColor(
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
   return {};
+}
+
+export type ExpediteDeliveryState = {
+  error?: string;
+  delivered?: boolean;
+  scheduledFor?: string | null;
+};
+
+export async function expediteProjectDelivery(projectId: string): Promise<ExpediteDeliveryState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  if (actor.role === "consultant") {
+    const { data: project } = await supabase
+      .from("projects")
+      .select("assigned_consultant_id")
+      .eq("id", projectId)
+      .single();
+    if (project?.assigned_consultant_id !== actor.id) {
+      return { error: "You are not assigned to this project." };
+    }
+  }
+
+  const { data: pending } = await supabase
+    .from("pending_deliveries")
+    .select("scheduled_for")
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (!pending) {
+    return { error: "No delivery is currently pending for this project." };
+  }
+
+  const result = await expediteDelivery(projectId, actor.id, actor.email as string);
+
+  await auditLog("pbdr.delivery_expedited", actor.id, actor.email as string, {
+    projectId,
+    metadata: {
+      previously_scheduled_for: pending.scheduled_for,
+      delivered_immediately: result.delivered,
+      rescheduled_for: result.scheduledFor,
+    },
+  });
+
+  if (!result.delivered && !result.scheduledFor && result.reason) {
+    return { error: result.reason };
+  }
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { delivered: result.delivered, scheduledFor: result.scheduledFor };
 }
 
 export type SetDeliveryDelayPresetState = { error?: string };

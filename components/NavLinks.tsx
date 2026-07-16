@@ -96,8 +96,8 @@ export function TopNavLinks({ items }: { items: NavItem[] }) {
             href={item.href}
             className={
               active
-                ? "shrink-0 rounded px-3 py-1.5 text-sm font-medium bg-zinc-100 text-zinc-900"
-                : "shrink-0 rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                ? "shrink-0 border-b-2 border-zinc-900 py-1 text-sm font-medium text-zinc-900"
+                : "shrink-0 border-b-2 border-transparent py-1 text-sm text-zinc-500 hover:text-zinc-700"
             }
           >
             {item.label}

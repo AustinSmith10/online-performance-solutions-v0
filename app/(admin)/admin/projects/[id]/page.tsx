@@ -19,6 +19,7 @@ import { AdminProjectTabs } from "./_components/AdminProjectTabs";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { ProjectDeliveryDelayPresetSelect } from "@/components/ProjectDeliveryDelayPresetSelect";
+import { PendingDeliveryPanel } from "@/components/PendingDeliveryPanel";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { DownloadCard } from "@/components/DownloadCard";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
@@ -125,7 +126,7 @@ export default async function ProjectDetailPage({
 
   const supabase = createAdminClient();
 
-  const [projectResult, consultantsResult] = await Promise.all([
+  const [projectResult, consultantsResult, pendingDeliveryResult] = await Promise.all([
     supabase
       .from("projects")
       .select(`
@@ -160,10 +161,13 @@ export default async function ProjectDetailPage({
       .eq("role", "consultant")
       .eq("is_locked", false)
       .order("first_name"),
+    supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).maybeSingle(),
   ]);
 
   if (projectResult.error) console.error(`[admin/projects/${id}] project query failed:`, projectResult.error);
   if (!projectResult.data) notFound();
+
+  const pendingDelivery = pendingDeliveryResult.data as { scheduled_for: string } | null;
 
   type ProjectDetail = {
     id: string;
@@ -521,6 +525,12 @@ export default async function ProjectDetailPage({
             initialValue={project.delivery_delay_preset}
           />
         </div>
+
+        {pendingDelivery && (
+          <div className="rounded-lg border border-zinc-200 bg-white p-5">
+            <PendingDeliveryPanel projectId={id} scheduledFor={pendingDelivery.scheduled_for} />
+          </div>
+        )}
 
         {/* PBDR files — reference list */}
         {pbdrFiles.length > 0 && (

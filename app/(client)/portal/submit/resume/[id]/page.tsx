@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -157,15 +158,10 @@ export default async function ResumeDraftPage({
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
-      <div className="mb-8">
-        <h1 className="text-xl font-semibold text-zinc-900">
-          Continue report request
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Review the extracted details below and submit when ready.
-        </p>
-      </div>
+    <div className="mx-auto max-w-5xl px-4 py-10 space-y-6">
+      <Link href="/portal" className="text-sm text-zinc-500 hover:text-zinc-700">
+        ← My Reports
+      </Link>
       <SubmissionForm
         templates={activeTemplates}
         defaultTemplateId={defaultTemplateId}

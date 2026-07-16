@@ -1,13 +1,11 @@
-import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DownloadCard } from "@/components/DownloadCard";
 import { DeletedBanner } from "./_components/DeletedBanner";
 import { RestoredBanner } from "./_components/RestoredBanner";
-import { ProjectCard } from "./_components/ProjectListRow";
+import { PortalDashboard } from "./_components/PortalDashboard";
 import { resolveStepperState, type StepperResult } from "@/lib/delivery/stepper";
-import { SUPPORT_MAILTO } from "@/lib/config/support";
 import type { ProjectStatus, PaymentMethod } from "@/types";
+import type { DashboardData } from "./_components/dashboardTypes";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -236,139 +234,46 @@ export default async function ClientPortalPage({
     }
   }
 
+  const dashboardData: DashboardData = {
+    rows: activeProjects.map((p) => ({
+      id: p.id,
+      href: `/portal/projects/${p.id}`,
+      label: projectLabel(p),
+      statusLabel: STATUS_LABELS[p.status],
+      statusClassName: STATUS_CLASSES[p.status],
+      stepper: stepperMap.get(p.id) ?? null,
+      submittedLabel: formatAuDate(p.created_at),
+      expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
+      isDelivered: p.status === "delivered",
+      pbdrFilename: pbdrFilenameMap.get(p.id),
+      pendingReview: pendingReviewMap.has(p.id)
+        ? {
+            reviewId: pendingReviewMap.get(p.id)!.id,
+            expiresAt: pendingReviewMap.get(p.id)!.expires_at,
+            pbdbDownloadUrl: `/api/download/pbdb-client/${p.id}`,
+            pbdbFilename: pbdbFilenameMap.get(p.id),
+          }
+        : undefined,
+    })),
+    readyItems: reportsReady.map((p) => {
+      const from = p.delivered_at ?? p.created_at;
+      const daysElapsed = workingDaysElapsed(from, todayIso);
+      return {
+        id: p.id,
+        label: projectLabel(p),
+        href: `/api/download/pbdr/${p.id}`,
+        filename: pbdrFilenameMap.get(p.id),
+        daysLeft: READY_WINDOW_DAYS - daysElapsed,
+      };
+    }),
+    org: org ? { paymentMethod: org.payment_method, creditBalance: org.credit_balance } : null,
+    readyWindowDays: READY_WINDOW_DAYS,
+  };
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 space-y-8">
       {justDeleted && <DeletedBanner />}
       {justRestored && <RestoredBanner />}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-zinc-900">My report requests</h1>
-        <Link
-          href="/portal/submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-        >
-          New report request
-        </Link>
-      </div>
-
-      {/* Credit balance — shown only for credit_deduction orgs */}
-      {org?.payment_method === "credit_deduction" && (
-        <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-5 py-4">
-          <div>
-            <p className="text-sm font-medium text-zinc-900">Credit balance</p>
-            <p className="mt-0.5 text-xs text-zinc-500">Tokens available for report requests</p>
-          </div>
-          <div className="text-right">
-            <p
-              className={`text-2xl font-semibold tabular-nums ${
-                org.credit_balance === 0 ? "text-red-600" : "text-zinc-900"
-              }`}
-            >
-              {org.credit_balance.toLocaleString()}
-            </p>
-            {org.credit_balance === 0 && (
-              <p className="mt-0.5 text-xs text-red-500">
-                No credits remaining —{" "}
-                <a href={SUPPORT_MAILTO} className="underline hover:text-red-700">
-                  contact your account manager
-                </a>
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Reports ready to download */}
-      {reportsReady.length > 0 && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-5">
-          <h2 className="text-sm font-semibold text-green-900">
-            {reportsReady.length === 1 ? "Report" : "Reports"} ready to download (
-            {reportsReady.length})
-          </h2>
-          <p className="mt-0.5 text-xs text-green-700">
-            {reportsReady.length === 1 ? "Your report is" : "Your reports are"} complete. Download{" "}
-            {reportsReady.length === 1 ? "it" : "them"} below —{" "}
-            {reportsReady.length === 1 ? "it moves" : "they move"} to History once downloaded or
-            after {READY_WINDOW_DAYS} working days.
-          </p>
-          <ul className="mt-3 space-y-2">
-            {reportsReady.map((p) => {
-              const from = p.delivered_at ?? p.created_at;
-              const daysElapsed = workingDaysElapsed(from, todayIso);
-              const daysLeft = READY_WINDOW_DAYS - daysElapsed;
-              return (
-                <DownloadCard
-                  key={p.id}
-                  href={`/api/download/pbdr/${p.id}`}
-                  filename={pbdrFilenameMap.get(p.id)}
-                  originalFilename={pbdrFilenameMap.get(p.id)}
-                  buttonLabel="Download report"
-                  buttonClassName="shrink-0 inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
-                  wrapperClassName="flex items-center justify-between rounded-md border border-green-100 bg-white px-4 py-2.5"
-                >
-                  <span className="block truncate text-sm font-medium text-zinc-900">
-                    {projectLabel(p)}
-                  </span>
-                  <span className="text-xs text-zinc-400">
-                    {daysLeft <= 1
-                      ? "Last day to download"
-                      : `Available for ${daysLeft} more working day${daysLeft !== 1 ? "s" : ""}`}
-                  </span>
-                </DownloadCard>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-
-      {/* Project table */}
-      {activeProjects.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-12 text-center">
-          <p className="text-sm font-medium text-zinc-900">No active report requests</p>
-          <p className="mt-1 text-sm text-zinc-500">
-            Submit a new request or check{" "}
-            <Link href="/portal/history" className="underline underline-offset-2">
-              History
-            </Link>{" "}
-            for past reports.
-          </p>
-          <Link
-            href="/portal/submit"
-            className="mt-4 inline-block rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-          >
-            New report request
-          </Link>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {activeProjects.map((p) => (
-            <ProjectCard
-              key={p.id}
-              href={`/portal/projects/${p.id}`}
-              label={projectLabel(p)}
-              statusLabel={STATUS_LABELS[p.status]}
-              statusClassName={STATUS_CLASSES[p.status]}
-              stepper={stepperMap.get(p.id) ?? null}
-              submittedLabel={formatAuDate(p.created_at)}
-              expectedDeliveryLabel={
-                p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null
-              }
-              isDelivered={p.status === "delivered"}
-              projectId={p.id}
-              pbdrFilename={pbdrFilenameMap.get(p.id)}
-              pendingReview={
-                pendingReviewMap.has(p.id)
-                  ? {
-                      reviewId: pendingReviewMap.get(p.id)!.id,
-                      expiresAt: pendingReviewMap.get(p.id)!.expires_at,
-                      pbdbDownloadUrl: `/api/download/pbdb-client/${p.id}`,
-                      pbdbFilename: pbdbFilenameMap.get(p.id),
-                    }
-                  : undefined
-              }
-            />
-          ))}
-        </div>
-      )}
+      <PortalDashboard {...dashboardData} />
     </div>
   );
 }

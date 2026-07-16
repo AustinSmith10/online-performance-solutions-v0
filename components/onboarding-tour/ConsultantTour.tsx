@@ -14,9 +14,9 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { markOnboardingStepSeen } from "@/app/actions/onboarding";
 import { CollapsibleSection } from "@/app/(consultant)/ops/projects/[id]/_components/CollapsibleSection";
-import { StageRail } from "@/app/(consultant)/ops/projects/[id]/_components/StageRail";
-import type { Stage } from "@/app/(consultant)/ops/projects/[id]/_components/StageRail";
-import { FocusCard } from "@/app/(consultant)/ops/projects/[id]/_components/FocusCard";
+import { StageRail } from "@/components/workspace/StageRail";
+import type { Stage } from "@/components/workspace/StageRail";
+import { FocusCard } from "@/components/workspace/FocusCard";
 import {
   CONSULTANT_TOUR_PARAM,
   CONSULTANT_TOUR_SEEN_KEY,
