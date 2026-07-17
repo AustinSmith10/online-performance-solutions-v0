@@ -242,7 +242,7 @@ export default async function TemplatePage({
                     highlightToken={sp.token_added}
                   />
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-white">
+                <div className="rounded-xl border border-zinc-200 bg-white">
                   <div className="border-b border-zinc-100 px-5 py-4">
                     <h2 className="text-sm font-semibold text-zinc-900">
                       Template tokens ({templateRows.length})
@@ -262,7 +262,7 @@ export default async function TemplatePage({
           {
             label: "Section labels",
             content: (
-              <div className="rounded-lg border border-zinc-200 bg-white p-5">
+              <div className="rounded-xl border border-zinc-200 bg-white p-5">
                 <h2 className="mb-1 text-sm font-semibold text-zinc-900">Step 2 section headings</h2>
                 <p className="mb-4 text-xs text-zinc-500">
                   Labels shown to the client above each group of fields in the review step.
@@ -286,7 +286,7 @@ export default async function TemplatePage({
           {
             label: `File requirements (${requirements.length})`,
             content: (
-              <div className="rounded-lg border border-zinc-200 bg-white">
+              <div className="rounded-xl border border-zinc-200 bg-white">
                 <div className="border-b border-zinc-100 px-5 py-4">
                   <h2 className="text-sm font-semibold text-zinc-900">
                     File requirements ({requirements.length})
@@ -307,7 +307,7 @@ export default async function TemplatePage({
           {
             label: "Client profile",
             content: (
-              <div className="rounded-lg border border-zinc-200 bg-white">
+              <div className="rounded-xl border border-zinc-200 bg-white">
                 <div className="border-b border-zinc-100 px-5 py-4">
                   <h2 className="text-sm font-semibold text-zinc-900">Client profile layout</h2>
                   <p className="mt-0.5 text-xs text-zinc-500">
@@ -321,7 +321,7 @@ export default async function TemplatePage({
           {
             label: "Settings",
             content: (
-              <div className="rounded-lg border border-zinc-200 bg-white">
+              <div className="rounded-xl border border-zinc-200 bg-white">
                 <div className="border-b border-zinc-100 px-5 py-4">
                   <h2 className="text-sm font-semibold text-zinc-900">Replace file</h2>
                   <p className="mt-0.5 text-xs text-zinc-500">
@@ -387,7 +387,7 @@ function StatCard({
       ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-amber-400 bg-white px-3 py-2.5"
       : variant === "success"
       ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-green-500 bg-white px-3 py-2.5"
-      : "rounded-lg border border-zinc-200 bg-white px-3 py-2.5";
+      : "rounded-xl border border-zinc-200 bg-white px-3 py-2.5";
 
   return (
     <div className={containerClass}>

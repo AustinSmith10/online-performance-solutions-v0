@@ -135,7 +135,7 @@ export default async function AuditPage({
       </div>
 
       {/* Filter form */}
-      <form method="GET" className="rounded-lg border border-zinc-200 bg-white p-4 space-y-3">
+      <form method="GET" className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
         <div className="flex flex-wrap gap-3">
           {/* Category */}
           <div className="flex flex-col gap-1">
@@ -145,7 +145,7 @@ export default async function AuditPage({
             <select
               name="category"
               defaultValue={category ?? ""}
-              className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             >
               <option value="">All categories</option>
               {Object.entries(CATEGORIES).map(([key, cat]) => (
@@ -164,7 +164,7 @@ export default async function AuditPage({
             <select
               name="event_type"
               defaultValue={event_type ?? ""}
-              className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             >
               <option value="">All events</option>
               {Object.entries(CATEGORIES).map(([key, cat]) => (
@@ -189,7 +189,7 @@ export default async function AuditPage({
               name="email"
               defaultValue={email ?? ""}
               placeholder="e.g. user@example.com"
-              className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             />
           </div>
 
@@ -203,7 +203,7 @@ export default async function AuditPage({
               name="org_name"
               defaultValue={org_name ?? ""}
               placeholder="Client name"
-              className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             />
           </div>
 
@@ -216,7 +216,7 @@ export default async function AuditPage({
               type="date"
               name="from"
               defaultValue={from ?? ""}
-              className="rounded border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -227,7 +227,7 @@ export default async function AuditPage({
               type="date"
               name="to"
               defaultValue={to ?? ""}
-              className="rounded border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             />
           </div>
         </div>
@@ -235,14 +235,14 @@ export default async function AuditPage({
         <div className="flex items-center gap-3">
           <button
             type="submit"
-            className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Search
           </button>
           {hasFilter && (
             <a
               href="/admin/audit"
-              className="rounded border border-zinc-300 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
             >
               Clear filters
             </a>
@@ -273,11 +273,11 @@ export default async function AuditPage({
 
       {/* Results */}
       {entries.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
           No audit entries found.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="w-full min-w-[900px] text-sm">
             <thead className="border-b border-zinc-100 bg-zinc-50">
               <tr>
@@ -288,7 +288,7 @@ export default async function AuditPage({
                     { label: "Actor", col: "actor_email" },
                   ] as { label: string; col: SortCol }[]
                 ).map(({ label, col }) => (
-                  <th key={col} className="px-5 py-3 text-left font-medium text-zinc-500">
+                  <th key={col} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">
                     <a
                       href={buildSortHref(currentParams, col)}
                       className="group inline-flex items-center hover:text-zinc-700"
@@ -298,9 +298,9 @@ export default async function AuditPage({
                     </a>
                   </th>
                 ))}
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Details</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">Client</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">Project</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-50">

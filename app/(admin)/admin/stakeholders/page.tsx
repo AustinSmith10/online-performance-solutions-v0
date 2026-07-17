@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ClickableRow } from "@/components/ClickableRow";
 import type { User } from "@/types";
 
 const SORT_COLS = ["invited_at", "first_name", "email"] as const;
 type SortCol = (typeof SORT_COLS)[number];
+const SORT_OPTIONS: { col: SortCol; label: string }[] = [
+  { col: "first_name", label: "Name" },
+  { col: "invited_at", label: "Invited" },
+];
 
 function sortHref(params: Record<string, string | undefined>, col: SortCol): string {
   const p = new URLSearchParams();
@@ -15,9 +18,26 @@ function sortHref(params: Record<string, string | undefined>, col: SortCol): str
   return `/admin/clients?${p.toString()}`;
 }
 
-function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" }) {
-  if (!active) return <span className="ml-1 text-zinc-300 group-hover:text-zinc-400">↕</span>;
-  return <span className="ml-1 text-zinc-600">{order === "asc" ? "↑" : "↓"}</span>;
+function SortPills({ params, sortCol, sortOrder }: { params: Record<string, string | undefined>; sortCol: SortCol; sortOrder: "asc" | "desc" }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-zinc-400">Sort:</span>
+      {SORT_OPTIONS.map((o) => {
+        const active = sortCol === o.col;
+        return (
+          <a
+            key={o.col}
+            href={sortHref(params, o.col)}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+              active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+            }`}
+          >
+            {o.label} {active ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 type ClientRow = Pick<User, "id" | "email" | "first_name" | "last_name" | "is_locked" | "invited_at"> & {
@@ -94,26 +114,26 @@ function ClientsLayout({
         </div>
       </div>
 
-      <form method="GET" className="rounded-lg border border-zinc-200 bg-white p-4">
+      <form method="GET" className="rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex flex-wrap gap-3">
           <input
             type="text"
             name="q"
             defaultValue={params.q ?? ""}
             placeholder="Search name or email…"
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <input
             type="text"
             name="org"
             defaultValue={params.org ?? ""}
             placeholder="Client…"
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <select
             name="status"
             defaultValue={params.status ?? ""}
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           >
             <option value="">All statuses</option>
             <option value="active">Active</option>
@@ -121,14 +141,14 @@ function ClientsLayout({
           </select>
           <button
             type="submit"
-            className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Search
           </button>
           {hasFilter && (
             <Link
               href="/admin/clients"
-              className="rounded border border-zinc-300 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
             >
               Clear
             </Link>
@@ -137,54 +157,40 @@ function ClientsLayout({
       </form>
 
       {clients.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
           {hasFilter ? "No clients match your filters." : "No clients yet."}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[480px] text-sm">
-            <thead className="border-b border-zinc-100 bg-zinc-50">
-              <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "first_name")} className="group inline-flex items-center hover:text-zinc-700">
-                    Name <SortIcon active={sortCol === "first_name"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "invited_at")} className="group inline-flex items-center hover:text-zinc-700">
-                    Invited <SortIcon active={sortCol === "invited_at"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {clients.map((c) => (
-                <ClickableRow key={c.id} href={`/admin/users/${c.id}`}>
-                  <td className="px-5 py-3">
-                    <span className="font-medium text-zinc-900">
-                      {c.first_name && c.last_name ? `${c.first_name} ${c.last_name}` : c.email}
-                    </span>
-                    {(c.first_name || c.last_name) && (
-                      <div className="text-xs text-zinc-400">{c.email}</div>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-zinc-600">{c.clients?.name ?? "—"}</td>
-                  <td className="px-5 py-3 text-zinc-500">
-                    {c.invited_at ? new Date(c.invited_at).toLocaleDateString("en-AU") : "—"}
-                  </td>
-                  <td className="px-5 py-3">
-                    {c.is_locked ? (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Locked</span>
-                    ) : (
-                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Active</span>
-                    )}
-                  </td>
-                </ClickableRow>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          <SortPills params={params} sortCol={sortCol} sortOrder={sortOrder} />
+          <div className="overflow-hidden rounded-lg">
+            {clients.map((c) => (
+              <Link
+                key={c.id}
+                href={`/admin/users/${c.id}`}
+                className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 hover:bg-zinc-50 ${
+                  c.is_locked ? "border-l-red-400" : "border-l-zinc-200"
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="truncate text-sm font-medium text-zinc-900">
+                    {c.first_name && c.last_name ? `${c.first_name} ${c.last_name}` : c.email}
+                  </span>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">
+                    {c.clients?.name ?? "—"}
+                    {c.invited_at ? ` · Invited ${new Date(c.invited_at).toLocaleDateString("en-AU")}` : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {c.is_locked ? (
+                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Locked</span>
+                  ) : (
+                    <span className="whitespace-nowrap rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-medium text-green-700">Active</span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>

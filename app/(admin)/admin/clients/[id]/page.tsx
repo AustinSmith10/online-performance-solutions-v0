@@ -266,7 +266,7 @@ export default async function OrganisationDetailPage({
 
       {/* Tab: Templates */}
       {activeTab === "templates" && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6">
+        <div className="rounded-xl border border-zinc-200 bg-white p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-zinc-900">Templates</h2>
             <Link
@@ -322,7 +322,7 @@ export default async function OrganisationDetailPage({
 
       {/* Tab: Users */}
       {activeTab === "users" && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6">
+        <div className="rounded-xl border border-zinc-200 bg-white p-6">
           <div className="mb-4">
             <h2 className="text-sm font-semibold text-zinc-900">Users</h2>
           </div>
@@ -387,7 +387,7 @@ export default async function OrganisationDetailPage({
 
       {/* Tab: Delete */}
       {activeTab === "danger" && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-5 space-y-4">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-5 space-y-4">
           <h2 className="text-sm font-semibold text-red-800">Delete</h2>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div>

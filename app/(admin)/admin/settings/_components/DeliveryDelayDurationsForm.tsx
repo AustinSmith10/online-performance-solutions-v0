@@ -14,7 +14,7 @@ export function DeliveryDelayDurationsForm({ durations }: { durations: DeliveryD
   );
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5">
+    <div className="rounded-xl border border-zinc-200 bg-white p-5">
       <h2 className="text-sm font-semibold text-zinc-900">Delivery delay durations</h2>
       <p className="mt-0.5 text-xs text-zinc-500">
         How long the Normal and Extended delivery-delay presets hold PBDR generation and final

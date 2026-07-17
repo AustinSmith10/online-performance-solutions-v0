@@ -70,7 +70,7 @@ export default async function OrgCreditsPage({
       {/* Balance cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {orgData.payment_method === "credit_deduction" && (
-          <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <div className="rounded-xl border border-zinc-200 bg-white p-5">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
               Credit balance
             </p>
@@ -81,7 +81,7 @@ export default async function OrgCreditsPage({
         )}
         {orgData.payment_method === "deferred" && (
           <>
-            <div className="rounded-lg border border-zinc-200 bg-white p-5">
+            <div className="rounded-xl border border-zinc-200 bg-white p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Deferred tab
               </p>
@@ -89,7 +89,7 @@ export default async function OrgCreditsPage({
                 {orgData.deferred_balance.toLocaleString()}
               </p>
             </div>
-            <div className="rounded-lg border border-zinc-200 bg-white p-5">
+            <div className="rounded-xl border border-zinc-200 bg-white p-5">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Credit limit
               </p>
@@ -100,7 +100,7 @@ export default async function OrgCreditsPage({
           </>
         )}
         {orgData.payment_method === "upfront" && (
-          <div className="col-span-2 rounded-lg border border-zinc-200 bg-zinc-50 p-5">
+          <div className="col-span-2 rounded-xl border border-zinc-200 bg-zinc-50 p-5">
             <p className="text-sm text-zinc-500">
               This organisation uses upfront payment — no credit balance managed in OPS.
             </p>
@@ -110,7 +110,7 @@ export default async function OrgCreditsPage({
 
       {/* Top-up — credit_deduction orgs only */}
       {orgData.payment_method === "credit_deduction" && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5">
           <h2 className="mb-3 text-sm font-semibold text-zinc-900">Add credits</h2>
           <TopUpForm orgId={orgData.id} />
         </div>
@@ -118,7 +118,7 @@ export default async function OrgCreditsPage({
 
       {/* Freeze / unfreeze — deferred orgs only */}
       {orgData.payment_method === "deferred" && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5">
           <h2 className="mb-1 text-sm font-semibold text-zinc-900">Account freeze</h2>
           <p className="mb-3 text-sm text-zinc-500">
             {orgData.is_frozen
@@ -130,7 +130,7 @@ export default async function OrgCreditsPage({
       )}
 
       {/* Ledger history */}
-      <div className="rounded-lg border border-zinc-200 bg-white">
+      <div className="rounded-xl border border-zinc-200 bg-white">
         <div className="border-b border-zinc-200 px-5 py-4">
           <h2 className="text-sm font-semibold text-zinc-900">Ledger history</h2>
           <p className="mt-0.5 text-xs text-zinc-500">Last 50 entries — immutable</p>

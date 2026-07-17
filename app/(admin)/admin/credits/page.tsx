@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ClickableRow } from "@/components/ClickableRow";
 import type { Client, PaymentMethod } from "@/types";
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -11,6 +10,11 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
 
 const SORT_COLS = ["name", "credit_balance", "deferred_balance"] as const;
 type SortCol = (typeof SORT_COLS)[number];
+const SORT_OPTIONS: { col: SortCol; label: string }[] = [
+  { col: "name", label: "Client" },
+  { col: "credit_balance", label: "Credit balance" },
+  { col: "deferred_balance", label: "Deferred tab" },
+];
 
 function sortHref(params: Record<string, string | undefined>, col: SortCol): string {
   const p = new URLSearchParams();
@@ -21,9 +25,26 @@ function sortHref(params: Record<string, string | undefined>, col: SortCol): str
   return `/admin/credits?${p.toString()}`;
 }
 
-function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" }) {
-  if (!active) return <span className="ml-1 text-zinc-300 group-hover:text-zinc-400">↕</span>;
-  return <span className="ml-1 text-zinc-600">{order === "asc" ? "↑" : "↓"}</span>;
+function SortPills({ params, sortCol, sortOrder }: { params: Record<string, string | undefined>; sortCol: SortCol; sortOrder: "asc" | "desc" }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-zinc-400">Sort:</span>
+      {SORT_OPTIONS.map((o) => {
+        const active = sortCol === o.col;
+        return (
+          <a
+            key={o.col}
+            href={sortHref(params, o.col)}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+              active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+            }`}
+          >
+            {o.label} {active ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 type OrgRow = Pick<Client, "id" | "name" | "payment_method" | "credit_balance" | "deferred_balance" | "credit_limit" | "is_frozen">;
@@ -65,19 +86,19 @@ export default async function CreditsPage({
         <p className="mt-1 text-sm text-zinc-500">Credit balances and ledger across all clients.</p>
       </div>
 
-      <form method="GET" className="rounded-lg border border-zinc-200 bg-white p-4">
+      <form method="GET" className="rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex flex-wrap gap-3">
           <input
             type="text"
             name="q"
             defaultValue={q ?? ""}
             placeholder="Search organisation…"
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <select
             name="payment"
             defaultValue={payment ?? ""}
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           >
             <option value="">All payment types</option>
             <option value="upfront">Upfront</option>
@@ -87,7 +108,7 @@ export default async function CreditsPage({
           <select
             name="status"
             defaultValue={status ?? ""}
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           >
             <option value="">All statuses</option>
             <option value="active">Active</option>
@@ -95,14 +116,14 @@ export default async function CreditsPage({
           </select>
           <button
             type="submit"
-            className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Search
           </button>
           {hasFilter && (
             <Link
               href="/admin/credits"
-              className="rounded border border-zinc-300 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
             >
               Clear
             </Link>
@@ -111,62 +132,52 @@ export default async function CreditsPage({
       </form>
 
       {orgs.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
           {hasFilter ? "No clients match your filters." : "No clients yet."}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[540px] text-sm">
-            <thead className="border-b border-zinc-100 bg-zinc-50">
-              <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "name")} className="group inline-flex items-center hover:text-zinc-700">
-                    Client <SortIcon active={sortCol === "name"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Payment</th>
-                <th className="px-5 py-3 text-right font-medium text-zinc-500">
-                  <a href={sortHref(params, "credit_balance")} className="group inline-flex items-center justify-end hover:text-zinc-700">
-                    Credit balance <SortIcon active={sortCol === "credit_balance"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-right font-medium text-zinc-500">
-                  <a href={sortHref(params, "deferred_balance")} className="group inline-flex items-center justify-end hover:text-zinc-700">
-                    Deferred tab <SortIcon active={sortCol === "deferred_balance"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {orgs.map((org) => (
-                <ClickableRow key={org.id} href={`/admin/credits/${org.id}`}>
-                  <td className="px-5 py-3 font-medium text-zinc-900">{org.name}</td>
-                  <td className="px-5 py-3 text-zinc-600">{PAYMENT_LABELS[org.payment_method]}</td>
-                  <td className="px-5 py-3 text-right text-zinc-900">
-                    {org.payment_method === "credit_deduction" ? org.credit_balance.toLocaleString() : "—"}
-                  </td>
-                  <td className="px-5 py-3 text-right text-zinc-900">
-                    {org.payment_method === "deferred" ? (
-                      <span>
-                        {org.deferred_balance.toLocaleString()}
-                        {org.credit_limit > 0 && (
-                          <span className="text-zinc-400"> / {org.credit_limit.toLocaleString()}</span>
-                        )}
-                      </span>
-                    ) : "—"}
-                  </td>
-                  <td className="px-5 py-3">
-                    {org.is_frozen ? (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Frozen</span>
-                    ) : (
-                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Active</span>
-                    )}
-                  </td>
-                </ClickableRow>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          <SortPills params={params} sortCol={sortCol} sortOrder={sortOrder} />
+          <div className="overflow-hidden rounded-lg">
+            {orgs.map((org) => (
+              <Link
+                key={org.id}
+                href={`/admin/credits/${org.id}`}
+                className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 hover:bg-zinc-50 ${
+                  org.is_frozen ? "border-l-red-400" : "border-l-zinc-200"
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="truncate text-sm font-medium text-zinc-900">{org.name}</span>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">{PAYMENT_LABELS[org.payment_method]}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-4 text-right">
+                  <div className="text-xs">
+                    <p className="text-zinc-400">Credit</p>
+                    <p className="tabular-nums text-zinc-900">
+                      {org.payment_method === "credit_deduction" ? org.credit_balance.toLocaleString() : "—"}
+                    </p>
+                  </div>
+                  <div className="text-xs">
+                    <p className="text-zinc-400">Deferred</p>
+                    <p className="tabular-nums text-zinc-900">
+                      {org.payment_method === "deferred" ? (
+                        <>
+                          {org.deferred_balance.toLocaleString()}
+                          {org.credit_limit > 0 && <span className="text-zinc-400"> / {org.credit_limit.toLocaleString()}</span>}
+                        </>
+                      ) : "—"}
+                    </p>
+                  </div>
+                  {org.is_frozen ? (
+                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Frozen</span>
+                  ) : (
+                    <span className="whitespace-nowrap rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-medium text-green-700">Active</span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -14,7 +14,7 @@ export function AdminNavRestrictionsForm({ restricted }: { restricted: AdminNavK
   );
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5">
+    <div className="rounded-xl border border-zinc-200 bg-white p-5">
       <h2 className="text-sm font-semibold text-zinc-900">Admin nav visibility</h2>
       <p className="mt-0.5 text-xs text-zinc-500">
         Check an item to hide it from plain admins — it stays visible to super admins. Dashboard

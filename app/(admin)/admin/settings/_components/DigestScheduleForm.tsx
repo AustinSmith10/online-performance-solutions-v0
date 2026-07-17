@@ -14,7 +14,7 @@ export function DigestScheduleForm({ schedule }: { schedule: DigestSchedule }) {
   );
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5">
+    <div className="rounded-xl border border-zinc-200 bg-white p-5">
       <h2 className="text-sm font-semibold text-zinc-900">Available requests digest</h2>
       <p className="mt-0.5 text-xs text-zinc-500">
         Send times for the twice-daily digest emailed to consultants and admins when there are

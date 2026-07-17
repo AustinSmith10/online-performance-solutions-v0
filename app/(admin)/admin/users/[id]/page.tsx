@@ -254,7 +254,7 @@ function StatCard({
       ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-amber-400 bg-white px-3 py-2.5"
       : variant === "success"
       ? "rounded-r-lg border border-zinc-200 border-l-[3px] border-l-green-500 bg-white px-3 py-2.5"
-      : "rounded-lg border border-zinc-200 bg-white px-3 py-2.5";
+      : "rounded-xl border border-zinc-200 bg-white px-3 py-2.5";
   const valueClass =
     variant === "success"
       ? "text-green-700"

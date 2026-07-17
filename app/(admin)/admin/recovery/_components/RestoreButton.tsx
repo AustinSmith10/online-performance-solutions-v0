@@ -15,7 +15,7 @@ export function RestoreButton({ projectId }: { projectId: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="rounded border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
       >
         {pending ? "Restoring…" : "Restore"}
       </button>

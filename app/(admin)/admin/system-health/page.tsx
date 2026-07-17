@@ -46,11 +46,11 @@ function Section({
         <p className="mt-0.5 pl-4 text-xs text-zinc-500">{description}</p>
       </div>
       {children.length === 0 ? (
-        <p className="rounded border border-dashed border-zinc-200 px-4 py-6 text-center text-xs text-zinc-400">
+        <p className="rounded-xl border border-dashed border-zinc-200 px-4 py-6 text-center text-xs text-zinc-400">
           {emptyText}
         </p>
       ) : (
-        <div className="divide-y divide-zinc-100 rounded border border-zinc-200 bg-white">
+        <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
           {children}
         </div>
       )}
@@ -96,7 +96,7 @@ export default async function SystemHealthPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <div>
-        <h1 className="text-lg font-semibold text-zinc-900">System Health</h1>
+        <h1 className="text-xl font-semibold text-zinc-900">System Health</h1>
         <p className="text-sm text-zinc-500">
           Everything currently flagged in the notification bell, with detail and suggested next
           steps. Mark an entry resolved once you&apos;ve dealt with it — it&apos;ll come back on

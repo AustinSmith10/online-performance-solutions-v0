@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
-import { ClickableRow } from "@/components/ClickableRow";
 import { CreateAccountModal } from "./_components/CreateAccountModal";
 import type { User, Client, ConsultantAvailability } from "@/types";
 
@@ -29,6 +28,17 @@ const CONSULTANT_SORT_COLS = ["first_name", "email", "availability"] as const;
 type AllSortCol = (typeof ALL_SORT_COLS)[number];
 type ConsultantSortCol = (typeof CONSULTANT_SORT_COLS)[number];
 
+const ALL_SORT_OPTIONS: { col: AllSortCol; label: string }[] = [
+  { col: "email", label: "User" },
+  { col: "role", label: "Role" },
+  { col: "org", label: "Client" },
+  { col: "created_at", label: "Joined" },
+];
+const CONSULTANT_SORT_OPTIONS: { col: ConsultantSortCol; label: string }[] = [
+  { col: "first_name", label: "Name" },
+  { col: "availability", label: "Availability" },
+];
+
 function sortHref(params: Record<string, string | undefined>, col: string): string {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) p.set(k, v);
@@ -38,9 +48,36 @@ function sortHref(params: Record<string, string | undefined>, col: string): stri
   return `/admin/users?${p.toString()}`;
 }
 
-function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" }) {
-  if (!active) return <span className="ml-1 text-zinc-300 group-hover:text-zinc-400">↕</span>;
-  return <span className="ml-1 text-zinc-600">{order === "asc" ? "↑" : "↓"}</span>;
+function SortPills<Col extends string>({
+  params,
+  sortCol,
+  sortOrder,
+  options,
+}: {
+  params: Record<string, string | undefined>;
+  sortCol: Col;
+  sortOrder: "asc" | "desc";
+  options: { col: Col; label: string }[];
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-zinc-400">Sort:</span>
+      {options.map((o) => {
+        const active = sortCol === o.col;
+        return (
+          <a
+            key={o.col}
+            href={sortHref(params, o.col)}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+              active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+            }`}
+          >
+            {o.label} {active ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 type UserRow = Pick<User, "id" | "email" | "first_name" | "last_name" | "role" | "availability" | "is_locked" | "created_at"> & {
@@ -52,6 +89,26 @@ const TABS = [
   { key: "consultants", label: "Consultants" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
+
+function TabBar({ tab }: { tab: Tab }) {
+  return (
+    <div className="flex gap-1 border-b border-zinc-200">
+      {TABS.map((t) => (
+        <Link
+          key={t.key}
+          href={`/admin/users?tab=${t.key}`}
+          className={`px-4 py-2 text-sm font-medium ${
+            tab === t.key
+              ? "border-b-2 border-zinc-900 text-zinc-900"
+              : "text-zinc-500 hover:text-zinc-700"
+          }`}
+        >
+          {t.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 export default async function UsersPage({
   searchParams,
@@ -97,9 +154,6 @@ export default async function UsersPage({
 
     const { data } = await query;
     const users = (data ?? []) as unknown as UserRow[];
-    const sortCol2: ConsultantSortCol = CONSULTANT_SORT_COLS.includes(sort as ConsultantSortCol)
-      ? (sort as ConsultantSortCol)
-      : "first_name";
     const hasFilter = !!(q || availability || status);
     const params = { q, availability, status, sort, order, tab };
 
@@ -113,27 +167,13 @@ export default async function UsersPage({
           <CreateAccountModal orgs={orgs} callerRole={caller.role as string} />
         </div>
 
-        <div className="flex gap-1 border-b border-zinc-200">
-          {TABS.map((t) => (
-            <Link
-              key={t.key}
-              href={`/admin/users?tab=${t.key}`}
-              className={`px-4 py-2 text-sm font-medium ${
-                tab === t.key
-                  ? "border-b-2 border-zinc-900 text-zinc-900"
-                  : "text-zinc-500 hover:text-zinc-700"
-              }`}
-            >
-              {t.label}
-            </Link>
-          ))}
-        </div>
+        <TabBar tab={tab} />
 
         <div>
           <p className="mb-4 text-sm text-zinc-500">
             Availability is set by each consultant from their workspace. Super Admins can also update it from the user detail page.
           </p>
-          <form method="GET" className="rounded-lg border border-zinc-200 bg-white p-4">
+          <form method="GET" className="rounded-xl border border-zinc-200 bg-white p-4">
             <input type="hidden" name="tab" value="consultants" />
             <div className="flex flex-wrap gap-3">
               <input
@@ -141,12 +181,12 @@ export default async function UsersPage({
                 name="q"
                 defaultValue={q ?? ""}
                 placeholder="Search name or email…"
-                className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
               />
               <select
                 name="availability"
                 defaultValue={availability ?? ""}
-                className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
               >
                 <option value="">All availability</option>
                 <option value="available">Available</option>
@@ -156,7 +196,7 @@ export default async function UsersPage({
               <select
                 name="status"
                 defaultValue={status ?? ""}
-                className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
               >
                 <option value="">All statuses</option>
                 <option value="active">Active</option>
@@ -164,14 +204,14 @@ export default async function UsersPage({
               </select>
               <button
                 type="submit"
-                className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+                className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
               >
                 Search
               </button>
               {hasFilter && (
                 <Link
                   href="/admin/users?tab=consultants"
-                  className="rounded border border-zinc-300 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+                  className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
                 >
                   Clear
                 </Link>
@@ -181,52 +221,39 @@ export default async function UsersPage({
         </div>
 
         {users.length === 0 ? (
-          <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+          <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
             {hasFilter ? "No consultants match your filters." : "No consultants yet."}
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-            <table className="w-full min-w-[400px] text-sm">
-              <thead className="border-b border-zinc-100 bg-zinc-50">
-                <tr>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                    <a href={sortHref(params, "first_name")} className="group inline-flex items-center hover:text-zinc-700">
-                      Name <SortIcon active={sortCol2 === "first_name"} order={sortOrder} />
-                    </a>
-                  </th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                    <a href={sortHref(params, "availability")} className="group inline-flex items-center hover:text-zinc-700">
-                      Availability <SortIcon active={sortCol2 === "availability"} order={sortOrder} />
-                    </a>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-50">
-                {users.map((u) => (
-                  <ClickableRow key={u.id} href={`/admin/users/${u.id}`}>
-                    <td className="px-5 py-3">
-                      <span className="font-medium text-zinc-900">
-                        {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
+          <div className="space-y-2">
+            <SortPills params={params} sortCol={sort && CONSULTANT_SORT_COLS.includes(sort as ConsultantSortCol) ? (sort as ConsultantSortCol) : "first_name"} sortOrder={sortOrder} options={CONSULTANT_SORT_OPTIONS} />
+            <div className="overflow-hidden rounded-lg">
+              {users.map((u) => (
+                <Link
+                  key={u.id}
+                  href={`/admin/users/${u.id}`}
+                  className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 hover:bg-zinc-50 ${
+                    u.is_locked ? "border-l-red-400" : u.availability === "at_capacity" ? "border-l-amber-400" : "border-l-zinc-200"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="truncate text-sm font-medium text-zinc-900">
+                      {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
+                    </span>
+                    <p className="mt-0.5 truncate text-xs text-zinc-500">{u.clients?.name ?? "—"}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {u.is_locked ? (
+                      <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Locked</span>
+                    ) : (
+                      <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${AVAILABILITY_CLASSES[u.availability as ConsultantAvailability] ?? "bg-zinc-100 text-zinc-600"}`}>
+                        {AVAILABILITY_LABELS[u.availability as ConsultantAvailability] ?? u.availability}
                       </span>
-                      {(u.first_name || u.last_name) && (
-                        <div className="text-xs text-zinc-400">{u.email}</div>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-zinc-600">{u.clients?.name ?? "—"}</td>
-                    <td className="px-5 py-3">
-                      {u.is_locked ? (
-                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Locked</span>
-                      ) : (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${AVAILABILITY_CLASSES[u.availability as ConsultantAvailability] ?? "bg-zinc-100 text-zinc-600"}`}>
-                          {AVAILABILITY_LABELS[u.availability as ConsultantAvailability] ?? u.availability}
-                        </span>
-                      )}
-                    </td>
-                  </ClickableRow>
-                ))}
-              </tbody>
-            </table>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -264,35 +291,21 @@ export default async function UsersPage({
         <CreateAccountModal orgs={orgs} callerRole={caller.role as string} />
       </div>
 
-      <div className="flex gap-1 border-b border-zinc-200">
-        {TABS.map((t) => (
-          <Link
-            key={t.key}
-            href={`/admin/users?tab=${t.key}`}
-            className={`px-4 py-2 text-sm font-medium ${
-              tab === t.key
-                ? "border-b-2 border-zinc-900 text-zinc-900"
-                : "text-zinc-500 hover:text-zinc-700"
-            }`}
-          >
-            {t.label}
-          </Link>
-        ))}
-      </div>
+      <TabBar tab={tab} />
 
-      <form method="GET" className="rounded-lg border border-zinc-200 bg-white p-4">
+      <form method="GET" className="rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex flex-wrap gap-3">
           <input
             type="text"
             name="q"
             defaultValue={q ?? ""}
             placeholder="Search name or email…"
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <select
             name="role"
             defaultValue={role ?? ""}
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           >
             <option value="">All roles</option>
             <option value="super_admin">Super Admin</option>
@@ -302,7 +315,7 @@ export default async function UsersPage({
           <select
             name="status"
             defaultValue={status ?? ""}
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           >
             <option value="">All statuses</option>
             <option value="active">Active</option>
@@ -310,14 +323,14 @@ export default async function UsersPage({
           </select>
           <button
             type="submit"
-            className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Search
           </button>
           {hasFilter && (
             <Link
               href="/admin/users"
-              className="rounded border border-zinc-300 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
             >
               Clear
             </Link>
@@ -326,74 +339,43 @@ export default async function UsersPage({
       </form>
 
       {users.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
           {hasFilter ? "No users match your filters." : "No users yet."}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[500px] text-sm">
-            <thead className="border-b border-zinc-100 bg-zinc-50">
-              <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "email")} className="group inline-flex items-center hover:text-zinc-700">
-                    User <SortIcon active={sortCol === "email"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "role")} className="group inline-flex items-center hover:text-zinc-700">
-                    Role <SortIcon active={sortCol === "role"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "org")} className="group inline-flex items-center hover:text-zinc-700">
-                    Client <SortIcon active={sortCol === "org"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "created_at")} className="group inline-flex items-center hover:text-zinc-700">
-                    Joined <SortIcon active={sortCol === "created_at"} order={sortOrder} />
-                  </a>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {users.map((u) => (
-                <ClickableRow key={u.id} href={`/admin/users/${u.id}`}>
-                  <td className="px-5 py-3">
-                    <span className="font-medium text-zinc-900">
-                      {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
+        <div className="space-y-2">
+          <SortPills params={params} sortCol={sortCol} sortOrder={sortOrder} options={ALL_SORT_OPTIONS} />
+          <div className="overflow-hidden rounded-lg">
+            {users.map((u) => (
+              <Link
+                key={u.id}
+                href={`/admin/users/${u.id}`}
+                className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 hover:bg-zinc-50 ${
+                  u.is_locked ? "border-l-red-400" : u.role === "consultant" && u.availability === "at_capacity" ? "border-l-amber-400" : "border-l-zinc-200"
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="truncate text-sm font-medium text-zinc-900">
+                    {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
+                  </span>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">
+                    {ROLE_LABELS[u.role] ?? u.role} · {u.clients?.name ?? "—"} · Joined {new Date(u.created_at).toLocaleDateString("en-AU")}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {u.is_locked ? (
+                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Locked</span>
+                  ) : u.role === "consultant" ? (
+                    <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${AVAILABILITY_CLASSES[u.availability as ConsultantAvailability] ?? "bg-zinc-100 text-zinc-600"}`}>
+                      {AVAILABILITY_LABELS[u.availability as ConsultantAvailability] ?? u.availability}
                     </span>
-                    {(u.first_name || u.last_name) && (
-                      <div className="text-xs text-zinc-400">{u.email}</div>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-zinc-600">{ROLE_LABELS[u.role] ?? u.role}</td>
-                  <td className="px-5 py-3 text-zinc-600">{u.clients?.name ?? "—"}</td>
-                  <td className="px-5 py-3">
-                    {u.is_locked ? (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Locked</span>
-                    ) : u.role === "consultant" ? (
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        u.availability === "available" ? "bg-green-100 text-green-700"
-                          : u.availability === "on_leave" ? "bg-yellow-100 text-yellow-700"
-                          : "bg-zinc-100 text-zinc-600"
-                      }`}>
-                        {u.availability === "available" ? "Available"
-                          : u.availability === "on_leave" ? "On leave"
-                          : "At capacity"}
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Active</span>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
-                    {new Date(u.created_at).toLocaleDateString("en-AU")}
-                  </td>
-                </ClickableRow>
-              ))}
-            </tbody>
-          </table>
+                  ) : (
+                    <span className="whitespace-nowrap rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-medium text-green-700">Active</span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>

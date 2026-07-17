@@ -13,7 +13,7 @@ export function PurgeButton({ projectId }: { projectId: string }) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="rounded border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+        className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
       >
         Delete forever
       </button>
@@ -32,7 +32,7 @@ export function PurgeButton({ projectId }: { projectId: string }) {
         <button
           type="button"
           onClick={() => setConfirming(false)}
-          className="rounded border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+          className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
         >
           Cancel
         </button>
@@ -40,7 +40,7 @@ export function PurgeButton({ projectId }: { projectId: string }) {
           <button
             type="submit"
             disabled={pending}
-            className="rounded border border-red-300 bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="rounded-full border border-red-300 bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
           >
             {pending ? "Deleting…" : "Yes, delete forever"}
           </button>

@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Drawer } from "./Drawer";
+import Link from "next/link";
+import { Drawer } from "@/components/Drawer";
 import { AssignForm } from "@/app/(admin)/admin/projects/[id]/_components/AssignForm";
 import { ResendTokenButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendTokenButton";
 import { UpdateEmailForm } from "@/app/(admin)/admin/projects/[id]/_components/UpdateEmailForm";
@@ -176,7 +177,7 @@ function SetNumberAndAssignDrawerContent({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm">
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm">
         <p className="font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
           {project.clients?.name ?? "—"} · Submitted {fmtDate(project.created_at)}
@@ -250,7 +251,7 @@ function SetNumberAndAssignDrawerContent({
         </div>
       ) : (
         <div className="space-y-5">
-          <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3">
             <p className="text-sm font-medium text-green-900">Project number set</p>
             <p className="mt-0.5 text-xs text-green-700">
               Generate the PBDB from the project&apos;s PBDB step once a consultant is assigned.
@@ -287,7 +288,7 @@ function AssignDrawerContent({
 }) {
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm">
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm">
         <p className="font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
           {project.clients?.name ?? "—"} · Submitted{" "}
@@ -349,7 +350,7 @@ function OverdueDrawerContent({
   return (
     <div className="space-y-5">
       {/* Project summary */}
-      <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3">
         <p className="text-sm font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
           {project.clients?.name ?? "—"} · {STATUS_LABELS[project.status]}
@@ -357,7 +358,7 @@ function OverdueDrawerContent({
       </div>
 
       {/* Overdue badge */}
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
         <p className="text-sm font-medium text-red-900">
           {daysOverdue} day{daysOverdue !== 1 ? "s" : ""} overdue
         </p>
@@ -408,7 +409,7 @@ function OverdueDrawerContent({
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
             Pending responses ({projectReviews.length})
           </p>
-          <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
+          <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200">
             {projectReviews.map((r) => {
               const isExpired = r.expires_at && r.expires_at < new Date().toISOString();
               return (
@@ -491,7 +492,7 @@ function OverdueDrawerContent({
 
       {/* Dispatched — all acknowledged, ready to convert */}
       {project.status === "dispatched" && projectReviews.length === 0 && (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3">
           <p className="text-sm font-medium text-green-900">All stakeholders have responded</p>
           <p className="mt-0.5 text-xs text-green-700">
             Open the full project to trigger PBDR conversion.
@@ -502,7 +503,7 @@ function OverdueDrawerContent({
       {/* Fallback: in_progress / assigned / revision_required — show consultant info */}
       {!["submitted", "dispatched"].includes(project.status) && (
         project.assigned_consultant_id ? (
-          <div className="rounded-lg border border-zinc-200 px-4 py-3">
+          <div className="rounded-xl border border-zinc-200 px-4 py-3">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
               Assigned consultant
             </p>
@@ -546,7 +547,7 @@ function StakeholderDrawerContent({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3">
         <p className="text-sm font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
           {project.clients?.name ?? "—"}
@@ -560,7 +561,7 @@ function StakeholderDrawerContent({
         Pending reviews ({reviews.length})
       </p>
 
-      <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
+      <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200">
         {reviews.map((r) => {
           const isExpired = r.expires_at && r.expires_at < new Date().toISOString();
           return (
@@ -645,14 +646,14 @@ function OverrideDrawerContent({ project }: { project: DashboardProject }) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3">
         <p className="text-sm font-medium text-zinc-900">{projectLabel(project)}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
           {project.clients?.name ?? "—"} · {STATUS_LABELS[project.status]}
         </p>
       </div>
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
         <p className="text-sm font-medium text-amber-900">Payment override active</p>
         {project.payment_override_at && (
           <p className="mt-0.5 text-xs text-amber-700">
@@ -686,7 +687,7 @@ function ErrorDrawerContent({
 }) {
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
         <p className="text-xs font-medium uppercase tracking-wide text-red-500">Error details</p>
         <p className="mt-1 break-words text-sm text-red-900">{error.message}</p>
         <p className="mt-2 text-xs text-red-400">
@@ -704,6 +705,121 @@ function ErrorDrawerContent({
         </div>
       ) : (
         <p className="text-xs text-zinc-400">No project linked — no retry available.</p>
+      )}
+    </div>
+  );
+}
+
+// ── Hero cards ───────────────────────────────────────────────────────────────
+//
+// Generalises the client/consultant "Right now" CompactHero pattern to N
+// categories with N projects each: an icon + the state name (not a repeated
+// "Right now") in the header, one action button when a category has a
+// single item, or a "Review (N)" toggle that expands a compact list of
+// one-line rows *inside the same card* when it has more than one — never
+// act on the first, ignore the rest.
+
+type Tone = "red" | "blue" | "orange" | "amber";
+type HeroIconKey = "clock" | "inbox" | "people" | "card" | "alert";
+type HeroItem = { id: string; label: string; meta: string; actionLabel: string; open: () => DrawerState };
+type HeroCategory = { key: string; tone: Tone; label: string; icon: HeroIconKey; subtitle: string; items: HeroItem[] };
+
+const HERO_TONE: Record<Tone, { box: string; title: string; button: string; iconBg: string }> = {
+  red: { box: "border-red-200 bg-red-50", title: "text-red-900", button: "border-red-300 bg-white text-red-700 hover:bg-red-100", iconBg: "bg-red-500" },
+  blue: { box: "border-blue-200 bg-blue-50", title: "text-blue-900", button: "border-blue-300 bg-white text-blue-700 hover:bg-blue-100", iconBg: "bg-blue-500" },
+  orange: { box: "border-orange-200 bg-orange-50", title: "text-orange-900", button: "border-orange-300 bg-white text-orange-700 hover:bg-orange-100", iconBg: "bg-orange-500" },
+  amber: { box: "border-amber-200 bg-amber-50", title: "text-amber-900", button: "border-amber-300 bg-white text-amber-700 hover:bg-amber-100", iconBg: "bg-amber-500" },
+};
+
+function HeroIconGlyph({ icon, className }: { icon: HeroIconKey; className?: string }) {
+  switch (icon) {
+    case "clock":
+      return (
+        <svg className={className} viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0V10c0 .199.079.39.22.53l2.5 2.5a.75.75 0 101.06-1.06l-2.28-2.28V6.75z" clipRule="evenodd" />
+        </svg>
+      );
+    case "inbox":
+      return (
+        <svg className={className} viewBox="0 0 20 20" fill="currentColor">
+          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2h-3.5a.5.5 0 00-.4.2l-.9 1.2a.5.5 0 01-.4.2h-2.6a.5.5 0 01-.4-.2l-.9-1.2A.5.5 0 006.5 6H3V4z" />
+          <path fillRule="evenodd" d="M3 8h3.75l.9 1.2a1.5 1.5 0 001.2.6h2.3a1.5 1.5 0 001.2-.6l.9-1.2H17v6a1 1 0 01-1 1H4a1 1 0 01-1-1V8z" clipRule="evenodd" />
+        </svg>
+      );
+    case "people":
+      return (
+        <svg className={className} viewBox="0 0 20 20" fill="currentColor">
+          <path d="M7 8a3 3 0 100-6 3 3 0 000 6zM14.5 9a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM1.615 16.428a1.224 1.224 0 01-.569-1.175 6.002 6.002 0 0111.908 0c.058.467-.172.92-.57 1.174A9.953 9.953 0 017 18a9.953 9.953 0 01-5.385-1.572zM14.5 16h-.106c.106-.31.18-.632.217-.964a4.978 4.978 0 00-1.056-3.79 6.487 6.487 0 013.63 1.55.998.998 0 01.35.98A5.006 5.006 0 0114.5 16z" />
+        </svg>
+      );
+    case "card":
+      return (
+        <svg className={className} viewBox="0 0 20 20" fill="currentColor">
+          <path d="M2 5.5A1.5 1.5 0 013.5 4h13A1.5 1.5 0 0118 5.5v.5H2v-.5z" />
+          <path fillRule="evenodd" d="M2 8h16v6.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 012 14.5V8zm2 4.25a.75.75 0 01.75-.75h3.5a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75z" clipRule="evenodd" />
+        </svg>
+      );
+    case "alert":
+      return (
+        <svg className={className} viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+        </svg>
+      );
+  }
+}
+
+function HeroCard({
+  category,
+  expanded,
+  onToggleExpand,
+  onOpen,
+}: {
+  category: HeroCategory;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  onOpen: (drawer: DrawerState) => void;
+}) {
+  const t = HERO_TONE[category.tone];
+  const single = category.items.length === 1 ? category.items[0] : null;
+
+  return (
+    <div className={`rounded-lg border px-4 py-2.5 ${t.box}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 shrink-0 items-center gap-1.5">
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white ${t.iconBg}`}>
+              <HeroIconGlyph icon={category.icon} className="h-3 w-3" />
+            </span>
+            <span className={`whitespace-nowrap text-sm font-semibold ${t.title}`}>{category.label}</span>
+          </span>
+          <span className="truncate text-xs text-zinc-500">{category.subtitle}</span>
+        </div>
+        <div className="shrink-0">
+          {single ? (
+            <button type="button" onClick={() => onOpen(single.open())} className={`rounded-md border px-3 py-1.5 text-xs font-medium ${t.button}`}>
+              {single.actionLabel}
+            </button>
+          ) : (
+            <button type="button" onClick={onToggleExpand} className={`rounded-md border px-3 py-1.5 text-xs font-medium ${t.button}`}>
+              Review ({category.items.length}) {expanded ? "▲" : "▼"}
+            </button>
+          )}
+        </div>
+      </div>
+      {!single && expanded && (
+        <div className="mt-2.5 space-y-1 border-t border-zinc-900/10 pt-2.5">
+          {category.items.map((item) => (
+            <div key={item.id} className="flex items-center justify-between gap-3 rounded-md bg-white/70 px-2.5 py-1.5">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-zinc-900">{item.label}</p>
+                <p className="truncate text-[11px] text-zinc-500">{item.meta}</p>
+              </div>
+              <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-700 underline decoration-dotted underline-offset-2 hover:text-zinc-900">
+                {item.actionLabel}
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -735,6 +851,7 @@ export function ActionPanel({
 }: Props) {
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [drawerSuccess, setDrawerSuccess] = useState<string | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const router = useRouter();
 
   const closeDrawer = useCallback(() => {
@@ -783,215 +900,121 @@ export function ActionPanel({
       ? "stakeholders"
       : undefined;
 
+  const heroCategories: HeroCategory[] = [
+    ...(overdue.length > 0
+      ? [
+          {
+            key: "overdue",
+            tone: "red" as const,
+            label: "Overdue",
+            icon: "clock" as const,
+            subtitle: `${overdue.length} project${overdue.length !== 1 ? "s" : ""} past their expected delivery date`,
+            items: overdue.map((p) => ({
+              id: p.id,
+              label: projectLabel(p),
+              meta: `${p.clients?.name ?? "—"} · ${consultantName(p.consultant) ?? "Unassigned"} · Due ${fmtDate(p.expected_delivery_date!)}`,
+              actionLabel: "View →",
+              open: () => ({ type: "overdue" as const, project: p }),
+            })),
+          },
+        ]
+      : []),
+    ...(unassigned.length > 0
+      ? [
+          {
+            key: "unassigned",
+            tone: "blue" as const,
+            label: "New Submission",
+            icon: "inbox" as const,
+            subtitle: `${unassigned.length} new submission${unassigned.length !== 1 ? "s" : ""} pending setup`,
+            items: unassigned.map((p) => ({
+              id: p.id,
+              label: projectLabel(p),
+              meta: `${p.clients?.name ?? "—"} · Submitted ${fmtDate(p.created_at)}${!p.project_number ? " · No project number" : ""}`,
+              actionLabel: p.project_number ? "Assign →" : "Set number →",
+              open: () => (p.project_number ? { type: "assign" as const, project: p } : { type: "set-number" as const, project: p }),
+            })),
+          },
+        ]
+      : []),
+    ...(awaitingStakeholder.length > 0
+      ? [
+          {
+            key: "awaiting",
+            tone: "orange" as const,
+            label: "Awaiting Stakeholder",
+            icon: "people" as const,
+            subtitle: `${awaitingStakeholder.length} project${awaitingStakeholder.length !== 1 ? "s" : ""} awaiting stakeholder response`,
+            items: awaitingStakeholder.map((p) => {
+              const pendingCount = pendingCountByProject[p.id] ?? 0;
+              const bufferDate = p.review_buffer_fired_at ? fmtDate(p.review_buffer_fired_at) : null;
+              return {
+                id: p.id,
+                label: projectLabel(p),
+                meta: `${p.clients?.name ?? "—"} · ${pendingCount} pending${bufferDate ? ` · Buffer fired ${bufferDate}` : ""}`,
+                actionLabel: "Manage →",
+                open: () => ({ type: "stakeholder" as const, project: p }),
+              };
+            }),
+          },
+        ]
+      : []),
+    ...(overridePending.length > 0
+      ? [
+          {
+            key: "override",
+            tone: "amber" as const,
+            label: "Payment Pending",
+            icon: "card" as const,
+            subtitle: `${overridePending.length} payment override${overridePending.length !== 1 ? "s" : ""} pending`,
+            items: overridePending.map((p) => ({
+              id: p.id,
+              label: projectLabel(p),
+              meta: `${p.clients?.name ?? "—"} · ${STATUS_LABELS[p.status] ?? p.status}${p.payment_override_at ? ` · Override applied ${fmtDate(p.payment_override_at)}` : ""}`,
+              actionLabel: "Review →",
+              open: () => ({ type: "override" as const, project: p }),
+            })),
+          },
+        ]
+      : []),
+    ...(systemErrors.length > 0
+      ? [
+          {
+            key: "error",
+            tone: "red" as const,
+            label: "Sys Error",
+            icon: "alert" as const,
+            subtitle: `${systemErrors.length} system error${systemErrors.length !== 1 ? "s" : ""} need attention`,
+            items: systemErrors.map((n) => ({
+              id: n.id,
+              label: n.message,
+              meta: n.project_id ? `Project ${n.project_id.slice(0, 8)} · ${fmtDate(n.created_at)}` : fmtDate(n.created_at),
+              actionLabel: "Details →",
+              open: () => ({ type: "error" as const, error: n }),
+            })),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <>
       {actionCount > 0 && (
-        <section className="space-y-5">
+        <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
             Action required
           </h2>
-
-          {/* Overdue */}
-          {overdue.length > 0 && (
-            <div className="rounded-lg border border-red-200 bg-white">
-              <div className="flex items-center gap-2 border-b border-red-100 bg-red-50 px-5 py-3">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-semibold text-white">
-                  {overdue.length}
-                </span>
-                <span className="text-sm font-medium text-red-900">
-                  Overdue project{overdue.length !== 1 ? "s" : ""} — past expected delivery date
-                </span>
-              </div>
-              <ul className="divide-y divide-zinc-100">
-                {overdue.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-4 px-5 py-3.5 hover:bg-zinc-50">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-zinc-900">{projectLabel(p)}</p>
-                      <p className="mt-0.5 text-xs text-zinc-500">
-                        {p.clients?.name ?? "—"}
-                        {" · "}
-                        {consultantName(p.consultant) ?? <span className="text-zinc-400">Unassigned</span>}
-                        {" · "}
-                        <span className="font-medium text-red-600">
-                          Due {fmtDate(p.expected_delivery_date!)}
-                        </span>
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setDrawer({ type: "overdue", project: p })}
-                      className="shrink-0 rounded border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
-                    >
-                      View →
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Unassigned submissions */}
-          {unassigned.length > 0 && (
-            <div className="rounded-lg border border-blue-200 bg-white">
-              <div className="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-5 py-3">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-                  {unassigned.length}
-                </span>
-                <span className="text-sm font-medium text-blue-900">
-                  New submission{unassigned.length !== 1 ? "s" : ""} pending setup
-                </span>
-              </div>
-              <ul className="divide-y divide-zinc-100">
-                {unassigned.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-4 px-5 py-3.5 hover:bg-zinc-50">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-zinc-900">{projectLabel(p)}</p>
-                      <p className="mt-0.5 text-xs text-zinc-500">
-                        {p.clients?.name ?? "—"}
-                        {" · "}
-                        Submitted {fmtDate(p.created_at)}
-                        {!p.project_number && (
-                          <> · <span className="font-medium text-amber-600">No project number</span></>
-                        )}
-                      </p>
-                    </div>
-                    {!p.project_number ? (
-                      <button
-                        type="button"
-                        onClick={() => setDrawer({ type: "set-number", project: p })}
-                        className="shrink-0 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
-                      >
-                        Set number →
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setDrawer({ type: "assign", project: p })}
-                        className="shrink-0 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                      >
-                        Assign →
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Awaiting stakeholder response */}
-          {awaitingStakeholder.length > 0 && (
-            <div className="rounded-lg border border-orange-200 bg-white">
-              <div className="flex items-center gap-2 border-b border-orange-100 bg-orange-50 px-5 py-3">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-600 text-xs font-semibold text-white">
-                  {awaitingStakeholder.length}
-                </span>
-                <span className="text-sm font-medium text-orange-900">
-                  Awaiting stakeholder response — action required
-                </span>
-              </div>
-              <ul className="divide-y divide-zinc-100">
-                {awaitingStakeholder.map((p) => {
-                  const pendingCount = pendingCountByProject[p.id] ?? 0;
-                  const bufferDate = p.review_buffer_fired_at
-                    ? fmtDate(p.review_buffer_fired_at)
-                    : null;
-                  return (
-                    <li key={p.id} className="flex items-center justify-between gap-4 px-5 py-3.5 hover:bg-zinc-50">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-zinc-900">{projectLabel(p)}</p>
-                        <p className="mt-0.5 text-xs text-zinc-500">
-                          {p.clients?.name ?? "—"}
-                          {" · "}
-                          <span className="font-medium text-orange-600">
-                            {pendingCount} stakeholder{pendingCount !== 1 ? "s" : ""} pending
-                          </span>
-                          {bufferDate && <> · Buffer fired {bufferDate}</>}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setDrawer({ type: "stakeholder", project: p })}
-                        className="shrink-0 rounded border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
-                      >
-                        Manage →
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-
-          {/* Override — Payment Pending */}
-          {overridePending.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-white">
-              <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-5 py-3">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-600 text-xs font-semibold text-white">
-                  {overridePending.length}
-                </span>
-                <span className="text-sm font-medium text-amber-900">
-                  Override — Payment Pending
-                </span>
-              </div>
-              <ul className="divide-y divide-zinc-100">
-                {overridePending.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-4 px-5 py-3.5 hover:bg-zinc-50">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-zinc-900">{projectLabel(p)}</p>
-                      <p className="mt-0.5 text-xs text-zinc-500">
-                        {p.clients?.name ?? "—"}
-                        {" · "}
-                        {STATUS_LABELS[p.status] ?? p.status}
-                        {p.payment_override_at && (
-                          <> · Override applied {fmtDate(p.payment_override_at!)}</>
-                        )}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setDrawer({ type: "override", project: p })}
-                      className="shrink-0 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
-                    >
-                      Review →
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* System errors */}
-          {systemErrors.length > 0 && (
-            <div className="rounded-lg border border-red-200 bg-white">
-              <div className="flex items-center gap-2 border-b border-red-100 bg-red-50 px-5 py-3">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-semibold text-white">
-                  {systemErrors.length}
-                </span>
-                <span className="text-sm font-medium text-red-900">System errors</span>
-              </div>
-              <ul className="divide-y divide-zinc-50">
-                {systemErrors.map((n) => (
-                  <li key={n.id} className="flex items-center justify-between gap-4 px-5 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-800">{n.message}</p>
-                      {n.project_id && (
-                        <p className="mt-0.5 text-xs text-zinc-400">
-                          Project {n.project_id.slice(0, 8)}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setDrawer({ type: "error", error: n })}
-                      className="shrink-0 rounded border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
-                    >
-                      Details →
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <div className={`grid grid-cols-1 gap-3 ${heroCategories.length > 1 ? "sm:grid-cols-2" : ""}`}>
+            {heroCategories.map((cat) => (
+              <HeroCard
+                key={cat.key}
+                category={cat}
+                expanded={expandedKey === cat.key}
+                onToggleExpand={() => setExpandedKey((k) => (k === cat.key ? null : cat.key))}
+                onOpen={setDrawer}
+              />
+            ))}
+          </div>
         </section>
       )}
 
@@ -1001,9 +1024,18 @@ export function ActionPanel({
         onClose={closeDrawer}
         title={drawerTitle}
         subtitle={drawerSubtitle}
-        projectId={drawerProjectId}
-        anchorId={drawerAnchorId}
         successMessage={drawerSuccess ?? undefined}
+        footer={
+          drawerProjectId ? (
+            <Link
+              href={drawerAnchorId ? `/admin/projects/${drawerProjectId}#${drawerAnchorId}` : `/admin/projects/${drawerProjectId}`}
+              onClick={closeDrawer}
+              className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
+            >
+              Open full project profile →
+            </Link>
+          ) : undefined
+        }
       >
         {drawer?.type === "set-number" && (
           <SetNumberAndAssignDrawerContent

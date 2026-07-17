@@ -1,20 +1,23 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Link from "next/link";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   subtitle?: string;
-  projectId: string;
-  anchorId?: string;
+  footer?: React.ReactNode;
   successMessage?: string;
   children: React.ReactNode;
 }
 
-export function Drawer({ isOpen, onClose, title, subtitle, projectId, anchorId, successMessage, children }: Props) {
+// Shared centered-modal primitive for admin drawers: detail/action panels
+// (dashboard's ActionPanel) and create forms (CreateAccountModal,
+// CreateOrgModal). `footer` is caller-supplied so callers that need a
+// "open full record" link and callers that only need form buttons in the
+// body can both use this without a footer they don't need.
+export function Drawer({ isOpen, onClose, title, subtitle, footer, successMessage, children }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Close on Escape
@@ -42,10 +45,6 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, anchorId, 
     const t = setTimeout(onClose, 2200);
     return () => clearTimeout(t);
   }, [successMessage, onClose]);
-
-  const projectHref = anchorId
-    ? `/admin/projects/${projectId}#${anchorId}`
-    : `/admin/projects/${projectId}`;
 
   return (
     <>
@@ -122,16 +121,12 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, anchorId, 
             {children}
           </div>
 
-          {/* Footer — link to full project */}
-          <div className="border-t border-zinc-100 px-5 py-3">
-            <Link
-              href={projectHref}
-              onClick={onClose}
-              className="inline-flex items-center gap-1.5 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
-            >
-              Open full project profile →
-            </Link>
-          </div>
+          {/* Footer */}
+          {footer && (
+            <div className="border-t border-zinc-100 px-5 py-3">
+              {footer}
+            </div>
+          )}
         </div>
       </div>
     </>

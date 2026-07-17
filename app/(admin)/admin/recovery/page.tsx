@@ -74,6 +74,10 @@ function daysRemaining(deletedAt: string): number {
 
 const SORT_COLS = ["deleted_at", "status"] as const;
 type SortCol = (typeof SORT_COLS)[number];
+const SORT_OPTIONS: { col: SortCol; label: string }[] = [
+  { col: "deleted_at", label: "Deleted" },
+  { col: "status", label: "Status at deletion" },
+];
 
 function sortHref(params: Record<string, string | undefined>, col: SortCol): string {
   const p = new URLSearchParams();
@@ -84,9 +88,26 @@ function sortHref(params: Record<string, string | undefined>, col: SortCol): str
   return `/admin/recovery?${p.toString()}`;
 }
 
-function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" }) {
-  if (!active) return <span className="ml-1 text-zinc-300 group-hover:text-zinc-400">↕</span>;
-  return <span className="ml-1 text-zinc-600">{order === "asc" ? "↑" : "↓"}</span>;
+function SortPills({ params, sortCol, sortOrder }: { params: Record<string, string | undefined>; sortCol: SortCol; sortOrder: "asc" | "desc" }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-zinc-400">Sort:</span>
+      {SORT_OPTIONS.map((o) => {
+        const active = sortCol === o.col;
+        return (
+          <a
+            key={o.col}
+            href={sortHref(params, o.col)}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+              active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+            }`}
+          >
+            {o.label} {active ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 export default async function AdminRecoveryPage({
@@ -228,26 +249,26 @@ function RecoveryLayout({
         </p>
       </div>
 
-      <form method="GET" className="rounded-lg border border-zinc-200 bg-white p-4">
+      <form method="GET" className="rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex flex-wrap gap-3">
           <input
             type="text"
             name="q"
             defaultValue={params.q ?? ""}
             placeholder="Search address or PO number…"
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <input
             type="text"
             name="org"
             defaultValue={params.org ?? ""}
             placeholder="Client…"
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <select
             name="status"
             defaultValue={params.status ?? ""}
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           >
             <option value="">All statuses</option>
             {(Object.entries(STATUS_LABELS) as [ProjectStatus, string][]).map(([val, label]) => (
@@ -256,14 +277,14 @@ function RecoveryLayout({
           </select>
           <button
             type="submit"
-            className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Search
           </button>
           {hasFilter && (
             <Link
               href="/admin/recovery"
-              className="rounded border border-zinc-300 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
             >
               Clear
             </Link>
@@ -272,142 +293,101 @@ function RecoveryLayout({
       </form>
 
       {projects.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
           {hasFilter ? "No deleted projects match your filters." : "Recovery bin is empty."}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[680px] text-sm">
-            <thead className="border-b border-zinc-100 bg-zinc-50">
-              <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Address / ID</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "status")} className="group inline-flex items-center hover:text-zinc-700">
-                    Status at deletion <SortIcon active={sortCol === "status"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "deleted_at")} className="group inline-flex items-center hover:text-zinc-700">
-                    Deleted <SortIcon active={sortCol === "deleted_at"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Days remaining</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {projects.map((p) => {
-                const days = daysRemaining(p.deleted_at);
-                const addr = p.site_address;
-                const label = (p.project_number && addr)
-                  ? `${p.project_number} — ${addr}`
-                  : addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
-                return (
-                  <tr key={p.id}>
-                    <td className="px-5 py-3 font-medium text-zinc-900">
-                      <Link href={`/admin/projects/${p.id}`} className="hover:underline">
-                        {label}
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3 text-zinc-600">{p.clients?.name ?? "—"}</td>
-                    <td className="px-5 py-3 text-zinc-500">{STATUS_LABELS[p.status]}</td>
-                    <td className="px-5 py-3 text-zinc-500">
-                      {new Date(p.deleted_at).toLocaleDateString("en-AU")}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={`text-sm font-medium ${days <= 3 ? "text-red-600" : "text-zinc-500"}`}>
-                        {days} {days === 1 ? "day" : "days"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex flex-col items-end gap-2">
-                        <RestoreButton projectId={p.id} />
-                        <PurgeButton projectId={p.id} />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <p className="px-5 py-3 text-xs text-zinc-400">{projects.length} deleted project{projects.length !== 1 ? "s" : ""}</p>
+        <div className="space-y-2">
+          <SortPills params={params} sortCol={sortCol} sortOrder={sortOrder} />
+          <div className="overflow-hidden rounded-lg">
+            {projects.map((p) => {
+              const days = daysRemaining(p.deleted_at);
+              const addr = p.site_address;
+              const label = (p.project_number && addr)
+                ? `${p.project_number} — ${addr}`
+                : addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
+              return (
+                <div
+                  key={p.id}
+                  className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 ${
+                    days <= 3 ? "border-l-red-400" : "border-l-zinc-200"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/admin/projects/${p.id}`} className="truncate text-sm font-medium text-zinc-900 hover:underline">
+                      {label}
+                    </Link>
+                    <p className="mt-0.5 truncate text-xs text-zinc-500">
+                      {p.clients?.name ?? "—"} · {STATUS_LABELS[p.status]} · Deleted {new Date(p.deleted_at).toLocaleDateString("en-AU")}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className={`whitespace-nowrap text-xs font-medium ${days <= 3 ? "text-red-600" : "text-zinc-500"}`}>
+                      {days} {days === 1 ? "day" : "days"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <RestoreButton projectId={p.id} />
+                      <PurgeButton projectId={p.id} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-zinc-400">{projects.length} deleted project{projects.length !== 1 ? "s" : ""}</p>
         </div>
       )}
 
-      <EntitySection
+      <EntityRowList
         title="Deleted templates"
         rows={templates}
         empty="No deleted templates."
-        columns={["Name", "Client", "Deleted"]}
-        renderRow={(t) => (
-          <tr key={t.id}>
-            <td className="px-5 py-3 font-medium text-zinc-900">{t.name}</td>
-            <td className="px-5 py-3 text-zinc-600">{t.clients?.name ?? "—"}</td>
-            <td className="px-5 py-3 text-zinc-500">{new Date(t.deleted_at).toLocaleDateString("en-AU")}</td>
-            <td className="px-5 py-4 text-right">
-              <EntityRestoreButton action={restoreTemplate.bind(null, t.id)} />
-            </td>
-          </tr>
-        )}
+        renderRow={(t) => ({
+          key: t.id,
+          primary: t.name,
+          meta: `${t.clients?.name ?? "—"} · Deleted ${new Date(t.deleted_at).toLocaleDateString("en-AU")}`,
+          action: <EntityRestoreButton action={restoreTemplate.bind(null, t.id)} />,
+        })}
       />
 
-      <EntitySection
+      <EntityRowList
         title="Deleted stakeholders"
         rows={stakeholders}
         empty="No deleted stakeholders."
-        columns={["Name", "Email", "Scope", "Deleted"]}
-        renderRow={(s) => (
-          <tr key={s.id}>
-            <td className="px-5 py-3 font-medium text-zinc-900">{s.name}</td>
-            <td className="px-5 py-3 text-zinc-600">{s.email}</td>
-            <td className="px-5 py-3 text-zinc-500 capitalize">{s.scope}</td>
-            <td className="px-5 py-3 text-zinc-500">{new Date(s.deleted_at).toLocaleDateString("en-AU")}</td>
-            <td className="px-5 py-4 text-right">
-              <StakeholderRestoreButton scope={s.scope} scopeId={s.scope_id} stakeholderId={s.id} />
-            </td>
-          </tr>
-        )}
+        renderRow={(s) => ({
+          key: s.id,
+          primary: s.name,
+          meta: `${s.email} · ${s.scope === "org" ? "Org" : "Project"} scope · Deleted ${new Date(s.deleted_at).toLocaleDateString("en-AU")}`,
+          action: <StakeholderRestoreButton scope={s.scope} scopeId={s.scope_id} stakeholderId={s.id} />,
+        })}
       />
 
-      <EntitySection
+      <EntityRowList
         title="Deleted users"
         rows={users}
         empty="No deleted users."
-        columns={["Name", "Role", "Client", "Deleted"]}
-        renderRow={(u) => (
-          <tr key={u.id}>
-            <td className="px-5 py-3 font-medium text-zinc-900">
-              {[u.first_name, u.last_name].filter(Boolean).join(" ") || u.email}
-            </td>
-            <td className="px-5 py-3 text-zinc-500 capitalize">{u.role.replace("_", " ")}</td>
-            <td className="px-5 py-3 text-zinc-600">{u.clients?.name ?? "—"}</td>
-            <td className="px-5 py-3 text-zinc-500">{new Date(u.deleted_at).toLocaleDateString("en-AU")}</td>
-            <td className="px-5 py-4 text-right">
-              <EntityRestoreButton action={restoreDeletedUser.bind(null, u.id)} />
-            </td>
-          </tr>
-        )}
+        renderRow={(u) => ({
+          key: u.id,
+          primary: [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email,
+          meta: `${u.role.replace("_", " ")} · ${u.clients?.name ?? "—"} · Deleted ${new Date(u.deleted_at).toLocaleDateString("en-AU")}`,
+          action: <EntityRestoreButton action={restoreDeletedUser.bind(null, u.id)} />,
+        })}
       />
 
-      <EntitySection
+      <EntityRowList
         title="Deleted clients"
         rows={clients}
         empty="No deleted clients."
-        columns={["Name", "Deleted"]}
-        renderRow={(c) => (
-          <tr key={c.id}>
-            <td className="px-5 py-3 font-medium text-zinc-900">{c.name}</td>
-            <td className="px-5 py-3 text-zinc-500">{new Date(c.deleted_at).toLocaleDateString("en-AU")}</td>
-            <td className="px-5 py-4 text-right">
-              {canRestoreClients ? (
-                <EntityRestoreButton action={restoreClient.bind(null, c.id)} />
-              ) : (
-                <span className="text-xs text-zinc-400">Super admin only</span>
-              )}
-            </td>
-          </tr>
-        )}
+        renderRow={(c) => ({
+          key: c.id,
+          primary: c.name,
+          meta: `Deleted ${new Date(c.deleted_at).toLocaleDateString("en-AU")}`,
+          action: canRestoreClients ? (
+            <EntityRestoreButton action={restoreClient.bind(null, c.id)} />
+          ) : (
+            <span className="text-xs text-zinc-400">Super admin only</span>
+          ),
+        })}
       />
       {clients.length > 0 && (
         <p className="text-xs text-zinc-400">
@@ -419,39 +399,38 @@ function RecoveryLayout({
   );
 }
 
-function EntitySection<T>({
+function EntityRowList<T>({
   title,
   rows,
   empty,
-  columns,
   renderRow,
 }: {
   title: string;
   rows: T[];
   empty: string;
-  columns: string[];
-  renderRow: (row: T) => ReactNode;
+  renderRow: (row: T) => { key: string; primary: ReactNode; meta: string; action: ReactNode };
 }) {
   return (
     <div className="space-y-2">
       <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
       {rows.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500">
           {empty}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[480px] text-sm">
-            <thead className="border-b border-zinc-100 bg-zinc-50">
-              <tr>
-                {columns.map((c) => (
-                  <th key={c} className="px-5 py-3 text-left font-medium text-zinc-500">{c}</th>
-                ))}
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">{rows.map(renderRow)}</tbody>
-          </table>
+        <div className="overflow-hidden rounded-lg">
+          {rows.map((row) => {
+            const { key, primary, meta, action } = renderRow(row);
+            return (
+              <div key={key} className="flex items-center gap-3 border-l-4 border-l-zinc-200 border-y border-r border-zinc-200 bg-white px-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <span className="truncate text-sm font-medium text-zinc-900">{primary}</span>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">{meta}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">{action}</div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

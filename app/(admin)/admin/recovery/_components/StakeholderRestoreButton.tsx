@@ -30,7 +30,7 @@ export function StakeholderRestoreButton({
       type="button"
       onClick={handleRestore}
       disabled={isPending}
-      className="rounded border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+      className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
     >
       {isPending ? "Restoring…" : "Restore"}
     </button>
