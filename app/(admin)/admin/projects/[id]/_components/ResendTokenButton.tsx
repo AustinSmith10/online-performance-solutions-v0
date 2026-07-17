@@ -25,7 +25,7 @@ export function ResendTokenButton({ reviewId, projectId, onSent }: Props) {
   }
 
   return (
-    <form action={formAction} className="mt-2">
+    <form action={formAction}>
       {state.error && <p className="mb-1 text-xs text-red-600">{state.error}</p>}
       <button
         type="submit"

@@ -87,7 +87,7 @@ function EditableRow({
     return (
       <div className="group flex items-center gap-4 px-5 py-3">
         <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
-        <span className="min-w-0 flex-1 truncate text-sm text-zinc-900">{value || "—"}</span>
+        <span className="min-w-0 flex-1 text-sm text-zinc-900">{value || "—"}</span>
         <EditIconButton
           onClick={() => setEditing(true)}
           label={`Edit ${label}`}

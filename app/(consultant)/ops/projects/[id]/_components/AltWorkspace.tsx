@@ -24,6 +24,7 @@ export function AltWorkspace(props: {
   documentsTab: React.ReactNode;
   stakeholdersTab: React.ReactNode;
   settingsContent: React.ReactNode;
+  settingsTitle?: string;
   auditTab: React.ReactNode;
   defaultRefTab?: RefTab;
 }) {
@@ -43,6 +44,7 @@ function AltWorkspaceInner({
   documentsTab,
   stakeholdersTab,
   settingsContent,
+  settingsTitle,
   auditTab,
   defaultRefTab = "details",
 }: {
@@ -54,6 +56,7 @@ function AltWorkspaceInner({
   documentsTab: React.ReactNode;
   stakeholdersTab: React.ReactNode;
   settingsContent: React.ReactNode;
+  settingsTitle?: string;
   auditTab: React.ReactNode;
   defaultRefTab?: RefTab;
 }) {
@@ -98,7 +101,7 @@ function AltWorkspaceInner({
       {tab === "audit" ? (
         auditTab
       ) : (
-        <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[22rem_1fr]">
+        <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[25rem_1fr]">
           {/* Left rail: whole workflow state, stays visible while the right column scrolls */}
           <div className="min-w-0 space-y-4 md:sticky md:top-4">
             <StageRail stages={stages} />
@@ -129,7 +132,7 @@ function AltWorkspaceInner({
             <div className="mt-3 space-y-3">{refContent[refTab]}</div>
           </div>
 
-          <SettingsPill>{settingsContent}</SettingsPill>
+          <SettingsPill title={settingsTitle}>{settingsContent}</SettingsPill>
         </div>
       )}
     </div>

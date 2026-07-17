@@ -28,7 +28,7 @@ export function AdminDeleteButton({ projectId }: { projectId: string }) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+        className="shrink-0 whitespace-nowrap rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
       >
         Delete project
       </button>

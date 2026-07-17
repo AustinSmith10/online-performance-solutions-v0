@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export function SettingsPill({ children }: { children: React.ReactNode }) {
+export function SettingsPill({ children, title = "Delivery Config" }: { children: React.ReactNode; title?: string }) {
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -34,7 +34,7 @@ export function SettingsPill({ children }: { children: React.ReactNode }) {
           className="fixed bottom-20 right-5 z-50 w-80 max-w-[calc(100vw-2.5rem)] rounded-xl border border-zinc-200 bg-white p-4 shadow-2xl"
         >
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-zinc-900">Delivery Config</h2>
+            <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -63,7 +63,7 @@ export function SettingsPill({ children }: { children: React.ReactNode }) {
             clipRule="evenodd"
           />
         </svg>
-        Delivery Config
+        {title}
       </button>
     </>
   );

@@ -6,7 +6,7 @@ import { OverrideForm } from "./_components/OverrideForm";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { WaiveForm } from "./_components/WaiveForm";
 import { ResendTokenButton } from "./_components/ResendTokenButton";
-import { UpdateEmailForm } from "./_components/UpdateEmailForm";
+import { UpdateEmailReveal } from "./_components/UpdateEmailReveal";
 import { ProjectStakeholderSection } from "./_components/ProjectStakeholderSection";
 import { ConvertButton } from "./_components/ConvertButton";
 import { DispatchButton } from "./_components/DispatchButton";
@@ -15,26 +15,53 @@ import { PauseForm } from "./_components/PauseForm";
 import { ResumeButton } from "./_components/ResumeButton";
 import { AdminDeleteButton } from "./_components/AdminDeleteButton";
 import { AdminProjectNumberForm } from "./_components/AdminProjectNumberForm";
-import { AdminProjectTabs } from "./_components/AdminProjectTabs";
+import { ConsultantCard } from "./_components/ConsultantCard";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { ProjectDeliveryDelayPresetSelect } from "@/components/ProjectDeliveryDelayPresetSelect";
 import { PendingDeliveryPanel } from "@/components/PendingDeliveryPanel";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
+import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { DownloadCard } from "@/components/DownloadCard";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
-import { GeneratePbdbButton, RegeneratePbdbButton } from "@/components/PbdbGenerationButtons";
+import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { HighlightRing } from "@/components/HighlightRing";
-import { ProjectNumberForm as ConsultantProjectNumberForm } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectNumberForm";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
 import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
-import { StepIndicator as ConsultantStepIndicator } from "@/app/(consultant)/ops/projects/[id]/_components/StepIndicator";
 import { ProjectDetailsEditor } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectDetailsEditor";
 import { ProjectAuditTrail, type ProjectAuditRow } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectAuditTrail";
+import { PbdbVersionsCard } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbVersionsCard";
+import { CollapsibleSection } from "@/app/(consultant)/ops/projects/[id]/_components/CollapsibleSection";
+import { LogStakeholderResponseForm } from "@/app/(consultant)/ops/projects/[id]/_components/LogStakeholderResponseForm";
+import { AltWorkspace } from "@/app/(consultant)/ops/projects/[id]/_components/AltWorkspace";
+import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_components/HeaderStatInline";
+import { FocusCard } from "@/components/workspace/FocusCard";
+import type { Stage } from "@/components/workspace/StageRail";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
+
+// Adopts the same StageRail + FocusCard + pill-tab + SettingsPill shell
+// already used by the client (ClientWorkspace) and consultant (AltWorkspace)
+// pages — see the prototype at app/prototype-admin-projectdetail/page.tsx
+// (Variant E — "always-visible edit cards" — chosen after review) for the
+// design rationale. Replaces the previous 5-tab (Overview / Admin Workflow /
+// Consultant Workflow / Controls / Audit) StepCard layout, which duplicated
+// the entire consultant workflow verbatim just so admins could see it.
+//
+// Notable behaviour change from the old layout: the old "Admin Workflow"
+// tab let PBDB generation unlock as soon as the project number was set,
+// independent of consultant assignment (the two were only related via
+// separate StepCard locks). The unified FocusCard now asks for a consultant
+// before offering PBDB generation — a deliberate tightening (you shouldn't
+// generate the work product before someone owns it), not a capability
+// removal; assignment remains one click away either way.
+//
+// The PBDB versions/regenerate card in the left rail is now hidden entirely
+// once regeneration is no longer available (post-dispatch), rather than
+// showing a disabled button — the version history itself stays reachable
+// via the Documents tab regardless.
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -47,6 +74,19 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   delivered: "Delivered",
   complete: "Complete",
   paused: "Paused",
+};
+
+const STATUS_CLASSES: Record<ProjectStatus, string> = {
+  draft: "bg-zinc-100 text-zinc-500",
+  submitted: "bg-blue-100 text-blue-700",
+  assigned: "bg-yellow-100 text-yellow-700",
+  in_progress: "bg-purple-100 text-purple-700",
+  dispatched: "bg-amber-100 text-amber-700",
+  revision_required: "bg-red-100 text-red-700",
+  converting: "bg-purple-100 text-purple-700",
+  delivered: "bg-green-100 text-green-700",
+  complete: "bg-zinc-100 text-zinc-500",
+  paused: "bg-amber-100 text-amber-700",
 };
 
 const STATUS_ACCENT: Record<ProjectStatus, string> = {
@@ -62,12 +102,6 @@ const STATUS_ACCENT: Record<ProjectStatus, string> = {
   paused: "border-l-amber-400",
 };
 
-const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
-  available: "Available",
-  on_leave: "On leave",
-  at_capacity: "At capacity",
-};
-
 const FILE_TYPE_LABELS: Record<string, string> = {
   building_plans: "Building Plans",
   building_drawing_plans: "Building Drawing Plans",
@@ -79,6 +113,9 @@ const FILE_TYPE_LABELS: Record<string, string> = {
 const LIVE_STATUSES: readonly ProjectStatus[] = [
   "submitted", "assigned", "in_progress", "dispatched", "revision_required",
 ];
+
+const UPLOAD_NEW_VERSION_COPY =
+  "Uploading a new version will reset all stakeholder approvals and resend the approval email with the updated document.";
 
 function overdueInfo(
   deliveryDate: string | null,
@@ -95,6 +132,15 @@ function overdueInfo(
 function calcDaysPaused(pausedAt: string | null): number {
   if (!pausedAt) return 0;
   return Math.ceil((Date.now() - new Date(pausedAt).getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline gap-4 px-5 py-3">
+      <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
+      <span className="min-w-0 flex-1 text-sm text-zinc-900">{value}</span>
+    </div>
+  );
 }
 
 export default async function ProjectDetailPage({
@@ -116,13 +162,6 @@ export default async function ProjectDetailPage({
   const justPaymentReconciled = sp.payment_reconciled === "1";
   const justReviewWaived = sp.review_waived === "1";
   const justEmailUpdated = sp.email_updated ?? null;
-
-  const initialTab: "overview" | "admin_workflow" | "consultant_workflow" | "controls" =
-    justSavedNumber || justAssigned || justDispatched || justPbdrResent || justReviewWaived || justEmailUpdated
-      ? "admin_workflow"
-      : justPaused || justResumed || justPaymentOverridden || justPaymentReconciled
-      ? "controls"
-      : "overview";
 
   const supabase = createAdminClient();
 
@@ -168,6 +207,7 @@ export default async function ProjectDetailPage({
   if (!projectResult.data) notFound();
 
   const pendingDelivery = pendingDeliveryResult.data as { scheduled_for: string } | null;
+  const deliveryDurations = await getDeliveryDelayDurations(supabase);
 
   type ProjectDetail = {
     id: string;
@@ -388,34 +428,8 @@ export default async function ProjectDetailPage({
     ? [project.assigned.first_name, project.assigned.last_name].filter(Boolean).join(" ") || project.assigned.email
     : null;
 
-  // ── Step locking logic ──────────────────────────────────────────────────────
-  const step1Completed = !!project.project_number;
-  const step2Locked = !project.project_number;
   const canRegeneratePbdb = (["assigned", "in_progress"] as ProjectStatus[]).includes(project.status);
-  const step3Locked = !step1Completed;
-  const step3Completed = !!project.assigned;
-  const step4Locked = !step3Completed;
-  const step4Completed =
-    (project.status === "dispatched" && allCurrentAcknowledged) ||
-    project.status === "converting" ||
-    isTerminal;
-  const step5Locked = !step4Completed;
-  const step5Completed = project.status === "converting" || isTerminal;
-
-  // ── Consultant-workflow tab state (mirrors app/(consultant)/ops/projects/[id]/page.tsx) ──
-  const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
-  const currentCycleComments = currentCycleReviews.filter((r) => r.comments);
-  const pbdbCardState: "locked" | "upload" | "pending" | "revision" | "approved" = !latestPbdb
-    ? "locked"
-    : project.status === "dispatched"
-    ? "pending"
-    : project.status === "revision_required"
-    ? "revision"
-    : isTerminal || project.status === "converting"
-    ? "approved"
-    : "upload";
-  const UPLOAD_NEW_VERSION_COPY =
-    "Uploading a new version will reset all stakeholder approvals and resend the approval email with the updated document.";
+  const deliveryLocked = isTerminal || project.status === "converting" || !!pendingDelivery;
 
   // ── Page title ──────────────────────────────────────────────────────────────
   const pageTitle = (() => {
@@ -425,364 +439,177 @@ export default async function ProjectDetailPage({
     return project.po_number ? `PO ${project.po_number}` : project.id.slice(0, 8);
   })();
 
-  // ── Tab: Overview ───────────────────────────────────────────────────────────
-  // Client / submitted-via / PO number / delivery recipient / expected delivery /
-  // created now live in the header card (see #39) instead of a duplicate box here.
-  const overviewContent = (
-    <div className="project-two-col">
-      {/* Left column: metadata */}
-      <div className="min-w-0 space-y-6">
-        {/* Documents */}
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">Documents</h2>
-          </div>
-          {files.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-zinc-500">No documents uploaded yet.</p>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {files.map((f) => (
-                <DownloadCard
-                  key={f.id as string}
-                  href={f.signedUrl}
-                  originalFilename={f.original_filename as string}
-                  external
-                >
-                  <p className="text-sm font-medium text-zinc-900">
-                    {FILE_TYPE_LABELS[f.file_type as string] ?? (f.file_type as string)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </DownloadCard>
-              ))}
-            </div>
-          )}
-          {!isDeleted && (
-            <div className="border-t border-zinc-100 px-5 py-4">
-              <FileUploadForm projectId={id} />
-            </div>
-          )}
-        </div>
-
-        {/* Evidence & correspondence — see #57 */}
-        <div className="rounded-lg border border-zinc-200 bg-white">
-          <div className="border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">Evidence & correspondence</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              Forwarded emails, screenshots, or other proof attached to this project
-            </p>
-          </div>
-          {evidenceFiles.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-zinc-500">No evidence attached yet.</p>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {evidenceFiles.map((f) => (
-                <DownloadCard
-                  key={f.id as string}
-                  href={f.signedUrl}
-                  originalFilename={f.original_filename as string}
-                  external
-                >
-                  <p className="text-sm font-medium text-zinc-900">
-                    {(f.reference as string | null) ?? "General correspondence"}
-                  </p>
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </DownloadCard>
-              ))}
-            </div>
-          )}
-          {!isDeleted && (
-            <div className="border-t border-zinc-100 px-5 py-4">
-              <AttachEvidenceForm projectId={id} />
-            </div>
-          )}
-        </div>
-
-        {/* Client document colour */}
-        {pbdbFiles.length > 0 && (
-          <div className="rounded-lg border border-zinc-200 bg-white p-5">
-            <h2 className="mb-1 text-sm font-semibold text-zinc-900">Client document colour</h2>
-            <p className="mb-4 text-xs text-zinc-500">
-              Controls whether the client receives a version with black text or the original red
-              token colour when they download the PBDB via their review link.
-            </p>
-            <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
-          </div>
+  // ── Header card — matches the consultant page's altHeaderCard exactly ───────
+  const headerCard = (
+    <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[project.status]} bg-white p-5`}>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
+        <h1 className="text-base font-semibold text-zinc-900">{pageTitle}</h1>
+        <span className="text-sm text-zinc-400">{project.clients?.name ?? "No organisation"}</span>
+        <span className={`self-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}>
+          {STATUS_LABELS[project.status]}
+        </span>
+        <span className={`self-center inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+          project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+        }`}>
+          {project.source === "email" ? "Email" : "Portal"}
+        </span>
+        {project.payment_override && (
+          <span className="self-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+            Override — Payment Pending
+          </span>
         )}
-
-        {/* Delivery delay preset */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-5">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Delivery timing</h2>
-          <p className="mb-4 text-xs text-zinc-500">
-            Delay applied to PBDR generation and final client delivery, on top of business-hours
-            gating. Doesn&apos;t affect the earlier stakeholder-review dispatch step.
-          </p>
-          <ProjectDeliveryDelayPresetSelect
-            projectId={id}
-            initialValue={project.delivery_delay_preset}
-          />
-        </div>
-
-        {pendingDelivery && (
-          <div className="rounded-lg border border-zinc-200 bg-white p-5">
-            <PendingDeliveryPanel projectId={id} scheduledFor={pendingDelivery.scheduled_for} />
-          </div>
+        {isOverdue && (
+          <span className="self-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+            Overdue
+          </span>
         )}
-
-        {/* PBDR files — reference list */}
-        {pbdrFiles.length > 0 && (
-          <div className="rounded-lg border border-zinc-200 bg-white">
-            <div className="border-b border-zinc-100 px-5 py-4">
-              <h2 className="text-sm font-semibold text-zinc-900">PBDR</h2>
-              <p className="mt-0.5 text-xs text-zinc-500">Final converted document delivered to the client.</p>
-            </div>
-            <div className="divide-y divide-zinc-100">
-              {pbdrFiles.map((f) => (
-                <DownloadCard
-                  key={f.id as string}
-                  href={`/api/download/pbdr/${id}`}
-                  filename={f.original_filename as string}
-                  originalFilename={f.original_filename as string}
-                >
-                  <p className="truncate text-sm font-medium text-zinc-900">PBDR</p>
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    Version {f.version as number} &middot;{" "}
-                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </DownloadCard>
-              ))}
-            </div>
-          </div>
+        {isDeleted && (
+          <span className="self-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">
+            Deleted
+          </span>
         )}
       </div>
-
-      {/* Right column: content */}
-      <div className="min-w-0 space-y-6">
-        {/* Submitted details / Client values — same read-only-with-pencil-edit
-            component the consultant workflow uses, see #38. */}
-        <ProjectDetailsEditor
-          projectId={id}
-          poNumber={project.po_number}
-          fieldEntries={clientFieldEntries}
-          orgEntries={orgTokenEntries}
+      <div className="mt-3 flex flex-wrap items-center gap-x-7 gap-y-1.5 border-t border-zinc-100 pt-3 text-sm">
+        <span className="inline-flex items-center gap-1 text-zinc-500" title={`Review cycle ${project.review_cycle}`}>
+          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 002.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0112.888 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
+          </svg>
+          <span className="font-medium text-zinc-900">{project.review_cycle}</span>
+        </span>
+        <HeaderStatInline
+          label="Assigned"
+          value={assignedName ?? "Unassigned"}
+          valueClassName={assignedName ? undefined : "text-amber-700"}
+          noLeftBorder
         />
-
-        {/* Stakeholder review history */}
-        {reviews.length > 0 && (
-          <div className="rounded-lg border border-zinc-200 bg-white">
-            <div className="border-b border-zinc-100 px-5 py-4">
-              <h2 className="text-sm font-semibold text-zinc-900">Stakeholder reviews</h2>
-              <p className="mt-0.5 text-xs text-zinc-500">
-                Grouped by review cycle — each cycle corresponds to one version of the PBDB.
-              </p>
-            </div>
-            {reviewCycles.map((cycle) => {
-              const cycleReviews = reviewsByCycle.get(cycle)!;
-              const pbdbForCycle = pbdbFiles.find((f) => (f.version as number) === cycle);
-              const isCurrent = cycle === project.review_cycle;
-              return (
-                <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
-                  <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
-                    <span className="text-xs font-semibold text-zinc-700">Cycle {cycle}</span>
-                    {pbdbForCycle ? (
-                      <span className="text-xs text-zinc-400">
-                        · PBDB v{cycle}
-                        · {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-zinc-400">· PBDB v{cycle}</span>
-                    )}
-                    {isCurrent && (
-                      <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                        Current
-                      </span>
-                    )}
-                  </div>
-                  <div className="divide-y divide-zinc-50">
-                    {cycleReviews.map((r) => {
-                      const statusConfig = {
-                        pending: { label: "Pending", cls: "bg-amber-100 text-amber-700" },
-                        approved_without_comments: { label: "Approved", cls: "bg-green-100 text-green-700" },
-                        approved_with_comments: { label: "Approved with comments", cls: "bg-green-100 text-green-700" },
-                        rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
-                        waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
-                      }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
-                      return (
-                        <div key={r.id} className="px-5 py-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
-                              <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
-                              {r.comments && (
-                                <p className="mt-2 text-sm leading-relaxed text-zinc-700 italic">
-                                  &ldquo;{r.comments}&rdquo;
-                                </p>
-                              )}
-                              {r.waive_reason && (
-                                <p className="mt-1 text-xs text-zinc-400">Waive reason: {r.waive_reason}</p>
-                              )}
-                            </div>
-                            <div className="shrink-0 text-right">
-                              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}>
-                                {statusConfig.label}
-                              </span>
-                              {r.responded_at && (
-                                <p className="mt-0.5 text-xs text-zinc-400">
-                                  {new Date(r.responded_at).toLocaleDateString("en-AU", {
-                                    day: "numeric", month: "short", year: "numeric",
-                                  })}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <HeaderStatInline label="Submitted" value={new Date(project.created_at).toLocaleDateString("en-AU")} />
+        <HeaderStatInline
+          label="Due"
+          value={project.expected_delivery_date ? new Date(project.expected_delivery_date).toLocaleDateString("en-AU") : "—"}
+          valueClassName={isOverdue ? "text-red-600" : undefined}
+        />
+        <HeaderStatInline value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"} />
       </div>
     </div>
   );
 
-  // ── Tab: Consultant Workflow ────────────────────────────────────────────────
-  // Mirrors app/(consultant)/ops/projects/[id]/page.tsx `stepsContent` exactly —
-  // same components, same step states — so admins see precisely what the
-  // assigned consultant sees.
-  const consultantWorkflowContent = (
-    <div className="space-y-3">
-      {/* Step 1: Set project number */}
-      <ConsultantProjectNumberForm projectId={id} projectNumber={project.project_number} />
+  // ── Stage rail — 5 stages (matches the client/consultant StageRail budget;
+  // an earlier pass gave admin 6 and it overflowed the 22rem left rail) ───────
+  const setupDone = !!project.project_number && !!project.assigned;
+  const pbdbDone = pbdbFiles.length > 0;
+  const reviewDone = allCurrentAcknowledged || project.status === "converting" || isTerminal;
+  const delivered = project.status === "delivered" || project.status === "complete";
 
-      {/* Step 2: Generate PBDB */}
-      <div className={`rounded-lg border ${step2Locked ? "border-zinc-200 bg-zinc-50" : "border-zinc-200 bg-white"}`}>
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-100 last:border-b-0">
-          <ConsultantStepIndicator step={2} completed={false} locked={step2Locked} />
-          <h3 className={`text-sm font-semibold ${step2Locked ? "text-zinc-400" : "text-zinc-900"}`}>
-            PBDB
-          </h3>
-        </div>
-        {step2Locked ? (
-          <p className="px-5 py-4 text-sm text-zinc-400">
-            Set the project number first to unlock PBDB generation.
+  const stageList: Stage[] = [
+    { id: "setup", label: "Number & consultant", icon: "number", state: setupDone ? "done" : "current" },
+    { id: "pbdb", label: "PBDB generated", icon: "document", state: pbdbDone ? "done" : setupDone ? "current" : "upcoming" },
+    {
+      id: "review", label: "Stakeholder review", icon: "people",
+      state: reviewDone ? "done" : pbdbDone ? "current" : "upcoming",
+      urgency: project.status === "revision_required" ? "red" : project.status === "dispatched" ? "amber" : "neutral",
+    },
+    {
+      id: "convert", label: "Converting to PBDR", icon: "refresh",
+      state: delivered ? "done" : (project.status === "converting" || reviewDone) ? "current" : "upcoming",
+      urgency: "green",
+    },
+    { id: "delivered", label: "Delivered", icon: "flag", state: delivered ? "done" : "upcoming" },
+  ];
+
+  // ── Focus card — whichever single thing is actionable right now. Unifies
+  // the old "Admin Workflow" and "Consultant Workflow" tabs (which mirrored
+  // each other almost exactly) into one spotlighted action. ────────────────
+  let focusCard: React.ReactNode;
+  if (isDeleted) {
+    focusCard = (
+      <FocusCard tone="amber" title="In the recovery bin" subtitle="Permanently deleted after 30 days.">
+        <Link href="/admin/recovery" className="text-sm font-medium text-amber-800 underline hover:text-amber-900">
+          Go to recovery bin →
+        </Link>
+      </FocusCard>
+    );
+  } else if (project.status === "paused") {
+    focusCard = (
+      <FocusCard tone="amber" title="Paused" subtitle={pauseData.pause_reason ?? "Frozen at its current stage."}>
+        <ResumeButton projectId={id} daysPaused={daysPaused} />
+      </FocusCard>
+    );
+  } else if (!project.project_number) {
+    focusCard = (
+      <FocusCard tone="neutral" title="Set the project number" subtitle="Unlocks consultant assignment and PBDB generation.">
+        <AdminProjectNumberForm projectId={id} currentNumber={null} />
+      </FocusCard>
+    );
+  } else if (!project.assigned) {
+    focusCard = (
+      <FocusCard tone="neutral" title="Assign a consultant" subtitle="Unlocks PBDB generation for the assignee.">
+        <AssignForm projectId={id} consultants={consultants} currentConsultantId="" isReassign={false} />
+        {consultants.length === 0 && (
+          <p className="mt-3 text-sm text-zinc-400">
+            No consultants available.{" "}
+            <Link href="/admin/users/invite" className="underline hover:text-zinc-700">
+              Create account →
+            </Link>
           </p>
-        ) : pbdbFiles.length === 0 ? (
-          <div className="px-5 py-4">
-            <GeneratePbdbButton projectId={id} />
-          </div>
-        ) : (
-          <div className="divide-y divide-zinc-100">
-            {pbdbFiles.map((f, i) => {
-              const version = f.version as number;
-              const isLatest = i === pbdbFiles.length - 1;
-              const showDispatchedBadge =
-                isLatest &&
-                (["dispatched", "revision_required"] as ProjectStatus[]).includes(
-                  project.status as ProjectStatus
-                );
-              return (
-                <DownloadCard
-                  key={f.id as string}
-                  id={showDispatchedBadge ? "consultant-qa-pbdb-row" : undefined}
-                  href={`/api/download/pbdb/${f.id as string}`}
-                  filename={f.original_filename as string}
-                  wrapperClassName="flex items-center justify-between px-5 py-3 transition-shadow duration-700"
-                >
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
-                    {showDispatchedBadge && (
-                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                        Dispatched PBDB
-                      </span>
-                    )}
+        )}
+      </FocusCard>
+    );
+  } else if (pbdbFiles.length === 0) {
+    focusCard = (
+      <FocusCard tone="neutral" title="Generate the PBDB" subtitle="Ready when you are.">
+        <GeneratePbdbButton projectId={id} />
+      </FocusCard>
+    );
+  } else if (project.status === "assigned" || (project.status === "in_progress" && !project.qa_completed_by)) {
+    focusCard = (
+      <FocusCard
+        tone="neutral"
+        title="Awaiting QA'd PBDB"
+        subtitle={`${assignedName} hasn't marked it ready yet — you can also upload on their behalf.`}
+      >
+        <PbdbQaUploadForm projectId={id} />
+      </FocusCard>
+    );
+  } else if (project.status === "in_progress" && !!project.qa_completed_by) {
+    focusCard = (
+      <FocusCard tone="neutral" title="Dispatch to stakeholders" subtitle="QA complete — send it out for approval.">
+        <DispatchButton projectId={id} />
+      </FocusCard>
+    );
+  } else if (project.status === "dispatched" && pendingReviews.length > 0) {
+    focusCard = (
+      <FocusCard
+        tone="amber"
+        title="Awaiting stakeholder review"
+        subtitle={`${pendingReviews.length} of ${currentCycleReviews.length} approvals outstanding.`}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            {pendingReviews.map((r) => {
+              const inner = (
+                <div className="space-y-2 rounded-md border border-amber-200 bg-white px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                    <p className="truncate text-xs text-zinc-500">{r.stakeholder_email}</p>
                   </div>
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    v{version} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </DownloadCard>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <ResendTokenButton reviewId={r.id} projectId={id} />
+                    <LogStakeholderResponseForm
+                      reviewId={r.id}
+                      projectId={id}
+                      stakeholderName={r.stakeholder_name}
+                      stakeholderEmail={r.stakeholder_email}
+                    />
+                    <UpdateEmailReveal reviewId={r.id} projectId={id} currentEmail={r.stakeholder_email} />
+                    <WaiveForm reviewId={r.id} projectId={id} stakeholderName={r.stakeholder_name} />
+                  </div>
+                </div>
               );
+              return <div key={r.id}>{justEmailUpdated === r.id ? <HighlightRing>{inner}</HighlightRing> : inner}</div>;
             })}
-            <div className="flex items-center justify-between gap-3 px-5 py-3">
-              {canRegeneratePbdb && (
-                <p className="text-xs text-zinc-500">
-                  Need to fix something? Regenerating creates a new version — existing versions are kept.
-                </p>
-              )}
-              <RegeneratePbdbButton
-                projectId={id}
-                disabledMessage={
-                  canRegeneratePbdb
-                    ? undefined
-                    : "Regeneration is only available before the PBDB is dispatched to stakeholders."
-                }
-              />
-            </div>
           </div>
-        )}
-      </div>
-
-      {/* Step 3: PBDB completion & approval — transforms through Locked / Upload / Pending / Revision / Approved */}
-      <div className={`rounded-lg border ${
-        pbdbCardState === "locked"
-          ? "border-zinc-200 bg-zinc-50"
-          : pbdbCardState === "approved"
-          ? "border-green-200 bg-green-50"
-          : "border-zinc-200 bg-white"
-      }`}>
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-100 last:border-b-0">
-          <ConsultantStepIndicator step={3} completed={pbdbCardState === "approved"} locked={pbdbCardState === "locked"} />
-          <h3 className={`text-sm font-semibold ${
-            pbdbCardState === "locked"
-              ? "text-zinc-400"
-              : pbdbCardState === "approved"
-              ? "text-green-800"
-              : "text-zinc-900"
-          }`}>
-            PBDB completion &amp; approval
-          </h3>
-          {pbdbCardState === "pending" && (
-            <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-              Awaiting {pendingReviews.length} of {currentCycleReviews.length} approvals
-            </span>
-          )}
-          {pbdbCardState === "revision" && (
-            <span className="ml-auto shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-              Revision required
-            </span>
-          )}
-          {pbdbCardState === "approved" && (
-            <span className="ml-auto shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-              {project.status === "converting" ? "Converting…" : "Approved"}
-            </span>
-          )}
-        </div>
-
-        {pbdbCardState === "locked" && (
-          <p className="px-5 py-4 text-sm text-zinc-400">
-            Waiting for the PBDB to be generated.
-          </p>
-        )}
-
-        {pbdbCardState === "upload" && (
-          <div className="px-5 py-4">
-            <PbdbQaUploadForm projectId={id} />
-          </div>
-        )}
-
-        {pbdbCardState === "pending" && (
-          <div className="px-5 py-4 space-y-4">
-            <div className="flex items-center gap-2 rounded-md border border-blue-100 bg-blue-50 px-4 py-3">
-              <svg className="h-4 w-4 shrink-0 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clipRule="evenodd" />
-              </svg>
-              <p className="text-sm text-blue-700">PBDB dispatched — awaiting stakeholder responses.</p>
-            </div>
+          <div className="border-t border-amber-200/60 pt-4">
+            <p className="mb-2 text-xs text-zinc-500">Need to fix something before everyone responds?</p>
             <PbdbQaUploadForm
               projectId={id}
               submitLabel="Upload new version"
@@ -795,113 +622,208 @@ export default async function ProjectDetailPage({
               />
             </PbdbQaUploadForm>
           </div>
-        )}
-
-        {pbdbCardState === "revision" && (
-          <div className="px-5 py-4 space-y-4">
-            {currentCycleComments.length > 0 && (
-              <div className="space-y-3">
-                {currentCycleComments.map((r) => (
-                  <div key={r.id} className="rounded-md border border-red-100 bg-red-50 px-4 py-3">
-                    <p className="text-xs font-semibold text-red-800">{r.stakeholder_name}</p>
-                    <p className="mt-1 text-sm leading-relaxed text-red-700">{r.comments}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-            <PbdbQaUploadForm
-              projectId={id}
-              submitLabel="Upload revised PBDB and re-submit to stakeholders"
-              requireConfirmation
-              confirmCopy={UPLOAD_NEW_VERSION_COPY}
+        </div>
+      </FocusCard>
+    );
+  } else if (project.status === "revision_required") {
+    const currentCycleComments = currentCycleReviews.filter((r) => r.comments);
+    focusCard = (
+      <FocusCard tone="red" title="Revision requested" subtitle="A stakeholder asked for changes — the consultant must upload a corrected PBDB.">
+        <div className="space-y-4">
+          {currentCycleComments.length > 0 && (
+            <div className="space-y-3">
+              {currentCycleComments.map((r) => (
+                <div key={r.id} className="rounded-md border border-red-100 bg-red-50 px-4 py-3">
+                  <p className="text-xs font-semibold text-red-800">{r.stakeholder_name}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-red-700">{r.comments}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          <PbdbQaUploadForm
+            projectId={id}
+            submitLabel="Upload revised PBDB and re-submit to stakeholders"
+            requireConfirmation
+            confirmCopy={UPLOAD_NEW_VERSION_COPY}
+          >
+            <RevisionNoteField
+              reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
+              required={project.clients?.revision_notes_required ?? false}
+            />
+          </PbdbQaUploadForm>
+        </div>
+      </FocusCard>
+    );
+  } else if (project.status === "converting") {
+    focusCard = (
+      <FocusCard tone="green" title="Converting to PBDR" subtitle="All stakeholders approved — this happens automatically.">
+        <p className="text-sm text-green-700">No action needed right now.</p>
+      </FocusCard>
+    );
+  } else if (project.status === "dispatched" && allCurrentAcknowledged) {
+    const paymentReady = project.credit_deducted || project.payment_override;
+    focusCard = paymentReady ? (
+      <FocusCard tone="green" title="Ready to convert" subtitle="All stakeholders approved and payment is clear.">
+        <ConvertButton projectId={id} />
+      </FocusCard>
+    ) : (
+      <FocusCard tone="green" title="Clear the payment gate" subtitle="All stakeholders approved — convert is blocked until payment is resolved.">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-zinc-500">Credit deducted</span>
+            <span className="font-medium text-zinc-500">No</span>
+          </div>
+          <OverrideForm projectId={id} alreadyOverridden={project.payment_override} />
+        </div>
+      </FocusCard>
+    );
+  } else if (isTerminal) {
+    focusCard = (
+      <FocusCard tone="green" title="Delivered" subtitle="PBDR sent to the client and delivery recipient.">
+        <div className="space-y-3">
+          {pbdrFiles.map((f) => (
+            <DownloadCard
+              key={f.id as string}
+              href={`/api/download/pbdr/${id}`}
+              filename={f.original_filename as string}
+              originalFilename={f.original_filename as string}
+              wrapperClassName="flex items-center justify-between rounded-md border border-green-200 bg-white px-3 py-2"
+              buttonClassName="shrink-0 rounded-md border border-green-300 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-800 hover:bg-green-100"
             >
-              <RevisionNoteField
-                reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
-                required={project.clients?.revision_notes_required ?? false}
-              />
-            </PbdbQaUploadForm>
-          </div>
-        )}
-
-        {pbdbCardState === "approved" && (
-          <div className="px-5 py-4">
-            {project.status === "converting" ? (
-              <p className="text-xs text-green-700">
-                All stakeholders approved — converting to PBDR.
+              <p className="text-sm font-medium text-zinc-900">PBDR</p>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                v{f.version as number} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
               </p>
-            ) : pbdrFiles.length > 0 ? (
-              <div className="space-y-3">
-                <p className="text-xs font-medium text-green-800">PBDR ready for download</p>
-                {pbdrFiles.map((f) => (
-                  <DownloadCard
-                    key={f.id as string}
-                    href={`/api/download/pbdr/${id}`}
-                    filename={f.original_filename as string}
-                    originalFilename={f.original_filename as string}
-                    wrapperClassName="flex items-center justify-between rounded-md border border-green-200 bg-white px-4 py-3"
-                    buttonClassName="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
-                  >
-                    <p className="text-sm font-medium text-zinc-900">PBDR</p>
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      v{f.version as number} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                    </p>
-                  </DownloadCard>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        )}
-      </div>
-    </div>
+            </DownloadCard>
+          ))}
+          <p className="text-xs text-zinc-500">
+            Resends a fresh 30-day download link to the submitter
+            {project.delivery_recipient_email ? " and the delivery recipient" : ""}.
+          </p>
+          <ResendPbdrButton projectId={id} />
+        </div>
+      </FocusCard>
+    );
+  } else {
+    focusCard = (
+      <FocusCard tone="neutral" title="In progress" subtitle={STATUS_LABELS[project.status]}>
+        <p className="text-sm text-zinc-500">Nothing needs your attention right now.</p>
+      </FocusCard>
+    );
+  }
+
+  // ── Left rail extras — persistent reference/edit cards for steps that are
+  // already "done" on the rail but still legitimately reopenable. ───────────
+  const leftRailExtras = (
+    <>
+      {project.project_number && (
+        <AdminProjectNumberForm projectId={id} currentNumber={project.project_number} />
+      )}
+      {project.assigned && (
+        <ConsultantCard
+          projectId={id}
+          consultants={consultants}
+          currentConsultantId={currentConsultantId}
+          assignedName={assignedName}
+          availability={project.assigned.availability}
+          assignmentHistory={assignmentHistory}
+        />
+      )}
+      {canRegeneratePbdb && pbdbFiles.length > 0 && (
+        <PbdbVersionsCard
+          projectId={id}
+          files={pbdbFiles as { id: string; original_filename: string; version: number; created_at: string }[]}
+          projectStatus={project.status}
+          canRegenerate={canRegeneratePbdb}
+        />
+      )}
+    </>
   );
 
-  // ── Tab: Admin Workflow ─────────────────────────────────────────────────────
-  const adminWorkflowContent = (
-    <div className="space-y-3">
-      {/* Step 1: Set project number */}
-      <div id="pbdb-section">
-        <StepCard
-          step={1}
-          title="Set project number"
-          completed={step1Completed}
-          completedChildren={<AdminProjectNumberForm projectId={id} currentNumber={project.project_number} />}
-        >
-          <AdminProjectNumberForm projectId={id} currentNumber={project.project_number} />
-        </StepCard>
+  // ── Details tab ─────────────────────────────────────────────────────────────
+  const detailsTab = (
+    <>
+      <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white">
+        <Row label="Client" value={project.clients?.name ?? "No organisation"} />
+        <Row label="PO number" value={project.po_number ?? "—"} />
+        <Row label="Delivery recipient" value={project.delivery_recipient_email ?? "—"} />
+        <Row label="Submitted via" value={project.source === "email" ? "Email" : "Portal"} />
       </div>
+      <ProjectDetailsEditor
+        projectId={id}
+        poNumber={project.po_number}
+        fieldEntries={clientFieldEntries}
+        orgEntries={orgTokenEntries}
+      />
+    </>
+  );
 
-      {/* Step 2: Generate PBDB */}
-      <div className={`rounded-lg border ${step2Locked ? "border-zinc-200 bg-zinc-50" : "border-zinc-200 bg-white"}`}>
-        <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-4 last:border-b-0">
-          <StepIndicator step={2} completed={false} locked={step2Locked} />
-          <h3 className={`text-sm font-semibold ${step2Locked ? "text-zinc-400" : "text-zinc-900"}`}>
-            PBDB
-          </h3>
-        </div>
-        {step2Locked ? (
-          <p className="px-5 py-4 text-sm text-zinc-400">
-            Set the project number first to unlock PBDB generation.
-          </p>
-        ) : pbdbFiles.length === 0 ? (
-          <div className="px-5 py-4">
-            <GeneratePbdbButton projectId={id} />
-          </div>
+  // ── Documents tab ────────────────────────────────────────────────────────────
+  const documentsTab = (
+    <>
+      <CollapsibleSection title="Documents" defaultOpen>
+        {files.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-zinc-400">No documents uploaded yet.</p>
         ) : (
+          <div className="divide-y divide-zinc-100">
+            {files.map((f) => (
+              <DownloadCard key={f.id as string} href={f.signedUrl} originalFilename={f.original_filename as string} external>
+                <p className="text-sm font-medium text-zinc-900">
+                  {FILE_TYPE_LABELS[f.file_type as string] ?? (f.file_type as string)}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                </p>
+              </DownloadCard>
+            ))}
+          </div>
+        )}
+        {!isDeleted && (
+          <div className="border-t border-zinc-100 px-5 py-4">
+            <FileUploadForm projectId={id} />
+          </div>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Evidence & correspondence"
+        subtitle="Forwarded emails, screenshots, or other proof attached to this project"
+        defaultOpen={evidenceFiles.length > 0}
+      >
+        {evidenceFiles.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-zinc-400">No evidence attached yet.</p>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {evidenceFiles.map((f) => (
+              <DownloadCard key={f.id as string} href={f.signedUrl} originalFilename={f.original_filename as string} external>
+                <p className="text-sm font-medium text-zinc-900">
+                  {(f.reference as string | null) ?? "General correspondence"}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                </p>
+              </DownloadCard>
+            ))}
+          </div>
+        )}
+        {!isDeleted && (
+          <div className="border-t border-zinc-100 px-5 py-4">
+            <AttachEvidenceForm projectId={id} />
+          </div>
+        )}
+      </CollapsibleSection>
+
+      {pbdbFiles.length > 0 && (
+        <CollapsibleSection title="PBDB" subtitle="All generated versions." defaultOpen={false}>
           <div className="divide-y divide-zinc-100">
             {pbdbFiles.map((f, i) => {
               const version = f.version as number;
               const isLatest = i === pbdbFiles.length - 1;
               const showDispatchedBadge =
                 isLatest &&
-                (["dispatched", "revision_required"] as ProjectStatus[]).includes(
-                  project.status as ProjectStatus
-                );
+                (["dispatched", "revision_required"] as ProjectStatus[]).includes(project.status);
               return (
-                <DownloadCard
-                  key={f.id as string}
-                  href={`/api/download/pbdb/${f.id as string}`}
-                  filename={f.original_filename as string}
-                >
+                <DownloadCard key={f.id as string} href={`/api/download/pbdb/${f.id as string}`} filename={f.original_filename as string}>
                   <div className="flex items-center gap-2">
                     <p className="truncate text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
                     {showDispatchedBadge && (
@@ -911,367 +833,240 @@ export default async function ProjectDetailPage({
                     )}
                   </div>
                   <p className="mt-0.5 text-xs text-zinc-500">
-                    Version {version}
-                    {" · "}{new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                    Version {version} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                   </p>
                 </DownloadCard>
               );
             })}
-            <div className="flex items-center justify-between gap-3 px-5 py-3">
-              {canRegeneratePbdb && (
-                <p className="text-xs text-zinc-500">
-                  Need to fix something? Regenerating creates a new version — existing versions are kept.
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {pbdrFiles.length > 0 && (
+        <CollapsibleSection title="PBDR" subtitle="Final converted document delivered to the client." defaultOpen>
+          <div className="divide-y divide-zinc-100">
+            {pbdrFiles.map((f) => (
+              <DownloadCard
+                key={f.id as string}
+                href={`/api/download/pbdr/${id}`}
+                filename={f.original_filename as string}
+                originalFilename={f.original_filename as string}
+              >
+                <p className="truncate text-sm font-medium text-zinc-900">PBDR</p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Version {f.version as number} &middot; {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                 </p>
+              </DownloadCard>
+            ))}
+          </div>
+        </CollapsibleSection>
+      )}
+    </>
+  );
+
+  // ── Stakeholders tab — read-only reference; actions live on the FocusCard
+  // while dispatched, matching where they lived in the old admin workflow. ──
+  const stakeholdersTab = (
+    <>
+      <CollapsibleSection
+        title="Project stakeholders"
+        subtitle="If set, these override the template- and org-level defaults for this project only. Leave empty to use the inherited list."
+        defaultOpen={projectStakeholders.length > 0}
+      >
+        <ProjectStakeholderSection projectId={id} stakeholders={projectStakeholders} />
+      </CollapsibleSection>
+
+      {reviews.length === 0 ? (
+        <p className="px-1 py-4 text-sm text-zinc-400">No stakeholder reviews yet.</p>
+      ) : (
+        <CollapsibleSection
+          title="Stakeholder reviews"
+          subtitle="Grouped by review cycle — each cycle corresponds to one version of the PBDB."
+          defaultOpen
+        >
+          {reviewCycles.map((cycle) => {
+            const cycleReviews = reviewsByCycle.get(cycle)!;
+            const pbdbForCycle = pbdbFiles.find((f) => (f.version as number) === cycle);
+            const isCurrent = cycle === project.review_cycle;
+            return (
+              <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
+                <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
+                  <span className="text-xs font-semibold text-zinc-700">Cycle {cycle}</span>
+                  {pbdbForCycle ? (
+                    <span className="text-xs text-zinc-400">
+                      · PBDB v{cycle} · {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-zinc-400">· PBDB v{cycle}</span>
+                  )}
+                  {isCurrent && (
+                    <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      Current
+                    </span>
+                  )}
+                </div>
+                <div className="divide-y divide-zinc-50">
+                  {cycleReviews.map((r) => {
+                    const statusConfig = {
+                      pending: { label: "Pending", cls: "bg-amber-100 text-amber-700" },
+                      approved_without_comments: { label: "Approved", cls: "bg-green-100 text-green-700" },
+                      approved_with_comments: { label: "Approved with comments", cls: "bg-green-100 text-green-700" },
+                      rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
+                      waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
+                    }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
+                    return (
+                      <div key={r.id} className="px-5 py-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                            <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
+                            {r.comments && (
+                              <p className="mt-2 text-sm leading-relaxed text-zinc-700 italic">
+                                &ldquo;{r.comments}&rdquo;
+                              </p>
+                            )}
+                            {r.waive_reason && (
+                              <p className="mt-1 text-xs text-zinc-400">Waive reason: {r.waive_reason}</p>
+                            )}
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}>
+                              {statusConfig.label}
+                            </span>
+                            {r.responded_at && (
+                              <p className="mt-0.5 text-xs text-zinc-400">
+                                {new Date(r.responded_at).toLocaleDateString("en-AU", {
+                                  day: "numeric", month: "short", year: "numeric",
+                                })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </CollapsibleSection>
+      )}
+    </>
+  );
+
+  // ── Settings pill content — payment gate, delivery timing, client document
+  // colour, pause/resume/delete. Previously a separate "Controls" tab. ──────
+  const settingsContent = isDeleted ? (
+    <p className="text-sm text-zinc-500">Project is in the recovery bin — controls are unavailable.</p>
+  ) : (
+    <>
+      <div>
+        {project.status === "paused" ? (
+          <p className="rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-500">
+            Payment override disabled while project is paused.
+          </p>
+        ) : (
+          <>
+            <h3 className="mb-1 text-sm font-semibold text-zinc-900">Payment gate</h3>
+            <div className="mb-2 flex gap-4 text-xs">
+              <span>
+                <span className="text-zinc-500">Credit deducted: </span>
+                <span className={project.credit_deducted ? "font-medium text-green-700" : "text-zinc-500"}>
+                  {project.credit_deducted ? "Yes" : "No"}
+                </span>
+              </span>
+              {project.payment_override && (
+                <span>
+                  <span className="text-zinc-500">Override applied: </span>
+                  <span className="font-medium text-amber-700">
+                    {project.payment_override_at
+                      ? new Date(project.payment_override_at).toLocaleDateString("en-AU")
+                      : "Yes"}
+                  </span>
+                </span>
               )}
-              <RegeneratePbdbButton
-                projectId={id}
-                disabledMessage={
-                  canRegeneratePbdb
-                    ? undefined
-                    : "Regeneration is only available before the PBDB is dispatched to stakeholders."
-                }
-              />
             </div>
+            {project.payment_override && project.payment_override_reason && (
+              <div className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <span className="font-medium">Override reason: </span>
+                {project.payment_override_reason}
+              </div>
+            )}
+            <OverrideForm projectId={id} alreadyOverridden={project.payment_override} />
+          </>
+        )}
+      </div>
+
+      <div className="border-t border-zinc-100 pt-4">
+        <h3 className="text-sm font-semibold text-zinc-900">Delivery timing</h3>
+        <p className="mt-1 mb-3 text-xs leading-relaxed text-zinc-500">
+          Delay before the PBDR goes out after final approval.
+        </p>
+        <ProjectDeliveryDelayPresetSelect
+          projectId={id}
+          initialValue={project.delivery_delay_preset}
+          durations={deliveryDurations}
+        />
+        {deliveryLocked ? (
+          <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-500">
+            All stakeholders already approved, so this delivery is using whatever was set
+            beforehand — changing it now won&apos;t affect this PBDR.
+          </p>
+        ) : (
+          <p className="mt-2.5 rounded-md bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-700">
+            Locks in once the last stakeholder approves.
+          </p>
+        )}
+        {pendingDelivery && (
+          <div className="mt-3">
+            <PendingDeliveryPanel projectId={id} scheduledFor={pendingDelivery.scheduled_for} />
           </div>
         )}
       </div>
 
-      {/* Step 3: Assign consultant */}
-      <StepCard
-        step={3}
-        title="Assign consultant"
-        completed={step3Completed}
-        locked={step3Locked}
-        completedNote={isTerminal ? undefined : assignedName ? `Assigned to ${assignedName}` : undefined}
-        completedChildren={
-          isTerminal ? (
-            assignmentHistory.length > 0 ? (
-              <div className="space-y-2">
-                {assignmentHistory.map((a, idx) => {
-                  const isFinal = idx === assignmentHistory.length - 1;
-                  const activeUntilStatus = isFinal
-                    ? project.status
-                    : (assignmentHistory[idx + 1].projectStatusAtAssignment as ProjectStatus | null);
-                  return (
-                    <div
-                      key={`${a.consultantId}-${idx}`}
-                      className="flex items-center justify-between gap-4 rounded-md border border-zinc-100 bg-zinc-50 px-4 py-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-zinc-900">{a.consultantName}</p>
-                        <p className="text-xs text-zinc-500">
-                          {isFinal ? "Final assignee" : "Previously assigned"} &middot;{" "}
-                          {new Date(a.assignedAt).toLocaleDateString("en-AU", {
-                            day: "numeric", month: "short", year: "numeric",
-                          })}
-                          {activeUntilStatus && (
-                            <> &middot; until <span className="font-medium text-zinc-700">{STATUS_LABELS[activeUntilStatus] ?? activeUntilStatus}</span></>
-                          )}
-                        </p>
-                      </div>
-                      {isFinal && (
-                        <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                          Completed
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : project.assigned ? (
-              <div className="flex items-center justify-between rounded-md border border-zinc-100 bg-zinc-50 px-4 py-3">
-                <p className="text-sm font-medium text-zinc-900">{assignedName}</p>
-                <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Completed</span>
-              </div>
-            ) : null
-          ) : (
-            <div>
-              {project.assigned && (
-                <p className="mb-4 text-sm text-zinc-500">
-                  Currently assigned to{" "}
-                  <strong className="text-zinc-800">{assignedName}</strong>{" "}
-                  &mdash;{" "}
-                  <span className={`font-medium ${
-                    project.assigned.availability === "available" ? "text-green-700"
-                    : project.assigned.availability === "on_leave" ? "text-yellow-700"
-                    : "text-zinc-500"
-                  }`}>
-                    {AVAILABILITY_LABELS[project.assigned.availability]}
-                  </span>
-                </p>
-              )}
-              <AssignForm
-                projectId={id}
-                consultants={consultants}
-                currentConsultantId={currentConsultantId}
-                isReassign={!!project.assigned}
-              />
-              {consultants.length === 0 && (
-                <p className="mt-3 text-sm text-zinc-400">
-                  No consultants available.{" "}
-                  <Link href="/admin/users/invite" className="underline hover:text-zinc-700">
-                    Create account →
-                  </Link>
-                </p>
-              )}
-            </div>
-          )
-        }
-      >
-        {/* First assignment — only shown when step3 is active (not completed, not locked) */}
-        <AssignForm
-          projectId={id}
-          consultants={consultants}
-          currentConsultantId=""
-          isReassign={false}
-        />
-        {consultants.length === 0 && (
-          <p className="mt-3 text-sm text-zinc-400">
-            No consultants available.{" "}
-            <Link href="/admin/users/invite" className="underline hover:text-zinc-700">
-              Create account →
-            </Link>
+      {pbdbFiles.length > 0 && (
+        <div className="border-t border-zinc-100 pt-4">
+          <h3 className="text-sm font-semibold text-zinc-900">Client document colour</h3>
+          <p className="mt-1 mb-2 text-xs text-zinc-400">
+            Black text, or the original red token colour, when the client downloads the PBDB.
           </p>
-        )}
-      </StepCard>
-
-      {/* Step 4: Dispatch to stakeholders */}
-      <StepCard
-        step={4}
-        title="Dispatch to stakeholders"
-        completed={step4Completed}
-        locked={step4Locked}
-        completedNote="All stakeholders have acknowledged."
-      >
-        {(project.status === "assigned" ||
-          (project.status === "in_progress" && !project.qa_completed_by)) && (
-          <p className="text-sm text-zinc-500">
-            Awaiting the assigned consultant to complete and upload the PBDB.
-          </p>
-        )}
-
-        {project.status === "in_progress" && !!project.qa_completed_by && (
-          <div className="space-y-3">
-            <p className="text-xs text-zinc-500">
-              The consultant has uploaded the completed PBDB. Dispatch it to stakeholders for approval.
-            </p>
-            <DispatchButton projectId={id} />
-          </div>
-        )}
-
-        {project.status === "dispatched" && pendingReviews.length > 0 && (
-          <div className="space-y-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-              Pending responses ({pendingReviews.length})
-            </p>
-            <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
-              {pendingReviews.map((r) => {
-                const inner = (
-                  <div className="space-y-3 px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
-                        <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
-                      </div>
-                      <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                        Pending
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      <ResendTokenButton reviewId={r.id} projectId={id} />
-                      <UpdateEmailForm reviewId={r.id} projectId={id} currentEmail={r.stakeholder_email} />
-                      <WaiveForm reviewId={r.id} projectId={id} stakeholderName={r.stakeholder_name} />
-                    </div>
-                  </div>
-                );
-                return (
-                  <div key={r.id}>
-                    {justEmailUpdated === r.id ? <HighlightRing>{inner}</HighlightRing> : inner}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {project.status === "revision_required" && (
-          <div className="space-y-3">
-            <div className="rounded-md border border-red-100 bg-red-50 px-4 py-3">
-              <p className="text-sm font-medium text-red-900">Revision requested</p>
-              <p className="mt-0.5 text-xs text-red-700">
-                Stakeholders requested changes. The consultant must upload a corrected PBDB.
-              </p>
-            </div>
-            {currentCycleReviews.filter((r) => r.comments).map((r) => (
-              <div key={r.id} className="rounded-md border border-red-100 bg-red-50 px-4 py-3">
-                <p className="text-xs font-semibold text-red-800">{r.stakeholder_name}</p>
-                <p className="mt-1 text-sm leading-relaxed text-red-700">{r.comments}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </StepCard>
-
-      {/* Step 5: PBDR conversion */}
-      <StepCard
-        step={5}
-        title="PBDR conversion"
-        completed={step5Completed}
-        locked={step5Locked}
-        completedNote={
-          project.status === "converting"
-            ? "Conversion in progress — this may take a moment."
-            : "PBDR delivered to client."
-        }
-        completedChildren={
-          pbdrFiles.length > 0 ? (
-            <div className="space-y-4">
-              <div className="divide-y divide-zinc-100 rounded-md border border-zinc-100">
-                {pbdrFiles.map((f) => (
-                  <DownloadCard
-                    key={f.id as string}
-                    href={`/api/download/pbdr/${id}`}
-                    filename={f.original_filename as string}
-                    originalFilename={f.original_filename as string}
-                    wrapperClassName="flex items-center gap-3 px-4 py-3"
-                  >
-                    <p className="truncate text-sm font-medium text-zinc-900">PBDR</p>
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      Version {f.version as number} &middot;{" "}
-                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                    </p>
-                  </DownloadCard>
-                ))}
-              </div>
-              {(project.status === "delivered" || project.status === "complete") && (
-                <div>
-                  <p className="mb-2 text-xs text-zinc-500">
-                    Resends a fresh 30-day download link to the submitter
-                    {project.delivery_recipient_email ? " and the delivery recipient" : ""}.
-                  </p>
-                  <ResendPbdrButton projectId={id} />
-                </div>
-              )}
-            </div>
-          ) : undefined
-        }
-      >
-        <div className="space-y-3">
-          <p className="text-sm text-zinc-500">
-            All stakeholders have acknowledged. Both gates must pass before converting:
-            credit deducted or override applied, and all reviews acknowledged.
-          </p>
-          <ConvertButton projectId={id} />
-        </div>
-      </StepCard>
-    </div>
-  );
-
-  // ── Tab: Controls ───────────────────────────────────────────────────────────
-  const controlsContent = (
-    <div className="space-y-6">
-      {isDeleted && (
-        <div className="rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-          Project is in the recovery bin — controls are unavailable.
+          <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
         </div>
       )}
 
-      {!isDeleted && (
-        <div className="project-two-col">
-          {/* Left column: payment gate + project controls */}
-          <div className="min-w-0 space-y-6">
-            {/* Payment gate */}
-            <div className="relative rounded-lg border border-zinc-200 bg-white p-5">
-              {project.status === "paused" && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/80 backdrop-blur-[2px]">
-                  <p className="text-sm font-medium text-zinc-500">Payment override disabled while project is paused</p>
+      {project.status === "paused" ? (
+        <div className="border-t border-zinc-100 pt-4">
+          <h3 className="mb-1 text-sm font-semibold text-zinc-900">Project controls</h3>
+          <p className="text-xs text-zinc-500">Paused — resume from the panel on the left.</p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-red-100 bg-red-50/40 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700">Danger zone</p>
+          <div className="space-y-2">
+            {!isTerminal && (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-zinc-900">Pause project</p>
+                  <p className="truncate text-xs text-zinc-500">Delivery date shifts by the days paused, on resume.</p>
                 </div>
-              )}
-              <h2 className="mb-1 text-sm font-semibold text-zinc-900">Payment gate</h2>
-              <div className="mb-4 flex gap-6 text-sm">
-                <span>
-                  <span className="text-zinc-500">Credit deducted: </span>
-                  <span className={project.credit_deducted ? "font-medium text-green-700" : "text-zinc-500"}>
-                    {project.credit_deducted ? "Yes" : "No"}
-                  </span>
-                </span>
-                {project.payment_override && (
-                  <span>
-                    <span className="text-zinc-500">Override applied: </span>
-                    <span className="font-medium text-amber-700">
-                      {project.payment_override_at
-                        ? new Date(project.payment_override_at).toLocaleDateString("en-AU")
-                        : "Yes"}
-                    </span>
-                  </span>
-                )}
+                <PauseForm projectId={id} />
               </div>
-              {project.payment_override && project.payment_override_reason && (
-                <div className="mb-4 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  <span className="font-medium">Override reason: </span>
-                  {project.payment_override_reason}
-                </div>
-              )}
-              <OverrideForm projectId={id} alreadyOverridden={project.payment_override} />
-            </div>
-
-            {/* Pause / Resume / Delete */}
-            <div className="rounded-lg border border-zinc-200 bg-white p-5">
-              <h2 className="mb-4 text-sm font-semibold text-zinc-900">Project controls</h2>
-
-              {project.status === "paused" ? (
-                <div>
-                  <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">
-                    Resume project
-                  </p>
-                  <ResumeButton projectId={id} daysPaused={daysPaused} />
-                </div>
-              ) : !isTerminal && (
-                <div className="mb-5">
-                  <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">
-                    Pause project
-                  </p>
-                  <p className="mb-3 text-xs text-zinc-500">
-                    Freezes the project at its current stage. The delivery date will be pushed
-                    forward by the number of days paused when resumed.
-                  </p>
-                  <PauseForm projectId={id} />
-                </div>
-              )}
-
-              {project.status !== "paused" && !isTerminal && (
-                <div className="mt-5 border-t border-zinc-100 pt-5" />
-              )}
-
-              <div className={project.status === "paused" ? "mt-5 border-t border-zinc-100 pt-5" : ""}>
-                <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">
-                  Delete project
-                </p>
-                <p className="mb-3 text-xs text-zinc-500">
-                  Moves the project to the recovery bin. Permanently purged after 30 days.
-                </p>
-                <AdminDeleteButton projectId={id} />
+            )}
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-zinc-900">Delete project</p>
+                <p className="truncate text-xs text-zinc-500">Recovery bin for 30 days, then purged.</p>
               </div>
-            </div>
-          </div>
-
-          {/* Right column: project stakeholders */}
-          <div className="min-w-0">
-            <div className="rounded-lg border border-zinc-200 bg-white p-5">
-              <h2 className="mb-1 text-sm font-semibold text-zinc-900">Project stakeholders</h2>
-              <p className="mb-4 text-xs text-zinc-500">
-                If set, these override the template- and org-level defaults for this project only.
-                Leave empty to use the inherited list.
-              </p>
-              <ProjectStakeholderSection projectId={id} stakeholders={projectStakeholders} />
+              <AdminDeleteButton projectId={id} />
             </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 
-  const auditContent = (
+  // ── Audit tab ────────────────────────────────────────────────────────────────
+  const auditTab = (
     <div className="space-y-3">
       {auditEntries.length > 0 && (
         <div className="flex justify-end gap-2">
@@ -1296,7 +1091,7 @@ export default async function ProjectDetailPage({
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Success banners */}
       {justSavedNumber && <NumberSavedBanner cleanUrl={`/admin/projects/${id}`} />}
       {justAssigned && (
@@ -1317,7 +1112,7 @@ export default async function ProjectDetailPage({
         <AdminSuccessBanner
           cleanUrl={`/admin/projects/${id}`}
           title="Project paused"
-          body="The project has been frozen. Resume it at any time from the Controls tab."
+          body="The project has been frozen. Resume it at any time from Settings."
         />
       )}
       {justResumed && (
@@ -1371,61 +1166,6 @@ export default async function ProjectDetailPage({
         {isDeleted ? "← Recovery bin" : "← Projects"}
       </Link>
 
-      {/* Header card */}
-      <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[project.status]} bg-white p-5`}>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-base font-semibold text-zinc-900">{pageTitle}</h1>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-            project.status === "paused" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600"
-          }`}>
-            {STATUS_LABELS[project.status]}
-          </span>
-          {project.payment_override && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-              Override — Payment Pending
-            </span>
-          )}
-          {isOverdue && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-              Overdue
-            </span>
-          )}
-          {isDeleted && (
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">
-              Deleted
-            </span>
-          )}
-        </div>
-        <p className="mt-3.5 border-t border-zinc-100 pt-3 text-sm leading-relaxed text-zinc-500">
-          {project.clients?.name ?? "No organisation"}
-          {" · "}
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-            project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-          }`}>
-            {project.source === "email" ? "Email" : "Portal"}
-          </span>
-          {" · "}Assigned to{" "}
-          <span className={`font-medium ${assignedName ? "text-zinc-900" : "text-amber-700"}`}>
-            {assignedName ?? "Unassigned"}
-          </span>
-          {" · "}Review cycle <span className="font-medium text-zinc-900">{project.review_cycle}</span>
-          {" · "}Submitted{" "}
-          <span className="font-medium text-zinc-900">
-            {new Date(project.created_at).toLocaleDateString("en-AU")}
-          </span>
-          {" · "}Due{" "}
-          <span className={`font-medium ${isOverdue ? "text-red-600" : "text-zinc-900"}`}>
-            {project.expected_delivery_date
-              ? new Date(project.expected_delivery_date).toLocaleDateString("en-AU")
-              : "—"}
-          </span>
-          {" · "}PO number{" "}
-          <span className="font-medium text-zinc-900">{project.po_number ?? "—"}</span>
-          {" · "}Delivery recipient{" "}
-          <span className="font-medium text-zinc-900">{project.delivery_recipient_email ?? "—"}</span>
-        </p>
-      </div>
-
       {/* Status banners */}
       {isDeleted && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -1452,103 +1192,27 @@ export default async function ProjectDetailPage({
             Overdue by {daysOverdue} day{daysOverdue !== 1 ? "s" : ""}.
           </span>{" "}
           {project.status === "submitted"
-            ? "No consultant has been assigned — go to the Admin Workflow tab to assign one."
+            ? "No consultant has been assigned — assign one from the panel on the left."
             : project.status === "dispatched" && pendingReviews.length > 0
-            ? `${pendingReviews.length} stakeholder${pendingReviews.length !== 1 ? "s" : ""} yet to respond — manage from the Admin Workflow tab.`
+            ? `${pendingReviews.length} stakeholder${pendingReviews.length !== 1 ? "s" : ""} yet to respond — see the panel on the left.`
             : project.status === "revision_required"
             ? "A revision has been requested — the consultant must upload a corrected document."
             : `Expected delivery date has passed.`}
         </div>
       )}
 
-      <AdminProjectTabs
-        initialTab={initialTab}
-        overview={overviewContent}
-        adminWorkflow={adminWorkflowContent}
-        consultantWorkflow={consultantWorkflowContent}
-        controls={controlsContent}
-        audit={auditContent}
+      <AltWorkspace
+        header={headerCard}
+        stages={stageList}
+        focusCard={focusCard}
+        leftRailExtras={leftRailExtras}
+        detailsTab={detailsTab}
+        documentsTab={documentsTab}
+        stakeholdersTab={stakeholdersTab}
+        settingsContent={settingsContent}
+        settingsTitle="Project Config"
+        auditTab={auditTab}
       />
-    </div>
-  );
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function StepIndicator({
-  step,
-  completed,
-  locked,
-}: {
-  step: number;
-  completed: boolean;
-  locked?: boolean;
-}) {
-  if (completed) {
-    return (
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-500 text-white text-xs font-semibold">
-        ✓
-      </div>
-    );
-  }
-  if (locked) {
-    return (
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-zinc-400 text-xs font-semibold">
-        {step}
-      </div>
-    );
-  }
-  return (
-    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white text-xs font-semibold">
-      {step}
-    </div>
-  );
-}
-
-function StepCard({
-  step,
-  title,
-  completed,
-  locked,
-  completedNote,
-  completedChildren,
-  children,
-}: {
-  step: number;
-  title: string;
-  completed: boolean;
-  locked?: boolean;
-  completedNote?: string;
-  completedChildren?: React.ReactNode;
-  children?: React.ReactNode;
-}) {
-  const isActive = !completed && !locked;
-
-  return (
-    <div className={`rounded-lg border ${
-      completed ? "border-green-200 bg-green-50" : locked ? "border-zinc-200 bg-zinc-50" : "border-zinc-200 bg-white"
-    }`}>
-      <div className={`flex items-center gap-3 px-5 py-4 ${
-        isActive || (completed && completedChildren) ? "border-b border-zinc-100" : ""
-      }`}>
-        <StepIndicator step={step} completed={completed} locked={locked} />
-        <h3 className={`text-sm font-semibold ${
-          completed ? "text-green-800" : locked ? "text-zinc-400" : "text-zinc-900"
-        }`}>
-          {title}
-        </h3>
-      </div>
-      {completed && completedNote && (
-        <p className={`px-5 pb-4 text-xs text-green-700 ${completedChildren ? "" : "pt-3"}`}>
-          {completedNote}
-        </p>
-      )}
-      {completed && completedChildren && (
-        <div className="px-5 py-4">{completedChildren}</div>
-      )}
-      {isActive && children && (
-        <div className="px-5 py-4">{children}</div>
-      )}
     </div>
   );
 }
