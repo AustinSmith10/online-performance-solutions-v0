@@ -18,6 +18,8 @@ import {
   getAutofillExclusionTokens,
   resolveMetricsAutofill,
 } from "@/lib/documents/metrics-autofill";
+import { buildFieldFlagPlan } from "@/lib/documents/field-flags";
+import type { ComparisonMode } from "@/lib/documents/compare-candidates";
 
 // Postmark retries on non-2xx — always return 200 so it doesn't retry on expected failures.
 // This does not apply to auth failures below: Postmark won't retry with different
@@ -230,10 +232,11 @@ async function handleNewSubmission(
       let extractTokens: { token: string; label: string; hint: string }[] = [];
       const metricsAutofillConfigs = await getMetricsAutofillConfigs(supabase, org.id as string);
       const metricsExclusionTokens = getAutofillExclusionTokens(metricsAutofillConfigs);
+      let comparisonModeByToken = new Map<string, ComparisonMode>();
       if (templateId) {
         const { data: mappings } = await supabase
           .from("template_field_mappings")
-          .select("placeholder_token, display_label, extraction_hint")
+          .select("placeholder_token, display_label, extraction_hint, comparison_mode")
           .eq("template_id", templateId)
           .eq("field_key", "extract")
           .order("sort_order")
@@ -245,6 +248,12 @@ async function handleNewSubmission(
             label: (m.display_label as string | null) ?? (m.placeholder_token as string),
             hint: (m.extraction_hint as string | null) ?? "",
           }));
+        comparisonModeByToken = new Map(
+          (mappings ?? []).map((m) => [
+            m.placeholder_token as string,
+            (m.comparison_mode as ComparisonMode | null) ?? "exact",
+          ])
+        );
       }
 
       const extracted = await extractDocumentFields(
@@ -257,6 +266,34 @@ async function handleNewSubmission(
       const fieldValues = normalizeExtractedFields(
         Object.fromEntries(Object.entries(extracted.fields).map(([k, v]) => [k, v.value]))
       );
+
+      // Candidate comparison + flag decision per extract token (#58) — same
+      // model as the portal submission flow in app/actions/submission.ts.
+      const flagRows: {
+        project_id: string;
+        type: string;
+        field_key: string;
+        status: string;
+        current_value: string;
+        candidate_values: unknown;
+      }[] = [];
+      for (const [token, rawCandidates] of Object.entries(extracted.candidates)) {
+        if (rawCandidates.length === 0) continue;
+        const normalizedCandidates = rawCandidates.map((c) => ({
+          ...c,
+          value: normalizeExtractedFields({ [token]: c.value })[token],
+        }));
+        const plan = await buildFieldFlagPlan(normalizedCandidates, comparisonModeByToken.get(token) ?? "exact");
+        if (!plan.needsFlag) continue;
+        flagRows.push({
+          project_id: projectId,
+          type: plan.flagType,
+          field_key: token,
+          status: "open",
+          current_value: fieldValues[token] ?? plan.finalValue,
+          candidate_values: plan.candidateRecords,
+        });
+      }
 
       const siteAddress = (fieldValues["EXTRACT_ADDRESS"] ?? "").trim() || null;
 
@@ -288,6 +325,10 @@ async function handleNewSubmission(
             .eq("id", projectId);
           return;
         }
+      }
+
+      if (flagRows.length > 0) {
+        await supabase.from("field_flags").insert(flagRows);
       }
 
       // Save extracted field values, PO number, and site address to the project

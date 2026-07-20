@@ -27,11 +27,8 @@ This document is the authoritative record of all placeholder tokens in the Stock
 
 Values entered manually by the client on the submission form.
 
-
-| Token              | Description          | Occurrences      |
-| ------------------ | -------------------- | ---------------- |
-| `{CLIENT_ADDRESS}` | Site/project address | 6 (body + cover) |
-
+_(no tokens currently — `CLIENT_ADDRESS` moved to `EXTRACT_` below as of #58; it participates in
+the extracted-field flag/candidate system like every other extract-type token.)_
 
 ---
 
@@ -42,6 +39,7 @@ Values extracted by Claude (Haiku) from the uploaded building plans. All `EXTRAC
 
 | Token                          | Description                                      | How resolved                                     |
 | ------------------------------ | ------------------------------------------------ | ------------------------------------------------ |
+| `{CLIENT_ADDRESS}`             | Site/project address                             | Claude reads directly from plans (moved from `CLIENT_` group, #58) |
 | `{EXTRACT_HOUSE_TYPE}`         | House/dwelling type                              | Claude reads directly from plans                 |
 | `{EXTRACT_SITE_WD_NO}`         | Site working drawing number                      | Claude reads directly from plans                 |
 | `{EXTRACT_FLOOR_WD_NO}`        | Floor working drawing number                     | Claude reads directly from plans                 |

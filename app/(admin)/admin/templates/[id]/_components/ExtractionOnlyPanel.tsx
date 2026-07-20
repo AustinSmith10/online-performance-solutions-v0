@@ -16,7 +16,14 @@ interface Row {
   display_label: string | null;
   extraction_hint: string | null;
   is_required: boolean;
+  comparison_mode?: string | null;
 }
+
+const COMPARISON_MODE_OPTIONS = [
+  { value: "exact", label: "Exact match" },
+  { value: "normalized", label: "Normalize whitespace & case" },
+  { value: "semantic", label: "Semantic (AI-normalized)" },
+];
 
 interface Props {
   templateId: string;
@@ -191,6 +198,20 @@ function ExtractionTokenCard({
               defaultValue={token.extraction_hint ?? ""}
               className="w-full resize-y rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700">
+              Comparison mode — how candidates across documents are compared
+            </label>
+            <select
+              name="comparison_mode"
+              defaultValue={token.comparison_mode ?? "exact"}
+              className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+            >
+              {COMPARISON_MODE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-700">
             <input

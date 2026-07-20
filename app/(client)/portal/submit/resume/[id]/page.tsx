@@ -20,7 +20,7 @@ export default async function ResumeDraftPage({
   const supabase = createAdminClient();
   const orgId = user.client_id as string;
 
-  const [{ data: project }, { data: templates }] = await Promise.all([
+  const [{ data: project }, { data: templates }, { data: openFlags }] = await Promise.all([
     supabase
       .from("projects")
       .select("id, status, template_id, extracted_fields, po_number")
@@ -36,9 +36,24 @@ export default async function ResumeDraftPage({
       .eq("status", "active")
       .is("deleted_at", null)
       .order("name"),
+    supabase
+      .from("field_flags")
+      .select("field_key, type, candidate_values")
+      .eq("project_id", id)
+      .eq("status", "open"),
   ]);
 
   if (!project) notFound();
+
+  const flagsByToken = new Map(
+    (openFlags ?? []).map((f) => [
+      f.field_key as string,
+      {
+        type: f.type as string,
+        candidates: (f.candidate_values ?? []) as { value: string; confidence: Confidence; source_document: string }[],
+      },
+    ])
+  );
 
   if (project.status !== "draft") {
     redirect(`/portal/projects/${id}`);
@@ -102,7 +117,8 @@ export default async function ResumeDraftPage({
     m: { placeholder_token: string; display_label: string | null; field_key: string | null; is_required: boolean },
     value: string,
     confidence: Confidence = "low",
-    required = false
+    required = false,
+    candidates?: TokenField["candidates"]
   ): TokenField {
     return {
       token: m.placeholder_token,
@@ -110,12 +126,32 @@ export default async function ResumeDraftPage({
       value,
       confidence,
       required,
+      candidates,
     };
+  }
+
+  function bestConfidence(candidates: { confidence: Confidence }[]): Confidence {
+    const rank = (c: Confidence) => (c === "high" ? 2 : c === "medium" ? 1 : 0);
+    return candidates.reduce(
+      (best, c) => (rank(c.confidence) > rank(best) ? c.confidence : best),
+      "low" as Confidence
+    );
   }
 
   const tokenGroups = {
     extract: extractMappings.map((m) => {
       const value = savedFields[m.placeholder_token] ?? "";
+      const flag = flagsByToken.get(m.placeholder_token);
+      if (flag) {
+        const hasMultipleCandidates = flag.type === "inconsistency" || flag.type === "both";
+        return makeField(
+          m,
+          value,
+          bestConfidence(flag.candidates),
+          m.is_required,
+          hasMultipleCandidates ? flag.candidates : undefined
+        );
+      }
       return makeField(m, value, value.trim() ? "high" : "low", m.is_required);
     }),
     org: orgMappings.map((m) =>

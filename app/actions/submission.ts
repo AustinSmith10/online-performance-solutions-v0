@@ -7,8 +7,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
-import { extractDocumentFields, type ExtractedField, type Confidence } from "@/lib/documents/extractor";
+import { extractDocumentFields, type ExtractedField, type Confidence, type ExtractedCandidate } from "@/lib/documents/extractor";
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
+import { buildFieldFlagPlan, type FieldFlagPlan } from "@/lib/documents/field-flags";
+import type { ComparisonMode } from "@/lib/documents/compare-candidates";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { addWorkingDays } from "@/lib/delivery/working-days";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/config/support";
@@ -33,6 +35,9 @@ export interface TokenField {
   value: string;
   confidence: Confidence;
   required: boolean;
+  // Present only when 2+ distinct candidates were found across documents —
+  // lets the review form offer a picker alongside free-text correction.
+  candidates?: ExtractedCandidate[];
 }
 
 // ─── Step 1 → 2 state ────────────────────────────────────────────────────────
@@ -288,7 +293,7 @@ export async function finalizeSubmission(
   const [mappingsResult, orgResult, templateResult] = await Promise.all([
     supabase
       .from("template_field_mappings")
-      .select("placeholder_token, field_key, display_label, extraction_hint, is_required")
+      .select("placeholder_token, field_key, display_label, extraction_hint, is_required, comparison_mode")
       .eq("template_id", templateId)
       .eq("is_mapped", true)
       .order("sort_order")
@@ -348,6 +353,23 @@ export async function finalizeSubmission(
     };
   }
 
+  // Candidate comparison + flag decision per extract token (#58). Tokens
+  // resolved by metrics-autofill instead of AI extraction have no entry in
+  // `candidates` and are skipped — no AI judgment sits behind those values.
+  const comparisonModeByToken = new Map(
+    extractMappings.map((m) => [m.placeholder_token, (m.comparison_mode as ComparisonMode) ?? "exact"])
+  );
+  const flagPlans = new Map<string, FieldFlagPlan>();
+  for (const [token, rawCandidates] of Object.entries(extraction.candidates)) {
+    if (rawCandidates.length === 0) continue;
+    const normalizedCandidates = rawCandidates.map((c) => ({
+      ...c,
+      value: normalizeExtractedFields({ [token]: c.value })[token],
+    }));
+    const plan = await buildFieldFlagPlan(normalizedCandidates, comparisonModeByToken.get(token) ?? "exact");
+    flagPlans.set(token, plan);
+  }
+
   // Duplicate address check — block draft creation if any non-deleted project
   // for this org already has the same address (submitted or draft).
   const extractedAddress = extraction.fields["EXTRACT_ADDRESS"]?.value?.trim() ?? "";
@@ -401,6 +423,20 @@ export async function finalizeSubmission(
     return { step: 1, error: "Failed to save your draft. Please try again." };
   }
 
+  const flagRows = [...flagPlans.entries()]
+    .filter(([, plan]) => plan.needsFlag)
+    .map(([token, plan]) => ({
+      project_id: projectId,
+      type: plan.flagType,
+      field_key: token,
+      status: "open",
+      current_value: draftFields[token] ?? plan.finalValue,
+      candidate_values: plan.candidateRecords,
+    }));
+  if (flagRows.length > 0) {
+    await supabase.from("field_flags").insert(flagRows);
+  }
+
   if (uploads.length > 0) {
     const fileRecords = uploads.map(({ slug, name, path }) => ({
       project_id: projectId,
@@ -429,13 +465,18 @@ export async function finalizeSubmission(
   });
 
   const tokenGroups = {
-    extract: extractMappings.map((m) => ({
-      token: m.placeholder_token,
-      label: m.display_label ?? m.placeholder_token,
-      value: draftFields[m.placeholder_token] ?? extraction.fields[m.placeholder_token]?.value ?? "",
-      confidence: extraction.fields[m.placeholder_token]?.confidence ?? ("low" as Confidence),
-      required: m.is_required ?? false,
-    })),
+    extract: extractMappings.map((m) => {
+      const plan = flagPlans.get(m.placeholder_token);
+      const hasMultipleCandidates = plan?.flagType === "inconsistency" || plan?.flagType === "both";
+      return {
+        token: m.placeholder_token,
+        label: m.display_label ?? m.placeholder_token,
+        value: draftFields[m.placeholder_token] ?? extraction.fields[m.placeholder_token]?.value ?? "",
+        confidence: extraction.fields[m.placeholder_token]?.confidence ?? ("low" as Confidence),
+        required: m.is_required ?? false,
+        candidates: hasMultipleCandidates ? plan!.candidateRecords : undefined,
+      };
+    }),
     org: orgMappings.map((m) => ({
       token: m.placeholder_token,
       label: m.display_label ?? m.placeholder_token,
@@ -646,6 +687,32 @@ export async function submitProject(
 
   if (updateError) return { error: `Failed to submit project: ${updateError.message}` };
   if (!count) return { error: "This project has already been submitted or is no longer a draft." };
+
+  // A field the stakeholder actively edited on the review form is treated as
+  // self-resolved — no reason to leave a flag open for a value the person
+  // reviewing it already fixed. Untouched flags stay open post-submission.
+  if (correctedFields.length > 0) {
+    try {
+      await Promise.all(
+        correctedFields.map((token) =>
+          supabase
+            .from("field_flags")
+            .update({
+              status: "resolved",
+              current_value: extractedFields[token] ?? "",
+              resolved_by: actor.id,
+              resolved_at: new Date().toISOString(),
+              resolution_reason: "self_resolved",
+            })
+            .eq("project_id", projectId)
+            .eq("field_key", token)
+            .eq("status", "open")
+        )
+      );
+    } catch (err) {
+      console.error("[submitProject] flag auto-resolve failed:", err);
+    }
+  }
 
   // Defer all post-success side effects so they don't block the redirect
   after(async () => {

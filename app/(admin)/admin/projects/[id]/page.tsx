@@ -30,7 +30,8 @@ import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { HighlightRing } from "@/components/HighlightRing";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
 import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
-import { ProjectDetailsEditor } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectDetailsEditor";
+import { ProjectDetailsEditor, type OpenFieldFlag } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectDetailsEditor";
+import { ReExtractButton } from "@/components/ReExtractButton";
 import { ProjectAuditTrail, type ProjectAuditRow } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectAuditTrail";
 import { PbdbVersionsCard } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbVersionsCard";
 import { CollapsibleSection } from "@/app/(consultant)/ops/projects/[id]/_components/CollapsibleSection";
@@ -271,6 +272,7 @@ export default async function ProjectDetailPage({
     { data: rawProjectStakeholders },
     { data: rawAssignments },
     { data: rawFullAuditEntries },
+    { data: openFieldFlags },
   ] = await Promise.all([
     project.template_id
       ? supabase
@@ -328,9 +330,21 @@ export default async function ProjectDetailPage({
       .eq("project_id", id)
       .not("event_type", "in", `(${PROJECT_AUDIT_EXCLUDED_EVENTS.join(",")})`)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("field_flags")
+      .select("id, field_key, candidate_values")
+      .eq("project_id", id)
+      .eq("status", "open"),
   ]);
 
   const auditEntries = (rawFullAuditEntries ?? []) as ProjectAuditRow[];
+
+  const flagsByToken: Record<string, OpenFieldFlag> = Object.fromEntries(
+    (openFieldFlags ?? []).map((f) => [
+      f.field_key as string,
+      { id: f.id as string, candidates: (f.candidate_values ?? []) as OpenFieldFlag["candidates"] },
+    ])
+  );
 
   const [files, evidenceFiles, pbdrFiles] = await Promise.all([
     Promise.all(
@@ -754,7 +768,11 @@ export default async function ProjectDetailPage({
         poNumber={project.po_number}
         fieldEntries={clientFieldEntries}
         orgEntries={orgTokenEntries}
+        flagsByToken={flagsByToken}
       />
+      <div className="px-1">
+        <ReExtractButton projectId={id} />
+      </div>
     </>
   );
 

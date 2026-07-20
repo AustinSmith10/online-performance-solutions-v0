@@ -17,7 +17,8 @@ import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
 import { CollapsibleSection } from "./_components/CollapsibleSection";
-import { ProjectDetailsEditor } from "./_components/ProjectDetailsEditor";
+import { ProjectDetailsEditor, type OpenFieldFlag } from "./_components/ProjectDetailsEditor";
+import { ReExtractButton } from "@/components/ReExtractButton";
 import { ProjectAuditTrail, type ProjectAuditRow } from "./_components/ProjectAuditTrail";
 import { LogStakeholderResponseForm } from "./_components/LogStakeholderResponseForm";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
@@ -163,6 +164,7 @@ export default async function ConsultantProjectDetailPage({
     { data: rawAuditEntries },
     { data: rawRevisionNotes },
     { data: pendingDelivery },
+    { data: openFieldFlags },
   ] = await Promise.all([
     project.template_id
       ? supabase
@@ -216,7 +218,19 @@ export default async function ConsultantProjectDetailPage({
       .select("review_cycle, note")
       .eq("project_id", id),
     supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).maybeSingle(),
+    supabase
+      .from("field_flags")
+      .select("id, field_key, candidate_values")
+      .eq("project_id", id)
+      .eq("status", "open"),
   ]);
+
+  const flagsByToken: Record<string, OpenFieldFlag> = Object.fromEntries(
+    (openFieldFlags ?? []).map((f) => [
+      f.field_key as string,
+      { id: f.id as string, candidates: (f.candidate_values ?? []) as OpenFieldFlag["candidates"] },
+    ])
+  );
 
   const revisionNotesByCycle = new Map<number, string>(
     (rawRevisionNotes ?? []).map((r) => [r.review_cycle as number, r.note as string])
@@ -586,7 +600,11 @@ export default async function ConsultantProjectDetailPage({
         poNumber={project.po_number}
         fieldEntries={clientFieldEntries}
         orgEntries={orgTokenEntries}
+        flagsByToken={flagsByToken}
       />
+      <div className="px-1">
+        <ReExtractButton projectId={id} />
+      </div>
       <CollapsibleSection title="Client contact" defaultOpen>
         <div className="divide-y divide-zinc-100">
           {project.submitter ? (

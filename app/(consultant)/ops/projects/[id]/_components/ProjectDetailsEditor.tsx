@@ -6,6 +6,7 @@ import { updateProjectDetails, type UpdateProjectDetailsState } from "@/app/acti
 import { EditIconButton } from "@/components/EditIconButton";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { FieldFlagReview, type FieldFlagCandidate } from "@/components/field-flag-review";
 
 interface FieldEntry {
   token: string;
@@ -13,11 +14,17 @@ interface FieldEntry {
   value: string;
 }
 
+export interface OpenFieldFlag {
+  id: string;
+  candidates: FieldFlagCandidate[];
+}
+
 interface Props {
   projectId: string;
   poNumber: string | null;
   fieldEntries: FieldEntry[];
   orgEntries: FieldEntry[];
+  flagsByToken?: Record<string, OpenFieldFlag>;
 }
 
 export function ProjectDetailsEditor({
@@ -25,6 +32,7 @@ export function ProjectDetailsEditor({
   poNumber,
   fieldEntries,
   orgEntries,
+  flagsByToken = {},
 }: Props) {
   return (
     <>
@@ -34,7 +42,14 @@ export function ProjectDetailsEditor({
         <div className="divide-y divide-zinc-100">
           <EditableRow projectId={projectId} id="po_number" label="PO number" value={poNumber ?? ""} />
           {fieldEntries.map(({ token, label, value }) => (
-            <EditableRow key={token} projectId={projectId} id={token} label={label} value={value} />
+            <EditableRow
+              key={token}
+              projectId={projectId}
+              id={token}
+              label={label}
+              value={value}
+              flag={flagsByToken[token]}
+            />
           ))}
         </div>
       </CollapsibleSection>
@@ -61,11 +76,13 @@ function EditableRow({
   id,
   label,
   value,
+  flag,
 }: {
   projectId: string;
   id: string;
   label: string;
   value: string;
+  flag?: OpenFieldFlag;
 }) {
   const router = useRouter();
   const boundAction = updateProjectDetails.bind(null, projectId);
@@ -74,6 +91,7 @@ function EditableRow({
     {}
   );
   const [editing, setEditing] = useState(false);
+  const [resolvedValue, setResolvedValue] = useState<string | null>(null);
   useUnsavedChanges(`project-detail-${id}`, editing);
 
   useEffect(() => {
@@ -85,14 +103,27 @@ function EditableRow({
 
   if (!editing) {
     return (
-      <div className="group flex items-center gap-4 px-5 py-3">
-        <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
-        <span className="min-w-0 flex-1 text-sm text-zinc-900">{value || "—"}</span>
-        <EditIconButton
-          onClick={() => setEditing(true)}
-          label={`Edit ${label}`}
-          className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
-        />
+      <div className="px-5 py-3">
+        <div className="group flex items-center gap-4">
+          <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
+          <span className="min-w-0 flex-1 text-sm text-zinc-900">{resolvedValue ?? (value || "—")}</span>
+          {flag && !resolvedValue && (
+            <span className="shrink-0">
+              <FieldFlagReview
+                flagId={flag.id}
+                label={label}
+                currentValue={value}
+                candidates={flag.candidates}
+                onResolved={(v) => setResolvedValue(v)}
+              />
+            </span>
+          )}
+          <EditIconButton
+            onClick={() => setEditing(true)}
+            label={`Edit ${label}`}
+            className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
+          />
+        </div>
       </div>
     );
   }

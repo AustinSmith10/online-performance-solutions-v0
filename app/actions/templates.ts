@@ -7,6 +7,12 @@ import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { extractPlaceholderTokens } from "@/lib/documents/validator";
 import { detectSource, isKnownToken } from "@/lib/documents/field-keys";
+import type { ComparisonMode } from "@/lib/documents/compare-candidates";
+
+const COMPARISON_MODES = new Set<ComparisonMode>(["exact", "normalized", "semantic"]);
+function parseComparisonMode(v: FormDataEntryValue | null): ComparisonMode {
+  return COMPARISON_MODES.has(v as ComparisonMode) ? (v as ComparisonMode) : "exact";
+}
 
 export type UploadTemplateState = { error?: string };
 
@@ -363,6 +369,7 @@ export async function updateTokenLabels(
     extraction_hint: string | null;
     is_required: boolean;
     sort_order: number;
+    comparison_mode: ComparisonMode;
   }> = [];
 
   for (const [key, rawVal] of formData.entries()) {
@@ -372,14 +379,15 @@ export async function updateTokenLabels(
       const label = (rawVal as string).trim();
       const is_required = formData.get(`required_${token}`) === "on";
       const sort_order = parseInt((formData.get(`order_${token}`) as string | null) ?? "0", 10) || 0;
-      if (token) updates.push({ placeholder_token: token, display_label: label, extraction_hint: hint, is_required, sort_order });
+      const comparison_mode = parseComparisonMode(formData.get(`comparison_mode_${token}`));
+      if (token) updates.push({ placeholder_token: token, display_label: label, extraction_hint: hint, is_required, sort_order, comparison_mode });
     }
   }
 
-  for (const { placeholder_token, display_label, extraction_hint, is_required, sort_order } of updates) {
+  for (const { placeholder_token, display_label, extraction_hint, is_required, sort_order, comparison_mode } of updates) {
     const { error } = await supabase
       .from("template_field_mappings")
-      .update({ display_label, extraction_hint, is_required, sort_order })
+      .update({ display_label, extraction_hint, is_required, sort_order, comparison_mode })
       .eq("template_id", templateId)
       .eq("placeholder_token", placeholder_token);
 
@@ -410,6 +418,7 @@ export async function addExtractionOnlyToken(
   const label = (formData.get("label") as string | null)?.trim();
   const hint = (formData.get("hint") as string | null)?.trim();
   const is_required = formData.get("is_required") === "on";
+  const comparison_mode = parseComparisonMode(formData.get("comparison_mode"));
 
   if (!token) return { error: "Token name is required." };
   if (!token.startsWith("EXTRACT_")) return { error: "Extraction-only tokens must start with EXTRACT_." };
@@ -435,6 +444,7 @@ export async function addExtractionOnlyToken(
     extraction_hint: hint,
     is_required,
     sort_order: 0,
+    comparison_mode,
   });
 
   if (error) {
@@ -501,6 +511,7 @@ export async function updateExtractionToken(
   const label = (formData.get("label") as string | null)?.trim();
   const hint = (formData.get("hint") as string | null)?.trim();
   const is_required = formData.get("is_required") === "on";
+  const comparison_mode = parseComparisonMode(formData.get("comparison_mode"));
 
   if (!label) return { error: "Display label is required." };
   if (!hint) return { error: "Extraction hint is required." };
@@ -509,7 +520,7 @@ export async function updateExtractionToken(
 
   const { error } = await supabase
     .from("template_field_mappings")
-    .update({ display_label: label, extraction_hint: hint, is_required })
+    .update({ display_label: label, extraction_hint: hint, is_required, comparison_mode })
     .eq("id", rowId)
     .eq("template_id", templateId)
     .eq("in_template", false);
@@ -599,12 +610,13 @@ export async function updateSingleTokenLabel(
 
   const hint = (formData.get("hint") as string | null)?.trim() || null;
   const is_required = formData.get("is_required") === "on";
+  const comparison_mode = parseComparisonMode(formData.get("comparison_mode"));
 
   const supabase = createAdminClient();
 
   const { error } = await supabase
     .from("template_field_mappings")
-    .update({ display_label: label, extraction_hint: hint, is_required })
+    .update({ display_label: label, extraction_hint: hint, is_required, comparison_mode })
     .eq("template_id", templateId)
     .eq("placeholder_token", placeholderToken)
     .eq("in_template", true);

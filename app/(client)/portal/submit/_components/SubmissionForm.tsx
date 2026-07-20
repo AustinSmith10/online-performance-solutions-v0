@@ -77,15 +77,47 @@ function ConfidenceBadge({
   fieldKey,
   confidence,
   modified,
+  hasCandidates,
+  isExtractField,
 }: {
   fieldKey: string;
   confidence: Confidence;
   modified: Set<string>;
+  hasCandidates?: boolean;
+  isExtractField?: boolean;
 }) {
-  if (confidence === "high" || modified.has(fieldKey)) return null;
+  if (modified.has(fieldKey)) return null;
+  if (hasCandidates) {
+    return (
+      <span className="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+        Multiple values found — please check
+      </span>
+    );
+  }
+  if (confidence === "high") {
+    // Extract-type fields are the only ones actually subject to AI
+    // confidence/candidate checking — org/client fields are user-entered
+    // or config-driven and were never "checked", so don't claim they were.
+    if (!isExtractField) return null;
+    // Icon-only, no text, muted gray rather than green/"Verified" — a loud
+    // affirmative badge risks reading as "this is correct" when it only
+    // means the pipeline didn't flag anything. The tooltip carries the
+    // caveat for anyone who wants it; the default view stays quiet.
+    return (
+      <span
+        className="inline-flex shrink-0 items-center text-zinc-400"
+        title="AI found no issues with this field — still worth a quick check"
+      >
+        <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+          <path fillRule="evenodd" d="M16.704 5.29a1 1 0 010 1.414l-7.5 7.5a1 1 0 01-1.414 0l-3.5-3.5a1 1 0 111.414-1.414L8.5 12.086l6.79-6.79a1 1 0 011.414 0z" clipRule="evenodd" />
+        </svg>
+        <span className="sr-only">AI found no issues with this field</span>
+      </span>
+    );
+  }
   return (
     <span
-      className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${
+      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
         confidence === "medium"
           ? "bg-yellow-100 text-yellow-700"
           : "bg-red-100 text-red-700"
@@ -96,8 +128,9 @@ function ConfidenceBadge({
   );
 }
 
-function fieldClass(modified: Set<string>, fieldKey: string, confidence: Confidence) {
+function fieldClass(modified: Set<string>, fieldKey: string, confidence: Confidence, hasCandidates?: boolean) {
   if (modified.has(fieldKey)) return "border-zinc-200 bg-white focus:ring-zinc-400";
+  if (hasCandidates) return "border-orange-300 bg-orange-50 focus:ring-orange-400";
   if (confidence === "low") return "border-red-300 bg-red-50 focus:ring-red-400";
   if (confidence === "medium") return "border-yellow-300 bg-yellow-50 focus:ring-yellow-400";
   return "border-zinc-200 bg-zinc-50 focus:ring-zinc-400";
@@ -110,28 +143,75 @@ function TokenInput({
   modified,
   onMark,
   disabled,
+  isExtractField,
 }: {
   field: TokenField;
   modified: Set<string>;
   onMark: (k: string) => void;
   disabled?: boolean;
+  isExtractField?: boolean;
 }) {
+  const hasCandidates = (field.candidates?.length ?? 0) > 1;
+  const [value, setValue] = useState(field.value);
+
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-zinc-700">
-        {field.label}
-        {field.required && <span className="ml-0.5 text-red-500">*</span>}
-        <ConfidenceBadge fieldKey={field.token} confidence={field.confidence} modified={modified} />
+      <label className="mb-1 flex items-center justify-between gap-2 text-xs font-medium text-zinc-700">
+        <span>
+          {field.label}
+          {field.required && <span className="ml-0.5 text-red-500">*</span>}
+        </span>
+        <ConfidenceBadge
+          fieldKey={field.token}
+          confidence={field.confidence}
+          modified={modified}
+          hasCandidates={hasCandidates}
+          isExtractField={isExtractField}
+        />
       </label>
       <input
         type="text"
         name={field.token}
-        defaultValue={field.value}
+        value={value}
         required={field.required}
         disabled={disabled}
-        onChange={() => onMark(field.token)}
-        className={`w-full rounded-md border px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${fieldClass(modified, field.token, field.confidence)}`}
+        onChange={(e) => {
+          setValue(e.target.value);
+          onMark(field.token);
+        }}
+        className={`w-full rounded-md border px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${fieldClass(modified, field.token, field.confidence, hasCandidates)}`}
       />
+      {hasCandidates && (
+        <div className="mt-2 space-y-1 rounded-md border border-orange-200 bg-orange-50/60 p-2">
+          <p className="text-xs font-medium text-orange-800">
+            Documents disagree — pick the correct value or edit it above:
+          </p>
+          {field.candidates!.map((c, i) => (
+            <label
+              key={`${c.value}-${i}`}
+              className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
+            >
+              <input
+                type="radio"
+                name={`${field.token}__pick`}
+                disabled={disabled}
+                checked={value === c.value}
+                onChange={() => {
+                  setValue(c.value);
+                  onMark(field.token);
+                }}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium text-zinc-900">{c.value}</span>{" "}
+                <span className="text-zinc-400">
+                  ({c.confidence} confidence — {c.source_document})
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -341,6 +421,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                         modified={modified}
                         onMark={mark}
                         disabled={submitPending}
+                        isExtractField
                       />
                     ))}
                   </div>

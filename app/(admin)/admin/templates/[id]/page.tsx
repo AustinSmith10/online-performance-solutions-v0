@@ -58,7 +58,7 @@ export default async function TemplatePage({
   const sp = await searchParams;
   const supabase = createAdminClient();
 
-  const [{ data: tmpl }, { data: mappings }, { data: fileReqs }] = await Promise.all([
+  const [{ data: tmpl }, { data: mappings, error: mappingsError }, { data: fileReqs }] = await Promise.all([
     supabase
       .from("templates")
       .select("id, name, status, storage_path, created_at, deleted_at, section_labels, org:client_id(id, name, client_config)")
@@ -66,7 +66,7 @@ export default async function TemplatePage({
       .maybeSingle(),
     supabase
       .from("template_field_mappings")
-      .select("id, placeholder_token, field_key, is_mapped, in_template, display_label, extraction_hint, is_required, sort_order, client_visible, client_sort_order")
+      .select("id, placeholder_token, field_key, is_mapped, in_template, display_label, extraction_hint, is_required, sort_order, client_visible, client_sort_order, comparison_mode")
       .eq("template_id", id)
       .order("sort_order", { ascending: true })
       .order("placeholder_token", { ascending: true }),
@@ -76,6 +76,13 @@ export default async function TemplatePage({
       .eq("template_id", id)
       .order("sort_order", { ascending: true }),
   ]);
+
+  // A query error here (e.g. a schema column the DB hasn't migrated yet)
+  // otherwise renders as an empty, silently misleading "no tokens" state —
+  // surface it instead of hiding it.
+  if (mappingsError) {
+    console.error(`[admin/templates/${id}] template_field_mappings query failed:`, mappingsError);
+  }
 
   if (!tmpl) notFound();
 
