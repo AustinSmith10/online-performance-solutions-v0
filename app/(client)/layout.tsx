@@ -5,6 +5,7 @@ import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { NotificationToasts } from "@/components/NotificationToasts";
 import { TopNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
+import { ClientOnboardingReplayButton } from "./_components/ClientOnboardingReplayButton";
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   const user = await requireRole("stakeholder");
@@ -28,6 +29,7 @@ export default async function ClientLayout({ children }: { children: React.React
               </nav>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <ClientOnboardingReplayButton />
               <NotificationTrayServer projectBasePath="/portal/projects" align="right" />
               <Link
                 href="/portal/profile"

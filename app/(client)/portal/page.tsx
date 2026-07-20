@@ -270,10 +270,10 @@ export default async function ClientPortalPage({
     readyWindowDays: READY_WINDOW_DAYS,
   };
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 space-y-8">
+    <div className="mx-auto max-w-5xl px-4 py-10 space-y-8">
       {justDeleted && <DeletedBanner />}
       {justRestored && <RestoredBanner />}
-      <PortalDashboard {...dashboardData} />
+      <PortalDashboard {...dashboardData} showOnboarding={!user.has_seen_client_onboarding} />
     </div>
   );
 }

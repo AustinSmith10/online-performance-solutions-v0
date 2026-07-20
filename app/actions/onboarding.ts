@@ -25,3 +25,17 @@ export async function markOnboardingStepSeen(stepId: string) {
     .update({ onboarding_steps_seen: [...seen, stepId] })
     .eq("id", user.id);
 }
+
+export async function dismissClientOnboarding() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const adminClient = createAdminClient();
+  await adminClient
+    .from("users")
+    .update({ has_seen_client_onboarding: true })
+    .eq("id", user.id);
+}

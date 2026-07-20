@@ -10,10 +10,14 @@
 // MiniStepper the project-detail page already uses.
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { MiniStepper, stepperBadge, stepperActiveIndexOf, stepperNeedsStakeholderAction } from "@/components/delivery/StepperVisuals";
 import { DownloadPbdrLink } from "./DownloadPbdrLink";
 import { PendingReviewModal } from "./PendingReviewModal";
 import { usePendingReviewHeroAction, useReadyDownloadHeroAction } from "./HeroActionMenu";
+import { ClientOnboardingBanner, CLIENT_ONBOARDING_REPLAY_EVENT } from "./ClientOnboardingBanner";
+import { dismissClientOnboarding } from "@/app/actions/onboarding";
 import type { DashboardData } from "./dashboardTypes";
 import type { StepperResult } from "@/lib/delivery/stepper";
 
@@ -98,7 +102,31 @@ function CompactHero({
   );
 }
 
-export function PortalDashboard({ rows, readyItems, org, readyWindowDays }: DashboardData) {
+export function PortalDashboard({
+  rows,
+  readyItems,
+  org,
+  readyWindowDays,
+  showOnboarding: initialShowOnboarding,
+}: DashboardData & { showOnboarding: boolean }) {
+  const searchParams = useSearchParams();
+  const [showOnboarding, setShowOnboarding] = useState(
+    initialShowOnboarding || searchParams.get("onboarding") === "replay"
+  );
+
+  useEffect(() => {
+    function onReplay() {
+      setShowOnboarding(true);
+    }
+    window.addEventListener(CLIENT_ONBOARDING_REPLAY_EVENT, onReplay);
+    return () => window.removeEventListener(CLIENT_ONBOARDING_REPLAY_EVENT, onReplay);
+  }, []);
+
+  function dismissOnboarding() {
+    setShowOnboarding(false);
+    dismissClientOnboarding();
+  }
+
   const attentionCount = rows.filter((r) => r.pendingReview).length;
   const inProgressCount = rows.filter((r) => !r.pendingReview && !r.isDelivered).length;
   const readyCount = readyItems.length;
@@ -123,11 +151,15 @@ export function PortalDashboard({ rows, readyItems, org, readyWindowDays }: Dash
 
   return (
     <div className="space-y-5">
+      {showOnboarding && <ClientOnboardingBanner onDismiss={dismissOnboarding} />}
+
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900">My report requests</h1>
         <Link
           href="/portal/submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          className={`rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 ${
+            showOnboarding ? "ring-2 ring-blue-500 ring-offset-2 transition-all" : ""
+          }`}
         >
           New report request
         </Link>
