@@ -1,38 +1,12 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ClickableRow } from "@/components/ClickableRow";
 import { ActionPanel } from "./_components/ActionPanel";
+import { ActiveProjectsList, type ActiveProjectItem } from "./_components/ActiveProjectsList";
 import { OnboardingTourProvider } from "@/components/onboarding-tour/context";
 import { TourHighlight } from "@/components/onboarding-tour/TourHighlight";
 import { ADMIN_TOUR_STEPS } from "@/lib/onboarding/steps";
 import type { ProjectStatus } from "@/types";
-
-const STATUS_LABELS: Record<ProjectStatus, string> = {
-  draft: "Draft",
-  submitted: "Submitted",
-  assigned: "Assigned",
-  in_progress: "In Progress",
-  dispatched: "Awaiting Approval",
-  revision_required: "Revision Required",
-  converting: "Converting to PBDR",
-  delivered: "Delivered",
-  complete: "Complete",
-  paused: "Paused",
-};
-
-const STATUS_CLASSES: Record<ProjectStatus, string> = {
-  draft: "bg-zinc-100 text-zinc-500",
-  submitted: "bg-blue-100 text-blue-700",
-  assigned: "bg-yellow-100 text-yellow-700",
-  in_progress: "bg-purple-100 text-purple-700",
-  dispatched: "bg-amber-100 text-amber-700",
-  revision_required: "bg-red-100 text-red-700",
-  converting: "bg-purple-100 text-purple-700",
-  delivered: "bg-green-100 text-green-700",
-  complete: "bg-zinc-100 text-zinc-500",
-  paused: "bg-amber-100 text-amber-700",
-};
 
 const IN_FLIGHT_STATUSES: ProjectStatus[] = [
   "submitted",
@@ -167,6 +141,19 @@ export default async function AdminDashboardPage({
   );
   const systemErrors = (systemErrorsResult.data ?? []) as SystemError[];
 
+  const activeProjectItems: ActiveProjectItem[] = allActive.map((p) => ({
+    id: p.id,
+    href: `/admin/projects/${p.id}`,
+    label: projectLabel(p),
+    client: p.clients?.name ?? null,
+    consultant: consultantName(p.consultant),
+    status: p.status,
+    dueLabel: p.expected_delivery_date ? new Date(p.expected_delivery_date).toLocaleDateString("en-AU") : null,
+    overdue: !!(p.expected_delivery_date && p.expected_delivery_date < todayIso),
+    awaitingStakeholder: pendingProjectIds.has(p.id),
+    overridePending: p.payment_override,
+  }));
+
   return (
     <OnboardingTourProvider
       steps={ADMIN_TOUR_STEPS}
@@ -178,10 +165,10 @@ export default async function AdminDashboardPage({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900">Dashboard</h1>
         <Link
-          href="/admin/recovery"
-          className="text-sm text-zinc-500 hover:text-zinc-800 hover:underline"
+          href="/admin/projects/submit"
+          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
         >
-          Recovery Bin →
+          Submit request
         </Link>
       </div>
 
@@ -215,65 +202,7 @@ export default async function AdminDashboardPage({
             </Link>
           </div>
 
-          {allActive.length === 0 ? (
-            <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
-              No active projects.
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead className="border-b border-zinc-100 bg-zinc-50">
-                  <tr>
-                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
-                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Client</th>
-                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Consultant</th>
-                    <th className="px-5 py-3 text-left font-medium text-zinc-500">Status</th>
-                    <th className="whitespace-nowrap px-5 py-3 text-left font-medium text-zinc-500">Due</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-50">
-                  {allActive.map((p) => {
-                    const isOverdue =
-                      p.expected_delivery_date && p.expected_delivery_date < todayIso;
-                    return (
-                      <ClickableRow key={p.id} href={`/admin/projects/${p.id}`}>
-                        <td className="max-w-[200px] truncate px-5 py-3 font-medium text-zinc-900">
-                          {projectLabel(p)}
-                        </td>
-                        <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                          {p.clients?.name ?? "—"}
-                        </td>
-                        <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                          {consultantName(p.consultant) ?? (
-                            <span className="text-zinc-400">Unassigned</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3">
-                          <div className="flex flex-wrap gap-1">
-                            <span
-                              className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}
-                            >
-                              {STATUS_LABELS[p.status]}
-                            </span>
-                            {isOverdue && (
-                              <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                                Overdue
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
-                          {p.expected_delivery_date
-                            ? new Date(p.expected_delivery_date).toLocaleDateString("en-AU")
-                            : "—"}
-                        </td>
-                      </ClickableRow>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <ActiveProjectsList projects={activeProjectItems} storageKey={`admin-dashboard-views:${user.id}`} />
         </section>
       </TourHighlight>
     </div>
