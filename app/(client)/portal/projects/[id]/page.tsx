@@ -6,7 +6,8 @@ import { DeleteProjectButton } from "./_components/DeleteProjectButton";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { PortalApprovalForm } from "./_components/PortalApprovalForm";
 import { ReplaceDocumentControl } from "./_components/ReplaceDocumentControl";
-import { SubmissionDetailsCard } from "./_components/SubmissionDetailsCard";
+import { SubmissionDetailsCard, type OpenFieldFlag } from "./_components/SubmissionDetailsCard";
+import { ReExtractButton } from "@/components/ReExtractButton";
 import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { DownloadCard } from "@/components/DownloadCard";
@@ -153,39 +154,53 @@ export default async function ClientProjectDetailPage({
       .order("review_cycle", { ascending: false }),
   ]);
 
-  // Load template mappings, submission files, latest PBDB, and latest PBDR in parallel
-  const [{ data: mappings }, { data: rawFiles }, { data: rawPbdbs }, { data: rawPbdrs }] = await Promise.all([
-    project.template_id
-      ? supabase
-          .from("template_field_mappings")
-          .select("placeholder_token, field_key, display_label, client_visible, client_sort_order")
-          .eq("template_id", project.template_id)
-          .order("client_sort_order", { ascending: true })
-          .order("placeholder_token", { ascending: true })
-      : Promise.resolve({ data: [] }),
-    supabase
-      .from("project_files")
-      .select("id, file_type, original_filename, storage_path, created_at")
-      .eq("project_id", id)
-      .not("file_type", "in", '("pbdb","pbdr","pbdb_pdf")')
-      .order("created_at"),
-    pbdbVisible
-      ? supabase
-          .from("project_files")
-          .select("original_filename, created_at")
-          .eq("project_id", id)
-          .eq("file_type", "pbdb")
-          .order("version", { ascending: false })
-          .limit(1)
-      : Promise.resolve({ data: [] }),
-    supabase
-      .from("project_files")
-      .select("id, original_filename, storage_path, version, created_at")
-      .eq("project_id", id)
-      .eq("file_type", "pbdr")
-      .order("version", { ascending: false })
-      .limit(1),
-  ]);
+  // Load template mappings, submission files, latest PBDB, latest PBDR, and
+  // open field flags in parallel
+  const [{ data: mappings }, { data: rawFiles }, { data: rawPbdbs }, { data: rawPbdrs }, { data: openFieldFlags }] =
+    await Promise.all([
+      project.template_id
+        ? supabase
+            .from("template_field_mappings")
+            .select("placeholder_token, field_key, display_label, client_visible, client_sort_order")
+            .eq("template_id", project.template_id)
+            .order("client_sort_order", { ascending: true })
+            .order("placeholder_token", { ascending: true })
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from("project_files")
+        .select("id, file_type, original_filename, storage_path, created_at")
+        .eq("project_id", id)
+        .not("file_type", "in", '("pbdb","pbdr","pbdb_pdf")')
+        .order("created_at"),
+      pbdbVisible
+        ? supabase
+            .from("project_files")
+            .select("original_filename, created_at")
+            .eq("project_id", id)
+            .eq("file_type", "pbdb")
+            .order("version", { ascending: false })
+            .limit(1)
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from("project_files")
+        .select("id, original_filename, storage_path, version, created_at")
+        .eq("project_id", id)
+        .eq("file_type", "pbdr")
+        .order("version", { ascending: false })
+        .limit(1),
+      supabase
+        .from("field_flags")
+        .select("id, field_key, candidate_values")
+        .eq("project_id", id)
+        .eq("status", "open"),
+    ]);
+
+  const flagsByToken: Record<string, OpenFieldFlag> = Object.fromEntries(
+    (openFieldFlags ?? []).map((f) => [
+      f.field_key as string,
+      { id: f.id as string, candidates: (f.candidate_values ?? []) as OpenFieldFlag["candidates"] },
+    ])
+  );
 
   // Submission files — signed URLs from `submissions` bucket
   const files = await Promise.all(
@@ -419,7 +434,21 @@ export default async function ClientProjectDetailPage({
           poNumber={project.po_number}
           fieldEntries={fieldEntries}
           locked={isLocked}
+          flagsByToken={flagsByToken}
         />
+      )}
+      {/* Draft projects already get a fresh extraction via the resume/step-2
+          flow — re-extract is for re-checking documents added after
+          submission, so it only makes sense once a project is past draft. */}
+      {!isDeleted && project.status !== "draft" && (
+        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+          <h2 className="mb-1 text-sm font-semibold text-zinc-900">Re-check documents</h2>
+          <p className="mb-3 text-sm text-zinc-500">
+            Added a document since submitting, or think something was misread? Re-run extraction
+            against your uploaded documents.
+          </p>
+          <ReExtractButton projectId={id} />
+        </div>
       )}
     </div>
   );

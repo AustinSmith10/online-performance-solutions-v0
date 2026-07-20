@@ -107,23 +107,26 @@ function EditableRow({
         <div className="group flex items-center gap-4">
           <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
           <span className="min-w-0 flex-1 text-sm text-zinc-900">{resolvedValue ?? (value || "—")}</span>
-          {flag && !resolvedValue && (
-            <span className="shrink-0">
-              <FieldFlagReview
-                flagId={flag.id}
-                label={label}
-                currentValue={value}
-                candidates={flag.candidates}
-                onResolved={(v) => setResolvedValue(v)}
-              />
-            </span>
-          )}
           <EditIconButton
             onClick={() => setEditing(true)}
             label={`Edit ${label}`}
             className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
           />
         </div>
+        {/* Rendered on its own line, not trailing inline with the value —
+            the expanded form needs the full row width, not just the
+            leftover space next to the value column. */}
+        {flag && !resolvedValue && (
+          <div className="mt-1 flex justify-end">
+            <FieldFlagReview
+              flagId={flag.id}
+              label={label}
+              currentValue={value}
+              candidates={flag.candidates}
+              onResolved={(v) => setResolvedValue(v)}
+            />
+          </div>
+        )}
       </div>
     );
   }

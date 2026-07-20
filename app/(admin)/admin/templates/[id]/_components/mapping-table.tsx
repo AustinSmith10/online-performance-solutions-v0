@@ -210,6 +210,20 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                         required
                       />
                     </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">
+                        Comparison mode — how candidates across documents are compared
+                      </label>
+                      <select
+                        name={`comparison_mode_${row.placeholder_token}`}
+                        defaultValue={row.comparison_mode ?? "exact"}
+                        className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                      >
+                        {COMPARISON_MODE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
                     <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-700">
                       <input
                         type="checkbox"

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { updateStakeholderSubmission, type UpdateSubmissionState } from "@/app/actions/projects";
 import { EditIconButton } from "@/components/EditIconButton";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
+import { FieldFlagReview, type FieldFlagCandidate } from "@/components/field-flag-review";
 
 interface FieldEntry {
   token: string;
@@ -12,14 +13,20 @@ interface FieldEntry {
   value: string;
 }
 
+export interface OpenFieldFlag {
+  id: string;
+  candidates: FieldFlagCandidate[];
+}
+
 interface Props {
   projectId: string;
   poNumber: string | null;
   fieldEntries: FieldEntry[];
   locked: boolean;
+  flagsByToken?: Record<string, OpenFieldFlag>;
 }
 
-export function SubmissionDetailsCard({ projectId, poNumber, fieldEntries, locked }: Props) {
+export function SubmissionDetailsCard({ projectId, poNumber, fieldEntries, locked, flagsByToken = {} }: Props) {
   const router = useRouter();
   const boundAction = updateStakeholderSubmission.bind(null, projectId);
   const [state, formAction, pending] = useActionState<UpdateSubmissionState, FormData>(
@@ -109,7 +116,7 @@ export function SubmissionDetailsCard({ projectId, poNumber, fieldEntries, locke
         <div className="divide-y divide-zinc-100">
           <Row label="PO number" value={poNumber ?? "—"} />
           {fieldEntries.map(({ token, label, value }) => (
-            <Row key={token} label={label} value={value || "—"} />
+            <Row key={token} label={label} value={value || "—"} flag={flagsByToken[token]} />
           ))}
         </div>
       )}
@@ -117,11 +124,36 @@ export function SubmissionDetailsCard({ projectId, poNumber, fieldEntries, locke
   );
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({
+  label,
+  value,
+  flag,
+}: {
+  label: string;
+  value: React.ReactNode;
+  flag?: OpenFieldFlag;
+}) {
+  const [resolvedValue, setResolvedValue] = useState<string | null>(null);
   return (
-    <div className="flex items-baseline gap-4 px-5 py-3">
-      <span className="w-40 shrink-0 text-sm text-zinc-500">{label}</span>
-      <span className="text-sm text-zinc-900">{value}</span>
+    <div className="px-5 py-3">
+      <div className="flex items-baseline gap-4">
+        <span className="w-40 shrink-0 text-sm text-zinc-500">{label}</span>
+        <span className="min-w-0 flex-1 text-sm text-zinc-900">{resolvedValue ?? value}</span>
+      </div>
+      {/* Rendered on its own line, not trailing inline with the value —
+          the expanded form needs the full row width, not just the leftover
+          space next to the value column. */}
+      {flag && !resolvedValue && (
+        <div className="mt-1 flex justify-end">
+          <FieldFlagReview
+            flagId={flag.id}
+            label={label}
+            currentValue={typeof value === "string" ? value : ""}
+            candidates={flag.candidates}
+            onResolved={(v) => setResolvedValue(v)}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -16,6 +16,12 @@ interface Props {
   currentValue: string;
   candidates: FieldFlagCandidate[];
   onResolved?: (value: string) => void;
+  // Re-extract conflict flow: this component *is* the "you're about to
+  // override an already-resolved value" warning, so it starts expanded and
+  // pre-loaded with the conflict banner already showing (no discovery step
+  // via a failed submit) — see reExtractProject / ReExtractButton.
+  initiallyExpanded?: boolean;
+  initialConflict?: { resolvedByEmail: string; resolvedValue: string };
 }
 
 const REASON_OPTIONS: { value: ResolutionReason; label: string }[] = [
@@ -24,14 +30,28 @@ const REASON_OPTIONS: { value: ResolutionReason; label: string }[] = [
   { value: "resolved_independently", label: "Resolved independently" },
 ];
 
-export function FieldFlagReview({ flagId, label, currentValue, candidates, onResolved }: Props) {
-  const [expanded, setExpanded] = useState(false);
+export function FieldFlagReview({
+  flagId,
+  label,
+  currentValue,
+  candidates,
+  onResolved,
+  initiallyExpanded,
+  initialConflict,
+}: Props) {
+  const [expanded, setExpanded] = useState(!!initiallyExpanded || !!initialConflict);
   const [value, setValue] = useState(currentValue);
   const [reason, setReason] = useState<ResolutionReason>("self_resolved");
   const [note, setNote] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [conflict, setConflict] = useState<{ resolvedByEmail: string; resolvedValue: string } | null>(null);
+  const [conflict, setConflict] = useState<{ resolvedByEmail: string; resolvedValue: string } | null>(
+    initialConflict ?? null
+  );
+  // Once a conflict has been shown (whether from a failed submit, or because
+  // this instance opened already knowing about one via initialConflict),
+  // the next resolve attempt is a conscious override — force it through.
+  const [sawConflict, setSawConflict] = useState(!!initialConflict);
 
   async function handleResolve() {
     if (!value.trim()) {
@@ -40,8 +60,7 @@ export function FieldFlagReview({ flagId, label, currentValue, candidates, onRes
     }
     setPending(true);
     setError(null);
-    setConflict(null);
-    const result = await resolveFieldFlag(flagId, { value: value.trim(), reason, note });
+    const result = await resolveFieldFlag(flagId, { value: value.trim(), reason, note, force: sawConflict });
     setPending(false);
     if (result.ok) {
       onResolved?.(value.trim());
@@ -50,6 +69,7 @@ export function FieldFlagReview({ flagId, label, currentValue, candidates, onRes
     }
     if (result.conflict) {
       setConflict({ resolvedByEmail: result.resolvedByEmail, resolvedValue: result.resolvedValue });
+      setSawConflict(true);
       return;
     }
     setError(result.error);

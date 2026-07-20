@@ -29,7 +29,7 @@ function revalidateProjectPaths(projectId: string) {
 
 export async function resolveFieldFlag(
   flagId: string,
-  input: { value: string; reason: ResolutionReason; note?: string }
+  input: { value: string; reason: ResolutionReason; note?: string; force?: boolean }
 ): Promise<ResolveFieldFlagResult> {
   const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
@@ -43,15 +43,19 @@ export async function resolveFieldFlag(
   if (!flag) return { ok: false, error: "Flag not found." };
 
   // Race protection: someone else may have resolved this between the page
-  // load and this submit — never silently overwrite their resolution.
-  if (flag.status === "resolved") {
+  // load and this submit — never silently overwrite their resolution. The
+  // caller can still override, but only as a conscious second action after
+  // being shown who resolved it and what they picked (input.force=true —
+  // set by the UI once it has displayed that conflict, or when the caller
+  // is the re-extract conflict flow, which *is* that display).
+  if (flag.status === "resolved" && !input.force) {
     return await conflictResponse(supabase, flag);
   }
 
   const value = input.value.trim();
   if (!value) return { ok: false, error: "A value is required." };
 
-  const { error, count } = await supabase
+  let updateQuery = supabase
     .from("field_flags")
     .update(
       {
@@ -64,8 +68,9 @@ export async function resolveFieldFlag(
       },
       { count: "exact" }
     )
-    .eq("id", flagId)
-    .eq("status", "open");
+    .eq("id", flagId);
+  updateQuery = input.force ? updateQuery.eq("status", flag.status) : updateQuery.eq("status", "open");
+  const { error, count } = await updateQuery;
 
   if (error) return { ok: false, error: error.message };
   if (!count) {
@@ -119,9 +124,11 @@ async function conflictResponse(
 }
 
 export interface ReExtractConflict {
+  flagId: string;
   token: string;
   label: string;
   resolvedValue: string;
+  resolvedByEmail: string;
   newCandidates: ExtractedCandidate[];
 }
 
@@ -160,7 +167,7 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
       .eq("is_mapped", true),
     supabase
       .from("field_flags")
-      .select("id, field_key, status, current_value")
+      .select("id, field_key, status, current_value, resolved_by")
       .eq("project_id", projectId),
   ]);
 
@@ -208,6 +215,14 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
 
   const existingByToken = new Map((existingFlags ?? []).map((f) => [f.field_key as string, f]));
 
+  const resolverIds = [
+    ...new Set((existingFlags ?? []).map((f) => f.resolved_by as string | null).filter((v): v is string => !!v)),
+  ];
+  const { data: resolvers } = resolverIds.length
+    ? await supabase.from("users").select("id, email").in("id", resolverIds)
+    : { data: [] };
+  const resolverEmailById = new Map((resolvers ?? []).map((u) => [u.id as string, u.email as string]));
+
   let newFlags = 0;
   let updatedFlags = 0;
   const conflicts: ReExtractConflict[] = [];
@@ -233,9 +248,11 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
       const groups = await groupCandidates(combined, mode);
       if (groups.length > 1) {
         conflicts.push({
+          flagId: existing.id as string,
           token,
           label: labelByToken.get(token) ?? token,
           resolvedValue: existing.current_value as string,
+          resolvedByEmail: resolverEmailById.get(existing.resolved_by as string) ?? "a previous reviewer",
           newCandidates: normalizedCandidates,
         });
       }
