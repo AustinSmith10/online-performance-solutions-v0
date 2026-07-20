@@ -230,7 +230,7 @@ Three roles exist in OPS. Stakeholders (certifiers and other approval parties) a
 - **PDF conversion:** Gotenberg — Docker service deployed on Railway, converts .docx to PDF via LibreOffice headlessly, called via HTTP from OPS backend
 - **AI extraction:** Claude API (`claude-haiku-4-5`) with Files API — extracts project field values from uploaded Purchase Orders and building plans; returns per-field confidence scores
 - **Background job queue:** `pg-boss` — PostgreSQL-backed job queue on Supabase; handles async document generation, email dispatch, approval buffer timers, draft expiry, and Recovery Bin purges
-- **Email sending:** Postmark — transactional emails (consolidated from Resend; see `docs/email-provider-comparison.md` for the decision — Postmark handles both directions, keeping inbound exactly as already scoped)
+- **Email sending:** Postmark, **Pro plan** — transactional emails (consolidated from Resend; see `docs/email-provider-comparison.md` for the decision — Postmark handles both directions, keeping inbound exactly as already scoped). Pro tier required because Postmark's Basic plan does not include inbound email processing at all; expected volume (~600-700 emails/month) is well within Pro's included 10,000/month either way.
 - **Email inbound webhook:** Postmark Inbound — receives incoming client emails, parses them, fires HTTP webhook to OPS backend for processing; MailboxHash used for reply threading. Authenticated via HTTP Basic Auth embedded in the webhook URL (issue #80).
 
 ### Security

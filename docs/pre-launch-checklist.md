@@ -15,6 +15,7 @@ Items to complete before going live. Not blocking development.
 
 ## Email
 
+- [ ] Sign up for Postmark **Pro plan** ($16.50/mo) — required because Basic does not include inbound email processing, which OPS depends on for client intake. Do not downgrade to Basic.
 - [ ] Configure a verified sending domain in Postmark for production invite and notification emails.
 - [ ] Test the invite email flow end-to-end with a real inbox.
 
