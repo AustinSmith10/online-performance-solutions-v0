@@ -12,10 +12,12 @@ import { AcknowledgementEmail } from "../lib/email/templates/AcknowledgementEmai
 import { ApprovalRequestEmail } from "../lib/email/templates/ApprovalRequestEmail";
 import { ModificationsRequestedEmail } from "../lib/email/templates/ModificationsRequestedEmail";
 import { PBDRDeliveryEmail } from "../lib/email/templates/PBDRDeliveryEmail";
-import { CreditDeductionEmail } from "../lib/email/templates/CreditDeductionEmail";
-import { LowCreditEmail } from "../lib/email/templates/LowCreditEmail";
+import { renderCreditDeductionEmail } from "../lib/email/templates/CreditDeductionEmail";
+import { renderLowCreditEmail } from "../lib/email/templates/LowCreditEmail";
 
-const templates = [
+// Templates are a mix of React components and plain HTML-string renderers,
+// so each entry supplies either an `element` or a ready-made `html` string.
+const templates: { name: string; element?: React.ReactElement; html?: string }[] = [
   {
     name: "AcknowledgementEmail",
     element: React.createElement(AcknowledgementEmail, {
@@ -59,20 +61,20 @@ const templates = [
   },
   {
     name: "CreditDeductionEmail",
-    element: React.createElement(CreditDeductionEmail, {
-      recipientName: "Jane Smith",
-      projectId: "OPS-2026-001",
+    html: renderCreditDeductionEmail({
+      orgName: "Acme Builders",
+      projectRef: "OPS-2026-001",
       creditsDeducted: 1,
       newBalance: 4,
-      portalUrl: "http://localhost:3000/portal/account",
+      portalUrl: "http://localhost:3000/portal",
     }),
   },
   {
     name: "LowCreditEmail",
-    element: React.createElement(LowCreditEmail, {
-      recipientName: "Jane Smith",
+    html: renderLowCreditEmail({
+      orgName: "Acme Builders",
       currentBalance: 1,
-      portalUrl: "http://localhost:3000/portal/account",
+      portalUrl: "http://localhost:3000/portal",
     }),
   },
 ];
@@ -80,8 +82,9 @@ const templates = [
 const outDir = "/tmp/email-previews";
 fs.mkdirSync(outDir, { recursive: true });
 
-for (const { name, element } of templates) {
-  const html = `<!DOCTYPE html>\n<html>\n<body>\n${renderToStaticMarkup(element)}\n</body>\n</html>`;
+for (const { name, element, html: rendered } of templates) {
+  const body = rendered ?? renderToStaticMarkup(element!);
+  const html = `<!DOCTYPE html>\n<html>\n<body>\n${body}\n</body>\n</html>`;
   const outPath = path.join(outDir, `${name}.html`);
   fs.writeFileSync(outPath, html);
   console.log(`wrote ${outPath}`);

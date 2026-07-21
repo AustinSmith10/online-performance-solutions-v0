@@ -4,8 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AcknowledgementEmail } from "./AcknowledgementEmail";
 import { renderAvailableRequestsDigestEmail } from "./AvailableRequestsDigestEmail";
 import { ConsultantAssignedEmail } from "./ConsultantAssignedEmail";
-import { CreditDeductionEmail } from "./CreditDeductionEmail";
-import { LowCreditEmail } from "./LowCreditEmail";
+import { renderCreditDeductionEmail } from "./CreditDeductionEmail";
+import { renderLowCreditEmail } from "./LowCreditEmail";
 import { PBDRDeliveryEmail, renderPbdrDeliveryEmail } from "./PBDRDeliveryEmail";
 import { QaCompleteEmail } from "./QaCompleteEmail";
 import { renderReviewResponseConfirmationEmail } from "./ReviewResponseConfirmationEmail";
@@ -86,60 +86,80 @@ describe("ConsultantAssignedEmail", () => {
   });
 });
 
-// ─── CreditDeductionEmail (JSX) ────────────────────────────────────────────────
+// ─── CreditDeductionEmail ──────────────────────────────────────────────────────
 
-describe("CreditDeductionEmail", () => {
+describe("renderCreditDeductionEmail", () => {
   const base = {
-    recipientName: "Jane Smith",
-    projectId: "OPS-001",
+    orgName: "Acme Builders",
+    projectRef: "OPS-001",
     creditsDeducted: 1,
     newBalance: 4,
-    portalUrl: "https://ops.ddeg.com.au/portal/account",
+    portalUrl: "https://ops.ddeg.com.au/portal",
   };
 
   it("uses singular wording for a single credit", () => {
-    const html = renderToStaticMarkup(React.createElement(CreditDeductionEmail, base));
+    const html = renderCreditDeductionEmail(base);
     expect(html).toContain("1 credit has been deducted");
   });
 
   it("uses plural wording for multiple credits", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(CreditDeductionEmail, { ...base, creditsDeducted: 2 })
-    );
+    const html = renderCreditDeductionEmail({ ...base, creditsDeducted: 2 });
     expect(html).toContain("2 credits have been deducted");
   });
 
-  it("shows the remaining balance", () => {
-    const html = renderToStaticMarkup(React.createElement(CreditDeductionEmail, base));
-    expect(html).toContain("4 credits");
+  it("includes the org name and project reference", () => {
+    const html = renderCreditDeductionEmail(base);
+    expect(html).toContain("Acme Builders");
+    expect(html).toContain("OPS-001");
   });
 
-  it("HTML-escapes the recipient name (via React auto-escaping)", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(CreditDeductionEmail, { ...base, recipientName: "<script>x</script>" })
-    );
+  it("shows the remaining balance, pluralised", () => {
+    expect(renderCreditDeductionEmail(base)).toContain("4 credits");
+    expect(renderCreditDeductionEmail({ ...base, newBalance: 1 })).toContain("1 credit");
+  });
+
+  it("includes the portal URL", () => {
+    expect(renderCreditDeductionEmail(base)).toContain("https://ops.ddeg.com.au/portal");
+  });
+
+  it("HTML-escapes the org name", () => {
+    const html = renderCreditDeductionEmail({ ...base, orgName: "<script>x</script>" });
     expect(html).not.toContain("<script>x</script>");
+    expect(html).toContain("&lt;script&gt;");
   });
 });
 
-// ─── LowCreditEmail (JSX) ───────────────────────────────────────────────────────
+// ─── LowCreditEmail ─────────────────────────────────────────────────────────────
 
-describe("LowCreditEmail", () => {
+describe("renderLowCreditEmail", () => {
   const base = {
-    recipientName: "Jane Smith",
+    orgName: "Acme Builders",
     currentBalance: 1,
-    portalUrl: "https://ops.ddeg.com.au/portal/account",
+    portalUrl: "https://ops.ddeg.com.au/portal",
   };
 
-  it("includes the current balance and recipient name", () => {
-    const html = renderToStaticMarkup(React.createElement(LowCreditEmail, base));
-    expect(html).toContain("Jane Smith");
+  it("includes the org name and current balance", () => {
+    const html = renderLowCreditEmail(base);
+    expect(html).toContain("Acme Builders");
     expect(html).toContain("1 credit");
   });
 
+  it("pluralises the balance correctly", () => {
+    expect(renderLowCreditEmail({ ...base, currentBalance: 2 })).toContain("2 credits");
+  });
+
   it("includes the support contact address", () => {
-    const html = renderToStaticMarkup(React.createElement(LowCreditEmail, base));
-    expect(html).toMatch(/mailto:/);
+    expect(renderLowCreditEmail(base)).toMatch(/mailto:/);
+  });
+
+  it("includes the portal URL", () => {
+    expect(renderLowCreditEmail(base)).toContain("https://ops.ddeg.com.au/portal");
+  });
+
+  it("HTML-escapes the org name", () => {
+    const html = renderLowCreditEmail({ ...base, orgName: "A & B <Co>" });
+    expect(html).not.toContain("<Co>");
+    expect(html).toContain("&amp;");
   });
 });
 

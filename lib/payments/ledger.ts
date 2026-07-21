@@ -2,6 +2,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
 import { auditLog } from "@/lib/audit/log";
+import { renderCreditDeductionEmail } from "@/lib/email/templates/CreditDeductionEmail";
+import { renderLowCreditEmail } from "@/lib/email/templates/LowCreditEmail";
 
 const LOW_CREDIT_THRESHOLD = 3;
 
@@ -20,6 +22,22 @@ async function getSuperAdminIds(): Promise<string[]> {
   return (data ?? []).map((u: { id: string }) => u.id);
 }
 
+// Human-readable project reference for emails: site address if known, else the
+// project number, else a short id. Mirrors how applyPaymentOverride builds it.
+async function resolveProjectRef(projectId: string): Promise<string> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("projects")
+    .select("project_number, site_address, extracted_fields")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (!data) return projectId.slice(0, 8);
+  const address =
+    (data.site_address as string | null) ??
+    ((data.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? null);
+  return address ?? (data.project_number as string | null) ?? projectId.slice(0, 8);
+}
+
 async function getOrgClientIds(orgId: string): Promise<string[]> {
   const supabase = createAdminClient();
   const { data } = await supabase
@@ -30,23 +48,30 @@ async function getOrgClientIds(orgId: string): Promise<string[]> {
   return (data ?? []).map((u: { id: string }) => u.id);
 }
 
-async function fireLowCreditNotifications(orgId: string, balance: number) {
+async function fireLowCreditNotifications(orgId: string, balance: number, orgName: string) {
   if (balance >= LOW_CREDIT_THRESHOLD) return;
   const [clientIds, adminIds] = await Promise.all([
     getOrgClientIds(orgId),
     getSuperAdminIds(),
   ]);
-  const recipients = [...clientIds, ...adminIds];
-  const html = `<p style="font-family:sans-serif">Your organisation's credit balance has dropped to <strong>${balance}</strong>. Please top up to avoid disruption to report requests.</p>`;
+  const message = `Credit balance is low: ${balance} credit${balance === 1 ? "" : "s"} remaining.`;
+  // Client users and admins land on different account pages, so each group gets
+  // a CTA pointing at the view they can actually act on.
+  const recipients: { ids: string[]; portalUrl: string }[] = [
+    { ids: clientIds, portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/portal` },
+    { ids: adminIds, portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/admin/credits/${orgId}` },
+  ];
   await Promise.all(
-    recipients.map((id) =>
-      notify({
-        recipientId: id,
-        type: "low_credit",
-        message: `Credit balance is low: ${balance} credit${balance === 1 ? "" : "s"} remaining.`,
-        emailSubject: "Low credit balance — action required",
-        emailHtml: html,
-      }).catch(() => {})
+    recipients.flatMap(({ ids, portalUrl }) =>
+      ids.map((id) =>
+        notify({
+          recipientId: id,
+          type: "low_credit",
+          message,
+          emailSubject: "Low credit balance — action required",
+          emailHtml: renderLowCreditEmail({ orgName, currentBalance: balance, portalUrl }),
+        }).catch(() => {})
+      )
     )
   );
 }
@@ -157,20 +182,37 @@ export async function deductCredit(
     performed_by: performedById,
   });
 
-  const adminIds = await getSuperAdminIds();
-  const clientIds = await getOrgClientIds(orgId);
-  const orgName = e(org.name as string);
-  const deductHtml = `<p style="font-family:sans-serif">1 credit has been deducted from <strong>${orgName}</strong>. Remaining balance: <strong>${newBalance}</strong>.</p>`;
+  const [adminIds, clientIds, projectRef] = await Promise.all([
+    getSuperAdminIds(),
+    getOrgClientIds(orgId),
+    resolveProjectRef(projectId),
+  ]);
+  const orgName = org.name as string;
+  const message = `1 credit deducted. New balance: ${newBalance}.`;
+  // Client users and admins land on different account pages, so each group gets
+  // a CTA pointing at the view they can actually act on.
+  const deductionRecipients: { ids: string[]; portalUrl: string }[] = [
+    { ids: clientIds, portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/portal` },
+    { ids: adminIds, portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/admin/credits/${orgId}` },
+  ];
   await Promise.all(
-    [...clientIds, ...adminIds].map((id) =>
-      notify({
-        recipientId: id,
-        type: "credit_deduction",
-        message: `1 credit deducted. New balance: ${newBalance}.`,
-        projectId,
-        emailSubject: "Credit deducted",
-        emailHtml: deductHtml,
-      }).catch(() => {})
+    deductionRecipients.flatMap(({ ids, portalUrl }) =>
+      ids.map((id) =>
+        notify({
+          recipientId: id,
+          type: "credit_deduction",
+          message,
+          projectId,
+          emailSubject: "Credit deducted",
+          emailHtml: renderCreditDeductionEmail({
+            orgName,
+            projectRef,
+            creditsDeducted: 1,
+            newBalance,
+            portalUrl,
+          }),
+        }).catch(() => {})
+      )
     )
   );
 
@@ -180,7 +222,7 @@ export async function deductCredit(
     metadata: { balance_after: newBalance },
   });
 
-  await fireLowCreditNotifications(orgId, newBalance);
+  await fireLowCreditNotifications(orgId, newBalance, org.name as string);
 
   revalidatePath(`/admin/credits/${orgId}`);
   revalidatePath("/admin/credits");
