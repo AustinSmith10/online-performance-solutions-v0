@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ClickableRow } from "@/components/ClickableRow";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -44,8 +43,14 @@ function sortHref(params: Record<string, string | undefined>, col: SortCol): str
 }
 
 function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" }) {
-  if (!active) return <span className="ml-1 text-zinc-300 group-hover:text-zinc-400">↕</span>;
-  return <span className="ml-1 text-zinc-600">{order === "asc" ? "↑" : "↓"}</span>;
+  if (!active) return null;
+  return <span className="ml-1">{order === "asc" ? "↑" : "↓"}</span>;
+}
+
+function accentClass(p: { status: ProjectStatus; payment_override: boolean; overdue: boolean }): string {
+  if (p.overdue) return "border-l-red-400";
+  if (p.payment_override) return "border-l-purple-400";
+  return "border-l-zinc-200";
 }
 
 type ProjectRow = {
@@ -145,7 +150,7 @@ function ProjectsLayout({
   hasFilter: boolean;
 }) {
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold text-zinc-900">Projects</h1>
@@ -153,7 +158,7 @@ function ProjectsLayout({
         </div>
         <Link
           href="/admin/projects/submit"
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
         >
           Submit request
         </Link>
@@ -166,12 +171,12 @@ function ProjectsLayout({
             name="q"
             defaultValue={params.q ?? ""}
             placeholder="Search address or PO number…"
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
           />
           <select
             name="status"
             defaultValue={params.status ?? ""}
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm text-zinc-700 focus:border-zinc-400 focus:outline-none"
           >
             <option value="">All statuses</option>
             {(Object.entries(STATUS_LABELS) as [ProjectStatus, string][]).map(([val, label]) => (
@@ -183,18 +188,18 @@ function ProjectsLayout({
             name="org"
             defaultValue={params.org ?? ""}
             placeholder="Client…"
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
           />
           <button
             type="submit"
-            className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+            className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Search
           </button>
           {hasFilter && (
             <Link
               href="/admin/projects"
-              className="rounded border border-zinc-300 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+              className="rounded-md border border-zinc-200 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
             >
               Clear
             </Link>
@@ -202,75 +207,72 @@ function ProjectsLayout({
         </div>
       </form>
 
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Sort by</span>
+        {([
+          ["created_at", "Created"],
+          ["expected_delivery_date", "Due date"],
+          ["status", "Status"],
+          ["org", "Client"],
+        ] as [SortCol, string][]).map(([col, label]) => (
+          <a
+            key={col}
+            href={sortHref(params, col)}
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              sortCol === col ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+            }`}
+          >
+            {label}
+            <SortIcon active={sortCol === col} order={sortOrder} />
+          </a>
+        ))}
+      </div>
+
       {projects.length === 0 ? (
         <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
           {hasFilter ? "No projects match your filters." : "No projects yet."}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-          <table className="w-full min-w-[600px] text-sm">
-            <thead className="border-b border-zinc-100 bg-zinc-50">
-              <tr>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Project</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "org")} className="group inline-flex items-center hover:text-zinc-700">
-                    Client <SortIcon active={sortCol === "org"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">Consultant</th>
-                <th className="px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "status")} className="group inline-flex items-center hover:text-zinc-700">
-                    Status <SortIcon active={sortCol === "status"} order={sortOrder} />
-                  </a>
-                </th>
-                <th className="whitespace-nowrap px-5 py-3 text-left font-medium text-zinc-500">
-                  <a href={sortHref(params, "created_at")} className="group inline-flex items-center hover:text-zinc-700">
-                    Created <SortIcon active={sortCol === "created_at"} order={sortOrder} />
-                  </a>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {projects.map((p) => (
-                <ClickableRow key={p.id} href={`/admin/projects/${p.id}`}>
-                  <td className="max-w-[200px] truncate px-5 py-3 font-medium text-zinc-900">
-                    {(() => {
-                        const addr = p.site_address || (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) || null;
-                        if (p.project_number && addr) return `${p.project_number} — ${addr}`;
-                        if (addr) return addr;
-                        return p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8);
-                      })()}
-                  </td>
-                  <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                    {p.clients?.name ?? "—"}
-                  </td>
-                  <td className="max-w-[160px] truncate px-5 py-3 text-zinc-600">
-                    {p.consultant
-                      ? [p.consultant.first_name, p.consultant.last_name].filter(Boolean).join(" ") || p.consultant.email
-                      : <span className="text-zinc-400">Unassigned</span>}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[p.status]}`}>
-                        {STATUS_LABELS[p.status]}
-                      </span>
-                      {p.payment_override && (
-                        <span className="whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Override</span>
-                      )}
-                      {p.expected_delivery_date &&
-                        p.expected_delivery_date < todayIso &&
-                        !TERMINAL_STATUSES.has(p.status) && (
-                          <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Overdue</span>
-                        )}
-                    </div>
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3 text-zinc-500">
+        <div className="overflow-hidden rounded-lg">
+          {projects.map((p) => {
+            const addr = p.site_address || (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) || null;
+            const label = p.project_number && addr
+              ? `${p.project_number} — ${addr}`
+              : addr || (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
+            const consultant = p.consultant
+              ? [p.consultant.first_name, p.consultant.last_name].filter(Boolean).join(" ") || p.consultant.email
+              : null;
+            const overdue = !!(
+              p.expected_delivery_date &&
+              p.expected_delivery_date < todayIso &&
+              !TERMINAL_STATUSES.has(p.status)
+            );
+
+            return (
+              <Link
+                key={p.id}
+                href={`/admin/projects/${p.id}`}
+                className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 ${accentClass({ status: p.status, payment_override: p.payment_override, overdue })} hover:bg-zinc-50`}
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="truncate text-sm font-medium text-zinc-900">{label}</span>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">
+                    {p.clients?.name ?? "—"} · {consultant ?? "Unassigned"} · Created{" "}
                     {new Date(p.created_at).toLocaleDateString("en-AU")}
-                  </td>
-                </ClickableRow>
-              ))}
-            </tbody>
-          </table>
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {overdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">Overdue</span>}
+                  {p.payment_override && (
+                    <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700">Override</span>
+                  )}
+                  <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_CLASSES[p.status]}`}>
+                    {STATUS_LABELS[p.status]}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
