@@ -26,6 +26,7 @@ import { DownloadCard } from "@/components/DownloadCard";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
+import { PbdbGeneratedBanner } from "@/components/PbdbGeneratedBanner";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { HighlightRing } from "@/components/HighlightRing";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
@@ -162,6 +163,7 @@ export default async function ProjectDetailPage({
   const justPaymentOverridden = sp.payment_overridden === "1";
   const justPaymentReconciled = sp.payment_reconciled === "1";
   const justReviewWaived = sp.review_waived === "1";
+  const justGeneratedPbdb = sp.pbdb_generated === "1";
   const justEmailUpdated = sp.email_updated ?? null;
 
   const supabase = createAdminClient();
@@ -570,7 +572,7 @@ export default async function ProjectDetailPage({
     );
   } else if (pbdbFiles.length === 0) {
     focusCard = (
-      <FocusCard tone="neutral" title="Generate the PBDB" subtitle="Ready when you are.">
+      <FocusCard id="pbdb-section" tone="neutral" title="Generate the PBDB" subtitle="Ready when you are.">
         <GeneratePbdbButton projectId={id} />
       </FocusCard>
     );
@@ -745,6 +747,7 @@ export default async function ProjectDetailPage({
       )}
       {canRegeneratePbdb && pbdbFiles.length > 0 && (
         <PbdbVersionsCard
+          id="pbdb-section"
           projectId={id}
           files={pbdbFiles as { id: string; original_filename: string; version: number; created_at: string }[]}
           projectStatus={project.status}
@@ -1112,6 +1115,7 @@ export default async function ProjectDetailPage({
     <div className="mx-auto max-w-7xl space-y-6">
       {/* Success banners */}
       {justSavedNumber && <NumberSavedBanner cleanUrl={`/admin/projects/${id}`} />}
+      {justGeneratedPbdb && <PbdbGeneratedBanner cleanUrl={`/admin/projects/${id}`} />}
       {justAssigned && (
         <AdminSuccessBanner
           cleanUrl={`/admin/projects/${id}`}

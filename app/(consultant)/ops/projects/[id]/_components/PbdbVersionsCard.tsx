@@ -15,14 +15,16 @@ export function PbdbVersionsCard({
   files,
   projectStatus,
   canRegenerate,
+  id,
 }: {
   projectId: string;
   files: PbdbFile[];
   projectStatus: ProjectStatus;
   canRegenerate: boolean;
+  id?: string;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4">
+    <div id={id} className="rounded-xl border border-zinc-200 bg-white p-4">
       <div className="mb-3 flex items-center gap-2">
         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-500">
           <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">

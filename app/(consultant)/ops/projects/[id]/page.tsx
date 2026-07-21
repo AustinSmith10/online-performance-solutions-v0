@@ -15,6 +15,7 @@ import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { DownloadCard } from "@/components/DownloadCard";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
+import { GeneratedPbdbDownload } from "@/components/GeneratedPbdbDownload";
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
 import { CollapsibleSection } from "./_components/CollapsibleSection";
 import { ProjectDetailsEditor, type OpenFieldFlag } from "./_components/ProjectDetailsEditor";
@@ -97,7 +98,7 @@ export default async function ConsultantProjectDetailPage({
   const { data, error } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, qa_completed_by, accepted_at, clients(name, state_territory, client_config, revision_notes_required), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, qa_completed_by, accepted_at, pbdb_downloaded_at, clients(name, state_territory, client_config, revision_notes_required), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -121,6 +122,7 @@ export default async function ConsultantProjectDetailPage({
     delivery_delay_preset: DeliveryDelayPreset;
     qa_completed_by: string | null;
     accepted_at: string | null;
+    pbdb_downloaded_at: string | null;
     clients: {
       name: string;
       state_territory: string | null;
@@ -471,8 +473,26 @@ export default async function ConsultantProjectDetailPage({
     );
   } else if (pbdbFiles.length === 0) {
     focusCard = (
-      <FocusCard tone="neutral" title="Generate the PBDB" subtitle="Ready when you are.">
+      <FocusCard id="pbdb-section" tone="neutral" title="Generate the PBDB" subtitle="Ready when you are.">
         <GeneratePbdbButton projectId={id} />
+      </FocusCard>
+    );
+  } else if (pbdbCardState === "upload" && !project.pbdb_downloaded_at && latestPbdb) {
+    // Just generated, not yet downloaded — confirm it worked and hand over the
+    // file. The step advances to "Upload QA'd PBDB" the moment pbdb_downloaded_at
+    // is set (by the download route, from here or the left-rail versions card):
+    // RealtimeRefresh re-renders and re-derives this branch from server state.
+    // No URL param / timers / overlay — the mechanism that used to wipe the old
+    // spotlight now drives the transition.
+    focusCard = (
+      <FocusCard tone="green" title="Download the generated PBDB" subtitle="Fresh off generation — QA it, then upload the QA'd copy to send to stakeholders.">
+        <GeneratedPbdbDownload
+          projectId={id}
+          fileId={latestPbdb.id as string}
+          filename={latestPbdb.original_filename as string}
+          version={latestPbdb.version as number}
+          generatedDate={latestPbdb.created_at as string}
+        />
       </FocusCard>
     );
   } else if (pbdbCardState === "upload") {
@@ -576,6 +596,7 @@ export default async function ConsultantProjectDetailPage({
       )}
       {pbdbFiles.length > 0 && (
         <PbdbVersionsCard
+          id="pbdb-section"
           projectId={id}
           files={(
             pbdbFiles as {

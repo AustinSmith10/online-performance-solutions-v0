@@ -3,11 +3,13 @@ export function FocusCard({
   title,
   subtitle,
   children,
+  id,
 }: {
   tone: "neutral" | "amber" | "red" | "green";
   title: string;
   subtitle?: string;
   children: React.ReactNode;
+  id?: string;
 }) {
   const toneClasses = {
     neutral: "border-blue-300 bg-blue-50 shadow-sm shadow-blue-100",
@@ -23,7 +25,7 @@ export function FocusCard({
   }[tone];
 
   return (
-    <div className={`rounded-xl border-2 p-5 ${toneClasses}`}>
+    <div id={id} className={`rounded-xl border-2 p-5 ${toneClasses}`}>
       <div className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Right now</p>
         <h2 className={`mt-0.5 text-lg font-semibold ${titleClasses}`}>{title}</h2>

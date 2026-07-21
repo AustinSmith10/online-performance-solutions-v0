@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { generatePbdbForProject, type GeneratePbdbState } from "@/app/actions/projects";
 
 function Spinner() {
@@ -16,7 +17,11 @@ function Spinner() {
 }
 
 export function GeneratePbdbButton({ projectId }: { projectId: string }) {
-  const boundAction = generatePbdbForProject.bind(null, projectId);
+  const pathname = usePathname();
+  // The ?pbdb_generated=1 redirect (which drives PbdbGeneratedBanner) happens
+  // server-side inside the action itself — see the comment there for why a
+  // client-side effect here isn't reliable.
+  const boundAction = generatePbdbForProject.bind(null, projectId, pathname);
   const [state, formAction, pending] = useActionState<GeneratePbdbState, FormData>(boundAction, {});
 
   return (
@@ -42,7 +47,8 @@ export function RegeneratePbdbButton({
   /** If set, regeneration is unavailable — this note is shown instead of a button. */
   disabledMessage?: string;
 }) {
-  const boundAction = generatePbdbForProject.bind(null, projectId);
+  const pathname = usePathname();
+  const boundAction = generatePbdbForProject.bind(null, projectId, pathname);
   const [state, formAction, pending] = useActionState<GeneratePbdbState, FormData>(boundAction, {});
   const [confirming, setConfirming] = useState(false);
 

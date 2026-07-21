@@ -3,19 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-function getTarget(): HTMLElement | null {
-  return document.getElementById("qa-pbdb-row") ?? document.getElementById("pbdb-section");
-}
-
 // This page's realtime subscription (RealtimeRefresh) calls router.refresh()
 // on any projects-table change, sometimes within a second or two — no
 // filter on which project. A multi-second setTimeout choreography here
 // risks getting interrupted mid-sequence, so the spotlight is applied
 // immediately on mount instead of after a delay, and the sessionStorage
 // guard below stops a refresh-triggered remount from restarting it.
-const shownKey = (cleanUrl: string) => `qa-uploaded-shown:${cleanUrl}`;
+const shownKey = (cleanUrl: string) => `pbdb-generated-shown:${cleanUrl}`;
 
-export function QaUploadedBanner({ cleanUrl }: { cleanUrl: string }) {
+export function PbdbGeneratedBanner({ cleanUrl }: { cleanUrl: string }) {
   const router = useRouter();
   // Pure read only — React 18 Strict Mode double-invokes state initializers
   // in dev to catch impurities, so a setItem() here would fire twice and the
@@ -32,7 +28,7 @@ export function QaUploadedBanner({ cleanUrl }: { cleanUrl: string }) {
     if (alreadyShown) return;
     sessionStorage.setItem(shownKey(cleanUrl), "1");
 
-    const el = getTarget();
+    const el = document.getElementById("pbdb-section");
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
     // rAF, not a synchronous setState in the effect body — lets the browser
     // commit the scroll before we measure, and the callback form is the
@@ -96,10 +92,8 @@ export function QaUploadedBanner({ cleanUrl }: { cleanUrl: string }) {
               </svg>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-zinc-900">PBDB uploaded</p>
-              <p className="mt-0.5 text-xs text-zinc-500">
-                Saved and dispatched to stakeholders for approval — highlighted below.
-              </p>
+              <p className="text-sm font-semibold text-zinc-900">PBDB generated</p>
+              <p className="mt-0.5 text-xs text-zinc-500">Ready to download — highlighted below.</p>
             </div>
             <button
               type="button"

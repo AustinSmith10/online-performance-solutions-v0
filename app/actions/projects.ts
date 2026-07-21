@@ -587,6 +587,11 @@ export async function saveProjectNumber(
 
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
+
+  // No redirect/banner — the "Right now" Focus card advances to "Generate the
+  // PBDB" on its own the moment project_number is set (server-state-driven,
+  // same principle as the PBDB-download step), so the old toast/spotlight
+  // targeting #pbdb-section was redundant. See pbdb-feedback-focus-step memory.
   return { success: true };
 }
 
@@ -693,6 +698,7 @@ export type GeneratePbdbState = { error?: string; success?: boolean };
 
 export async function generatePbdbForProject(
   projectId: string,
+  redirectBasePath: string,
   _prev: GeneratePbdbState,
   _formData: FormData
 ): Promise<GeneratePbdbState> {
@@ -748,7 +754,71 @@ export async function generatePbdbForProject(
 
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
+
+  // Consultant workspace: no redirect/banner. The "Right now" Focus card now
+  // shows a durable, server-state-driven "Download the generated PBDB" step
+  // (gated on projects.pbdb_downloaded_at) that RealtimeRefresh reconciles into
+  // place — replacing the old ?pbdb_generated=1 toast/spotlight that raced the
+  // revalidatePath() above. The admin project page has no Focus card, so it
+  // keeps the first-generation banner via the redirect below.
+  if (!isRegenerate && redirectBasePath.startsWith("/admin")) {
+    redirect(`${redirectBasePath}?pbdb_generated=1`);
+  }
   return { success: true };
+}
+
+// ─── Consultant: mark the freshly generated PBDB as downloaded ───────────────
+//
+// The "Right now" Focus card advances from "Download the generated PBDB" to
+// "Upload QA'd PBDB" the instant projects.pbdb_downloaded_at is set. The
+// actual file download is a plain <a href> to /api/download/pbdb/[fileId]
+// (GeneratedPbdbDownload.tsx) — that GET route already sets the flag and
+// audit-logs project.pbdb_downloaded, but driving the Focus-card advance off
+// that alone means waiting on RealtimeRefresh to notice the row change, which
+// isn't reliable/prompt (RLS on realtime UPDATEs, or no realtime at all
+// locally → slow poll fallback). This action runs alongside the anchor click
+// purely to revalidatePath deterministically. Idempotent — the GET route's
+// own IS NULL guard means it's fine if both race to set the timestamp; no
+// second audit log is written here to avoid double-logging one download.
+
+export type MarkPbdbDownloadedState = { error?: string };
+
+export async function markPbdbDownloaded(
+  projectId: string,
+  fileId: string
+): Promise<MarkPbdbDownloadedState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
+
+  const { data: file } = await supabase
+    .from("project_files")
+    .select("id")
+    .eq("id", fileId)
+    .eq("project_id", projectId)
+    .eq("file_type", "pbdb")
+    .maybeSingle();
+  if (!file) return { error: "PBDB file not found." };
+
+  await supabase
+    .from("projects")
+    .update({ pbdb_downloaded_at: new Date().toISOString() })
+    .eq("id", projectId)
+    .is("pbdb_downloaded_at", null);
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  return {};
 }
 
 // ─── Consultant: re-upload corrected PBDB after QA ───────────────────────────
