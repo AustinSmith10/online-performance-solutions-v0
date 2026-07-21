@@ -222,7 +222,7 @@ export default async function ConsultantProjectDetailPage({
     supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).maybeSingle(),
     supabase
       .from("field_flags")
-      .select("id, field_key, candidate_values")
+      .select("id, field_key, candidate_values, type")
       .eq("project_id", id)
       .eq("status", "open"),
   ]);
@@ -230,7 +230,11 @@ export default async function ConsultantProjectDetailPage({
   const flagsByToken: Record<string, OpenFieldFlag> = Object.fromEntries(
     (openFieldFlags ?? []).map((f) => [
       f.field_key as string,
-      { id: f.id as string, candidates: (f.candidate_values ?? []) as OpenFieldFlag["candidates"] },
+      {
+        id: f.id as string,
+        candidates: (f.candidate_values ?? []) as OpenFieldFlag["candidates"],
+        type: f.type as OpenFieldFlag["type"],
+      },
     ])
   );
 

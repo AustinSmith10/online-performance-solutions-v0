@@ -6,6 +6,7 @@ import { updateStakeholderSubmission, type UpdateSubmissionState } from "@/app/a
 import { EditIconButton } from "@/components/EditIconButton";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { FieldFlagReview, type FieldFlagCandidate } from "@/components/field-flag-review";
+import type { FlagType } from "@/lib/documents/field-flags";
 
 interface FieldEntry {
   token: string;
@@ -16,6 +17,7 @@ interface FieldEntry {
 export interface OpenFieldFlag {
   id: string;
   candidates: FieldFlagCandidate[];
+  type: FlagType;
 }
 
 interface Props {
@@ -150,6 +152,7 @@ function Row({
             label={label}
             currentValue={typeof value === "string" ? value : ""}
             candidates={flag.candidates}
+            flagType={flag.type}
             stakeholderView
             onResolved={(v) => setResolvedValue(v)}
           />

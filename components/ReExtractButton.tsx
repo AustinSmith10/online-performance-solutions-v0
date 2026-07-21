@@ -63,6 +63,7 @@ export function ReExtractButton({
                 candidates={c.newCandidates}
                 initiallyExpanded
                 initialConflict={{ resolvedByEmail: c.resolvedByEmail, resolvedValue: c.resolvedValue }}
+                flagType="inconsistency"
                 stakeholderView={stakeholderView}
                 onResolved={() => setConflicts((prev) => prev.filter((x) => x.flagId !== c.flagId))}
               />

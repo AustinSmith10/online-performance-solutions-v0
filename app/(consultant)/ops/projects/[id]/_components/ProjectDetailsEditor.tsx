@@ -7,6 +7,7 @@ import { EditIconButton } from "@/components/EditIconButton";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { FieldFlagReview, type FieldFlagCandidate } from "@/components/field-flag-review";
+import type { FlagType } from "@/lib/documents/field-flags";
 
 interface FieldEntry {
   token: string;
@@ -17,6 +18,7 @@ interface FieldEntry {
 export interface OpenFieldFlag {
   id: string;
   candidates: FieldFlagCandidate[];
+  type: FlagType;
 }
 
 interface Props {
@@ -123,6 +125,7 @@ function EditableRow({
               label={label}
               currentValue={value}
               candidates={flag.candidates}
+              flagType={flag.type}
               onResolved={(v) => setResolvedValue(v)}
             />
           </div>

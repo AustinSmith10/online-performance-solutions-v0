@@ -42,6 +42,12 @@ export async function resolveFieldFlag(
 
   if (!flag) return { ok: false, error: "Flag not found." };
 
+  const { data: projectForStage } = await supabase
+    .from("projects")
+    .select("status")
+    .eq("id", flag.project_id)
+    .maybeSingle();
+
   // Race protection: someone else may have resolved this between the page
   // load and this submit — never silently overwrite their resolution. The
   // caller can still override, but only as a conscious second action after
@@ -63,6 +69,7 @@ export async function resolveFieldFlag(
         current_value: value,
         resolved_by: actor.id,
         resolved_at: new Date().toISOString(),
+        resolved_stage: (projectForStage?.status as string | undefined) ?? null,
         resolution_reason: input.reason,
         resolution_note: input.note?.trim() || null,
       },
