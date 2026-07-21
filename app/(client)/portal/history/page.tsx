@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DownloadCard } from "@/components/DownloadCard";
+import { DownloadPbdrLink } from "../_components/DownloadPbdrLink";
 import type { ProjectStatus } from "@/types";
 
 type DeliveredProject = {
@@ -18,6 +19,14 @@ type PbdrFile = {
   original_filename: string | null;
   version: number;
 };
+
+function formatAuDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 export default async function ClientHistoryPage() {
   const user = await requireRole("stakeholder");
@@ -54,12 +63,13 @@ export default async function ClientHistoryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 space-y-6">
+    <div className="mx-auto max-w-5xl px-4 py-10 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">Report history</h1>
-        <p className="mt-0.5 text-sm text-zinc-500">
-          All delivered reports for your organisation
-        </p>
+        <Link href="/portal" className="text-sm text-zinc-500 hover:text-zinc-700">
+          ← My Reports
+        </Link>
+        <h1 className="mt-2 text-xl font-semibold text-zinc-900">Report history</h1>
+        <p className="mt-0.5 text-sm text-zinc-500">All delivered reports for your organisation</p>
       </div>
 
       {reports.length === 0 ? (
@@ -70,103 +80,41 @@ export default async function ClientHistoryPage() {
           </p>
         </div>
       ) : (
-        <>
-          {/* Mobile cards */}
-          <div className="flex flex-col gap-3 sm:hidden">
-            {reports.map((r) => {
-              const hasPbdr = projectsWithPbdr.has(r.id);
-              const deliveredDate = r.delivered_at ?? r.created_at;
-              const label =
-                r.extracted_fields?.["EXTRACT_ADDRESS"] ??
-                (r.po_number ? `PO ${r.po_number}` : r.id.slice(0, 8));
-              return (
-                <div key={r.id} className="rounded-lg border border-zinc-200 bg-white">
-                  {hasPbdr ? (
-                    <DownloadCard
-                      href={`/api/download/pbdr/${r.id}`}
-                      filename={pbdrFilenameMap.get(r.id)}
-                      originalFilename={pbdrFilenameMap.get(r.id)}
-                      buttonLabel="Download PDF"
-                      wrapperClassName="flex items-start justify-between gap-3 px-4 py-4"
+        <div className="space-y-3">
+          {reports.map((r) => {
+            const hasPbdr = projectsWithPbdr.has(r.id);
+            const deliveredDate = r.delivered_at ?? r.created_at;
+            const label =
+              r.extracted_fields?.["EXTRACT_ADDRESS"] ??
+              (r.po_number ? `PO ${r.po_number}` : r.id.slice(0, 8));
+            return (
+              <div key={r.id} className="rounded-xl border border-zinc-200 bg-white p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/portal/projects/${r.id}`}
+                      className="truncate text-base font-semibold text-zinc-900 hover:underline"
                     >
-                      <p className="font-medium text-zinc-900 leading-snug">{label}</p>
-                      <p className="mt-2 text-xs text-zinc-500">
-                        Delivered{" "}
-                        {new Date(deliveredDate).toLocaleDateString("en-AU", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </DownloadCard>
+                      {label}
+                    </Link>
+                    <p className="mt-1 text-xs text-zinc-500">Delivered {formatAuDate(deliveredDate)}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
+                    Delivered
+                  </span>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-zinc-100 pt-4">
+                  {hasPbdr ? (
+                    <DownloadPbdrLink projectId={r.id} filename={pbdrFilenameMap.get(r.id)} />
                   ) : (
-                    <div className="flex items-start justify-between gap-3 px-4 py-4">
-                      <div>
-                        <p className="font-medium text-zinc-900 leading-snug">{label}</p>
-                        <p className="mt-2 text-xs text-zinc-500">
-                          Delivered{" "}
-                          {new Date(deliveredDate).toLocaleDateString("en-AU", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-xs text-zinc-400">Processing…</span>
-                    </div>
+                    <span className="text-xs text-zinc-400">Processing…</span>
                   )}
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Desktop table */}
-          <div className="hidden sm:block overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-            <table className="w-full min-w-[400px] text-sm">
-              <thead className="border-b border-zinc-100 bg-zinc-50">
-                <tr>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Address</th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Delivered</th>
-                  <th className="px-5 py-3 text-left font-medium text-zinc-500">Download</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-50">
-                {reports.map((r) => {
-                  const hasPbdr = projectsWithPbdr.has(r.id);
-                  const deliveredDate = r.delivered_at ?? r.created_at;
-                  return (
-                    <tr key={r.id} className="hover:bg-blue-50">
-                      <td className="px-5 py-3 font-medium text-zinc-900">
-                        {r.extracted_fields?.["EXTRACT_ADDRESS"] ??
-                          (r.po_number ? `PO ${r.po_number}` : r.id.slice(0, 8))}
-                      </td>
-                      <td className="px-5 py-3 text-zinc-500">
-                        {new Date(deliveredDate).toLocaleDateString("en-AU", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </td>
-                      <td className="px-5 py-3">
-                        {hasPbdr ? (
-                          <DownloadCard
-                            href={`/api/download/pbdr/${r.id}`}
-                            filename={pbdrFilenameMap.get(r.id)}
-                            originalFilename={pbdrFilenameMap.get(r.id)}
-                            buttonLabel="Download PDF"
-                            wrapperClassName="inline-flex items-center gap-2"
-                          />
-                        ) : (
-                          <span className="text-xs text-zinc-400">Processing…</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

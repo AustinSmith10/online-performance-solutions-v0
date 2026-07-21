@@ -844,12 +844,11 @@ export function SubmissionForm({
       header={
         <ClientHeaderCard
           title="New report request"
-          subtitle="Tell us what you need — we'll set up your workspace as soon as you submit."
         />
       }
       stages={REQUEST_STAGES}
       focusCard={
-        <FocusCard tone="neutral" title="Start your request" subtitle="Two things and you're done.">
+        <FocusCard tone="neutral" title="Start your request" subtitle="upload the appropriate pdf files">
           <RequestForm
             extractAction={extractAction}
             extractPending={extractPending}
@@ -872,9 +871,8 @@ export function SubmissionForm({
         <div className="rounded-lg border border-zinc-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-zinc-900">What&apos;s happening</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-            Fill in the report type and attach your documents on the left. As soon as you submit,
-            this page becomes your project workspace — same tabs, same layout, just filled in with
-            your project&apos;s details. No new page to learn.
+            Attach your documents on the left. As soon as you submit the documents, this page
+            becomes your report request record.
           </p>
         </div>
       }

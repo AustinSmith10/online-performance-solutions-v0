@@ -620,11 +620,7 @@ export default async function ClientProjectDetailPage({
         header={
           <ClientHeaderCard
             title={title}
-            subtitle={
-              subtitleParts.length > 0
-                ? subtitleParts.join(" · ")
-                : "Tell us what you need — we'll set up your workspace as soon as you submit."
-            }
+            subtitle={subtitleParts.length > 0 ? subtitleParts.join(" · ") : undefined}
             statusLabel={isDeleted ? "In recovery bin" : project.status === "draft" ? "Draft" : currentStageLabel ?? undefined}
             roundBadge={project.review_cycle}
           />
