@@ -75,7 +75,7 @@ export async function deliverPbdr(
       (admins ?? []).map((u: { id: string }) =>
         notify({
           recipientId: u.id,
-          type: "project_approved",
+          type: "system_error",
           message: `PBDR conversion blocked: ${reason}`,
           projectId,
           emailSubject: `PBDR conversion blocked — ${projectId.slice(0, 8)}`,
@@ -333,7 +333,7 @@ export async function deliverPbdr(
       (admins ?? []).map((u: { id: string }) =>
         notify({
           recipientId: u.id,
-          type: "project_approved",
+          type: "system_error",
           message: `PBDR conversion failed for ${projectId.slice(0, 8)}: ${errorMsg}`,
           projectId,
           emailSubject: `PBDR conversion failed — ${projectId.slice(0, 8)}`,
