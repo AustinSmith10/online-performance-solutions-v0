@@ -228,16 +228,22 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
   const conflicts: ReExtractConflict[] = [];
 
   for (const [token, rawCandidates] of Object.entries(extraction.candidates)) {
-    if (rawCandidates.length === 0) continue;
     const mode = comparisonModeByToken.get(token) ?? "exact";
     const normalizedCandidates = rawCandidates.map((c) => ({
       ...c,
       value: normalizeExtractedFields({ [token]: c.value })[token],
     }));
-    const plan = await buildFieldFlagPlan(normalizedCandidates, mode);
     const existing = existingByToken.get(token);
 
     if (existing?.status === "resolved") {
+      // Re-extraction finding nothing this time is not evidence the resolved
+      // value is wrong — never run the conflict check against an empty
+      // result, or a plain extraction miss would spuriously read as "found a
+      // different (empty) value" and reopen a decision already made. Only a
+      // genuine new candidate can conflict (extraction-flag-model-decisions:
+      // "new document uploads never auto-reopen a resolved flag").
+      if (rawCandidates.length === 0) continue;
+
       // Would the resolved value still be considered "the same" as what
       // re-extraction just found? If so, nothing to do — no rework for a
       // decision already made.
@@ -259,6 +265,11 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
       continue;
     }
 
+    // Unresolved (open or never-flagged) tokens are checked even with zero
+    // candidates — a field re-extraction that found nothing anywhere must
+    // flag/stay flagged for review (extraction-verification-layer-decisions
+    // #7), not be silently skipped.
+    const plan = await buildFieldFlagPlan(normalizedCandidates, mode);
     if (!plan.needsFlag) continue;
 
     if (existing?.status === "open") {

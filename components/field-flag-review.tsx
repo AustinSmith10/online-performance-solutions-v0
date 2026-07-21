@@ -8,6 +8,10 @@ export interface FieldFlagCandidate {
   value: string;
   confidence: Confidence;
   source_document: string;
+  // Set only when the verification pass downgraded this candidate's
+  // self-graded confidence — shown as a caption, descriptive metadata only,
+  // never a second resolvable thing (extraction-verification-layer-decisions #8a).
+  reason?: string;
 }
 
 interface Props {
@@ -128,10 +132,11 @@ export function FieldFlagReview({
                 className="mt-0.5"
               />
               <span>
-                <span className="font-medium text-zinc-900">{c.value}</span>{" "}
+                <span className="font-medium text-zinc-900">{c.value || "(empty)"}</span>{" "}
                 <span className="text-zinc-400">
                   ({c.confidence} confidence — {c.source_document})
                 </span>
+                {c.reason && <span className="block text-[11px] italic text-orange-700">{c.reason}</span>}
               </span>
             </label>
           ))}

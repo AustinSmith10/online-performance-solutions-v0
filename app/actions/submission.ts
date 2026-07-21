@@ -359,9 +359,11 @@ export async function finalizeSubmission(
   const comparisonModeByToken = new Map(
     extractMappings.map((m) => [m.placeholder_token, (m.comparison_mode as ComparisonMode) ?? "exact"])
   );
+  // Every extract token is checked, including ones with zero candidates — a
+  // field extraction that found nothing anywhere must flag for review too
+  // (extraction-verification-layer-decisions #7), not be silently skipped.
   const flagPlans = new Map<string, FieldFlagPlan>();
   for (const [token, rawCandidates] of Object.entries(extraction.candidates)) {
-    if (rawCandidates.length === 0) continue;
     const normalizedCandidates = rawCandidates.map((c) => ({
       ...c,
       value: normalizeExtractedFields({ [token]: c.value })[token],

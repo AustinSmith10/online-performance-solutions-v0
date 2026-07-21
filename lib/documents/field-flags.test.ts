@@ -65,9 +65,13 @@ describe("buildFieldFlagPlan", () => {
     expect(plan.candidateRecords).toEqual(candidates);
   });
 
-  it("returns no flag for an empty candidate list (field absent from every document)", async () => {
+  it("flags an empty candidate list (field absent from every document) instead of silently passing (#7)", async () => {
     const plan = await buildFieldFlagPlan([], "exact");
-    expect(plan.needsFlag).toBe(false);
+    expect(plan.needsFlag).toBe(true);
+    expect(plan.flagType).toBe("confidence");
     expect(plan.finalValue).toBe("");
+    expect(plan.candidateRecords).toHaveLength(1);
+    expect(plan.candidateRecords[0].confidence).toBe("low");
+    expect(plan.candidateRecords[0].reason).toBeTruthy();
   });
 });

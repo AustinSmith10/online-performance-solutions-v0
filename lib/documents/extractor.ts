@@ -21,6 +21,11 @@ export type Confidence = "high" | "medium" | "low";
 export interface ExtractedField {
   value: string;
   confidence: Confidence;
+  // Set only when the verification pass (below) downgraded this field's
+  // self-graded confidence — the one-line reason a reviewer sees as a caption
+  // next to the candidate (extraction-verification-layer-decisions #8a).
+  // Absent for anything the verifier didn't touch or didn't downgrade.
+  reason?: string;
 }
 
 // One document's contribution to a field — the raw material for candidate
@@ -150,6 +155,146 @@ function asExtractedFieldList(v: unknown): ExtractedField[] {
 export interface SingleDocResult {
   po_number: ExtractedField;
   fields: Record<string, ExtractedField[]>;
+}
+
+// ─── Verification pass (extraction-verification-layer-decisions) ───────────
+//
+// The extractor's own confidence is self-graded and overstates it — real
+// mistakes ("House Type" = "SR" / "SPECIAL GABLE" / "MORETONG5") came back
+// "high" and sailed through unflagged, because buildFieldFlagPlan only flags
+// on cross-document disagreement or an already-low self-grade. This pass is
+// an independent second opinion: for every field a single document's own
+// extraction call graded "high", judge it again from scratch — using that
+// same field's existing extraction hint (no new admin config) plus the
+// document's own text (so it catches a well-formed-but-wrong-cell value, not
+// just a malformed one) — and downgrade the confidence if the second opinion
+// disagrees. "Most-skeptical-voice-wins": the verifier can only ever lower a
+// grade, never raise one, and only high-confidence fields are sent (medium/
+// low already flag via the existing path, so there's nothing to gain by
+// checking them). Runs once per document as a single batched call covering
+// every high-confidence field that document contributed, not once per field.
+
+export interface VerificationEntry {
+  token: string;
+  idx: number;
+  hint: string;
+  value: string;
+}
+
+export interface VerificationResult {
+  confidence: Confidence;
+  reason: string;
+}
+
+// Pure — no I/O. Exported for unit testing. Only fields graded "high" by this
+// document's own extraction pass are worth a second opinion — anything
+// already medium/low already flags via buildFieldFlagPlan without our help.
+export function collectHighConfidenceEntries(
+  fields: Record<string, ExtractedField[]>,
+  tokens: ExtractToken[]
+): VerificationEntry[] {
+  const hintByToken = new Map(tokens.map((t) => [t.token, t.hint]));
+  const entries: VerificationEntry[] = [];
+  for (const [token, list] of Object.entries(fields)) {
+    list.forEach((f, idx) => {
+      if (f.confidence === "high" && f.value.trim()) {
+        entries.push({ token, idx, hint: hintByToken.get(token) ?? "", value: f.value });
+      }
+    });
+  }
+  return entries;
+}
+
+function buildVerificationPrompt(docText: string, entries: VerificationEntry[]): string {
+  const entryLines = entries
+    .map(
+      (e, i) =>
+        `${i}. Extraction rule: ${e.hint || "(no specific rule provided)"}\n   Extracted value: "${e.value}"`
+    )
+    .join("\n");
+
+  return `You are independently double-checking values a first-pass extractor already pulled from a document, for an Australian building compliance system. The first pass may be confidently wrong — judge each value fresh against the document text and its own extraction rule below; do not assume the first pass was correct just because it was confident.
+
+Document text:
+${docText}
+
+Entries to judge:
+${entryLines}
+
+For each entry, decide whether the extracted value plausibly and correctly satisfies its extraction rule, as it actually appears in the document text above. Return ONLY a JSON array with exactly one object per entry index, in this shape:
+[{ "index": 0, "confidence": "high|medium|low", "reason": "one short sentence if not high, empty string if high" }]
+
+Grade "high" only if you are independently confident the value is correct. Use "medium" if it's plausible but you're unsure, or "low" if it looks wrong, malformed, fused together with another value, or unsupported by the document text.`;
+}
+
+// Pure — no I/O. Exported for unit testing.
+export function parseVerificationResponse(raw: string, entryCount: number): Map<number, VerificationResult> {
+  const results = new Map<number, VerificationResult>();
+  const match = raw.match(/\[[\s\S]*\]/);
+  if (!match) return results;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch {
+    return results;
+  }
+  if (!Array.isArray(parsed)) return results;
+
+  for (const item of parsed) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const index = o.index;
+    if (typeof index !== "number" || index < 0 || index >= entryCount) continue;
+    if (!["high", "medium", "low"].includes(o.confidence as string)) continue;
+    results.set(index, {
+      confidence: o.confidence as Confidence,
+      reason: typeof o.reason === "string" ? o.reason : "",
+    });
+  }
+  return results;
+}
+
+// Mutates `fields` in place, downgrading (never raising) confidence —
+// "most-skeptical-voice-wins" (#8b: overwrite the grade in place, keep the
+// reason string as the trace, so pickBest/buildFieldFlagPlan/reshuffle all
+// work unmodified). Pure aside from the mutation — no I/O. Exported for unit
+// testing.
+export function applyVerificationResults(
+  fields: Record<string, ExtractedField[]>,
+  entries: VerificationEntry[],
+  results: Map<number, VerificationResult>
+): void {
+  entries.forEach((entry, i) => {
+    const result = results.get(i);
+    if (!result || result.confidence === "high") return;
+    const field = fields[entry.token]?.[entry.idx];
+    if (!field) return;
+    field.confidence = result.confidence;
+    field.reason = result.reason || undefined;
+  });
+}
+
+// Orchestrates one document's verification pass. Fails open (#6): a broken
+// checker must never make things worse than before this feature existed —
+// on any error, leave every field's self-graded confidence untouched and log
+// loudly, rather than flagging every high-confidence field (which would
+// bury reviewers in alarm-fatigue noise on every checker outage).
+async function verifyDocumentFields(
+  docText: string,
+  fields: Record<string, ExtractedField[]>,
+  tokens: ExtractToken[]
+): Promise<void> {
+  const entries = collectHighConfidenceEntries(fields, tokens);
+  if (entries.length === 0) return;
+
+  try {
+    const raw = await runTextCompletion(buildVerificationPrompt(docText, entries));
+    const results = parseVerificationResponse(raw, entries.length);
+    applyVerificationResults(fields, entries, results);
+  } catch (err) {
+    console.error("[extractor] verification pass failed, leaving self-graded confidence:", err);
+  }
 }
 
 // Exported for unit testing (#64) — pure parsing, no I/O.
@@ -291,7 +436,9 @@ export async function extractDocumentFields(
     documents.map(async (doc) => {
       const text = await extractPdfText(doc.buffer);
       const prompt = buildPrompt([{ label: doc.label, text }], extractTokens);
-      return { label: doc.label, result: await runSingleExtraction(prompt, tokenNames) };
+      const result = await runSingleExtraction(prompt, tokenNames);
+      await verifyDocumentFields(text, result.fields, extractTokens);
+      return { label: doc.label, result };
     })
   );
 

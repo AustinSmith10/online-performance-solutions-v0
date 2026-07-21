@@ -24,7 +24,19 @@ export async function buildFieldFlagPlan(
   comparisonMode: ComparisonMode
 ): Promise<FieldFlagPlan> {
   if (candidates.length === 0) {
-    return { finalValue: "", needsFlag: false, flagType: "confidence", candidateRecords: [] };
+    // A field extraction that whiffed on every document must flag for human
+    // review, not vanish (extraction-verification-layer-decisions #7) — this
+    // previously returned needsFlag:false, silently leaving the field blank
+    // with no signal anyone should look. The synthetic placeholder candidate
+    // gives the reviewer something to see/resolve against, same shape as any
+    // other candidate.
+    const placeholder: ExtractedCandidate = {
+      value: "",
+      confidence: "low",
+      source_document: "none",
+      reason: "Not found in any submitted document — please fill in.",
+    };
+    return { finalValue: "", needsFlag: true, flagType: "confidence", candidateRecords: [placeholder] };
   }
 
   const groups = await groupCandidates(candidates, comparisonMode);

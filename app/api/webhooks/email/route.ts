@@ -277,8 +277,10 @@ async function handleNewSubmission(
         current_value: string;
         candidate_values: unknown;
       }[] = [];
+      // Every extract token is checked, including ones with zero candidates —
+      // a field extraction that found nothing anywhere must flag for review
+      // too (extraction-verification-layer-decisions #7), not be skipped.
       for (const [token, rawCandidates] of Object.entries(extracted.candidates)) {
-        if (rawCandidates.length === 0) continue;
         const normalizedCandidates = rawCandidates.map((c) => ({
           ...c,
           value: normalizeExtractedFields({ [token]: c.value })[token],
