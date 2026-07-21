@@ -309,7 +309,9 @@ export default async function ProjectDetailPage({
       .order("version", { ascending: true }),
     supabase
       .from("stakeholder_reviews")
-      .select("id, review_cycle, stakeholder_email, stakeholder_name, status, comments, responded_at, waive_reason, waived_at")
+      .select(
+        "id, review_cycle, stakeholder_email, stakeholder_name, status, comments, responded_at, waive_reason, waived_at, email_reply_text, email_reply_received_at, email_reply_sender_verified"
+      )
       .eq("project_id", id)
       .order("review_cycle", { ascending: false })
       .order("created_at", { ascending: true }),
@@ -374,6 +376,16 @@ export default async function ProjectDetailPage({
   const pbdbFiles = rawPbdbFiles ?? [];
 
   const reviews = (rawReviews ?? []) as StakeholderReview[];
+
+  // Auto-attached evidence from an email reply (#68) — see the ops project page
+  // for the matching logic.
+  const evidenceByReviewId = new Map<string, (typeof evidenceFiles)[number]>();
+  for (const f of evidenceFiles) {
+    const ref = f.reference as string | null;
+    if (ref?.startsWith("stakeholder_review:")) {
+      evidenceByReviewId.set(ref.slice("stakeholder_review:".length), f);
+    }
+  }
 
   type AssignmentEvent = { consultant_id: string; consultant_name: string; project_status?: string };
   const assignmentHistory = (rawAssignments ?? [])
@@ -606,12 +618,28 @@ export default async function ProjectDetailPage({
         <div className="space-y-4">
           <div className="space-y-2">
             {pendingReviews.map((r) => {
+              const emailReplyEvidence = evidenceByReviewId.get(r.id);
               const inner = (
                 <div className="space-y-2 rounded-md border border-amber-200 bg-white px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
                     <p className="truncate text-xs text-zinc-500">{r.stakeholder_email}</p>
                   </div>
+                  {r.email_reply_text && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold text-amber-800">Replied by email — needs action</p>
+                        {r.email_reply_sender_verified === false && (
+                          <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                            Unverified sender
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-amber-900">
+                        {r.email_reply_text}
+                      </p>
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center gap-1.5">
                     <ResendTokenButton reviewId={r.id} projectId={id} />
                     <LogStakeholderResponseForm
@@ -619,6 +647,15 @@ export default async function ProjectDetailPage({
                       projectId={id}
                       stakeholderName={r.stakeholder_name}
                       stakeholderEmail={r.stakeholder_email}
+                      prefilledEvidence={
+                        emailReplyEvidence
+                          ? {
+                              storagePath: emailReplyEvidence.storage_path as string,
+                              filename: emailReplyEvidence.original_filename as string,
+                            }
+                          : undefined
+                      }
+                      prefilledComments={r.email_reply_text ?? undefined}
                     />
                     <UpdateEmailReveal reviewId={r.id} projectId={id} currentEmail={r.stakeholder_email} />
                     <WaiveForm reviewId={r.id} projectId={id} stakeholderName={r.stakeholder_name} />

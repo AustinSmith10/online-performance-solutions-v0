@@ -465,6 +465,9 @@ describe("POST /api/webhooks/email", () => {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           is: vi.fn().mockReturnThis(),
+          // Stakeholder-reply token lookup (checked before sender lookup) —
+          // no match, so this falls through to the ordinary draft-thread flow.
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           single: vi.fn().mockImplementation(() => {
             selectCallCount++;
             if (selectCallCount === 1) return Promise.resolve({ data: CLIENT_USER, error: null });
@@ -494,6 +497,201 @@ describe("POST /api/webhooks/email", () => {
         expect.anything(),
         expect.anything(),
         expect.anything()
+      );
+    });
+  });
+
+  describe("stakeholder email reply threading (#68)", () => {
+    const TOKEN = "abc123reviewtoken";
+    const REVIEW = {
+      id: "review-1",
+      project_id: "proj-1",
+      stakeholder_email: "stakeholder@external.com",
+      stakeholder_name: "Sam Stakeholder",
+      status: "pending",
+    };
+    const PROJECT = {
+      id: "proj-1",
+      client_id: "org-1",
+      submitted_by: "user-1",
+      assigned_consultant_id: "consultant-1",
+      qa_completed_by: null,
+      extracted_fields: null,
+      project_number: "PN-100",
+    };
+
+    function makeMock({ senderKnown = true }: { senderKnown?: boolean } = {}) {
+      const reviewUpdateEq = vi.fn().mockResolvedValue({ data: null, error: null });
+      const reviewUpdate = vi.fn().mockReturnValue({ eq: reviewUpdateEq });
+      const projectFilesInsertSingle = vi.fn().mockResolvedValue({ data: { id: "file-1" }, error: null });
+      const notificationsInsert = vi.fn().mockResolvedValue({ data: null, error: null });
+
+      const fromMock = vi.fn((table: string) => {
+        switch (table) {
+          case "stakeholder_reviews":
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: REVIEW, error: null }),
+              update: reviewUpdate,
+            };
+          case "projects":
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: PROJECT, error: null }),
+            };
+          case "stakeholders":
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              is: vi.fn().mockReturnThis(),
+              order: vi.fn().mockResolvedValue({
+                data: senderKnown
+                  ? [{ id: "s1", name: "Sam Stakeholder", email: "stakeholder@external.com", company: null }]
+                  : [],
+              }),
+            };
+          case "users":
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              in: vi.fn().mockResolvedValue({ data: [{ id: "admin-1" }] }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: { email: "submitter@example.com" }, error: null }),
+              single: vi.fn().mockResolvedValue({ data: { email: "consultant@example.com" }, error: null }),
+            };
+          case "project_files":
+            return {
+              insert: vi.fn().mockReturnValue({
+                select: vi.fn().mockReturnThis(),
+                single: projectFilesInsertSingle,
+              }),
+            };
+          case "notifications":
+            return { insert: notificationsInsert };
+          default:
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            };
+        }
+      });
+
+      return {
+        from: fromMock,
+        storage: {
+          from: vi.fn().mockReturnValue({
+            upload: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        },
+        reviewUpdateEq,
+        reviewUpdate,
+      };
+    }
+
+    it("links a reply from a known stakeholder, stores it as verified, and skips the sender-lookup gate", async () => {
+      const mock = makeMock({ senderKnown: true });
+      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        From: "stakeholder@external.com",
+        FromFull: { Email: "stakeholder@external.com", Name: "Sam Stakeholder", MailboxHash: TOKEN },
+        MailboxHash: TOKEN,
+        TextBody: "Looks good, approved from my end.",
+      };
+
+      const res = await POST(makeRequest(payload));
+
+      expect(res.status).toBe(200);
+      // The sender-lookup "unrecognised sender" bounce must NOT fire — this
+      // sender has no `users` row at all, only a `stakeholders` roster entry.
+      const bounced = mockSendEmail.mock.calls.some((c) =>
+        (c[0] as { subject: string }).subject?.includes("Unrecognised")
+      );
+      expect(bounced).toBe(false);
+
+      expect(mock.reviewUpdateEq).toHaveBeenCalledWith("id", "review-1");
+
+      expect(mockAuditLog).toHaveBeenCalledWith(
+        "stakeholder.email_reply_received",
+        null,
+        "stakeholder@external.com",
+        expect.objectContaining({
+          metadata: expect.objectContaining({ review_id: "review-1", sender_verified: true }),
+        })
+      );
+
+      // Independent notification to the assigned consultant + admins.
+      expect(mockSendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: expect.stringContaining("needs action") })
+      );
+    });
+
+    it("prefers Postmark's StrippedTextReply over the full TextBody when both are present", async () => {
+      const mock = makeMock({ senderKnown: true });
+      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        From: "stakeholder@external.com",
+        FromFull: { Email: "stakeholder@external.com", Name: "Sam Stakeholder", MailboxHash: TOKEN },
+        MailboxHash: TOKEN,
+        TextBody: "Approved.\n\nOn Mon, Jan 1 wrote:\n> quoted history\n--\nSam, Sent from my iPhone",
+        StrippedTextReply: "Approved.",
+      };
+
+      await POST(makeRequest(payload));
+
+      expect(mock.reviewUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ email_reply_text: "Approved." })
+      );
+    });
+
+    it("falls back to TextBody when StrippedTextReply is absent", async () => {
+      const mock = makeMock({ senderKnown: true });
+      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        From: "stakeholder@external.com",
+        FromFull: { Email: "stakeholder@external.com", Name: "Sam Stakeholder", MailboxHash: TOKEN },
+        MailboxHash: TOKEN,
+        TextBody: "Approved from my end.",
+        StrippedTextReply: "",
+      };
+
+      await POST(makeRequest(payload));
+
+      expect(mock.reviewUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ email_reply_text: "Approved from my end." })
+      );
+    });
+
+    it("flags the reply as unverified when the sender isn't a known project/client stakeholder", async () => {
+      const mock = makeMock({ senderKnown: false });
+      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        From: "someone-else@example.com",
+        FromFull: { Email: "someone-else@example.com", Name: "", MailboxHash: TOKEN },
+        MailboxHash: TOKEN,
+        TextBody: "Forwarding this along, approved.",
+      };
+
+      const res = await POST(makeRequest(payload));
+
+      expect(res.status).toBe(200);
+      expect(mockAuditLog).toHaveBeenCalledWith(
+        "stakeholder.email_reply_received",
+        null,
+        "someone-else@example.com",
+        expect.objectContaining({
+          metadata: expect.objectContaining({ sender_verified: false }),
+        })
       );
     });
   });

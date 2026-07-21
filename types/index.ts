@@ -38,7 +38,8 @@ export type NotificationType =
   | "submission_edited"
   | "assignment_declined"
   | "assignment_overdue"
-  | "system_error";
+  | "system_error"
+  | "stakeholder_replied_by_email";
 
 export type CreditEventType =
   | "top_up"
@@ -234,4 +235,7 @@ export interface StakeholderReview {
   waive_reason: string | null;
   waived_at: string | null;
   created_at: string;
+  email_reply_text: string | null;
+  email_reply_received_at: string | null;
+  email_reply_sender_verified: boolean | null;
 }

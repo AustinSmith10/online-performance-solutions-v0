@@ -10,6 +10,7 @@ import { deliverPbdr } from "@/lib/documents/delivery";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
 import { sendEmail } from "@/lib/email/sender";
+import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
 import { notify } from "@/lib/notifications/notify";
@@ -440,10 +441,13 @@ export async function resendFreshToken(
     isFreshToken: true,
   });
 
+  const replyTo = buildStakeholderReplyTo(token);
+
   await sendEmail({
     to: review.stakeholder_email as string,
     subject: `Reminder: approval required (ref: ${projectId.slice(0, 8)})`,
     html: emailHtml,
+    ...(replyTo ? { replyTo } : {}),
   }).catch((err) => {
     console.error(`[resend-token] email to ${review.stakeholder_email} failed:`, err);
   });

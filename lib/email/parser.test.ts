@@ -5,6 +5,7 @@ import {
   isSupportedAttachment,
   attachmentBuffer,
   buildInboundReplyTo,
+  buildStakeholderReplyTo,
 } from "./parser";
 
 const MINIMAL_VALID = {
@@ -202,5 +203,29 @@ describe("buildInboundReplyTo", () => {
     process.env.POSTMARK_INBOUND_HASH = "myhash";
     const result = buildInboundReplyTo("550e8400-e29b-41d4-a716-446655440000");
     expect(result).toContain("550e8400-e29b-41d4-a716-446655440000");
+  });
+});
+
+describe("buildStakeholderReplyTo", () => {
+  const originalEnv = process.env.POSTMARK_INBOUND_HASH;
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.POSTMARK_INBOUND_HASH;
+    } else {
+      process.env.POSTMARK_INBOUND_HASH = originalEnv;
+    }
+  });
+
+  it("returns empty string when POSTMARK_INBOUND_HASH is not set", () => {
+    delete process.env.POSTMARK_INBOUND_HASH;
+    expect(buildStakeholderReplyTo("some-token")).toBe("");
+  });
+
+  it("embeds the stakeholder review token in the mailbox hash position", () => {
+    process.env.POSTMARK_INBOUND_HASH = "abc123hash";
+    expect(buildStakeholderReplyTo("review-token-xyz")).toBe(
+      "ops+review-token-xyz@abc123hash.inbound.postmarkapp.com"
+    );
   });
 });

@@ -6,6 +6,7 @@ import { deductCredit, debitDeferred, logUpfront } from "@/lib/payments/ledger";
 import { notify } from "@/lib/notifications/notify";
 import { auditLog } from "@/lib/audit/log";
 import { sendEmail } from "@/lib/email/sender";
+import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { renderRevisionNoticeEmail } from "@/lib/email/templates/RevisionNoticeEmail";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
@@ -227,6 +228,11 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
       pbdbUrl,
     });
 
+    // Reply-to lets the stakeholder just hit reply instead of using the
+    // portal/token link — the inbound webhook links it back to this review
+    // via the token (#68). Applies to every stakeholder, portal or not.
+    const replyTo = buildStakeholderReplyTo(token);
+
     if (portalUser) {
       // Portal user — in-app notification + email via notify()
       await notify({
@@ -236,6 +242,7 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
         projectId,
         emailSubject: `Approval required — PBDB review (ref: ${projectId.slice(0, 8)})`,
         emailHtml,
+        ...(replyTo ? { replyTo } : {}),
       }).catch(() => {});
     } else {
       // External stakeholder — email only
@@ -243,6 +250,7 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
         to: stakeholder.email,
         subject: `Approval required — PBDB review (ref: ${projectId.slice(0, 8)})`,
         html: emailHtml,
+        ...(replyTo ? { replyTo } : {}),
       }).catch((err) => {
         console.error(`[dispatch-pbdb] email to ${stakeholder.email} failed:`, err);
       });

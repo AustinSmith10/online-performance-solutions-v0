@@ -916,6 +916,9 @@ export type Database = {
           comments: string | null
           created_at: string
           dispatched_at: string
+          email_reply_received_at: string | null
+          email_reply_sender_verified: boolean | null
+          email_reply_text: string | null
           expires_at: string
           fresh_token_sent_at: string | null
           id: string
@@ -934,6 +937,9 @@ export type Database = {
           comments?: string | null
           created_at?: string
           dispatched_at?: string
+          email_reply_received_at?: string | null
+          email_reply_sender_verified?: boolean | null
+          email_reply_text?: string | null
           expires_at: string
           fresh_token_sent_at?: string | null
           id?: string
@@ -952,6 +958,9 @@ export type Database = {
           comments?: string | null
           created_at?: string
           dispatched_at?: string
+          email_reply_received_at?: string | null
+          email_reply_sender_verified?: boolean | null
+          email_reply_text?: string | null
           expires_at?: string
           fresh_token_sent_at?: string | null
           id?: string

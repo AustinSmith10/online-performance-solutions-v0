@@ -9,6 +9,7 @@ export interface NotifyOptions {
   projectId?: string;
   emailSubject: string;
   emailHtml: string;
+  replyTo?: string;
 }
 
 export async function notify({
@@ -18,6 +19,7 @@ export async function notify({
   projectId,
   emailSubject,
   emailHtml,
+  replyTo,
 }: NotifyOptions): Promise<void> {
   const admin = createAdminClient();
 
@@ -42,7 +44,7 @@ export async function notify({
   }
 
   try {
-    await sendEmail({ to: userResult.data.email, subject: emailSubject, html: emailHtml });
+    await sendEmail({ to: userResult.data.email, subject: emailSubject, html: emailHtml, ...(replyTo ? { replyTo } : {}) });
   } catch (err) {
     console.error("[notify] email send failed (non-fatal):", err);
   }

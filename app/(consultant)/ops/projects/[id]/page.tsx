@@ -201,7 +201,9 @@ export default async function ConsultantProjectDetailPage({
       .order("version", { ascending: true }),
     supabase
       .from("stakeholder_reviews")
-      .select("id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle")
+      .select(
+        "id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle, email_reply_text, email_reply_received_at, email_reply_sender_verified"
+      )
       .eq("project_id", id)
       .order("review_cycle", { ascending: false })
       .order("responded_at", { ascending: true }),
@@ -271,9 +273,22 @@ export default async function ConsultantProjectDetailPage({
   const pbdbFiles = rawPbdbFiles ?? [];
   const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
 
+  // Auto-attached evidence from an email reply (#68) is stored with reference
+  // `stakeholder_review:{reviewId}` — key it here so LogStakeholderResponseForm
+  // can offer it instead of forcing a fresh upload.
+  const evidenceByReviewId = new Map<string, (typeof evidenceFiles)[number]>();
+  for (const f of evidenceFiles) {
+    const ref = f.reference as string | null;
+    if (ref?.startsWith("stakeholder_review:")) {
+      evidenceByReviewId.set(ref.slice("stakeholder_review:".length), f);
+    }
+  }
+
   type ReviewRow = {
     id: string; stakeholder_name: string; stakeholder_email: string;
     status: string; comments: string | null; responded_at: string | null; review_cycle: number;
+    email_reply_text: string | null; email_reply_received_at: string | null;
+    email_reply_sender_verified: boolean | null;
   };
   const allReviews = (rawReviews ?? []) as ReviewRow[];
   const reviewsByCycle = new Map<number, ReviewRow[]>();
@@ -808,6 +823,7 @@ export default async function ConsultantProjectDetailPage({
                   }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
                   const canLogOnBehalf =
                     isCurrent && r.status === "pending" && project.status === "dispatched";
+                  const emailReplyEvidence = evidenceByReviewId.get(r.id);
                   return (
                     <div key={r.id} className="px-5 py-3">
                       <div className="flex items-start justify-between gap-3">
@@ -837,10 +853,41 @@ export default async function ConsultantProjectDetailPage({
                               projectId={id}
                               stakeholderName={r.stakeholder_name}
                               stakeholderEmail={r.stakeholder_email}
+                              prefilledEvidence={
+                                emailReplyEvidence
+                                  ? {
+                                      storagePath: emailReplyEvidence.storage_path as string,
+                                      filename: emailReplyEvidence.original_filename as string,
+                                    }
+                                  : undefined
+                              }
+                              prefilledComments={r.email_reply_text ?? undefined}
                             />
                           )}
                         </div>
                       </div>
+                      {r.email_reply_text && (
+                        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-semibold text-amber-800">Replied by email — needs action</p>
+                            {r.email_reply_sender_verified === false && (
+                              <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                                Unverified sender
+                              </span>
+                            )}
+                            {r.email_reply_received_at && (
+                              <span className="text-[10px] text-amber-600">
+                                {new Date(r.email_reply_received_at).toLocaleString("en-AU", {
+                                  day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+                                })}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-amber-900">
+                            {r.email_reply_text}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

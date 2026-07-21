@@ -11,6 +11,8 @@ import {
   buildInboundReplyTo,
   type PostmarkAttachment,
 } from "@/lib/email/parser";
+import { resolveStakeholders } from "@/lib/stakeholders/resolver";
+import { notify } from "@/lib/notifications/notify";
 import { extractDocumentFields } from "@/lib/documents/extractor";
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import {
@@ -69,6 +71,25 @@ export async function POST(req: NextRequest) {
 
   const fromEmail = senderEmail(payload);
   const supabase = createAdminClient();
+
+  // ── 0. Stakeholder-reply threading (#68) ────────────────────────────────────
+  // Checked before the sender-lookup gate below: third-party stakeholders who
+  // reply to their approval email typically have no `users` row at all (they're
+  // in the `stakeholders` table, not portal accounts), so the ordinary
+  // sender-lookup gate would otherwise bounce every one of these replies as an
+  // "unrecognised sender". The token itself is the credential here.
+  if (payload.MailboxHash) {
+    const { data: review } = await supabase
+      .from("stakeholder_reviews")
+      .select("*")
+      .eq("token", payload.MailboxHash)
+      .maybeSingle();
+
+    if (review) {
+      await handleStakeholderEmailReply(payload, review, fromEmail, supabase);
+      return NextResponse.json({ ok: true });
+    }
+  }
 
   // ── 1. Look up sender ──────────────────────────────────────────────────────
   const { data: user } = await supabase
@@ -489,6 +510,157 @@ async function handleThreadReply(
     projectId,
     metadata: { message_id: payload.MessageID, attachments: supportedFiles.map((f: PostmarkAttachment) => f.Name) },
   });
+}
+
+// A reply to a stakeholder's approval-request email (#68). The token proves the
+// sender received this specific email; it does not prove they *are* the
+// stakeholder (a forward or a shared inbox could reply too), so we separately
+// check the sender against the project/client stakeholder roster and record
+// whether it matched. No approve/reject interpretation happens here — the
+// consultant resolves it manually via the #65 form.
+async function handleStakeholderEmailReply(
+  payload: ReturnType<typeof parseInboundPayload> & object,
+  review: {
+    id: string;
+    project_id: string;
+    stakeholder_email: string;
+    stakeholder_name: string;
+  },
+  fromEmail: string,
+  supabase: ReturnType<typeof createAdminClient>
+) {
+  const { data: project } = await supabase
+    .from("projects")
+    .select(
+      "id, client_id, submitted_by, assigned_consultant_id, qa_completed_by, extracted_fields, project_number"
+    )
+    .eq("id", review.project_id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!project) {
+    await auditLog("email.stakeholder_reply_invalid", null, fromEmail, {
+      metadata: { review_id: review.id, message_id: payload.MessageID, reason: "project not found" },
+    });
+    return;
+  }
+
+  const knownEmails = new Set<string>([review.stakeholder_email.toLowerCase()]);
+  const roster = await resolveStakeholders(project.id as string, project.client_id as string);
+  for (const s of roster) knownEmails.add(s.email.toLowerCase());
+  if (project.submitted_by) {
+    const { data: submitter } = await supabase
+      .from("users")
+      .select("email")
+      .eq("id", project.submitted_by as string)
+      .maybeSingle();
+    if (submitter?.email) knownEmails.add((submitter.email as string).toLowerCase());
+  }
+  const verified = knownEmails.has(fromEmail.toLowerCase());
+
+  // Prefer Postmark's own quote/signature-stripped reply when present — pure
+  // structural stripping, not an AI read of the content, so it doesn't
+  // conflict with #68's "no auto-interpretation" requirement. Falls back to
+  // the full TextBody (e.g. hand-built test payloads that lack the field).
+  const replyText = (payload.StrippedTextReply || payload.TextBody || "").trim();
+  const receivedAt = new Date().toISOString();
+
+  await supabase
+    .from("stakeholder_reviews")
+    .update({
+      email_reply_text: replyText,
+      email_reply_received_at: receivedAt,
+      email_reply_sender_verified: verified,
+    })
+    .eq("id", review.id);
+
+  // Store the reply as evidence, linked to this review via the #57 reference
+  // convention, so it's already attached when the consultant resolves it
+  // through the #65 manual-capture form. Keeps the full original body (not
+  // the stripped version) — evidence should be the complete correspondence.
+  const fullBody = (payload.TextBody || "").trim();
+  const evidenceBody = [
+    `From: ${payload.FromName ? `${payload.FromName} <${fromEmail}>` : fromEmail}`,
+    `Date: ${payload.Date}`,
+    `Subject: ${payload.Subject}`,
+    `Message-ID: ${payload.MessageID}`,
+    "",
+    fullBody || "(empty message body)",
+  ].join("\n");
+
+  // .eml + message/rfc822, not .txt — the evidence bucket's allowed_mime_types
+  // (migration 00000000000076) doesn't include text/plain.
+  const evidenceFilename = `email-reply-${Date.now()}.eml`;
+  const evidenceStoragePath = `${project.client_id}/${project.id}/evidence/${evidenceFilename}`;
+  const uploadedBy = (project.assigned_consultant_id as string | null) ?? (project.submitted_by as string);
+
+  const { error: uploadError } = await supabase.storage
+    .from("evidence")
+    .upload(evidenceStoragePath, Buffer.from(evidenceBody, "utf8"), {
+      contentType: "message/rfc822",
+      upsert: false,
+    });
+
+  let evidenceFileId: string | null = null;
+  if (uploadError) {
+    console.error("[email-webhook] Failed to store stakeholder reply as evidence:", uploadError);
+  } else {
+    const { data: inserted } = await supabase
+      .from("project_files")
+      .insert({
+        project_id: project.id as string,
+        file_type: "evidence",
+        storage_path: evidenceStoragePath,
+        original_filename: evidenceFilename,
+        uploaded_by: uploadedBy,
+        reference: `stakeholder_review:${review.id}`,
+      })
+      .select("id")
+      .single();
+    evidenceFileId = (inserted?.id as string | null) ?? null;
+  }
+
+  await auditLog("stakeholder.email_reply_received", null, fromEmail, {
+    projectId: project.id as string,
+    orgId: project.client_id as string,
+    metadata: {
+      review_id: review.id,
+      message_id: payload.MessageID,
+      sender_verified: verified,
+      evidence_file_id: evidenceFileId,
+    },
+  });
+
+  // Independent consultant notification — decided not to route through #46's
+  // "needs attention" chit, which doesn't exist yet (see issue #68 body).
+  const projectRef =
+    (project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ??
+    (project.project_number as string | null) ??
+    (project.id as string).slice(0, 8);
+
+  const recipientIds = new Set<string>();
+  const consultantId =
+    (project.qa_completed_by as string | null) ?? (project.assigned_consultant_id as string | null);
+  if (consultantId) recipientIds.add(consultantId);
+  const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
+  for (const a of admins ?? []) recipientIds.add(a.id as string);
+
+  const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/ops/projects/${project.id}`;
+  const snippet = replyText.slice(0, 120) + (replyText.length > 120 ? "…" : "");
+  const verifiedNote = verified ? "" : " — sender could not be verified against the stakeholder list";
+
+  await Promise.all(
+    [...recipientIds].map((recipientId) =>
+      notify({
+        recipientId,
+        type: "stakeholder_replied_by_email",
+        message: `${review.stakeholder_name} replied by email on ${projectRef}${verifiedNote} — needs manual resolution.${snippet ? ` "${snippet}"` : ""}`,
+        projectId: project.id as string,
+        emailSubject: `Stakeholder replied by email — needs action (ref: ${(project.id as string).slice(0, 8)})`,
+        emailHtml: `<p style="font-family:sans-serif">${review.stakeholder_name} (${review.stakeholder_email}) replied by email to their approval request for <strong>${projectRef}</strong>${verifiedNote}.</p><p style="font-family:sans-serif">Their reply is not auto-interpreted — please review it and log the response manually.</p><p style="font-family:sans-serif"><a href="${projectUrl}">Open the project</a></p>`,
+      }).catch(() => {})
+    )
+  );
 }
 
 // ── Email HTML builders ───────────────────────────────────────────────────────

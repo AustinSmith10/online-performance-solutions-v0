@@ -15,6 +15,11 @@ interface Props {
   projectId: string;
   stakeholderName: string;
   stakeholderEmail: string;
+  // Set when the stakeholder already replied by email (#68) and the webhook
+  // auto-attached that reply as evidence — lets the consultant reuse it
+  // instead of being forced through a fresh upload.
+  prefilledEvidence?: { storagePath: string; filename: string };
+  prefilledComments?: string;
 }
 
 export function LogStakeholderResponseForm({
@@ -22,11 +27,14 @@ export function LogStakeholderResponseForm({
   projectId,
   stakeholderName,
   stakeholderEmail,
+  prefilledEvidence,
+  prefilledComments,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [response, setResponse] = useState<"approved" | "rejected" | "">("");
-  const [comments, setComments] = useState("");
+  const [comments, setComments] = useState(prefilledComments ?? "");
   const [file, setFile] = useState<File | null>(null);
+  const [useEmailEvidence, setUseEmailEvidence] = useState(!!prefilledEvidence);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
 
@@ -44,6 +52,18 @@ export function LogStakeholderResponseForm({
     if (selectedResponse === "rejected" && !enteredComments) {
       return { error: "Comments are required for a rejection." };
     }
+
+    if (useEmailEvidence && prefilledEvidence) {
+      return logStakeholderResponseOnBehalf(
+        reviewId,
+        projectId,
+        selectedResponse,
+        enteredComments,
+        prefilledEvidence.storagePath,
+        prefilledEvidence.filename
+      );
+    }
+
     if (!selectedFile || selectedFile.size === 0) {
       return { error: "Attach evidence — the form can't be submitted without it." };
     }
@@ -100,7 +120,9 @@ export function LogStakeholderResponseForm({
   }
 
   const canSubmit =
-    !!response && (response !== "rejected" || comments.trim().length > 0) && !!file;
+    !!response &&
+    (response !== "rejected" || comments.trim().length > 0) &&
+    ((useEmailEvidence && !!prefilledEvidence) || !!file);
 
   return (
     <>
@@ -180,15 +202,27 @@ export function LogStakeholderResponseForm({
                 <span className="mb-1.5 block text-xs font-medium text-zinc-700">
                   Evidence <span className="font-normal text-zinc-400">(required)</span>
                 </span>
-                <UploadDropzone
-                  accept="application/pdf,image/png,image/jpeg,image/tiff,message/rfc822,.eml,application/vnd.ms-outlook,.msg"
-                  hint="PDF, JPEG, PNG, TIFF, or a forwarded email (.eml/.msg) — 50 MB max"
-                  pending={pending}
-                  success={state.success}
-                  error={state.error}
-                  required
-                  onFile={setFile}
-                />
+                {prefilledEvidence && (
+                  <label className="mb-2 flex items-center gap-1.5 text-xs text-zinc-700">
+                    <input
+                      type="checkbox"
+                      checked={useEmailEvidence}
+                      onChange={(e) => setUseEmailEvidence(e.target.checked)}
+                    />
+                    Use their email reply ({prefilledEvidence.filename}) as evidence
+                  </label>
+                )}
+                {!useEmailEvidence && (
+                  <UploadDropzone
+                    accept="application/pdf,image/png,image/jpeg,image/tiff,message/rfc822,.eml,application/vnd.ms-outlook,.msg"
+                    hint="PDF, JPEG, PNG, TIFF, or a forwarded email (.eml/.msg) — 50 MB max"
+                    pending={pending}
+                    success={state.success}
+                    error={state.error}
+                    required={!prefilledEvidence}
+                    onFile={setFile}
+                  />
+                )}
               </div>
 
               <div className="flex gap-3">

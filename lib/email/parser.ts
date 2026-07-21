@@ -15,6 +15,11 @@ export interface PostmarkInboundEmail {
   TextBody: string;
   HtmlBody: string;
   MailboxHash: string;
+  // Postmark's own quote/signature-stripped version of TextBody, populated
+  // when it detects the message is a reply. Present on our real inbound
+  // stream; absent on hand-built test payloads. Structural stripping only —
+  // not an AI interpretation of the content (#68 requires no auto-decisioning).
+  StrippedTextReply: string;
   Attachments: PostmarkAttachment[];
   MessageID: string;
   Date: string;
@@ -37,6 +42,7 @@ export function parseInboundPayload(body: unknown): PostmarkInboundEmail | null 
     TextBody: typeof p.TextBody === "string" ? p.TextBody : "",
     HtmlBody: typeof p.HtmlBody === "string" ? p.HtmlBody : "",
     MailboxHash: typeof p.MailboxHash === "string" ? p.MailboxHash : "",
+    StrippedTextReply: typeof p.StrippedTextReply === "string" ? p.StrippedTextReply : "",
     Attachments: Array.isArray(p.Attachments)
       ? (p.Attachments as PostmarkAttachment[])
       : [],
@@ -68,4 +74,13 @@ export function buildInboundReplyTo(projectId: string): string {
   const hash = process.env.POSTMARK_INBOUND_HASH;
   if (!hash) return "";
   return `ops+${projectId}@${hash}.inbound.postmarkapp.com`;
+}
+
+// Same MailboxHash mechanism as buildInboundReplyTo, keyed on a stakeholder
+// review's token instead of a project id, so a reply lands back on the
+// specific stakeholder_reviews row it was sent for (#68).
+export function buildStakeholderReplyTo(token: string): string {
+  const hash = process.env.POSTMARK_INBOUND_HASH;
+  if (!hash) return "";
+  return `ops+${token}@${hash}.inbound.postmarkapp.com`;
 }
