@@ -57,7 +57,7 @@ export default async function AdminShellLayout({
 
       {/* Desktop sidebar (hidden on mobile) */}
       <aside className="hidden w-56 shrink-0 flex-col border-r border-zinc-200 bg-white lg:flex">
-        <div className="flex h-14 items-center justify-between border-b border-zinc-200 px-4">
+        <div className="flex h-11 items-center justify-between border-b border-zinc-200 px-4">
           <span className="text-sm font-semibold text-zinc-900">OPS Admin</span>
           <div className="flex items-center gap-1">
             <NotificationTrayServer projectBasePath="/admin/projects" includeNeedsAttention />
@@ -67,21 +67,23 @@ export default async function AdminShellLayout({
           <SidebarNavLinks items={NAV_ITEMS} />
         </nav>
         <div className="border-t border-zinc-200 p-3">
-          <p className="mb-1 truncate text-xs text-zinc-500">{[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}</p>
+          <p className="mb-2 truncate px-2 text-xs text-zinc-400">
+            {[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
+          </p>
           <Link
             href="/admin/profile"
-            className="mb-1 block rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+            className="mb-0.5 block rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
           >
             My profile
           </Link>
           <ReplayTourButton
             href="/admin/dashboard"
-            className="mb-1 block w-full rounded px-3 py-1.5 text-left text-sm text-zinc-600 hover:bg-zinc-100"
+            className="mb-0.5 block w-full rounded px-2 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
           />
           <form action={logout}>
             <button
               type="submit"
-              className="w-full rounded px-3 py-1.5 text-left text-sm text-zinc-600 hover:bg-zinc-100"
+              className="w-full rounded px-2 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
             >
               Sign out
             </button>

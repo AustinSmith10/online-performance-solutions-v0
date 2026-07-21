@@ -8,6 +8,7 @@ import { DigestScheduleForm } from "./_components/DigestScheduleForm";
 import { BusinessHoursForm } from "./_components/BusinessHoursForm";
 import { DeliveryDelayDurationsForm } from "./_components/DeliveryDelayDurationsForm";
 import { AdminNavRestrictionsForm } from "./_components/AdminNavRestrictionsForm";
+import { SettingsSection } from "./_components/SettingsSection";
 
 export default async function AdminSettingsPage() {
   const user = await requireRole("super_admin", "admin");
@@ -20,17 +21,31 @@ export default async function AdminSettingsPage() {
     user.role === "super_admin" ? await getAdminNavRestrictions(supabase) : [];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-8">
       <div>
         <h1 className="text-xl font-semibold text-zinc-900">Settings</h1>
         <p className="mt-1 text-sm text-zinc-500">Platform-wide configuration.</p>
       </div>
 
-      <DigestScheduleForm schedule={schedule} />
-      <BusinessHoursForm hours={businessHours} />
-      <DeliveryDelayDurationsForm durations={deliveryDelayDurations} />
+      <SettingsSection
+        title="Notifications"
+        description="Automated emails sent to consultants and admins."
+      >
+        <DigestScheduleForm schedule={schedule} />
+      </SettingsSection>
+
+      <SettingsSection
+        title="Delivery"
+        description="Timing rules for automated status updates and report generation."
+      >
+        <BusinessHoursForm hours={businessHours} />
+        <DeliveryDelayDurationsForm durations={deliveryDelayDurations} />
+      </SettingsSection>
+
       {user.role === "super_admin" && (
-        <AdminNavRestrictionsForm restricted={navRestrictions} />
+        <SettingsSection title="Access control" description="Super admin only.">
+          <AdminNavRestrictionsForm restricted={navRestrictions} />
+        </SettingsSection>
       )}
     </div>
   );
