@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { User } from "@/types";
+import { requireRole } from "@/lib/auth/session";
+import { CreateAccountModal } from "../users/_components/CreateAccountModal";
+import type { User, Client } from "@/types";
 
 const SORT_COLS = ["invited_at", "first_name", "email"] as const;
 type SortCol = (typeof SORT_COLS)[number];
@@ -55,7 +57,16 @@ export default async function ClientsPage({
   const sortOrder: "asc" | "desc" = order === "asc" ? "asc" : "desc";
   const params = { q, org, status, sort, order };
 
-  const supabase = createAdminClient();
+  const [caller, supabase] = await Promise.all([
+    requireRole("super_admin", "admin"),
+    Promise.resolve(createAdminClient()),
+  ]);
+
+  const { data: orgsData } = await supabase
+    .from("clients")
+    .select("id, name")
+    .order("name", { ascending: true });
+  const orgs = (orgsData ?? []) as Pick<Client, "id" | "name">[];
 
   let orgIds: string[] | null = null;
   if (org?.trim()) {
@@ -80,7 +91,17 @@ export default async function ClientsPage({
   if (status === "active") query = query.eq("is_locked", false);
   if (orgIds !== null) {
     if (orgIds.length === 0) {
-      return <ClientsLayout clients={[]} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter />;
+      return (
+        <ClientsLayout
+          clients={[]}
+          params={params}
+          sortCol={sortCol}
+          sortOrder={sortOrder}
+          hasFilter
+          orgs={orgs}
+          callerRole={caller.role as string}
+        />
+      );
     }
     query = query.in("client_id", orgIds);
   }
@@ -89,7 +110,17 @@ export default async function ClientsPage({
   const clients = (data ?? []) as unknown as ClientRow[];
   const hasFilter = !!(q || org || status);
 
-  return <ClientsLayout clients={clients} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} />;
+  return (
+    <ClientsLayout
+      clients={clients}
+      params={params}
+      sortCol={sortCol}
+      sortOrder={sortOrder}
+      hasFilter={hasFilter}
+      orgs={orgs}
+      callerRole={caller.role as string}
+    />
+  );
 }
 
 function ClientsLayout({
@@ -98,12 +129,16 @@ function ClientsLayout({
   sortCol,
   sortOrder,
   hasFilter,
+  orgs,
+  callerRole,
 }: {
   clients: ClientRow[];
   params: Record<string, string | undefined>;
   sortCol: SortCol;
   sortOrder: "asc" | "desc";
   hasFilter: boolean;
+  orgs: Pick<Client, "id" | "name">[];
+  callerRole: string;
 }) {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -112,6 +147,7 @@ function ClientsLayout({
           <h1 className="text-xl font-semibold text-zinc-900">Stakeholders</h1>
           <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{clients.length}</span>
         </div>
+        <CreateAccountModal orgs={orgs} callerRole={callerRole} />
       </div>
 
       <form method="GET" className="rounded-xl border border-zinc-200 bg-white p-4">
