@@ -22,6 +22,12 @@ interface Props {
   // via a failed submit) — see reExtractProject / ReExtractButton.
   initiallyExpanded?: boolean;
   initialConflict?: { resolvedByEmail: string; resolvedValue: string };
+  // Stakeholders resolving their own flag already attest to reviewing it via
+  // the submission form's confirmation checkbox — asking them to also pick
+  // a "reason" from a vocabulary written for consultants (e.g. "Resolved on
+  // stakeholder's behalf") is both confusing and redundant. In that context
+  // the reason is fixed to "self_resolved" and only an optional note shows.
+  stakeholderView?: boolean;
 }
 
 const REASON_OPTIONS: { value: ResolutionReason; label: string }[] = [
@@ -38,6 +44,7 @@ export function FieldFlagReview({
   onResolved,
   initiallyExpanded,
   initialConflict,
+  stakeholderView,
 }: Props) {
   const [expanded, setExpanded] = useState(!!initiallyExpanded || !!initialConflict);
   const [value, setValue] = useState(currentValue);
@@ -142,23 +149,25 @@ export function FieldFlagReview({
         />
       </div>
 
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium text-zinc-700">Reason</label>
-          <select
-            value={reason}
-            onChange={(e) => setReason(e.target.value as ResolutionReason)}
-            disabled={pending}
-            className="w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:opacity-60"
-          >
-            {REASON_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+      {!stakeholderView && (
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs font-medium text-zinc-700">Reason</label>
+            <select
+              value={reason}
+              onChange={(e) => setReason(e.target.value as ResolutionReason)}
+              disabled={pending}
+              className="w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:opacity-60"
+            >
+              {REASON_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
+      )}
 
       <div>
         <label className="mb-1 block text-xs font-medium text-zinc-700">Note (optional)</label>

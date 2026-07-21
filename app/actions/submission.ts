@@ -688,13 +688,18 @@ export async function submitProject(
   if (updateError) return { error: `Failed to submit project: ${updateError.message}` };
   if (!count) return { error: "This project has already been submitted or is no longer a draft." };
 
-  // A field the stakeholder actively edited on the review form is treated as
-  // self-resolved — no reason to leave a flag open for a value the person
-  // reviewing it already fixed. Untouched flags stay open post-submission.
-  if (correctedFields.length > 0) {
+  // Every extract token on the step-2 review form was shown to the person
+  // submitting — including any flagged candidates — and covered by the
+  // "I confirm I have reviewed the details" checkbox above. So resolve
+  // every open flag for a token on this form, not just ones whose value
+  // changed: leaving an untouched-but-reviewed flag open would just force
+  // the same review to happen again immediately after, on the project
+  // details page.
+  const reviewedTokens = Object.keys(extractedFields);
+  if (reviewedTokens.length > 0) {
     try {
       await Promise.all(
-        correctedFields.map((token) =>
+        reviewedTokens.map((token) =>
           supabase
             .from("field_flags")
             .update({
@@ -702,7 +707,7 @@ export async function submitProject(
               current_value: extractedFields[token] ?? "",
               resolved_by: actor.id,
               resolved_at: new Date().toISOString(),
-              resolution_reason: "self_resolved",
+              resolution_reason: actsOnBehalf ? "resolved_for_stakeholder" : "self_resolved",
             })
             .eq("project_id", projectId)
             .eq("field_key", token)

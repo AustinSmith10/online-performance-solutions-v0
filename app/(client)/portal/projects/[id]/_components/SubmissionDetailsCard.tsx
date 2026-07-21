@@ -150,6 +150,7 @@ function Row({
             label={label}
             currentValue={typeof value === "string" ? value : ""}
             candidates={flag.candidates}
+            stakeholderView
             onResolved={(v) => setResolvedValue(v)}
           />
         </div>

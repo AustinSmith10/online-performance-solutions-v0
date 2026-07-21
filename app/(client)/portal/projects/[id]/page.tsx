@@ -447,7 +447,7 @@ export default async function ClientProjectDetailPage({
             Added a document since submitting, or think something was misread? Re-run extraction
             against your uploaded documents.
           </p>
-          <ReExtractButton projectId={id} />
+          <ReExtractButton projectId={id} stakeholderView />
         </div>
       )}
     </div>

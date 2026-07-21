@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { reExtractProject, type ReExtractConflict } from "@/app/actions/field-flags";
 import { FieldFlagReview } from "@/components/field-flag-review";
 
-export function ReExtractButton({ projectId }: { projectId: string }) {
+export function ReExtractButton({
+  projectId,
+  stakeholderView,
+}: {
+  projectId: string;
+  stakeholderView?: boolean;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -57,6 +63,7 @@ export function ReExtractButton({ projectId }: { projectId: string }) {
                 candidates={c.newCandidates}
                 initiallyExpanded
                 initialConflict={{ resolvedByEmail: c.resolvedByEmail, resolvedValue: c.resolvedValue }}
+                stakeholderView={stakeholderView}
                 onResolved={() => setConflicts((prev) => prev.filter((x) => x.flagId !== c.flagId))}
               />
             </div>
