@@ -411,7 +411,7 @@ async function main() {
     const supabase = createAdminClient();
     const result = await sendAvailableRequestsDigest(supabase);
     console.log(
-      `[available-requests-digest] count=${result.count} sent=${result.sent} recipients=${result.recipients}`
+      `[available-requests-digest] count=${result.count} queueCount=${result.queueCount} sent=${result.sent} recipients=${result.recipients}`
     );
   });
 

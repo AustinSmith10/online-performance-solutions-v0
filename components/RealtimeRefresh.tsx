@@ -30,6 +30,7 @@ export function RealtimeRefresh({ userId }: { userId: string }) {
       .channel(`realtime-refresh-${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "stakeholder_reviews" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inbound_email_queue" }, scheduleRefresh)
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",

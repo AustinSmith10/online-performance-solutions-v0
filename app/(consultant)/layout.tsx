@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { logout } from "@/app/actions/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getPendingEmailQueueCount } from "@/lib/email/queue-pending-count";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { NotificationToasts } from "@/components/NotificationToasts";
 import { TopNavLinks } from "@/components/NavLinks";
@@ -15,11 +17,6 @@ import type { ConsultantAvailability } from "@/types";
 // now that Availability lives in its own floating pill (AvailabilityPill),
 // there's only one nav destination left. See NOTES at the bottom of
 // app/prototype-client-workspace/page.tsx for the reasoning this followed.
-const NAV_ITEMS = [
-  { href: "/ops", label: "Workspace" },
-  { href: "/email-queue", label: "Email Queue" },
-];
-
 export default async function ConsultantLayout({
   children,
 }: {
@@ -27,6 +24,12 @@ export default async function ConsultantLayout({
 }) {
   const user = await requireRole("consultant");
   const userName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+
+  const pendingQueueCount = await getPendingEmailQueueCount(createAdminClient());
+  const NAV_ITEMS = [
+    { href: "/ops", label: "Workspace" },
+    { href: "/email-queue", label: `Email Queue (${pendingQueueCount})` },
+  ];
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50">

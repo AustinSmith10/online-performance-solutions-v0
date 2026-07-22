@@ -56,7 +56,12 @@ const templates: { name: string; html: string }[] = [
   },
   {
     name: "AvailableRequestsDigestEmail",
-    html: renderAvailableRequestsDigestEmail({ count: 3, portalUrl: `${APP}/ops` }),
+    html: renderAvailableRequestsDigestEmail({
+      count: 3,
+      portalUrl: `${APP}/ops`,
+      queueCount: 5,
+      queueUrl: `${APP}/email-queue`,
+    }),
   },
   {
     name: "ConsultantAssignedEmail",

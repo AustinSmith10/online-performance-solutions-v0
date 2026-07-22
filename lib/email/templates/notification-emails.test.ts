@@ -42,20 +42,37 @@ describe("AcknowledgementEmail", () => {
 // ─── AvailableRequestsDigestEmail ─────────────────────────────────────────────
 
 describe("renderAvailableRequestsDigestEmail", () => {
+  const base = {
+    portalUrl: "https://ops.ddeg.com.au/ops",
+    queueUrl: "https://ops.ddeg.com.au/email-queue",
+  };
+
   it("uses singular wording for a single available request", () => {
-    const html = renderAvailableRequestsDigestEmail({ count: 1, portalUrl: "https://ops.ddeg.com.au/ops" });
+    const html = renderAvailableRequestsDigestEmail({ ...base, count: 1, queueCount: 0 });
     expect(html).toContain("1 available request");
     expect(html).not.toContain("1 available requests");
   });
 
   it("uses plural wording for multiple available requests", () => {
-    const html = renderAvailableRequestsDigestEmail({ count: 4, portalUrl: "https://ops.ddeg.com.au/ops" });
+    const html = renderAvailableRequestsDigestEmail({ ...base, count: 4, queueCount: 0 });
     expect(html).toContain("4 available requests");
   });
 
-  it("includes the portal URL", () => {
-    const html = renderAvailableRequestsDigestEmail({ count: 2, portalUrl: "https://ops.ddeg.com.au/ops" });
+  it("uses singular wording for a single pending queue email", () => {
+    const html = renderAvailableRequestsDigestEmail({ ...base, count: 0, queueCount: 1 });
+    expect(html).toContain("1 pending queue email");
+    expect(html).not.toContain("1 pending queue emails");
+  });
+
+  it("uses plural wording for multiple pending queue emails", () => {
+    const html = renderAvailableRequestsDigestEmail({ ...base, count: 0, queueCount: 3 });
+    expect(html).toContain("3 pending queue emails");
+  });
+
+  it("includes the portal URL and the queue URL, each attached to its own count", () => {
+    const html = renderAvailableRequestsDigestEmail({ ...base, count: 2, queueCount: 5 });
     expect(html).toContain("https://ops.ddeg.com.au/ops");
+    expect(html).toContain("https://ops.ddeg.com.au/email-queue");
   });
 });
 

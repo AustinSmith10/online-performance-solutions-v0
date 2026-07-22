@@ -76,7 +76,12 @@ const TEMPLATES: Record<string, { subject: string; html: string }> = {
   },
   digest: {
     subject: "OPS smoke test: available requests digest",
-    html: renderAvailableRequestsDigestEmail({ count: 3, portalUrl: "http://localhost:3000/ops" }),
+    html: renderAvailableRequestsDigestEmail({
+      count: 3,
+      portalUrl: "http://localhost:3000/ops",
+      queueCount: 5,
+      queueUrl: "http://localhost:3000/email-queue",
+    }),
   },
 };
 

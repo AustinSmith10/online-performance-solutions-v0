@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/session";
 import { logout } from "@/app/actions/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminNavRestrictions, type AdminNavKey } from "@/lib/settings/admin-nav-restrictions";
+import { getPendingEmailQueueCount } from "@/lib/email/queue-pending-count";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { NotificationToasts } from "@/components/NotificationToasts";
 import { MobileNav } from "@/components/MobileNav";
@@ -31,12 +32,18 @@ export default async function AdminShellLayout({
   children: React.ReactNode;
 }) {
   const user = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
 
   let NAV_ITEMS = ALL_NAV_ITEMS;
   if (user.role !== "super_admin") {
-    const restricted = await getAdminNavRestrictions(createAdminClient());
+    const restricted = await getAdminNavRestrictions(supabase);
     NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => !item.key || !restricted.includes(item.key));
   }
+
+  const pendingQueueCount = await getPendingEmailQueueCount(supabase);
+  NAV_ITEMS = NAV_ITEMS.map((item) =>
+    item.href === "/email-queue" ? { ...item, label: `${item.label} (${pendingQueueCount})` } : item
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 lg:h-screen lg:flex-row lg:overflow-hidden">
