@@ -4,12 +4,9 @@ import { notify } from "@/lib/notifications/notify";
 import { auditLog } from "@/lib/audit/log";
 import { renderCreditDeductionEmail } from "@/lib/email/templates/CreditDeductionEmail";
 import { renderLowCreditEmail } from "@/lib/email/templates/LowCreditEmail";
+import { renderEmailShell, e, paragraph, strong, panel } from "@/lib/email/templates/shell";
 
 const LOW_CREDIT_THRESHOLD = 3;
-
-function e(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -140,7 +137,15 @@ export async function deductCredit(
   if (balance < 1) {
     const adminIds = await getSuperAdminIds();
     const clientIds = await getOrgClientIds(orgId);
-    const html = `<p style="font-family:sans-serif">A report request could not proceed because the organisation's credit balance is <strong>0</strong>. Please top up credits or apply a payment override.</p>`;
+    const html = renderEmailShell({
+      status: "error",
+      statusLabel: "Dispatch blocked",
+      heading: "Insufficient credit balance",
+      bodyHtml:
+        paragraph(
+          `A report request for ${strong(org.name as string)} could not proceed — the credit balance is 0.`
+        ) + paragraph("Please top up credits or apply a payment override to continue.", 20),
+    });
     await Promise.all(
       [...clientIds, ...adminIds].map((id) =>
         notify({
@@ -374,8 +379,18 @@ export async function logOverride(
     ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"]) ??
     null;
   const projectRef = address ?? (project.project_number as string | null) ?? projectId.slice(0, 8);
-  const safeReason = e(reason);
-  const html = `<p style="font-family:sans-serif">A payment gate override has been applied to project <strong>${e(projectRef)}</strong>.</p><p style="font-family:sans-serif"><strong>Reason:</strong> ${safeReason}</p><p style="font-family:sans-serif">This project is flagged <em>Override — Payment Pending</em> until manually reconciled.</p>`;
+  const html = renderEmailShell({
+    status: "action",
+    statusLabel: "Needs reconciling",
+    heading: "Payment override applied",
+    bodyHtml:
+      paragraph(`A payment gate override has been applied to project ${strong(projectRef)}.`) +
+      panel("Reason", e(reason)) +
+      paragraph(
+        "This project stays flagged <em>Override — Payment Pending</em> until it is manually reconciled.",
+        20
+      ),
+  });
   await Promise.all(
     adminIds.map((id) =>
       notify({

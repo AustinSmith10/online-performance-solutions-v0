@@ -1,12 +1,10 @@
 import { describe, it, expect } from "vitest";
-import * as React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { AcknowledgementEmail } from "./AcknowledgementEmail";
 import { renderAvailableRequestsDigestEmail } from "./AvailableRequestsDigestEmail";
 import { ConsultantAssignedEmail } from "./ConsultantAssignedEmail";
 import { renderCreditDeductionEmail } from "./CreditDeductionEmail";
 import { renderLowCreditEmail } from "./LowCreditEmail";
-import { PBDRDeliveryEmail, renderPbdrDeliveryEmail } from "./PBDRDeliveryEmail";
+import { renderPbdrDeliveryEmail } from "./PBDRDeliveryEmail";
 import { QaCompleteEmail } from "./QaCompleteEmail";
 import { renderReviewResponseConfirmationEmail } from "./ReviewResponseConfirmationEmail";
 import { renderStakeholderBufferUpdateEmail } from "./StakeholderBufferUpdateEmail";
@@ -188,21 +186,6 @@ describe("renderPbdrDeliveryEmail (string variant)", () => {
   });
 });
 
-describe("PBDRDeliveryEmail (JSX variant)", () => {
-  it("renders the same key details as the string variant", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(PBDRDeliveryEmail, {
-        recipientName: "Jane Smith",
-        projectId: "OPS-001",
-        downloadUrl: "https://storage.example.com/report.pdf",
-        expiresAt: "19 June 2026",
-      })
-    );
-    expect(html).toContain("Jane Smith");
-    expect(html).toContain("OPS-001");
-    expect(html).toContain("https://storage.example.com/report.pdf");
-  });
-});
 
 // ─── QaCompleteEmail ────────────────────────────────────────────────────────────
 

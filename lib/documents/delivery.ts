@@ -9,6 +9,7 @@ import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { sendEmail } from "@/lib/email/sender";
 import { renderPbdrDeliveryEmail } from "@/lib/email/templates/PBDRDeliveryEmail";
+import { renderEmailShell, e, paragraph, strong, noticeBox } from "@/lib/email/templates/shell";
 
 export interface DeliverPbdrResult {
   success: boolean;
@@ -69,7 +70,15 @@ export async function deliverPbdr(
     const reason = !gate.creditDeducted
       ? "Credit has not been deducted (or payment override applied)."
       : "Not all stakeholders have acknowledged.";
-    const html = `<p style="font-family:sans-serif">PBDR conversion blocked for project <strong>${projectId.slice(0, 8)}</strong>: ${reason}</p>`;
+    const html = renderEmailShell({
+      status: "error",
+      statusLabel: "Blocked",
+      heading: "PBDR conversion blocked",
+      bodyHtml:
+        paragraph(
+          `Conversion could not start for project ${strong(projectId.slice(0, 8))}.`
+        ) + noticeBox(e(reason), "error"),
+    });
     const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
     await Promise.all(
       (admins ?? []).map((u: { id: string }) =>
@@ -275,7 +284,15 @@ export async function deliverPbdr(
     // Notify super admins and assigned consultant to close the project in the legacy database
     const projectRef = (project.project_number as string | null) ?? projectId.slice(0, 8);
     const completionMessage = `PBDR delivered for project ${projectRef}. Close the project record in the legacy database.`;
-    const completionHtml = `<p style="font-family:sans-serif">The PBDR for project <strong>${projectRef}</strong> has been successfully converted and delivered to the client. Please close the corresponding project record in the legacy database.</p>`;
+    const completionHtml = renderEmailShell({
+      status: "success",
+      statusLabel: "Delivered",
+      heading: "PBDR delivered — close the legacy record",
+      bodyHtml: paragraph(
+        `The PBDR for project ${strong(projectRef)} has been converted and delivered to the client. Please close the corresponding project record in the legacy database.`,
+        20
+      ),
+    });
 
     const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
     const consultantId = project.assigned_consultant_id as string | null;
@@ -327,7 +344,15 @@ export async function deliverPbdr(
     });
 
     const errorMsg = err instanceof Error ? err.message : "Unknown error";
-    const html = `<p style="font-family:sans-serif">PBDR conversion failed for project <strong>${projectId.slice(0, 8)}</strong>: ${errorMsg}. Status has been reset to dispatched.</p>`;
+    const html = renderEmailShell({
+      status: "error",
+      statusLabel: "Failed",
+      heading: "PBDR conversion failed",
+      bodyHtml:
+        paragraph(`Conversion failed for project ${strong(projectId.slice(0, 8))}.`) +
+        noticeBox(e(errorMsg), "error") +
+        paragraph("The project status has been reset to dispatched.", 20),
+    });
     const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
     await Promise.all(
       (admins ?? []).map((u: { id: string }) =>
