@@ -4,18 +4,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.mock() is hoisted to the top of the file — use vi.hoisted() so the mock
 // function references are available before initialization.
 
-const { mockSendEmail, mockAuditLog, mockExtractDocumentFields } = vi.hoisted(() => ({
+const { mockSendEmail, mockAuditLog, mockValidateToken } = vi.hoisted(() => ({
   mockSendEmail: vi.fn().mockResolvedValue(true),
   mockAuditLog: vi.fn().mockResolvedValue(undefined),
-  mockExtractDocumentFields: vi.fn(),
+  mockValidateToken: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/email/sender", () => ({ sendEmail: mockSendEmail }));
 vi.mock("@/lib/audit/log", () => ({ auditLog: mockAuditLog }));
-vi.mock("@/lib/documents/extractor", () => ({
-  extractDocumentFields: mockExtractDocumentFields,
-}));
+vi.mock("@/lib/stakeholders/tokens", () => ({ validateToken: mockValidateToken }));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(),
@@ -65,23 +63,31 @@ const ORG = {
   abandoned_draft_days: 14,
 };
 
-const EMPTY_EXTRACTION = {
-  po_number: { value: "", confidence: "low" },
-  client_address: { value: "", confidence: "low" },
-  house_type: { value: "", confidence: "low" },
-  site_wd_no: { value: "", confidence: "low" },
-  floor_wd_no: { value: "", confidence: "low" },
-  roof_wd_no: { value: "", confidence: "low" },
-  draw_date: { value: "", confidence: "low" },
-  dev_name: { value: "", confidence: "low" },
-};
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// Builds a mock query-builder object supporting the chain shapes the route
+// uses (select/eq/ilike/is/limit/maybeSingle/single/insert) with resolved
+// values driven by table name, so each test can target only the tables it
+// cares about.
+function makeQueryBuilder(overrides: Record<string, unknown> = {}) {
+  const upload = vi.fn().mockResolvedValue({ error: null });
+  const insert = vi.fn().mockResolvedValue({ data: null, error: null });
+  return {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    ilike: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    insert,
+    _upload: upload,
+    ...overrides,
+  };
+}
 
 describe("POST /api/webhooks/email", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockExtractDocumentFields.mockResolvedValue(EMPTY_EXTRACTION);
+    mockValidateToken.mockResolvedValue(null);
   });
 
   describe("Basic Auth", () => {
@@ -120,11 +126,7 @@ describe("POST /api/webhooks/email", () => {
 
     it("processes the request with correct credentials", async () => {
       vi.mocked(createAdminClient).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } }),
-        }),
+        from: vi.fn().mockReturnValue(makeQueryBuilder()),
       } as unknown as ReturnType<typeof createAdminClient>);
 
       const req = new NextRequest("http://localhost/api/webhooks/email", {
@@ -157,13 +159,9 @@ describe("POST /api/webhooks/email", () => {
   });
 
   describe("unrecognised sender", () => {
-    it("sends unrecognised-sender email and audits when user not found", async () => {
+    it("sends unrecognised-sender email and audits when no users or stakeholders match", async () => {
       vi.mocked(createAdminClient).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: null, error: { message: "not found" } }),
-        }),
+        from: vi.fn().mockReturnValue(makeQueryBuilder()),
       } as unknown as ReturnType<typeof createAdminClient>);
 
       const res = await POST(makeRequest(BASE_PAYLOAD));
@@ -183,25 +181,62 @@ describe("POST /api/webhooks/email", () => {
         expect.anything()
       );
     });
+
+    it("queues as stakeholder_response via the stakeholders-table fallback instead of bouncing", async () => {
+      const fromMock = vi.fn((table: string) => {
+        if (table === "stakeholders") {
+          return makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sh-1" }, error: null }),
+          });
+        }
+        if (table === "inbound_email_queue") {
+          return makeQueryBuilder({ insert: vi.fn().mockResolvedValue({ data: null, error: null }) });
+        }
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: fromMock,
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const res = await POST(makeRequest(BASE_PAYLOAD));
+
+      expect(res.status).toBe(200);
+      // No bounce — a holding reply instead.
+      const bounced = mockSendEmail.mock.calls.some((c) =>
+        (c[0] as { subject: string }).subject?.includes("Unrecognised")
+      );
+      expect(bounced).toBe(false);
+      expect(mockSendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: "client@example.com", subject: expect.stringContaining("received") })
+      );
+
+      expect(fromMock).toHaveBeenCalledWith("inbound_email_queue");
+
+      const queueCallIndex = fromMock.mock.calls.findIndex((c) => c[0] === "inbound_email_queue");
+      const insertedRow = fromMock.mock.results[queueCallIndex].value.insert.mock.calls[0][0];
+      expect(insertedRow).toMatchObject({
+        proposed_category: "stakeholder_response",
+        proposed_project_id: null,
+        proposed_stakeholder_review_id: null,
+        match_reason: "stakeholder_table_fallback",
+      });
+    });
   });
 
   describe("whitelist enforcement", () => {
     it("blocks sender and audits when org has whitelist and domain does not match", async () => {
-      let callCount = 0;
-      vi.mocked(createAdminClient).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockImplementation(() => {
-            callCount++;
-            if (callCount === 1) return Promise.resolve({ data: CLIENT_USER, error: null });
-            return Promise.resolve({
-              data: { ...ORG, email_whitelist: ["allowed.com"] },
-              error: null,
-            });
-          }),
-        }),
-      } as unknown as ReturnType<typeof createAdminClient>);
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: CLIENT_USER, error: null }) });
+        if (table === "clients")
+          return makeQueryBuilder({
+            single: vi.fn().mockResolvedValue({ data: { ...ORG, email_whitelist: ["allowed.com"] }, error: null }),
+          });
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof createAdminClient>);
 
       const res = await POST(makeRequest(BASE_PAYLOAD)); // sender is example.com, not allowed.com
 
@@ -214,41 +249,23 @@ describe("POST /api/webhooks/email", () => {
     });
 
     it("allows sender when their domain is in the whitelist", async () => {
-      let callCount = 0;
-      const insertMock = vi.fn().mockResolvedValue({ data: { id: "proj-1" }, error: null });
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: CLIENT_USER, error: null }) });
+        if (table === "clients")
+          return makeQueryBuilder({
+            single: vi.fn().mockResolvedValue({ data: { ...ORG, email_whitelist: ["example.com"] }, error: null }),
+          });
+        return makeQueryBuilder();
+      });
 
       vi.mocked(createAdminClient).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          is: vi.fn().mockReturnThis(),
-          not: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          single: vi.fn().mockImplementation(() => {
-            callCount++;
-            if (callCount === 1) return Promise.resolve({ data: CLIENT_USER, error: null });
-            if (callCount === 2)
-              return Promise.resolve({
-                data: { ...ORG, email_whitelist: ["example.com"] },
-                error: null,
-              });
-            return Promise.resolve({ data: { id: "proj-1" }, error: null });
-          }),
-          insert: insertMock,
-          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-          update: vi.fn().mockReturnThis(),
-        }),
-        storage: {
-          from: vi.fn().mockReturnValue({
-            upload: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        },
+        from: fromMock,
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
       } as unknown as ReturnType<typeof createAdminClient>);
 
       // No attachments → should hit the no-attachment path, not the whitelist block
       const res = await POST(makeRequest(BASE_PAYLOAD));
       expect(res.status).toBe(200);
-      // Should NOT have been blocked (whitelist_blocked would have a different email subject)
       const blocked = mockSendEmail.mock.calls.find((c) =>
         (c[0] as { subject: string }).subject?.includes("not permitted")
       );
@@ -258,18 +275,13 @@ describe("POST /api/webhooks/email", () => {
 
   describe("no attachments path", () => {
     it("sends instructions email when no supported attachments", async () => {
-      let callCount = 0;
-      vi.mocked(createAdminClient).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockImplementation(() => {
-            callCount++;
-            if (callCount === 1) return Promise.resolve({ data: CLIENT_USER, error: null });
-            return Promise.resolve({ data: ORG, error: null });
-          }),
-        }),
-      } as unknown as ReturnType<typeof createAdminClient>);
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: CLIENT_USER, error: null }) });
+        if (table === "clients") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: ORG, error: null }) });
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof createAdminClient>);
 
       const payload = { ...BASE_PAYLOAD, Attachments: [] };
       const res = await POST(makeRequest(payload));
@@ -283,18 +295,13 @@ describe("POST /api/webhooks/email", () => {
     });
 
     it("ignores unsupported attachment types (e.g. .docx)", async () => {
-      let callCount = 0;
-      vi.mocked(createAdminClient).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockImplementation(() => {
-            callCount++;
-            if (callCount === 1) return Promise.resolve({ data: CLIENT_USER, error: null });
-            return Promise.resolve({ data: ORG, error: null });
-          }),
-        }),
-      } as unknown as ReturnType<typeof createAdminClient>);
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: CLIENT_USER, error: null }) });
+        if (table === "clients") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: ORG, error: null }) });
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof createAdminClient>);
 
       const payload = {
         ...BASE_PAYLOAD,
@@ -309,108 +316,29 @@ describe("POST /api/webhooks/email", () => {
     });
   });
 
-  describe("new submission with PDF attachment", () => {
-    function makeFullSupabaseMock(projectId = "proj-1") {
-      let selectCallCount = 0;
-
-      const fromMock = vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        not: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-        single: vi.fn().mockImplementation(() => {
-          selectCallCount++;
-          if (selectCallCount === 1) return Promise.resolve({ data: CLIENT_USER, error: null }); // user lookup
-          if (selectCallCount === 2) return Promise.resolve({ data: ORG, error: null }); // org lookup
-          if (selectCallCount === 3) return Promise.resolve({ data: { id: projectId }, error: null }); // project insert
-          return Promise.resolve({ data: { extracted_fields: null, po_number: null }, error: null }); // extracted_fields fetch
-        }),
-        insert: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: { id: projectId }, error: null }),
-        }),
-        update: vi.fn().mockResolvedValue({ error: null }),
+  describe("new submission with PDF attachment → queued, not executed", () => {
+    function makeMock() {
+      const insert = vi.fn().mockResolvedValue({ data: null, error: null });
+      const upload = vi.fn().mockResolvedValue({ error: null });
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: CLIENT_USER, error: null }) });
+        if (table === "clients") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: ORG, error: null }) });
+        if (table === "inbound_email_queue") return makeQueryBuilder({ insert });
+        // "projects" and "templates" must NOT be queried under the hard gate.
+        return makeQueryBuilder();
       });
 
       return {
         from: fromMock,
-        storage: {
-          from: vi.fn().mockReturnValue({
-            upload: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        },
+        storage: { from: vi.fn().mockReturnValue({ upload }) },
+        insert,
+        upload,
       };
     }
 
-    it("creates a draft project and sends portal link", async () => {
-      vi.mocked(createAdminClient).mockReturnValue(
-        makeFullSupabaseMock() as unknown as ReturnType<typeof createAdminClient>
-      );
-
-      const payload = {
-        ...BASE_PAYLOAD,
-        Attachments: [
-          { Name: "plans.pdf", Content: PDF_BASE64, ContentType: "application/pdf", ContentLength: 100 },
-        ],
-      };
-
-      const res = await POST(makeRequest(payload));
-
-      expect(res.status).toBe(200);
-      expect(mockSendEmail).toHaveBeenCalledOnce();
-      expect(mockSendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: "client@example.com",
-          subject: expect.stringContaining("draft is ready"),
-        })
-      );
-      expect(mockAuditLog).toHaveBeenCalledWith("email.draft_created", "user-1", "client@example.com", expect.anything());
-    });
-
-    it("runs field extraction on PDF attachments", async () => {
-      vi.mocked(createAdminClient).mockReturnValue(
-        makeFullSupabaseMock() as unknown as ReturnType<typeof createAdminClient>
-      );
-
-      const payload = {
-        ...BASE_PAYLOAD,
-        Attachments: [
-          { Name: "plans.pdf", Content: PDF_BASE64, ContentType: "application/pdf", ContentLength: 100 },
-        ],
-      };
-
-      await POST(makeRequest(payload));
-
-      expect(mockExtractDocumentFields).toHaveBeenCalledOnce();
-    });
-
-    it("skips extraction when only image attachments are present", async () => {
-      vi.mocked(createAdminClient).mockReturnValue(
-        makeFullSupabaseMock() as unknown as ReturnType<typeof createAdminClient>
-      );
-
-      const payload = {
-        ...BASE_PAYLOAD,
-        Attachments: [
-          { Name: "plan.jpg", Content: PDF_BASE64, ContentType: "image/jpeg", ContentLength: 100 },
-        ],
-      };
-
-      await POST(makeRequest(payload));
-
-      expect(mockExtractDocumentFields).not.toHaveBeenCalled();
-    });
-
-    it("audits and does not 500 when the draft-ready email fails to send", async () => {
-      const mock = makeFullSupabaseMock();
-      mock.from.mockReturnValue({
-        ...mock.from(),
-        in: vi.fn().mockResolvedValue({ data: [{ id: "admin-1" }], error: null }),
-      });
+    it("queues the email instead of creating a draft project", async () => {
+      const mock = makeMock();
       vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
-      mockSendEmail.mockResolvedValue(false);
 
       const payload = {
         ...BASE_PAYLOAD,
@@ -422,103 +350,110 @@ describe("POST /api/webhooks/email", () => {
       const res = await POST(makeRequest(payload));
 
       expect(res.status).toBe(200);
-      expect(mockAuditLog).toHaveBeenCalledWith(
-        "email.draft_notification_failed",
-        "user-1",
-        "client@example.com",
-        expect.anything()
+      expect(mock.from).not.toHaveBeenCalledWith("projects");
+      expect(mock.from).not.toHaveBeenCalledWith("templates");
+      expect(mock.insert).toHaveBeenCalledOnce();
+      expect(mock.insert.mock.calls[0][0]).toMatchObject({
+        proposed_category: "new_submission",
+        proposed_project_id: null,
+        match_reason: "no_match",
+        from_email: "client@example.com",
+      });
+
+      // Attachment uploaded to the pending-inbound bucket, not "submissions".
+      expect(mock.upload).toHaveBeenCalledOnce();
+      const [path] = mock.upload.mock.calls[0];
+      expect(path).toMatch(/^[0-9a-f-]+\/plans\.pdf$/);
+
+      // Holding reply, not "your draft is ready".
+      expect(mockSendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: "client@example.com", subject: expect.stringContaining("received") })
       );
     });
   });
 
-  describe("thread reply via MailboxHash", () => {
-    it("adds attachments to existing draft and audits", async () => {
-      let selectCallCount = 0;
-      const existingProjectId = "existing-proj-1";
+  describe("thread reply via MailboxHash → queued, not executed", () => {
+    const existingProjectId = "existing-proj-1";
 
-      vi.mocked(createAdminClient).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          is: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-          single: vi.fn().mockImplementation(() => {
-            selectCallCount++;
-            if (selectCallCount === 1) return Promise.resolve({ data: CLIENT_USER, error: null }); // user
-            if (selectCallCount === 2) return Promise.resolve({ data: ORG, error: null }); // org
-            if (selectCallCount === 3)
-              return Promise.resolve({
-                data: { id: existingProjectId, client_id: "org-1", status: "draft" },
-                error: null,
-              }); // project
-            return Promise.resolve({ data: { extracted_fields: null, po_number: null }, error: null });
-          }),
-          insert: vi.fn().mockResolvedValue({ error: null }),
-          update: vi.fn().mockResolvedValue({ error: null }),
-        }),
-        storage: {
-          from: vi.fn().mockReturnValue({
-            upload: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        },
-      } as unknown as ReturnType<typeof createAdminClient>);
+    function makeMock(project: Record<string, unknown> | null) {
+      const insert = vi.fn().mockResolvedValue({ data: null, error: null });
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: CLIENT_USER, error: null }) });
+        if (table === "clients") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: ORG, error: null }) });
+        if (table === "projects") return makeQueryBuilder({ maybeSingle: vi.fn().mockResolvedValue({ data: project, error: null }) });
+        if (table === "inbound_email_queue") return makeQueryBuilder({ insert });
+        return makeQueryBuilder();
+      });
 
-      const payload = {
-        ...BASE_PAYLOAD,
-        MailboxHash: existingProjectId,
-        Attachments: [
-          { Name: "extra-plans.pdf", Content: PDF_BASE64, ContentType: "application/pdf", ContentLength: 100 },
-        ],
+      return {
+        from: fromMock,
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+        insert,
       };
+    }
 
-      const res = await POST(makeRequest(payload));
+    const PAYLOAD = {
+      ...BASE_PAYLOAD,
+      MailboxHash: existingProjectId,
+      Attachments: [
+        { Name: "extra-plans.pdf", Content: PDF_BASE64, ContentType: "application/pdf", ContentLength: 100 },
+      ],
+    };
+
+    it("queues as thread_reply when the sender owns the draft", async () => {
+      const mock = makeMock({
+        id: existingProjectId,
+        client_id: "org-1",
+        status: "draft",
+        submitted_by: "user-1", // matches CLIENT_USER.id
+      });
+      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
+
+      const res = await POST(makeRequest(PAYLOAD));
 
       expect(res.status).toBe(200);
+      expect(mock.insert).toHaveBeenCalledOnce();
+      expect(mock.insert.mock.calls[0][0]).toMatchObject({
+        proposed_category: "thread_reply",
+        proposed_project_id: existingProjectId,
+        match_reason: "mailbox_hash_projectid_match",
+      });
+    });
+
+    it("#99: rejects a project-id match from a non-owning org member (different submitted_by)", async () => {
+      const mock = makeMock({
+        id: existingProjectId,
+        client_id: "org-1", // same org as sender
+        status: "draft",
+        submitted_by: "someone-else-user-id", // not the sender
+      });
+      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
+
+      const res = await POST(makeRequest(PAYLOAD));
+
+      expect(res.status).toBe(200);
+      expect(mock.insert).not.toHaveBeenCalled();
       expect(mockAuditLog).toHaveBeenCalledWith(
-        "email.thread_attachments_added",
+        "email.thread_reply_invalid",
         "user-1",
         "client@example.com",
         expect.anything()
       );
-      // Should NOT send a portal link email for thread replies
-      expect(mockSendEmail).not.toHaveBeenCalled();
     });
 
     it("rejects a MailboxHash pointing to a non-draft project", async () => {
-      let selectCallCount = 0;
+      const mock = makeMock({
+        id: existingProjectId,
+        client_id: "org-1",
+        status: "submitted",
+        submitted_by: "user-1",
+      });
+      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
 
-      vi.mocked(createAdminClient).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          is: vi.fn().mockReturnThis(),
-          // Stakeholder-reply token lookup (checked before sender lookup) —
-          // no match, so this falls through to the ordinary draft-thread flow.
-          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-          single: vi.fn().mockImplementation(() => {
-            selectCallCount++;
-            if (selectCallCount === 1) return Promise.resolve({ data: CLIENT_USER, error: null });
-            if (selectCallCount === 2) return Promise.resolve({ data: ORG, error: null });
-            // Project is in 'submitted' status — not a valid draft to append to
-            return Promise.resolve({
-              data: { id: "proj-x", client_id: "org-1", status: "submitted" },
-              error: null,
-            });
-          }),
-        }),
-      } as unknown as ReturnType<typeof createAdminClient>);
-
-      const payload = {
-        ...BASE_PAYLOAD,
-        MailboxHash: "proj-x",
-        Attachments: [
-          { Name: "plans.pdf", Content: PDF_BASE64, ContentType: "application/pdf", ContentLength: 100 },
-        ],
-      };
-
-      const res = await POST(makeRequest(payload));
+      const res = await POST(makeRequest(PAYLOAD));
 
       expect(res.status).toBe(200);
+      expect(mock.insert).not.toHaveBeenCalled();
       expect(mockAuditLog).toHaveBeenCalledWith(
         "email.thread_reply_invalid",
         expect.anything(),
@@ -528,99 +463,28 @@ describe("POST /api/webhooks/email", () => {
     });
   });
 
-  describe("stakeholder email reply threading (#68)", () => {
+  describe("stakeholder email reply token match → queued, not executed", () => {
     const TOKEN = "abc123reviewtoken";
     const REVIEW = {
       id: "review-1",
       project_id: "proj-1",
-      stakeholder_email: "stakeholder@external.com",
-      stakeholder_name: "Sam Stakeholder",
       status: "pending",
-    };
-    const PROJECT = {
-      id: "proj-1",
-      client_id: "org-1",
-      submitted_by: "user-1",
-      assigned_consultant_id: "consultant-1",
-      qa_completed_by: null,
-      extracted_fields: null,
-      project_number: "PN-100",
+      expires_at: "2999-01-01T00:00:00Z",
     };
 
-    function makeMock({ senderKnown = true }: { senderKnown?: boolean } = {}) {
-      const reviewUpdateEq = vi.fn().mockResolvedValue({ data: null, error: null });
-      const reviewUpdate = vi.fn().mockReturnValue({ eq: reviewUpdateEq });
-      const projectFilesInsertSingle = vi.fn().mockResolvedValue({ data: { id: "file-1" }, error: null });
-      const notificationsInsert = vi.fn().mockResolvedValue({ data: null, error: null });
+    it("queues as stakeholder_response and skips the sender-lookup gate entirely", async () => {
+      mockValidateToken.mockResolvedValue({ review: REVIEW, isExpired: false });
 
+      const insert = vi.fn().mockResolvedValue({ data: null, error: null });
       const fromMock = vi.fn((table: string) => {
-        switch (table) {
-          case "stakeholder_reviews":
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({ data: REVIEW, error: null }),
-              update: reviewUpdate,
-            };
-          case "projects":
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              is: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({ data: PROJECT, error: null }),
-            };
-          case "stakeholders":
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              is: vi.fn().mockReturnThis(),
-              order: vi.fn().mockResolvedValue({
-                data: senderKnown
-                  ? [{ id: "s1", name: "Sam Stakeholder", email: "stakeholder@external.com", company: null }]
-                  : [],
-              }),
-            };
-          case "users":
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              in: vi.fn().mockResolvedValue({ data: [{ id: "admin-1" }] }),
-              maybeSingle: vi.fn().mockResolvedValue({ data: { email: "submitter@example.com" }, error: null }),
-              single: vi.fn().mockResolvedValue({ data: { email: "consultant@example.com" }, error: null }),
-            };
-          case "project_files":
-            return {
-              insert: vi.fn().mockReturnValue({
-                select: vi.fn().mockReturnThis(),
-                single: projectFilesInsertSingle,
-              }),
-            };
-          case "notifications":
-            return { insert: notificationsInsert };
-          default:
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-            };
-        }
+        if (table === "inbound_email_queue") return makeQueryBuilder({ insert });
+        return makeQueryBuilder();
       });
 
-      return {
+      vi.mocked(createAdminClient).mockReturnValue({
         from: fromMock,
-        storage: {
-          from: vi.fn().mockReturnValue({
-            upload: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        },
-        reviewUpdateEq,
-        reviewUpdate,
-      };
-    }
-
-    it("links a reply from a known stakeholder, stores it as verified, and skips the sender-lookup gate", async () => {
-      const mock = makeMock({ senderKnown: true });
-      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
 
       const payload = {
         ...BASE_PAYLOAD,
@@ -633,114 +497,92 @@ describe("POST /api/webhooks/email", () => {
       const res = await POST(makeRequest(payload));
 
       expect(res.status).toBe(200);
-      // The sender-lookup "unrecognised sender" bounce must NOT fire — this
-      // sender has no `users` row at all, only a `stakeholders` roster entry.
+      // "users" table must never be queried — the token alone routes this.
+      expect(fromMock).not.toHaveBeenCalledWith("users");
+      expect(insert).toHaveBeenCalledOnce();
+      expect(insert.mock.calls[0][0]).toMatchObject({
+        proposed_category: "stakeholder_response",
+        proposed_project_id: "proj-1",
+        proposed_stakeholder_review_id: "review-1",
+        match_reason: "token_match",
+      });
+
       const bounced = mockSendEmail.mock.calls.some((c) =>
         (c[0] as { subject: string }).subject?.includes("Unrecognised")
       );
       expect(bounced).toBe(false);
-
-      expect(mock.reviewUpdateEq).toHaveBeenCalledWith("id", "review-1");
-
-      expect(mockAuditLog).toHaveBeenCalledWith(
-        "stakeholder.email_reply_received",
-        null,
-        "stakeholder@external.com",
-        expect.objectContaining({
-          metadata: expect.objectContaining({ review_id: "review-1", sender_verified: true }),
-        })
-      );
-
-      // Independent notification to the assigned consultant + admins.
-      expect(mockSendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ subject: expect.stringContaining("needs action") })
-      );
     });
 
-    it("prefers Postmark's StrippedTextReply over the full TextBody when both are present", async () => {
-      const mock = makeMock({ senderKnown: true });
-      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
+    it("#99: treats an expired token as no match — falls through instead of queuing a stakeholder_response", async () => {
+      mockValidateToken.mockResolvedValue({
+        review: { ...REVIEW, expires_at: "2000-01-01T00:00:00Z" },
+        isExpired: true,
+      });
+
+      const insert = vi.fn().mockResolvedValue({ data: null, error: null });
+      // Falls through to the ordinary sender-lookup gate — this sender has
+      // no `users` row and no `stakeholders` match, so it bounces.
+      const fromMock = vi.fn(() => makeQueryBuilder({ insert }));
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: fromMock,
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
 
       const payload = {
         ...BASE_PAYLOAD,
         From: "stakeholder@external.com",
         FromFull: { Email: "stakeholder@external.com", Name: "Sam Stakeholder", MailboxHash: TOKEN },
         MailboxHash: TOKEN,
-        TextBody: "Approved.\n\nOn Mon, Jan 1 wrote:\n> quoted history\n--\nSam, Sent from my iPhone",
-        StrippedTextReply: "Approved.",
-      };
-
-      await POST(makeRequest(payload));
-
-      expect(mock.reviewUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({ email_reply_text: "Approved." })
-      );
-    });
-
-    it("falls back to TextBody when StrippedTextReply is absent", async () => {
-      const mock = makeMock({ senderKnown: true });
-      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
-
-      const payload = {
-        ...BASE_PAYLOAD,
-        From: "stakeholder@external.com",
-        FromFull: { Email: "stakeholder@external.com", Name: "Sam Stakeholder", MailboxHash: TOKEN },
-        MailboxHash: TOKEN,
-        TextBody: "Approved from my end.",
-        StrippedTextReply: "",
-      };
-
-      await POST(makeRequest(payload));
-
-      expect(mock.reviewUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({ email_reply_text: "Approved from my end." })
-      );
-    });
-
-    it("flags the reply as unverified when the sender isn't a known project/client stakeholder", async () => {
-      const mock = makeMock({ senderKnown: false });
-      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
-
-      const payload = {
-        ...BASE_PAYLOAD,
-        From: "someone-else@example.com",
-        FromFull: { Email: "someone-else@example.com", Name: "", MailboxHash: TOKEN },
-        MailboxHash: TOKEN,
-        TextBody: "Forwarding this along, approved.",
       };
 
       const res = await POST(makeRequest(payload));
 
       expect(res.status).toBe(200);
-      expect(mockAuditLog).toHaveBeenCalledWith(
-        "stakeholder.email_reply_received",
-        null,
-        "someone-else@example.com",
-        expect.objectContaining({
-          metadata: expect.objectContaining({ sender_verified: false }),
-        })
+      expect(insert).not.toHaveBeenCalled();
+      const bounced = mockSendEmail.mock.calls.some((c) =>
+        (c[0] as { subject: string }).subject?.includes("Unrecognised")
       );
+      expect(bounced).toBe(true);
+    });
+
+    it("#99: treats an already-acknowledged (non-pending) token as no match", async () => {
+      mockValidateToken.mockResolvedValue({
+        review: { ...REVIEW, status: "acknowledged" },
+        isExpired: false,
+      });
+
+      const insert = vi.fn().mockResolvedValue({ data: null, error: null });
+      const fromMock = vi.fn(() => makeQueryBuilder({ insert }));
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: fromMock,
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        From: "stakeholder@external.com",
+        FromFull: { Email: "stakeholder@external.com", Name: "Sam Stakeholder", MailboxHash: TOKEN },
+        MailboxHash: TOKEN,
+      };
+
+      const res = await POST(makeRequest(payload));
+
+      expect(res.status).toBe(200);
+      expect(insert).not.toHaveBeenCalled();
     });
   });
 
   describe("non-client role", () => {
     it("returns 200 silently for consultant senders", async () => {
-      let callCount = 0;
-      vi.mocked(createAdminClient).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockImplementation(() => {
-            callCount++;
-            if (callCount === 1)
-              return Promise.resolve({
-                data: { ...CLIENT_USER, role: "consultant" },
-                error: null,
-              });
-            return Promise.resolve({ data: ORG, error: null });
-          }),
-        }),
-      } as unknown as ReturnType<typeof createAdminClient>);
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users")
+          return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: { ...CLIENT_USER, role: "consultant" }, error: null }) });
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof createAdminClient>);
 
       const res = await POST(makeRequest(BASE_PAYLOAD));
       expect(res.status).toBe(200);

@@ -15,7 +15,10 @@ import type { ConsultantAvailability } from "@/types";
 // now that Availability lives in its own floating pill (AvailabilityPill),
 // there's only one nav destination left. See NOTES at the bottom of
 // app/prototype-client-workspace/page.tsx for the reasoning this followed.
-const NAV_ITEMS = [{ href: "/ops", label: "Workspace" }];
+const NAV_ITEMS = [
+  { href: "/ops", label: "Workspace" },
+  { href: "/email-queue", label: "Email Queue" },
+];
 
 export default async function ConsultantLayout({
   children,

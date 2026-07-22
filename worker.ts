@@ -1,6 +1,7 @@
 import { PgBoss } from "pg-boss";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { purgeRecoveryBin } from "@/lib/jobs/purge-recovery-bin";
+import { purgeRejectedInboundAttachments } from "@/lib/jobs/purge-rejected-inbound-attachments";
 import { generatePbdb } from "@/lib/documents/generator";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
@@ -29,6 +30,7 @@ async function main() {
   // scheduled or sent to — schedule()/send() insert rows with a FK to queue.name.
   for (const queue of [
     "purge-recovery-bin",
+    "purge-rejected-inbound-attachments",
     "expire-draft",
     "generate-pbdb",
     "dispatch-pbdb",
@@ -51,6 +53,20 @@ async function main() {
     console.log(`[purge-recovery-bin] permanently removed ${purgedCount} project(s)`);
     if (failedProjectIds.length > 0) {
       throw new Error(`failed to purge project(s): ${failedProjectIds.join(", ")}`);
+    }
+  });
+
+  // Purge storage attachments for rejected inbound-email-queue entries older
+  // than 30 days (#102). The queue row itself is never touched. Runs daily at
+  // midnight, alongside purge-recovery-bin.
+  await boss.schedule("purge-rejected-inbound-attachments", "0 0 * * *", {});
+  await boss.work("purge-rejected-inbound-attachments", async () => {
+    const supabase = createAdminClient();
+    const { purgedCount, failedQueueIds } = await purgeRejectedInboundAttachments(supabase);
+
+    console.log(`[purge-rejected-inbound-attachments] purged attachments for ${purgedCount} queue entries`);
+    if (failedQueueIds.length > 0) {
+      throw new Error(`failed to purge queue entries: ${failedQueueIds.join(", ")}`);
     }
   });
 
