@@ -70,10 +70,14 @@ export function attachmentBuffer(attachment: PostmarkAttachment): Buffer {
   return Buffer.from(attachment.Content, "base64");
 }
 
+// Postmark's hosted inbound address is `<inbound-hash>+<MailboxHash>@inbound.postmarkapp.com`
+// — the server hash is the local part, and the domain is always the bare
+// inbound.postmarkapp.com. (It is NOT `<hash>.inbound.postmarkapp.com`: that
+// subdomain does not resolve, so replies to it never reach Postmark at all.)
 export function buildInboundReplyTo(projectId: string): string {
   const hash = process.env.POSTMARK_INBOUND_HASH;
   if (!hash) return "";
-  return `ops+${projectId}@${hash}.inbound.postmarkapp.com`;
+  return `${hash}+${projectId}@inbound.postmarkapp.com`;
 }
 
 // Same MailboxHash mechanism as buildInboundReplyTo, keyed on a stakeholder
@@ -82,5 +86,5 @@ export function buildInboundReplyTo(projectId: string): string {
 export function buildStakeholderReplyTo(token: string): string {
   const hash = process.env.POSTMARK_INBOUND_HASH;
   if (!hash) return "";
-  return `ops+${token}@${hash}.inbound.postmarkapp.com`;
+  return `${hash}+${token}@inbound.postmarkapp.com`;
 }

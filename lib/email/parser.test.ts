@@ -195,7 +195,7 @@ describe("buildInboundReplyTo", () => {
   it("returns a correctly formatted reply-to address when hash is set", () => {
     process.env.POSTMARK_INBOUND_HASH = "abc123hash";
     expect(buildInboundReplyTo("proj-uuid")).toBe(
-      "ops+proj-uuid@abc123hash.inbound.postmarkapp.com"
+      "abc123hash+proj-uuid@inbound.postmarkapp.com"
     );
   });
 
@@ -225,7 +225,7 @@ describe("buildStakeholderReplyTo", () => {
   it("embeds the stakeholder review token in the mailbox hash position", () => {
     process.env.POSTMARK_INBOUND_HASH = "abc123hash";
     expect(buildStakeholderReplyTo("review-token-xyz")).toBe(
-      "ops+review-token-xyz@abc123hash.inbound.postmarkapp.com"
+      "abc123hash+review-token-xyz@inbound.postmarkapp.com"
     );
   });
 });
