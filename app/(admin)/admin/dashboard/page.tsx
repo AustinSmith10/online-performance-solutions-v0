@@ -42,6 +42,16 @@ type SystemError = {
   created_at: string;
 };
 
+type EmailFailureRow = {
+  id: string;
+  to_email: string;
+  subject: string;
+  source: string;
+  project_id: string | null;
+  created_at: string;
+  error: string | null;
+};
+
 function projectLabel(p: { project_number: string | null; site_address: string | null; po_number: string | null; id: string }) {
   const addr = p.site_address;
   if (p.project_number && addr) return `${p.project_number} — ${addr}`;
@@ -69,6 +79,7 @@ export default async function AdminDashboardPage({
     overrideResult,
     pendingReviewsResult,
     systemErrorsResult,
+    emailFailuresResult,
     consultantsResult,
   ] = await Promise.all([
     supabase
@@ -108,6 +119,13 @@ export default async function AdminDashboardPage({
       .order("created_at", { ascending: false })
       .limit(10),
 
+    supabase
+      .from("email_send_log")
+      .select("id, to_email, subject, source, project_id, created_at, error")
+      .eq("status", "failed")
+      .order("created_at", { ascending: false })
+      .limit(10),
+
     // Consultants for the assign drawer
     supabase
       .from("users")
@@ -140,6 +158,7 @@ export default async function AdminDashboardPage({
       pendingProjectIds.has(p.id)
   );
   const systemErrors = (systemErrorsResult.data ?? []) as SystemError[];
+  const emailFailures = (emailFailuresResult.data ?? []) as unknown as EmailFailureRow[];
 
   const activeProjectItems: ActiveProjectItem[] = allActive.map((p) => ({
     id: p.id,
@@ -184,6 +203,7 @@ export default async function AdminDashboardPage({
           consultants={(consultantsResult.data ?? []) as unknown as import("./_components/ActionPanel").ConsultantOption[]}
           todayIso={todayIso}
           systemErrors={systemErrors}
+          emailFailures={emailFailures}
         />
       </TourHighlight>
 

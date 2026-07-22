@@ -193,7 +193,8 @@ export default async function ProjectDetailPage({
         delivery_delay_preset,
         qa_completed_by,
         clients(id, name, client_config, revision_notes_required),
-        assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability)
+        assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability),
+        submitter:users!projects_submitted_by_fkey(id, first_name, last_name, email, company_role)
       `)
       .eq("id", id)
       .maybeSingle(),
@@ -243,6 +244,13 @@ export default async function ProjectDetailPage({
       last_name: string | null;
       email: string;
       availability: ConsultantAvailability;
+    } | null;
+    submitter: {
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string;
+      company_role: string | null;
     } | null;
     review_cycle: number;
     qa_completed_by: string | null;
@@ -458,6 +466,9 @@ export default async function ProjectDetailPage({
 
   const assignedName = project.assigned
     ? [project.assigned.first_name, project.assigned.last_name].filter(Boolean).join(" ") || project.assigned.email
+    : null;
+  const submitterName = project.submitter
+    ? [project.submitter.first_name, project.submitter.last_name].filter(Boolean).join(" ") || project.submitter.email
     : null;
 
   const canRegeneratePbdb = (["assigned", "in_progress"] as ProjectStatus[]).includes(project.status);
@@ -803,6 +814,22 @@ export default async function ProjectDetailPage({
     <>
       <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white">
         <Row label="Client" value={project.clients?.name ?? "No organisation"} />
+        <Row
+          label="Submitted by"
+          value={
+            submitterName ? (
+              <>
+                {submitterName}
+                {project.submitter?.company_role && (
+                  <span className="text-zinc-400"> · {project.submitter.company_role}</span>
+                )}
+                <span className="ml-2 text-xs text-zinc-400">{project.submitter?.email}</span>
+              </>
+            ) : (
+              "—"
+            )
+          }
+        />
         <Row label="PO number" value={project.po_number ?? "—"} />
         <Row label="Delivery recipient" value={project.delivery_recipient_email ?? "—"} />
         <Row label="Submitted via" value={project.source === "email" ? "Email" : "Portal"} />

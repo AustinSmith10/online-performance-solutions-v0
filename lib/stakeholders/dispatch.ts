@@ -186,6 +186,8 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
         to: prior.stakeholder_email as string,
         subject: `Document revised — re-approval required (ref: ${projectId.slice(0, 8)})`,
         html: noticeHtml,
+        source: "stakeholder_dispatch_revision_notice",
+        projectId,
       }).catch((err) => {
         console.error(`[dispatch-pbdb] revision notice to ${prior.stakeholder_email} failed:`, err);
       });
@@ -250,6 +252,8 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
         to: stakeholder.email,
         subject: `Approval required — PBDB review (ref: ${projectId.slice(0, 8)})`,
         html: emailHtml,
+        source: "stakeholder_dispatch_external",
+        projectId,
         ...(replyTo ? { replyTo } : {}),
       }).catch((err) => {
         console.error(`[dispatch-pbdb] email to ${stakeholder.email} failed:`, err);

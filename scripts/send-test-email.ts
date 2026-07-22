@@ -95,7 +95,7 @@ async function main() {
   console.log(`Sending "${template}" to ${to} via Postmark (real send — uses your trial quota)...`);
   // throwOnError so a rejected send fails loudly here — sendEmail swallows
   // errors by default so application code is never blocked by email problems.
-  await sendEmail({ to, subject: chosen.subject, html: chosen.html, throwOnError: true });
+  await sendEmail({ to, subject: chosen.subject, html: chosen.html, throwOnError: true, source: "script_send_test_email" });
   console.log(
     `✅ Postmark accepted the send to ${to}.\n` +
       "   Note: accepted ≠ landed in the inbox. Confirm in the recipient's mailbox and\n" +

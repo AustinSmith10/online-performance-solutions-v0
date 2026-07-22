@@ -244,6 +244,8 @@ export async function deliverPbdr(
             downloadUrl,
             expiresAt,
           }),
+          source: "document_delivery_recipient",
+          projectId,
         }).catch((err) => {
           console.error("[deliver-pbdr] delivery_recipient email failed:", err);
         });

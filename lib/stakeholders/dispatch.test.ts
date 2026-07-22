@@ -117,7 +117,7 @@ beforeEach(() => {
   vi.mocked(computeTokenExpiry).mockResolvedValue(new Date("2026-06-30T00:00:00Z"));
   vi.mocked(renderApprovalRequestEmail).mockReturnValue("<html>approval</html>");
   vi.mocked(renderRevisionNoticeEmail).mockReturnValue("<html>notice</html>");
-  vi.mocked(sendEmail).mockResolvedValue(undefined);
+  vi.mocked(sendEmail).mockResolvedValue(true);
   vi.mocked(resolveStakeholders).mockResolvedValue(ORG_STAKEHOLDERS);
 });
 

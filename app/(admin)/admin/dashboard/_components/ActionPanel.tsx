@@ -51,6 +51,16 @@ export interface ConsultantOption {
   availability: ConsultantAvailability;
 }
 
+export interface EmailFailure {
+  id: string;
+  to_email: string;
+  subject: string;
+  source: string;
+  project_id: string | null;
+  created_at: string;
+  error: string | null;
+}
+
 interface Props {
   unassigned: DashboardProject[];
   overdue: DashboardProject[];
@@ -61,6 +71,7 @@ interface Props {
   consultants: ConsultantOption[];
   todayIso: string;
   systemErrors: { id: string; message: string; project_id: string | null; created_at: string }[];
+  emailFailures: EmailFailure[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -710,6 +721,31 @@ function ErrorDrawerContent({
   );
 }
 
+function EmailFailureDrawerContent({ failure }: { failure: EmailFailure }) {
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-red-500">Delivery failed</p>
+        <p className="mt-1 break-words text-sm text-red-900">To: {failure.to_email}</p>
+        <p className="mt-1 break-words text-sm text-zinc-700">{failure.subject}</p>
+        <p className="mt-1 text-xs text-zinc-400">Source: {failure.source}</p>
+        {failure.error && (
+          <p className="mt-2 break-words rounded bg-red-100 px-2 py-1.5 font-mono text-xs text-red-700">
+            {failure.error}
+          </p>
+        )}
+        <p className="mt-2 text-xs text-red-400">
+          {fmtDate(failure.created_at)} {fmtTime(failure.created_at)}
+        </p>
+      </div>
+      <p className="text-xs text-zinc-500">
+        Check the Postmark Activity log for this recipient to confirm whether the send was rejected,
+        bounced, or never reached Postmark at all.
+      </p>
+    </div>
+  );
+}
+
 // ── Hero cards ───────────────────────────────────────────────────────────────
 //
 // Generalises the client/consultant "Right now" CompactHero pattern to N
@@ -836,6 +872,7 @@ type DrawerState =
   | { type: "override"; project: DashboardProject }
   | { type: "overdue"; project: DashboardProject }
   | { type: "error"; error: SystemError }
+  | { type: "email-failure"; failure: EmailFailure }
   | null;
 
 export function ActionPanel({
@@ -848,6 +885,7 @@ export function ActionPanel({
   consultants,
   todayIso,
   systemErrors,
+  emailFailures,
 }: Props) {
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [drawerSuccess, setDrawerSuccess] = useState<string | null>(null);
@@ -869,7 +907,8 @@ export function ActionPanel({
     overdue.length +
     awaitingStakeholder.length +
     overridePending.length +
-    systemErrors.length;
+    systemErrors.length +
+    emailFailures.length;
 
   const activeReviews =
     drawer?.type === "stakeholder"
@@ -879,18 +918,22 @@ export function ActionPanel({
   const drawerTitle =
     drawer?.type === "error"
       ? "System Error"
+      : drawer?.type === "email-failure"
+      ? "Email Delivery Failed"
       : drawer
       ? projectLabel(drawer.project)
       : "";
 
   const drawerSubtitle =
-    drawer?.type === "error"
+    drawer?.type === "error" || drawer?.type === "email-failure"
       ? undefined
       : drawer?.project.clients?.name ?? undefined;
 
   const drawerProjectId =
     drawer?.type === "error"
       ? drawer.error.project_id ?? ""
+      : drawer?.type === "email-failure"
+      ? drawer.failure.project_id ?? ""
       : drawer?.project.id ?? "";
 
   const drawerAnchorId =
@@ -995,6 +1038,26 @@ export function ActionPanel({
           },
         ]
       : []),
+    ...(emailFailures.length > 0
+      ? [
+          {
+            key: "email-failure",
+            tone: "red" as const,
+            label: "Email Failed",
+            icon: "alert" as const,
+            subtitle: `${emailFailures.length} email${emailFailures.length !== 1 ? "s" : ""} failed to send`,
+            items: emailFailures.map((f) => ({
+              id: f.id,
+              label: `To: ${f.to_email}`,
+              meta: f.project_id
+                ? `${f.source} · Project ${f.project_id.slice(0, 8)} · ${fmtDate(f.created_at)}`
+                : `${f.source} · ${fmtDate(f.created_at)}`,
+              actionLabel: "Details →",
+              open: () => ({ type: "email-failure" as const, failure: f }),
+            })),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -1075,6 +1138,9 @@ export function ActionPanel({
         )}
         {drawer?.type === "error" && (
           <ErrorDrawerContent error={drawer.error} />
+        )}
+        {drawer?.type === "email-failure" && (
+          <EmailFailureDrawerContent failure={drawer.failure} />
         )}
       </Drawer>
     </>

@@ -10,8 +10,8 @@ describe("sendEmail without a Postmark token configured", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await expect(
-      sendEmail({ to: "nobody@example.com", subject: "s", html: "<p>h</p>" })
-    ).resolves.toBeUndefined();
+      sendEmail({ to: "nobody@example.com", subject: "s", html: "<p>h</p>", source: "test" })
+    ).resolves.toBe(false);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("POSTMARK_SERVER_TOKEN not set"));
 
     warnSpy.mockRestore();
@@ -24,7 +24,7 @@ describe("sendEmail without a Postmark token configured", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await expect(
-      sendEmail({ to: "nobody@example.com", subject: "s", html: "<p>h</p>", throwOnError: true })
+      sendEmail({ to: "nobody@example.com", subject: "s", html: "<p>h</p>", throwOnError: true, source: "test" })
     ).rejects.toThrow("nothing was sent");
 
     warnSpy.mockRestore();
@@ -54,6 +54,7 @@ describe.skipIf(!RUN_INTEGRATION)("sendEmail against the real Postmark API (test
       to: "test@example.com",
       subject: "OPS integration test (POSTMARK_API_TEST — not actually delivered)",
       html: "<p>This is a Postmark test-token send; nothing is delivered.</p>",
+      source: "test",
     });
 
     expect(errorSpy).not.toHaveBeenCalled();
@@ -73,6 +74,7 @@ describe.skipIf(!RUN_INTEGRATION)("sendEmail against the real Postmark API (test
       subject: "OPS integration test — replyTo",
       html: "<p>test</p>",
       replyTo: "reply-test@example.com",
+      source: "test",
     });
 
     expect(errorSpy).not.toHaveBeenCalled();

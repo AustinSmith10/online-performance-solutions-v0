@@ -40,12 +40,23 @@ export async function notify({
 
   if (userResult.error || !userResult.data?.email) {
     console.error("[notify] could not resolve recipient email:", userResult.error);
+    await admin.from("email_send_log").insert({
+      to_email: `(unresolved recipient: ${recipientId})`,
+      subject: emailSubject,
+      source: `notify:${type}`,
+      project_id: projectId ?? null,
+      status: "failed",
+      error: "Could not resolve recipient email",
+    });
     return;
   }
 
-  try {
-    await sendEmail({ to: userResult.data.email, subject: emailSubject, html: emailHtml, ...(replyTo ? { replyTo } : {}) });
-  } catch (err) {
-    console.error("[notify] email send failed (non-fatal):", err);
-  }
+  await sendEmail({
+    to: userResult.data.email,
+    subject: emailSubject,
+    html: emailHtml,
+    source: `notify:${type}`,
+    projectId,
+    ...(replyTo ? { replyTo } : {}),
+  });
 }

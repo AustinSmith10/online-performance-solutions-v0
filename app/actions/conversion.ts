@@ -121,6 +121,8 @@ export async function resendPbdrEmail(
           downloadUrl,
           expiresAt,
         }),
+        source: "conversion_resend_delivery_recipient",
+        projectId,
       }).catch((err) => console.warn("[resend-pbdr-email] delivery_recipient email failed:", err));
     }
   }

@@ -119,7 +119,7 @@ beforeEach(() => {
   vi.mocked(convertPbdbToPbdr).mockImplementation((buf: Buffer) => buf);
   vi.mocked(convertDocxToPdf).mockResolvedValue(Buffer.from("pdf-bytes"));
   vi.mocked(notify).mockResolvedValue(undefined);
-  vi.mocked(sendEmail).mockResolvedValue(undefined);
+  vi.mocked(sendEmail).mockResolvedValue(true);
 });
 
 describe("deliverPbdr — scopes the PBDB lookup to the final-approved review cycle", () => {

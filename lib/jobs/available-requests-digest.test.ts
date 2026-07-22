@@ -52,7 +52,7 @@ function makeSupabase({
 
 beforeEach(() => {
   vi.mocked(sendEmail).mockReset();
-  vi.mocked(sendEmail).mockResolvedValue(undefined);
+  vi.mocked(sendEmail).mockResolvedValue(true);
 });
 
 describe("sendAvailableRequestsDigest", () => {

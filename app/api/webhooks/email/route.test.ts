@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // function references are available before initialization.
 
 const { mockSendEmail, mockAuditLog, mockExtractDocumentFields } = vi.hoisted(() => ({
-  mockSendEmail: vi.fn().mockResolvedValue(undefined),
+  mockSendEmail: vi.fn().mockResolvedValue(true),
   mockAuditLog: vi.fn().mockResolvedValue(undefined),
   mockExtractDocumentFields: vi.fn(),
 }));
@@ -401,6 +401,33 @@ describe("POST /api/webhooks/email", () => {
       await POST(makeRequest(payload));
 
       expect(mockExtractDocumentFields).not.toHaveBeenCalled();
+    });
+
+    it("audits and does not 500 when the draft-ready email fails to send", async () => {
+      const mock = makeFullSupabaseMock();
+      mock.from.mockReturnValue({
+        ...mock.from(),
+        in: vi.fn().mockResolvedValue({ data: [{ id: "admin-1" }], error: null }),
+      });
+      vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
+      mockSendEmail.mockResolvedValue(false);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        Attachments: [
+          { Name: "plans.pdf", Content: PDF_BASE64, ContentType: "application/pdf", ContentLength: 100 },
+        ],
+      };
+
+      const res = await POST(makeRequest(payload));
+
+      expect(res.status).toBe(200);
+      expect(mockAuditLog).toHaveBeenCalledWith(
+        "email.draft_notification_failed",
+        "user-1",
+        "client@example.com",
+        expect.anything()
+      );
     });
   });
 

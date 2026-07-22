@@ -45,7 +45,7 @@ export async function sendAvailableRequestsDigest(
 
   await Promise.all(
     emails.map((to) =>
-      sendEmail({ to, subject, html }).catch((err) =>
+      sendEmail({ to, subject, html, source: "available_requests_digest" }).catch((err) =>
         console.error(`[available-requests-digest] email to ${to} failed:`, err)
       )
     )

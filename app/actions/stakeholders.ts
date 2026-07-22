@@ -447,6 +447,8 @@ export async function resendFreshToken(
     to: review.stakeholder_email as string,
     subject: `Reminder: approval required (ref: ${projectId.slice(0, 8)})`,
     html: emailHtml,
+    source: "stakeholder_resend_token",
+    projectId,
     ...(replyTo ? { replyTo } : {}),
   }).catch((err) => {
     console.error(`[resend-token] email to ${review.stakeholder_email} failed:`, err);
@@ -565,6 +567,8 @@ export async function updateStakeholderEmail(
     to: newEmail,
     subject: `Approval required — PBDB review (ref: ${projectId.slice(0, 8)})`,
     html: emailHtml,
+    source: "stakeholder_update_email",
+    projectId,
   }).catch((err) => {
     console.error(`[update-email] email to ${newEmail} failed:`, err);
   });

@@ -61,6 +61,7 @@ export async function createAccount(
       resetLink: linkData.properties.action_link,
       appUrl,
     }),
+    source: "invite",
   });
 
   return { userId };

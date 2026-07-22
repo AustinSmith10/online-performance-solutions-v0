@@ -205,6 +205,8 @@ async function main() {
           to: recipientEmail,
           subject: `Your Performance Report is ready — ${projectId.slice(0, 8)}`,
           html: renderPbdrDeliveryEmail({ recipientName: recipientEmail, projectId: projectId.slice(0, 8), downloadUrl, expiresAt }),
+          source: "script_deliver_pbdr",
+          projectId,
         }).catch((err) => console.warn("[deliver-pbdr] delivery_recipient email failed:", err));
       }
     }

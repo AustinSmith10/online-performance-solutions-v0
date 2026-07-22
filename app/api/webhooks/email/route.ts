@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
       to: fromEmail,
       subject: "OPS: Unrecognised sender",
       html: unrecognisedSenderHtml(fromEmail),
+      source: "webhook_unrecognised_sender",
     });
     await auditLog("email.unrecognised_sender", null, fromEmail, {
       metadata: { message_id: payload.MessageID },
@@ -136,6 +137,7 @@ export async function POST(req: NextRequest) {
         to: fromEmail,
         subject: "OPS: Email submission not permitted",
         html: whitelistBlockedHtml(fromEmail),
+        source: "webhook_whitelist_blocked",
       });
       await auditLog("email.whitelist_blocked", user.id, user.email, {
         orgId: org.id,
@@ -161,6 +163,7 @@ export async function POST(req: NextRequest) {
       to: fromEmail,
       subject: "OPS: Please submit via the portal",
       html: noAttachmentHtml(fromEmail, org.name as string),
+      source: "webhook_no_attachments",
     });
     await auditLog("email.no_attachments", user.id, user.email, {
       orgId: org.id,
@@ -174,6 +177,62 @@ export async function POST(req: NextRequest) {
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
+
+// Stores the raw inbound email as an .eml evidence file, so the original
+// correspondence stays on record even after its attachments are pulled out
+// and filed as project documents. Shared by the new-submission and
+// stakeholder-reply paths so both leave a correspondence trail.
+async function archiveInboundEmailAsEvidence(
+  payload: ReturnType<typeof parseInboundPayload> & object,
+  fromEmail: string,
+  clientId: string,
+  projectId: string,
+  uploadedBy: string,
+  reference: string,
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<string | null> {
+  const fullBody = (payload.TextBody || "").trim();
+  const evidenceBody = [
+    `From: ${payload.FromName ? `${payload.FromName} <${fromEmail}>` : fromEmail}`,
+    `Date: ${payload.Date}`,
+    `Subject: ${payload.Subject}`,
+    `Message-ID: ${payload.MessageID}`,
+    "",
+    fullBody || "(empty message body)",
+  ].join("\n");
+
+  // .eml + message/rfc822, not .txt — the evidence bucket's allowed_mime_types
+  // (migration 00000000000076) doesn't include text/plain.
+  const evidenceFilename = `email-${Date.now()}.eml`;
+  const evidenceStoragePath = `${clientId}/${projectId}/evidence/${evidenceFilename}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("evidence")
+    .upload(evidenceStoragePath, Buffer.from(evidenceBody, "utf8"), {
+      contentType: "message/rfc822",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    console.error("[email-webhook] Failed to store email as evidence:", uploadError);
+    return null;
+  }
+
+  const { data: inserted } = await supabase
+    .from("project_files")
+    .insert({
+      project_id: projectId,
+      file_type: "evidence",
+      storage_path: evidenceStoragePath,
+      original_filename: evidenceFilename,
+      uploaded_by: uploadedBy,
+      reference,
+    })
+    .select("id")
+    .single();
+
+  return (inserted?.id as string | null) ?? null;
+}
 
 async function handleNewSubmission(
   payload: ReturnType<typeof parseInboundPayload> & object,
@@ -211,6 +270,49 @@ async function handleNewSubmission(
   }
 
   const projectId = project.id;
+
+  // Archive the raw email itself as evidence — once the attachments below are
+  // pulled out and filed as project documents, this is the only remaining
+  // record of the original correspondence that created the request.
+  await archiveInboundEmailAsEvidence(
+    payload,
+    user.email,
+    org.id,
+    projectId,
+    user.id,
+    "email_submission",
+    supabase
+  );
+
+  // Postmark's own reply-detection (StrippedTextReply is only populated when
+  // it recognises quote/signature structure typical of a reply) firing on an
+  // email that reached us with no MailboxHash is a signal this may actually
+  // be a reply to an existing thread whose thread-reference got lost — e.g. a
+  // mail client rewriting the reply-to plus-address back to the bare inbound
+  // address. We still can't tell *which* thread it belongs to, so we process
+  // it as a new submission as before, but flag it for a human to verify
+  // rather than silently risk filing it as an unrelated new request.
+  if (payload.StrippedTextReply) {
+    await auditLog("email.reply_without_mailbox_hash", user.id, user.email, {
+      orgId: org.id,
+      projectId,
+      metadata: { message_id: payload.MessageID },
+    });
+    const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    await Promise.all(
+      (admins ?? []).map((a) =>
+        notify({
+          recipientId: a.id as string,
+          type: "email_reply_without_thread_token",
+          message: `${user.email} sent an email that looks like a reply, but it arrived with no thread reference — it was processed as a new report request instead of added to an existing thread. Please verify.`,
+          projectId,
+          emailSubject: "OPS: Possible misrouted email reply — please verify",
+          emailHtml: `<p>An email from <strong>${user.email}</strong> looks like a reply (Postmark detected reply-style content), but it had no thread reference, so it was processed as a brand-new report request rather than threaded onto an existing draft.</p><p>Please check whether <a href="${appUrl}/admin/projects/${projectId}">this project</a> is correct, or whether its attachments actually belong on an existing thread.</p>`,
+        }).catch(() => {})
+      )
+    );
+  }
 
   // Upload attachments to Supabase Storage and create project_files rows
   const pdfBuffers: Buffer[] = [];
@@ -335,6 +437,8 @@ async function handleNewSubmission(
             to: user.email,
             subject: "OPS: Duplicate address detected",
             html: duplicateAddressHtml(user.email, siteAddress, dupe.id),
+            source: "webhook_duplicate_address",
+            projectId,
           });
           await auditLog("email.duplicate_address", user.id, user.email, {
             orgId: org.id,
@@ -373,18 +477,51 @@ async function handleNewSubmission(
   const portalLink = `${appUrl}/portal/submit/resume/${projectId}`;
   const replyTo = buildInboundReplyTo(projectId);
 
-  await sendEmail({
+  const draftEmailSent = await sendEmail({
     to: user.email,
     subject: "OPS: Your report request draft is ready",
     html: portalLinkHtml(user.email, org.name as string, portalLink),
+    source: "webhook_draft_created",
+    projectId,
     ...(replyTo ? { replyTo } : {}),
   });
 
   await auditLog("email.draft_created", user.id, user.email, {
     orgId: org.id,
     projectId,
-    metadata: { message_id: payload.MessageID, attachments: files.map((f) => f.Name) },
+    metadata: { message_id: payload.MessageID, attachments: files.map((f) => f.Name), draft_email_sent: draftEmailSent },
   });
+
+  // sendEmail swallows delivery failures by default so the webhook itself
+  // never breaks — but a failed "your draft is ready" send is otherwise
+  // completely invisible: the draft still exists, nothing else errors, and
+  // no one is told the stakeholder was never actually notified. Surface it.
+  if (!draftEmailSent) {
+    try {
+      await auditLog("email.draft_notification_failed", user.id, user.email, {
+        orgId: org.id,
+        projectId,
+        metadata: { message_id: payload.MessageID },
+      });
+      const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
+      await Promise.all(
+        (admins ?? []).map((a) =>
+          notify({
+            recipientId: a.id as string,
+            type: "email_draft_notification_failed",
+            message: `A draft was created from ${user.email}'s emailed report request, but the "your draft is ready" notification failed to send — they haven't been told it exists yet.`,
+            projectId,
+            emailSubject: "OPS: Stakeholder was not notified of their email-created draft",
+            emailHtml: `<p>A draft project was created from an email sent by <strong>${user.email}</strong>, but the notification telling them to confirm it failed to send (check the Email delivery log for details).</p><p>They don't know the draft exists yet. Consider following up manually or resending from <a href="${appUrl}/admin/projects/${projectId}">the project page</a>.</p>`,
+          }).catch(() => {})
+        )
+      );
+    } catch (err) {
+      // Best-effort visibility only — must never turn a delivery hiccup into
+      // a 500 that makes Postmark retry the whole webhook.
+      console.error("[email-webhook] Failed to raise draft-notification-failed alert (non-fatal):", err);
+    }
+  }
 }
 
 async function handleThreadReply(
@@ -578,47 +715,16 @@ async function handleStakeholderEmailReply(
   // convention, so it's already attached when the consultant resolves it
   // through the #65 manual-capture form. Keeps the full original body (not
   // the stripped version) — evidence should be the complete correspondence.
-  const fullBody = (payload.TextBody || "").trim();
-  const evidenceBody = [
-    `From: ${payload.FromName ? `${payload.FromName} <${fromEmail}>` : fromEmail}`,
-    `Date: ${payload.Date}`,
-    `Subject: ${payload.Subject}`,
-    `Message-ID: ${payload.MessageID}`,
-    "",
-    fullBody || "(empty message body)",
-  ].join("\n");
-
-  // .eml + message/rfc822, not .txt — the evidence bucket's allowed_mime_types
-  // (migration 00000000000076) doesn't include text/plain.
-  const evidenceFilename = `email-reply-${Date.now()}.eml`;
-  const evidenceStoragePath = `${project.client_id}/${project.id}/evidence/${evidenceFilename}`;
   const uploadedBy = (project.assigned_consultant_id as string | null) ?? (project.submitted_by as string);
-
-  const { error: uploadError } = await supabase.storage
-    .from("evidence")
-    .upload(evidenceStoragePath, Buffer.from(evidenceBody, "utf8"), {
-      contentType: "message/rfc822",
-      upsert: false,
-    });
-
-  let evidenceFileId: string | null = null;
-  if (uploadError) {
-    console.error("[email-webhook] Failed to store stakeholder reply as evidence:", uploadError);
-  } else {
-    const { data: inserted } = await supabase
-      .from("project_files")
-      .insert({
-        project_id: project.id as string,
-        file_type: "evidence",
-        storage_path: evidenceStoragePath,
-        original_filename: evidenceFilename,
-        uploaded_by: uploadedBy,
-        reference: `stakeholder_review:${review.id}`,
-      })
-      .select("id")
-      .single();
-    evidenceFileId = (inserted?.id as string | null) ?? null;
-  }
+  const evidenceFileId = await archiveInboundEmailAsEvidence(
+    payload,
+    fromEmail,
+    project.client_id as string,
+    project.id as string,
+    uploadedBy,
+    `stakeholder_review:${review.id}`,
+    supabase
+  );
 
   await auditLog("stakeholder.email_reply_received", null, fromEmail, {
     projectId: project.id as string,

@@ -39,7 +39,9 @@ export type NotificationType =
   | "assignment_declined"
   | "assignment_overdue"
   | "system_error"
-  | "stakeholder_replied_by_email";
+  | "stakeholder_replied_by_email"
+  | "email_reply_without_thread_token"
+  | "email_draft_notification_failed";
 
 export type CreditEventType =
   | "top_up"

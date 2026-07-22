@@ -261,6 +261,8 @@ export async function requestNewApprovalLink(
     to: currentReview.stakeholder_email as string,
     subject: `Reminder: approval required (ref: ${review.project_id.slice(0, 8)})`,
     html: emailHtml,
+    source: "approval_self_reissue",
+    projectId: review.project_id,
   }).catch((err) => {
     console.error(`[requestNewApprovalLink] email to ${currentReview.stakeholder_email} failed:`, err);
   });

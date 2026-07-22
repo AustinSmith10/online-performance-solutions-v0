@@ -236,6 +236,8 @@ async function main() {
           to: email,
           subject: `Approval status update (ref: ${projectId.slice(0, 8)})`,
           html,
+          source: "worker_approval_buffer_update",
+          projectId,
         }).catch((err) => {
           console.error(`[approval-buffer] email to ${email} failed:`, err);
         });
