@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { assignConsultantFromForm, type AssignState } from "@/app/actions/projects";
 import type { ConsultantAvailability } from "@/types";
 
@@ -32,47 +33,56 @@ export function AssignForm({ projectId, consultants, currentConsultantId, isReas
   const [state, action, pending] = useActionState<AssignState, FormData>(boundAction, {});
   const [pendingConsultantId, setPendingConsultantId] = useState(currentConsultantId);
   const [confirming, setConfirming] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { queueMicrotask(() => setMounted(true)); }, []);
 
   const selectedConsultant = consultants.find((c) => c.id === pendingConsultantId);
   const selectedName = selectedConsultant
     ? [selectedConsultant.first_name, selectedConsultant.last_name].filter(Boolean).join(" ") || selectedConsultant.email
     : null;
 
+  const confirmDialog = confirming && selectedName && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+      <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl text-center">
+        <p className="text-base font-semibold text-zinc-900">
+          {isReassign ? "Reassign consultant?" : "Assign consultant?"}
+        </p>
+        <p className="mt-2 text-sm text-zinc-500">
+          {isReassign ? "Reassign to" : "Assign"}{" "}
+          <strong className="text-zinc-800">{selectedName}</strong>?
+          {isReassign && " The previous consultant will be removed."}
+        </p>
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="flex-1 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          >
+            Cancel
+          </button>
+          <form action={action} className="flex-1">
+            <input type="hidden" name="consultant_id" value={pendingConsultantId} />
+            <button
+              type="submit"
+              disabled={pending}
+              className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+            >
+              {pending ? "Saving…" : "Confirm"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
-      {confirming && selectedName && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl text-center">
-            <p className="text-base font-semibold text-zinc-900">
-              {isReassign ? "Reassign consultant?" : "Assign consultant?"}
-            </p>
-            <p className="mt-2 text-sm text-zinc-500">
-              {isReassign ? "Reassign to" : "Assign"}{" "}
-              <strong className="text-zinc-800">{selectedName}</strong>?
-              {isReassign && " The previous consultant will be removed."}
-            </p>
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirming(false)}
-                className="flex-1 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-              >
-                Cancel
-              </button>
-              <form action={action} className="flex-1">
-                <input type="hidden" name="consultant_id" value={pendingConsultantId} />
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
-                >
-                  {pending ? "Saving…" : "Confirm"}
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Portalled to <body> so `fixed inset-0` covers the real viewport even when
+          this form is mounted inside the dashboard's Drawer, whose panel has a
+          `transform` + `overflow-hidden` — either of which would otherwise turn
+          this into a containing block and clip the dialog to the drawer's box. */}
+      {mounted && confirmDialog && createPortal(confirmDialog, document.body)}
 
       <div className="space-y-3">
         {state.error && (
