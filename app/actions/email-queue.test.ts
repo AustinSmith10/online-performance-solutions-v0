@@ -176,6 +176,84 @@ describe("email-queue actions", () => {
       expect(result.error).toBe("boom");
       expect(updateFn).not.toHaveBeenCalled();
     });
+
+    it("redirects to the new project's Documents tab when it landed with unconfirmed document types", async () => {
+      mockExecute.mockResolvedValue({ ok: true, projectId: "proj-new" });
+      const eq = vi.fn().mockResolvedValue({ data: null, error: null });
+      const newSubmissionEntry = { ...PENDING_ENTRY, proposed_category: "new_submission", proposed_project_id: null };
+
+      const fromMock = vi.fn((table: string) => {
+        if (table === "inbound_email_queue") {
+          return makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: newSubmissionEntry, error: null }),
+            update: vi.fn().mockReturnValue({ eq }),
+          });
+        }
+        if (table === "project_files") {
+          // eq() is called twice (project_id, then file_type_confirmed) and
+          // mockReturnThis, so `count` sits on the builder itself — awaiting
+          // the chain resolves to the same object.
+          return makeQueryBuilder({ count: 1 });
+        }
+        throw new Error(`unexpected table: ${table}`);
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof createAdminClient>);
+      vi.mocked(requireRole).mockResolvedValue({ id: "actor-1", email: "admin@example.com", role: "consultant" } as never);
+
+      const result = await approveQueueEntry("queue-1");
+
+      expect(result.error).toBeUndefined();
+      expect(result.redirectTo).toBe("/ops/projects/proj-new?queue_approved=1");
+    });
+
+    it("does not redirect when the new project has no unconfirmed documents", async () => {
+      mockExecute.mockResolvedValue({ ok: true, projectId: "proj-new" });
+      const eq = vi.fn().mockResolvedValue({ data: null, error: null });
+      const newSubmissionEntry = { ...PENDING_ENTRY, proposed_category: "new_submission", proposed_project_id: null };
+
+      const fromMock = vi.fn((table: string) => {
+        if (table === "inbound_email_queue") {
+          return makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: newSubmissionEntry, error: null }),
+            update: vi.fn().mockReturnValue({ eq }),
+          });
+        }
+        if (table === "project_files") return makeQueryBuilder({ count: 0 });
+        throw new Error(`unexpected table: ${table}`);
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof createAdminClient>);
+
+      const result = await approveQueueEntry("queue-1");
+
+      expect(result.error).toBeUndefined();
+      expect(result.redirectTo).toBeUndefined();
+    });
+
+    it("does not redirect for a thread_reply approval, even with unconfirmed documents on the target project", async () => {
+      mockExecute.mockResolvedValue({ ok: true, projectId: "proj-1" });
+      const eq = vi.fn().mockResolvedValue({ data: null, error: null });
+
+      const fromMock = vi.fn((table: string) => {
+        if (table === "inbound_email_queue") {
+          return makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: PENDING_ENTRY, error: null }),
+            update: vi.fn().mockReturnValue({ eq }),
+          });
+        }
+        throw new Error(`unexpected table: ${table}`);
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof createAdminClient>);
+
+      const result = await approveQueueEntry("queue-1");
+
+      expect(result.error).toBeUndefined();
+      expect(result.redirectTo).toBeUndefined();
+      // project_files must never even be queried for a thread_reply — the "table"
+      // is not stubbed above, so calling it would throw and fail this test.
+    });
   });
 
   describe("reassignQueueEntry", () => {
@@ -239,6 +317,29 @@ describe("email-queue actions", () => {
         { category: "stakeholder_response", stakeholderReviewId: "review-9" },
         expect.anything()
       );
+    });
+
+    it("redirects to the new project's Documents tab when reassigning to new_submission lands unconfirmed documents", async () => {
+      mockExecute.mockResolvedValue({ ok: true, projectId: "proj-new" });
+      const eq = vi.fn().mockResolvedValue({ data: null, error: null });
+
+      const fromMock = vi.fn((table: string) => {
+        if (table === "inbound_email_queue") {
+          return makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: PENDING_ENTRY, error: null }),
+            update: vi.fn().mockReturnValue({ eq }),
+          });
+        }
+        if (table === "project_files") return makeQueryBuilder({ count: 2 });
+        throw new Error(`unexpected table: ${table}`);
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof createAdminClient>);
+
+      const result = await reassignQueueEntry("queue-1", "new_submission", null, null);
+
+      expect(result.error).toBeUndefined();
+      expect(result.redirectTo).toBe("/admin/projects/proj-new?queue_approved=1");
     });
   });
 

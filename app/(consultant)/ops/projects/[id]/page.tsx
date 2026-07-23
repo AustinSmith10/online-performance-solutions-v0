@@ -18,6 +18,7 @@ import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { GeneratedPbdbDownload } from "@/components/GeneratedPbdbDownload";
 import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanner";
+import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { CollapsibleSection } from "./_components/CollapsibleSection";
 import { ProjectDetailsEditor, type OpenFieldFlag } from "./_components/ProjectDetailsEditor";
 import { ReExtractButton } from "@/components/ReExtractButton";
@@ -93,6 +94,7 @@ export default async function ConsultantProjectDetailPage({
   const sp = await searchParams;
   const justPickedUp = sp.picked_up === "1";
   const justUploadedQa = sp.qa_uploaded === "1";
+  const justQueueApproved = sp.queue_approved === "1";
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
 
@@ -952,6 +954,13 @@ export default async function ConsultantProjectDetailPage({
     <div className="mx-auto max-w-7xl space-y-6">
       {justPickedUp && <PickedUpBanner projectId={id} />}
       {justUploadedQa && <QaUploadedBanner cleanUrl={`/ops/projects/${id}`} />}
+      {justQueueApproved && (
+        <AdminSuccessBanner
+          cleanUrl={`/ops/projects/${id}`}
+          title="Submission approved"
+          body="Please confirm the document types flagged below before continuing."
+        />
+      )}
       <Link href="/ops" className="text-sm text-zinc-500 hover:text-zinc-700">
         ← My projects
       </Link>
@@ -965,6 +974,7 @@ export default async function ConsultantProjectDetailPage({
         stakeholdersTab={stakeholdersTab}
         settingsContent={settingsContent}
         auditTab={auditTab}
+        defaultRefTab={justQueueApproved ? "documents" : undefined}
       />
     </div>
   );

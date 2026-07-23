@@ -166,6 +166,7 @@ export default async function ProjectDetailPage({
   const justReviewWaived = sp.review_waived === "1";
   const justGeneratedPbdb = sp.pbdb_generated === "1";
   const justEmailUpdated = sp.email_updated ?? null;
+  const justQueueApproved = sp.queue_approved === "1";
 
   const supabase = createAdminClient();
 
@@ -1255,6 +1256,13 @@ export default async function ProjectDetailPage({
           body="The stakeholder's email has been updated and a fresh approval link has been resent."
         />
       )}
+      {justQueueApproved && (
+        <AdminSuccessBanner
+          cleanUrl={`/admin/projects/${id}`}
+          title="Submission approved"
+          body="Please confirm the document types flagged below before continuing."
+        />
+      )}
 
       {/* Breadcrumb */}
       <Link
@@ -1310,6 +1318,7 @@ export default async function ProjectDetailPage({
         settingsContent={settingsContent}
         settingsTitle="Project Config"
         auditTab={auditTab}
+        defaultRefTab={justQueueApproved ? "documents" : undefined}
       />
     </div>
   );

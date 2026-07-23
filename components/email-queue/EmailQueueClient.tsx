@@ -140,6 +140,8 @@ function ReassignPanel({
 
   const effectiveReviewOptions = category === "stakeholder_response" && projectId ? reviewOptions : [];
 
+  const router = useRouter();
+
   function handleReassign() {
     setError(null);
     startTransition(async () => {
@@ -151,6 +153,10 @@ function ReassignPanel({
       );
       if (result.error) {
         setError(result.error);
+        return;
+      }
+      if (result.redirectTo) {
+        router.push(result.redirectTo);
         return;
       }
       onDone();
@@ -368,7 +374,8 @@ function ClarificationPanel({
   );
 }
 
-function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: () => void }) {
+function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: (message: string) => void }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [reassigning, setReassigning] = useState(false);
   const [clarifying, setClarifying] = useState(false);
@@ -383,7 +390,11 @@ function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: () => 
         setError(result.error);
         return;
       }
-      onResolved();
+      if (result.redirectTo) {
+        router.push(result.redirectTo);
+        return;
+      }
+      onResolved("Approved");
     });
   }
 
@@ -395,7 +406,7 @@ function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: () => 
         setError(result.error);
         return;
       }
-      onResolved();
+      onResolved("Rejected");
     });
   }
 
@@ -406,7 +417,7 @@ function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: () => 
         onCancel={() => setReassigning(false)}
         onDone={() => {
           setReassigning(false);
-          onResolved();
+          onResolved("Reassigned & approved");
         }}
       />
     );
@@ -419,7 +430,7 @@ function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: () => 
         onCancel={() => setClarifying(false)}
         onDone={() => {
           setClarifying(false);
-          onResolved();
+          onResolved("Clarification request sent");
         }}
       />
     );
@@ -473,8 +484,24 @@ function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: () => 
 export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
   const router = useRouter();
   const [tab, setTab] = useState<QueueStatus>("pending");
+  const [toast, setToast] = useState<string | null>(null);
   const visible = rows.filter((r) => r.status === tab);
   const [selectedId, setSelectedId] = useState<string>(visible[0]?.id ?? "");
+
+  // The row the toast is confirming disappears from view the moment
+  // router.refresh() re-fetches (its status just changed) — so the
+  // confirmation lives here, outside the row/panel that's about to vanish,
+  // instead of inline where it'd be gone before anyone read it.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  function handleResolved(message: string) {
+    router.refresh();
+    setToast(message);
+  }
 
   // Re-anchor the selection to the first row whenever the active tab
   // changes, adjusted during render (React's documented alternative to an
@@ -606,7 +633,7 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
                   </p>
                 ) : (
                   <div className="mt-6 max-w-xl border-t border-zinc-200 pt-4">
-                    <ResolveActions row={selected} onResolved={() => router.refresh()} />
+                    <ResolveActions row={selected} onResolved={handleResolved} />
                   </div>
                 )}
               </>
@@ -614,6 +641,19 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
           </div>
         </div>
       </div>
+
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg">
+          <svg className="h-4 w-4 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+              clipRule="evenodd"
+            />
+          </svg>
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

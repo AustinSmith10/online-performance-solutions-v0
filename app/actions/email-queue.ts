@@ -33,6 +33,11 @@ function revalidateQueueRoutes() {
 
 export interface QueueActionState {
   error?: string;
+  // Set when approving created a brand-new project with at least one
+  // AI-suggested (unconfirmed) document type — the caller should send the
+  // admin/consultant straight there to confirm it, rather than leaving that
+  // as an easy-to-miss badge back on the project page (#101 follow-up).
+  redirectTo?: string;
 }
 
 export type QueueCategory = "new_submission" | "thread_reply" | "stakeholder_response";
@@ -82,6 +87,31 @@ function proposedTarget(entry: QueueDbRow): ResolvedTarget | null {
     default:
       return null;
   }
+}
+
+// A brand-new project (new_submission only — an existing draft's documents
+// were presumably already reviewed on an earlier pass) may have landed with
+// AI-suggested, unconfirmed document types. If so, send the actor straight
+// to it instead of leaving that as an easy-to-miss badge on a page they
+// have no reason to visit next.
+async function documentReviewRedirect(
+  supabase: ReturnType<typeof createAdminClient>,
+  target: ResolvedTarget,
+  projectId: string | undefined,
+  actorRole: string
+): Promise<string | undefined> {
+  if (target.category !== "new_submission" || !projectId) return undefined;
+
+  const { count } = await supabase
+    .from("project_files")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .eq("file_type_confirmed", false);
+
+  if (!count) return undefined;
+
+  const base = actorRole === "consultant" ? `/ops/projects/${projectId}` : `/admin/projects/${projectId}`;
+  return `${base}?queue_approved=1`;
 }
 
 async function markResolved(
@@ -134,8 +164,10 @@ export async function approveQueueEntry(queueId: string): Promise<QueueActionSta
     metadata: { queue_id: queueId, category: target.category },
   });
 
+  const redirectTo = await documentReviewRedirect(supabase, target, result.projectId, actor.role as string);
+
   revalidateQueueRoutes();
-  return {};
+  return { redirectTo };
 }
 
 // ── Reassign & approve ──────────────────────────────────────────────────────
@@ -184,8 +216,10 @@ export async function reassignQueueEntry(
     },
   });
 
+  const redirectTo = await documentReviewRedirect(supabase, target, result.projectId, actor.role as string);
+
   revalidateQueueRoutes();
-  return {};
+  return { redirectTo };
 }
 
 // ── Reject ───────────────────────────────────────────────────────────────────
