@@ -12,7 +12,8 @@
     "db:generate": "npx supabase gen types typescript --local > types/supabase.ts",
     "seed": "node --env-file=.env.local ./node_modules/.bin/tsx supabase/seed.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:concurrency": "vitest run --config vitest.concurrency.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",

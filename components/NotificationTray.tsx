@@ -10,12 +10,13 @@ import {
   notificationToEntry,
   failedJobToEntry,
   bounceEventToEntry,
+  creditRaceEventToEntry,
   stalledProjectToEntry,
   pendingReviewToEntry,
   expiringTokenToEntry,
   NEEDS_ATTENTION_POLL_MS,
 } from "@/lib/notifications/tray";
-import type { Notification, FailedJob, BounceEvent } from "@/types";
+import type { Notification, FailedJob, BounceEvent, CreditRaceEvent } from "@/types";
 import type { StalledProjectSignal, StakeholderReviewSignal } from "@/lib/admin/needs-attention";
 
 function timeAgo(dateStr: string): string {
@@ -118,6 +119,9 @@ export function NotificationTray({
         ...(signals.failedJobs as FailedJob[]).map((j) => failedJobToEntry(j, projectBasePath)),
         ...(signals.bounceEvents as BounceEvent[]).map((b) =>
           bounceEventToEntry(b, projectBasePath)
+        ),
+        ...(signals.creditRaceEvents as CreditRaceEvent[]).map((c) =>
+          creditRaceEventToEntry(c, projectBasePath)
         ),
         ...(signals.stalledProjects as StalledProjectSignal[]).map((p) =>
           stalledProjectToEntry(p, projectBasePath)

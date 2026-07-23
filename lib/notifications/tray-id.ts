@@ -12,4 +12,5 @@ export const trayId = {
   pending: (id: string) => `pending-${id}`,
   expiring: (id: string) => `expiring-${id}`,
   overdue: (id: string) => `overdue-${id}`,
+  creditRace: (id: string) => `credit-race-${id}`,
 };

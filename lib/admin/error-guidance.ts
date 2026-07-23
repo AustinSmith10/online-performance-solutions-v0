@@ -57,3 +57,7 @@ export function pendingReviewGuidance(): string {
 export function expiringTokenGuidance(): string {
   return "This approval link will expire soon with no response yet. The approval-buffer job should issue a fresh token automatically once it runs, or you can contact the stakeholder directly in the meantime.";
 }
+
+export function creditRaceEventGuidance(): string {
+  return "A duplicate dispatch/webhook tried to bill this project a second time — the atomic ledger guard caught it and skipped the second write, so no double charge occurred. Usually a retried webhook or a doubled click; no action needed unless this project keeps re-triggering it.";
+}

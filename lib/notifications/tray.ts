@@ -1,4 +1,4 @@
-import type { Notification, FailedJob, BounceEvent } from "@/types";
+import type { Notification, FailedJob, BounceEvent, CreditRaceEvent } from "@/types";
 import type {
   StalledProjectSignal,
   StakeholderReviewSignal,
@@ -59,6 +59,25 @@ export function bounceEventToEntry(b: BounceEvent, projectBasePath: string): Tra
     message: `Email bounced: ${b.email}${b.reason ? ` (${b.reason})` : ""}`,
     href: b.project_id ? `${projectBasePath}/${b.project_id}` : null,
     timestamp: b.created_at,
+    isRead: false,
+    resolvable: true,
+  };
+}
+
+const CREDIT_RACE_EVENT_LABEL: Record<CreditRaceEvent["event_type"], string> = {
+  deduct_credit: "a credit deduction",
+  debit_deferred: "a deferred debit",
+  log_upfront: "an upfront payment log",
+  log_override: "a payment override",
+};
+
+export function creditRaceEventToEntry(c: CreditRaceEvent, projectBasePath: string): TrayEntry {
+  return {
+    id: trayId.creditRace(c.id),
+    kind: "hard_error",
+    message: `Duplicate ${CREDIT_RACE_EVENT_LABEL[c.event_type]} attempt was caught and skipped`,
+    href: c.project_id ? `${projectBasePath}/${c.project_id}` : null,
+    timestamp: c.detected_at,
     isRead: false,
     resolvable: true,
   };

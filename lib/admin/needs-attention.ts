@@ -1,5 +1,5 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
-import type { FailedJob, BounceEvent } from "@/types";
+import type { FailedJob, BounceEvent, CreditRaceEvent } from "@/types";
 import { trayId } from "@/lib/notifications/tray-id";
 
 // Thresholds for the soft "needs attention" signals (issue #46). Not
@@ -50,6 +50,7 @@ export interface OverdueAssignmentSignal {
 export interface NeedsAttentionSignals {
   failedJobs: FailedJob[];
   bounceEvents: BounceEvent[];
+  creditRaceEvents: CreditRaceEvent[];
   stalledProjects: StalledProjectSignal[];
   pendingReviews: StakeholderReviewSignal[];
   expiringTokens: StakeholderReviewSignal[];
@@ -71,6 +72,7 @@ export async function getNeedsAttentionSignals(
   const [
     { data: failedJobs, error: jobsError },
     { data: bounceEvents, error: bounceError },
+    { data: creditRaceEvents, error: creditRaceError },
     { data: stalledProjects, error: stalledError },
     { data: pendingReviews, error: pendingError },
     { data: expiringTokens, error: expiringError },
@@ -83,6 +85,12 @@ export async function getNeedsAttentionSignals(
       .select("id, email, project_id, reason, created_at, resolved_at")
       .is("resolved_at", null)
       .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("credit_race_events")
+      .select("id, client_id, project_id, event_type, detected_at, resolved_at")
+      .is("resolved_at", null)
+      .order("detected_at", { ascending: false })
       .limit(100),
     supabase
       .from("projects")
@@ -121,6 +129,7 @@ export async function getNeedsAttentionSignals(
   const error =
     jobsError?.message ??
     bounceError?.message ??
+    creditRaceError?.message ??
     stalledError?.message ??
     pendingError?.message ??
     expiringError?.message ??
@@ -139,6 +148,9 @@ export async function getNeedsAttentionSignals(
       ),
       bounceEvents: ((bounceEvents ?? []) as BounceEvent[]).filter(
         (b) => !resolvedIds.has(trayId.bounce(b.id))
+      ),
+      creditRaceEvents: ((creditRaceEvents ?? []) as CreditRaceEvent[]).filter(
+        (c) => !resolvedIds.has(trayId.creditRace(c.id))
       ),
       stalledProjects: ((stalledProjects ?? []) as StalledProjectSignal[]).filter(
         (p) => !resolvedIds.has(trayId.stalled(p.id))

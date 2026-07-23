@@ -6,11 +6,20 @@ import type { TrayEntryKind } from "@/lib/notifications/tray";
 import {
   jobGuidance,
   bounceGuidance,
+  creditRaceEventGuidance,
   stalledProjectGuidance,
   pendingReviewGuidance,
   expiringTokenGuidance,
 } from "@/lib/admin/error-guidance";
 import { ResolveSignalButton } from "@/components/ResolveSignalButton";
+import type { CreditRaceEvent } from "@/types";
+
+const CREDIT_RACE_EVENT_LABEL: Record<CreditRaceEvent["event_type"], string> = {
+  deduct_credit: "a credit deduction",
+  debit_deferred: "a deferred debit",
+  log_upfront: "an upfront payment log",
+  log_override: "a payment override",
+};
 
 function formatDateTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString("en-AU", {
@@ -142,6 +151,24 @@ export default async function SystemHealthPage() {
             guidance={bounceGuidance(b.reason)}
             timestamp={b.created_at}
             href={b.project_id ? `/admin/projects/${b.project_id}` : null}
+          />
+        ))}
+      </Section>
+
+      <Section
+        title="Credit race conditions caught"
+        description="Duplicate dispatch/webhook attempts to bill the same project twice — caught and skipped, no double charge."
+        kind="hard_error"
+        emptyText="No credit race conditions caught."
+      >
+        {data.creditRaceEvents.map((c) => (
+          <Row
+            key={c.id}
+            signalId={trayId.creditRace(c.id)}
+            message={`Duplicate ${CREDIT_RACE_EVENT_LABEL[c.event_type]} attempt was caught and skipped`}
+            guidance={creditRaceEventGuidance()}
+            timestamp={c.detected_at}
+            href={c.project_id ? `/admin/projects/${c.project_id}` : null}
           />
         ))}
       </Section>

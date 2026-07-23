@@ -103,6 +103,17 @@ export interface BounceEvent {
   resolved_at: string | null;
 }
 
+export type CreditRaceEventType = "deduct_credit" | "debit_deferred" | "log_upfront" | "log_override";
+
+export interface CreditRaceEvent {
+  id: string;
+  client_id: string | null;
+  project_id: string | null;
+  event_type: CreditRaceEventType;
+  detected_at: string;
+  resolved_at: string | null;
+}
+
 export interface User {
   id: string;
   email: string;

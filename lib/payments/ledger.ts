@@ -45,6 +45,12 @@ async function getOrgClientIds(orgId: string): Promise<string[]> {
   return (data ?? []).map((u: { id: string }) => u.id);
 }
 
+async function getClientName(orgId: string): Promise<string> {
+  const supabase = createAdminClient();
+  const { data } = await supabase.from("clients").select("name").eq("id", orgId).maybeSingle();
+  return (data?.name as string | undefined) ?? "Client";
+}
+
 async function fireLowCreditNotifications(orgId: string, balance: number, orgName: string) {
   if (balance >= LOW_CREDIT_THRESHOLD) return;
   const [clientIds, adminIds] = await Promise.all([
@@ -73,6 +79,22 @@ async function fireLowCreditNotifications(orgId: string, balance: number, orgNam
   );
 }
 
+// credit_deducted claims lost to a concurrent call are expected, quiet
+// successes — but they must not fail silently, so every "already_deducted"
+// outcome from the atomic RPCs lands here for admin visibility (issue #103).
+async function recordCreditRaceEvent(
+  eventType: "deduct_credit" | "debit_deferred" | "log_upfront" | "log_override",
+  clientId: string | null,
+  projectId: string | null
+) {
+  const supabase = createAdminClient();
+  await supabase.from("credit_race_events").insert({
+    client_id: clientId,
+    project_id: projectId,
+    event_type: eventType,
+  });
+}
+
 // ─── public API ─────────────────────────────────────────────────────────────
 
 export async function topUpCredit(
@@ -85,29 +107,18 @@ export async function topUpCredit(
 
   const supabase = createAdminClient();
 
-  const { data: org, error: orgErr } = await supabase
-    .from("clients")
-    .select("credit_balance")
-    .eq("id", orgId)
+  const { data, error } = await supabase
+    .rpc("top_up_credit", {
+      p_client_id: orgId,
+      p_amount: amount,
+      p_performed_by: performedById,
+      p_notes: notes ?? null,
+    })
     .single();
-  if (orgErr || !org) throw new Error("Client not found.");
+  if (error) throw new Error(error.message);
 
-  const newBalance = (org.credit_balance as number) + amount;
-
-  const { error: updateErr } = await supabase
-    .from("clients")
-    .update({ credit_balance: newBalance, updated_at: new Date().toISOString() })
-    .eq("id", orgId);
-  if (updateErr) throw new Error(updateErr.message);
-
-  await supabase.from("credit_ledger").insert({
-    client_id: orgId,
-    event_type: "top_up",
-    amount,
-    balance_after: newBalance,
-    performed_by: performedById,
-    notes: notes ?? null,
-  });
+  const { status, new_balance: newBalance } = data as { status: string; new_balance: number | null };
+  if (status === "not_found") throw new Error("Client not found.");
 
   await auditLog("credit.top_up", performedById, null, {
     orgId,
@@ -125,16 +136,26 @@ export async function deductCredit(
 ): Promise<void> {
   const supabase = createAdminClient();
 
-  const { data: org, error: orgErr } = await supabase
-    .from("clients")
-    .select("credit_balance, name")
-    .eq("id", orgId)
+  const { data, error } = await supabase
+    .rpc("deduct_credit", {
+      p_client_id: orgId,
+      p_project_id: projectId,
+      p_performed_by: performedById,
+    })
     .single();
-  if (orgErr || !org) throw new Error("Client not found.");
+  if (error) throw new Error(error.message);
 
-  const balance = org.credit_balance as number;
+  const { status, new_balance: newBalance } = data as { status: string; new_balance: number | null };
 
-  if (balance < 1) {
+  if (status === "not_found") throw new Error("Client not found.");
+
+  if (status === "already_deducted") {
+    await recordCreditRaceEvent("deduct_credit", orgId, projectId);
+    return;
+  }
+
+  if (status === "insufficient_balance") {
+    const orgName = await getClientName(orgId);
     const adminIds = await getSuperAdminIds();
     const clientIds = await getOrgClientIds(orgId);
     const html = renderEmailShell({
@@ -143,7 +164,7 @@ export async function deductCredit(
       heading: "Insufficient credit balance",
       bodyHtml:
         paragraph(
-          `A report request for ${strong(org.name as string)} could not proceed — the credit balance is 0.`
+          `A report request for ${strong(orgName)} could not proceed — the credit balance is 0.`
         ) + paragraph("Please top up credits or apply a payment override to continue.", 20),
     });
     await Promise.all(
@@ -161,38 +182,13 @@ export async function deductCredit(
     throw new Error("Insufficient credit balance — dispatch blocked.");
   }
 
-  const newBalance = balance - 1;
-
-  const [updateErr1, updateErr2] = await Promise.all([
-    supabase
-      .from("clients")
-      .update({ credit_balance: newBalance, updated_at: new Date().toISOString() })
-      .eq("id", orgId)
-      .then((r) => r.error),
-    supabase
-      .from("projects")
-      .update({ credit_deducted: true, updated_at: new Date().toISOString() })
-      .eq("id", projectId)
-      .then((r) => r.error),
-  ]);
-  if (updateErr1) throw new Error(updateErr1.message);
-  if (updateErr2) throw new Error(updateErr2.message);
-
-  await supabase.from("credit_ledger").insert({
-    client_id: orgId,
-    project_id: projectId,
-    event_type: "deduction",
-    amount: -1,
-    balance_after: newBalance,
-    performed_by: performedById,
-  });
-
+  // status === "ok"
+  const orgName = await getClientName(orgId);
   const [adminIds, clientIds, projectRef] = await Promise.all([
     getSuperAdminIds(),
     getOrgClientIds(orgId),
     resolveProjectRef(projectId),
   ]);
-  const orgName = org.name as string;
   const message = `1 credit deducted. New balance: ${newBalance}.`;
   // Client users and admins land on different account pages, so each group gets
   // a CTA pointing at the view they can actually act on.
@@ -213,7 +209,7 @@ export async function deductCredit(
             orgName,
             projectRef,
             creditsDeducted: 1,
-            newBalance,
+            newBalance: newBalance as number,
             portalUrl,
           }),
         }).catch(() => {})
@@ -227,7 +223,7 @@ export async function deductCredit(
     metadata: { balance_after: newBalance },
   });
 
-  await fireLowCreditNotifications(orgId, newBalance, org.name as string);
+  await fireLowCreditNotifications(orgId, newBalance as number, orgName);
 
   revalidatePath(`/admin/credits/${orgId}`);
   revalidatePath("/admin/credits");
@@ -240,49 +236,33 @@ export async function debitDeferred(
 ): Promise<void> {
   const supabase = createAdminClient();
 
-  const { data: org, error: orgErr } = await supabase
-    .from("clients")
-    .select("deferred_balance, credit_limit, is_frozen")
-    .eq("id", orgId)
+  const { data, error } = await supabase
+    .rpc("debit_deferred", {
+      p_client_id: orgId,
+      p_project_id: projectId,
+      p_performed_by: performedById,
+    })
     .single();
-  if (orgErr || !org) throw new Error("Client not found.");
+  if (error) throw new Error(error.message);
 
-  if (org.is_frozen as boolean) {
+  const { status, new_deferred_balance: newDeferred } = data as {
+    status: string;
+    new_deferred_balance: number | null;
+  };
+
+  if (status === "not_found") throw new Error("Client not found.");
+
+  if (status === "already_deducted") {
+    await recordCreditRaceEvent("debit_deferred", orgId, projectId);
+    return;
+  }
+
+  if (status === "frozen") {
     throw new Error("Client account is frozen — deferred dispatch blocked.");
   }
-
-  const deferred = org.deferred_balance as number;
-  const limit = org.credit_limit as number;
-  if (limit > 0 && deferred >= limit) {
+  if (status === "limit_reached") {
     throw new Error("Deferred credit limit reached — dispatch blocked.");
   }
-
-  const newDeferred = deferred + 1;
-
-  const [updateErr1, updateErr2] = await Promise.all([
-    supabase
-      .from("clients")
-      .update({ deferred_balance: newDeferred, updated_at: new Date().toISOString() })
-      .eq("id", orgId)
-      .then((r) => r.error),
-    supabase
-      .from("projects")
-      .update({ credit_deducted: true, updated_at: new Date().toISOString() })
-      .eq("id", projectId)
-      .then((r) => r.error),
-  ]);
-  if (updateErr1) throw new Error(updateErr1.message);
-  if (updateErr2) throw new Error(updateErr2.message);
-
-  await supabase.from("credit_ledger").insert({
-    client_id: orgId,
-    project_id: projectId,
-    event_type: "deferred_debit",
-    amount: -1,
-    balance_after: newDeferred,
-    performed_by: performedById,
-    notes: `Deferred tab: ${newDeferred}`,
-  });
 
   await auditLog("credit.deferred_debit", performedById, null, {
     orgId,
@@ -300,28 +280,23 @@ export async function logUpfront(
 ): Promise<void> {
   const supabase = createAdminClient();
 
-  const { data: org, error: orgErr } = await supabase
-    .from("clients")
-    .select("credit_balance")
-    .eq("id", orgId)
+  const { data, error } = await supabase
+    .rpc("log_upfront", {
+      p_client_id: orgId,
+      p_project_id: projectId,
+      p_performed_by: performedById,
+    })
     .single();
-  if (orgErr || !org) throw new Error("Client not found.");
+  if (error) throw new Error(error.message);
 
-  await Promise.all([
-    supabase.from("credit_ledger").insert({
-      client_id: orgId,
-      project_id: projectId,
-      event_type: "upfront_log",
-      amount: 0,
-      balance_after: org.credit_balance as number,
-      performed_by: performedById,
-      notes: "Upfront payment — ledger entry only",
-    }),
-    supabase
-      .from("projects")
-      .update({ credit_deducted: true, updated_at: new Date().toISOString() })
-      .eq("id", projectId),
-  ]);
+  const { status } = data as { status: string; balance: number | null };
+
+  if (status === "not_found") throw new Error("Client not found.");
+
+  if (status === "already_deducted") {
+    await recordCreditRaceEvent("log_upfront", orgId, projectId);
+    return;
+  }
 
   revalidatePath(`/admin/credits/${orgId}`);
 }
@@ -333,52 +308,41 @@ export async function logOverride(
 ): Promise<void> {
   const supabase = createAdminClient();
 
-  const { data: project, error: projErr } = await supabase
+  const { data, error } = await supabase
+    .rpc("log_override", {
+      p_project_id: projectId,
+      p_performed_by: performedById,
+      p_reason: reason,
+    })
+    .single();
+  if (error) throw new Error(error.message);
+
+  const { status } = data as { status: string; balance: number | null };
+
+  if (status === "not_found") throw new Error("Project not found.");
+
+  const { data: project } = await supabase
     .from("projects")
     .select("client_id, project_number, site_address, extracted_fields")
     .eq("id", projectId)
-    .single();
-  if (projErr || !project) throw new Error("Project not found.");
+    .maybeSingle();
 
-  const { data: org, error: orgErr } = await supabase
-    .from("clients")
-    .select("credit_balance")
-    .eq("id", project.client_id as string)
-    .single();
-  if (orgErr || !org) throw new Error("Client not found.");
+  if (status === "already_deducted") {
+    await recordCreditRaceEvent(
+      "log_override",
+      (project?.client_id as string | undefined) ?? null,
+      projectId
+    );
+    return;
+  }
 
-  const now = new Date().toISOString();
-
-  const [overrideErr] = await Promise.all([
-    supabase
-      .from("projects")
-      .update({
-        payment_override: true,
-        payment_override_reason: reason,
-        payment_override_at: now,
-        payment_override_by: performedById,
-        credit_deducted: true,
-        updated_at: now,
-      })
-      .eq("id", projectId)
-      .then((r) => r.error),
-    supabase.from("credit_ledger").insert({
-      client_id: project.client_id,
-      project_id: projectId,
-      event_type: "override",
-      amount: 0,
-      balance_after: org.credit_balance as number,
-      performed_by: performedById,
-      notes: reason,
-    }),
-  ]);
-  if (overrideErr) throw new Error(overrideErr.message);
-
+  // status === "ok"
   const adminIds = await getSuperAdminIds();
-  const address = (project.site_address as string | null) ??
-    ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"]) ??
+  const address =
+    (project?.site_address as string | null) ??
+    ((project?.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"]) ??
     null;
-  const projectRef = address ?? (project.project_number as string | null) ?? projectId.slice(0, 8);
+  const projectRef = address ?? (project?.project_number as string | null) ?? projectId.slice(0, 8);
   const html = renderEmailShell({
     status: "action",
     statusLabel: "Needs reconciling",
@@ -406,8 +370,8 @@ export async function logOverride(
 
   await auditLog("payment.override_applied", performedById, null, {
     projectId,
-    orgId: project.client_id as string,
-    metadata: { reason, project_number: project.project_number ?? null },
+    orgId: (project?.client_id as string) ?? null,
+    metadata: { reason, project_number: project?.project_number ?? null },
   });
 
   revalidatePath(`/admin/projects/${projectId}`);
