@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   updateProfile,
   changePassword,
+  revokeTrustedDevices,
   type UpdateProfileState,
   type ChangePasswordState,
+  type RevokeTrustedDevicesState,
 } from "@/app/actions/profile";
 import { EditIconButton } from "@/components/EditIconButton";
 
@@ -32,6 +34,10 @@ export function ProfileForm({ profile }: { profile: ProfileData }) {
   );
   const [passwordState, passwordAction, passwordPending] = useActionState<ChangePasswordState, FormData>(
     changePassword,
+    {}
+  );
+  const [devicesState, devicesAction, devicesPending] = useActionState<RevokeTrustedDevicesState, FormData>(
+    revokeTrustedDevices,
     {}
   );
 
@@ -75,6 +81,12 @@ export function ProfileForm({ profile }: { profile: ProfileData }) {
         action={passwordAction}
         pending={passwordPending}
         state={passwordState}
+      />
+
+      <TrustedDevicesSection
+        action={devicesAction}
+        pending={devicesPending}
+        state={devicesState}
       />
     </div>
   );
@@ -318,6 +330,51 @@ function PasswordSection({
           </div>
         </form>
       )}
+    </div>
+  );
+}
+
+function TrustedDevicesSection({
+  action,
+  pending,
+  state,
+}: {
+  action: (formData: FormData) => void;
+  pending: boolean;
+  state: RevokeTrustedDevicesState;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-900">Remembered devices</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Browsers where you chose &ldquo;Remember this device&rdquo; skip the
+            2FA code for 30 days. Sign them all out if you&rsquo;ve lost a device
+            or used a shared computer.
+          </p>
+        </div>
+        <form action={action}>
+          <button
+            type="submit"
+            disabled={pending}
+            className="whitespace-nowrap rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+          >
+            {pending ? "Signing out…" : "Sign out of all remembered devices"}
+          </button>
+        </form>
+      </div>
+
+      {state.saved && (
+        <p className="mt-3 text-sm font-medium text-green-700">
+          Done. Every device will need to re-enter a 2FA code next time.
+        </p>
+      )}
+      {state.errors?.form?.map((e) => (
+        <p key={e} className="mt-3 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+          {e}
+        </p>
+      ))}
     </div>
   );
 }

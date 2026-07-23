@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -149,47 +129,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "bounce_events_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      email_send_log: {
-        Row: {
-          created_at: string
-          error: string | null
-          id: string
-          project_id: string | null
-          source: string
-          status: string
-          subject: string
-          to_email: string
-        }
-        Insert: {
-          created_at?: string
-          error?: string | null
-          id?: string
-          project_id?: string | null
-          source: string
-          status: string
-          subject: string
-          to_email: string
-        }
-        Update: {
-          created_at?: string
-          error?: string | null
-          id?: string
-          project_id?: string | null
-          source?: string
-          status?: string
-          subject?: string
-          to_email?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "email_send_log_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -485,6 +424,47 @@ export type Database = {
           },
         ]
       }
+      email_send_log: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          project_id: string | null
+          source: string
+          status: string
+          subject: string
+          to_email: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          project_id?: string | null
+          source: string
+          status: string
+          subject: string
+          to_email: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          project_id?: string | null
+          source?: string
+          status?: string
+          subject?: string
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_send_log_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       field_flags: {
         Row: {
           candidate_values: Json
@@ -494,8 +474,11 @@ export type Database = {
           id: string
           project_id: string
           resolution_method: string | null
+          resolution_note: string | null
+          resolution_reason: string | null
           resolved_at: string | null
           resolved_by: string | null
+          resolved_stage: string | null
           status: string
           type: string
         }
@@ -507,8 +490,11 @@ export type Database = {
           id?: string
           project_id: string
           resolution_method?: string | null
+          resolution_note?: string | null
+          resolution_reason?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
+          resolved_stage?: string | null
           status?: string
           type?: string
         }
@@ -520,8 +506,11 @@ export type Database = {
           id?: string
           project_id?: string
           resolution_method?: string | null
+          resolution_note?: string | null
+          resolution_reason?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
+          resolved_stage?: string | null
           status?: string
           type?: string
         }
@@ -585,6 +574,145 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inbound_email_queue: {
+        Row: {
+          attachment_paths: Json
+          clarification_candidates: Json | null
+          clarification_expires_at: string | null
+          clarification_message: string | null
+          clarification_reply_text: string | null
+          clarification_requested_at: string | null
+          clarification_requested_by: string | null
+          clarification_token: string | null
+          created_at: string
+          from_email: string
+          from_name: string | null
+          id: string
+          mailbox_hash: string | null
+          match_reason: string
+          message_id: string | null
+          proposed_category: string
+          proposed_project_id: string | null
+          proposed_stakeholder_review_id: string | null
+          received_at: string
+          rejection_reason: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_category: string | null
+          resolved_project_id: string | null
+          resolved_stakeholder_review_id: string | null
+          status: string
+          stripped_reply_text: string | null
+          subject: string | null
+          text_body: string | null
+        }
+        Insert: {
+          attachment_paths?: Json
+          clarification_candidates?: Json | null
+          clarification_expires_at?: string | null
+          clarification_message?: string | null
+          clarification_reply_text?: string | null
+          clarification_requested_at?: string | null
+          clarification_requested_by?: string | null
+          clarification_token?: string | null
+          created_at?: string
+          from_email: string
+          from_name?: string | null
+          id?: string
+          mailbox_hash?: string | null
+          match_reason: string
+          message_id?: string | null
+          proposed_category: string
+          proposed_project_id?: string | null
+          proposed_stakeholder_review_id?: string | null
+          received_at?: string
+          rejection_reason?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_category?: string | null
+          resolved_project_id?: string | null
+          resolved_stakeholder_review_id?: string | null
+          status?: string
+          stripped_reply_text?: string | null
+          subject?: string | null
+          text_body?: string | null
+        }
+        Update: {
+          attachment_paths?: Json
+          clarification_candidates?: Json | null
+          clarification_expires_at?: string | null
+          clarification_message?: string | null
+          clarification_reply_text?: string | null
+          clarification_requested_at?: string | null
+          clarification_requested_by?: string | null
+          clarification_token?: string | null
+          created_at?: string
+          from_email?: string
+          from_name?: string | null
+          id?: string
+          mailbox_hash?: string | null
+          match_reason?: string
+          message_id?: string | null
+          proposed_category?: string
+          proposed_project_id?: string | null
+          proposed_stakeholder_review_id?: string | null
+          received_at?: string
+          rejection_reason?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_category?: string | null
+          resolved_project_id?: string | null
+          resolved_stakeholder_review_id?: string | null
+          status?: string
+          stripped_reply_text?: string | null
+          subject?: string | null
+          text_body?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbound_email_queue_clarification_requested_by_fkey"
+            columns: ["clarification_requested_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbound_email_queue_proposed_project_id_fkey"
+            columns: ["proposed_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbound_email_queue_proposed_stakeholder_review_id_fkey"
+            columns: ["proposed_stakeholder_review_id"]
+            isOneToOne: false
+            referencedRelation: "stakeholder_reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbound_email_queue_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbound_email_queue_resolved_project_id_fkey"
+            columns: ["resolved_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbound_email_queue_resolved_stakeholder_review_id_fkey"
+            columns: ["resolved_stakeholder_review_id"]
+            isOneToOne: false
+            referencedRelation: "stakeholder_reviews"
             referencedColumns: ["id"]
           },
         ]
@@ -655,10 +783,37 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_deliveries: {
+        Row: {
+          created_at: string
+          project_id: string
+          scheduled_for: string
+        }
+        Insert: {
+          created_at?: string
+          project_id: string
+          scheduled_for: string
+        }
+        Update: {
+          created_at?: string
+          project_id?: string
+          scheduled_for?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_deliveries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_files: {
         Row: {
           created_at: string
           file_type: string
+          file_type_confirmed: boolean
           id: string
           original_filename: string
           project_id: string
@@ -671,6 +826,7 @@ export type Database = {
         Insert: {
           created_at?: string
           file_type: string
+          file_type_confirmed?: boolean
           id?: string
           original_filename: string
           project_id: string
@@ -683,6 +839,7 @@ export type Database = {
         Update: {
           created_at?: string
           file_type?: string
+          file_type_confirmed?: boolean
           id?: string
           original_filename?: string
           project_id?: string
@@ -1079,6 +1236,7 @@ export type Database = {
         Row: {
           client_sort_order: number
           client_visible: boolean
+          comparison_mode: string
           created_at: string
           display_label: string | null
           extraction_hint: string | null
@@ -1094,6 +1252,7 @@ export type Database = {
         Insert: {
           client_sort_order?: number
           client_visible?: boolean
+          comparison_mode?: string
           created_at?: string
           display_label?: string | null
           extraction_hint?: string | null
@@ -1109,6 +1268,7 @@ export type Database = {
         Update: {
           client_sort_order?: number
           client_visible?: boolean
+          comparison_mode?: string
           created_at?: string
           display_label?: string | null
           extraction_hint?: string | null
@@ -1192,16 +1352,19 @@ export type Database = {
           email: string
           failed_login_count: number
           first_name: string | null
+          has_seen_client_onboarding: boolean
           id: string
           invited_at: string | null
           is_active: boolean
           is_locked: boolean
           last_name: string | null
+          onboarding_steps_seen: string[]
           phone: string | null
           profile_complete: boolean
           role: Database["public"]["Enums"]["user_role"]
           state_territory: string | null
           totp_enabled: boolean
+          trusted_device_version: number
         }
         Insert: {
           availability?: Database["public"]["Enums"]["consultant_availability"]
@@ -1212,16 +1375,19 @@ export type Database = {
           email: string
           failed_login_count?: number
           first_name?: string | null
+          has_seen_client_onboarding?: boolean
           id: string
           invited_at?: string | null
           is_active?: boolean
           is_locked?: boolean
           last_name?: string | null
+          onboarding_steps_seen?: string[]
           phone?: string | null
           profile_complete?: boolean
           role: Database["public"]["Enums"]["user_role"]
           state_territory?: string | null
           totp_enabled?: boolean
+          trusted_device_version?: number
         }
         Update: {
           availability?: Database["public"]["Enums"]["consultant_availability"]
@@ -1232,16 +1398,19 @@ export type Database = {
           email?: string
           failed_login_count?: number
           first_name?: string | null
+          has_seen_client_onboarding?: boolean
           id?: string
           invited_at?: string | null
           is_active?: boolean
           is_locked?: boolean
           last_name?: string | null
+          onboarding_steps_seen?: string[]
           phone?: string | null
           profile_complete?: boolean
           role?: Database["public"]["Enums"]["user_role"]
           state_territory?: string | null
           totp_enabled?: boolean
+          trusted_device_version?: number
         }
         Relationships: [
           {
@@ -1272,6 +1441,10 @@ export type Database = {
           retry_count: number
           retry_limit: number
         }[]
+      }
+      increment_trusted_device_version: {
+        Args: { p_user_id: string }
+        Returns: undefined
       }
       purge_project: { Args: { p_project_id: string }; Returns: undefined }
       restore_client: { Args: { p_client_id: string }; Returns: undefined }
@@ -1411,9 +1584,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       consultant_availability: ["available", "on_leave", "at_capacity"],
@@ -1428,4 +1598,3 @@ export const Constants = {
     },
   },
 } as const
-

@@ -6,6 +6,11 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SESSION_DURATION, SESSION_EXPIRY_COOKIE } from "@/lib/auth/session";
+import {
+  TRUSTED_DEVICE_COOKIE,
+  TRUSTED_DEVICE_MAX_AGE,
+  signTrustedDeviceToken,
+} from "@/lib/auth/trusted-device";
 import { auditLog } from "@/lib/audit/log";
 import type { UserRole } from "@/types";
 
@@ -396,8 +401,24 @@ export async function verifyTotp(
   const { data: { user: authedUser } } = await supabase.auth.getUser();
   const adminClient = createAdminClient();
   const { data: userRow } = authedUser
-    ? await adminClient.from("users").select("role").eq("id", authedUser.id).maybeSingle()
+    ? await adminClient
+        .from("users")
+        .select("role, trusted_device_version")
+        .eq("id", authedUser.id)
+        .maybeSingle()
     : { data: null };
+
+  if (authedUser && formData.get("remember_device") === "on") {
+    const cookieStore = await cookies();
+    const version = userRow?.trusted_device_version ?? 0;
+    cookieStore.set(TRUSTED_DEVICE_COOKIE, signTrustedDeviceToken(authedUser.id, version), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: TRUSTED_DEVICE_MAX_AGE,
+    });
+  }
 
   const next = formData.get("next") as string | null;
   redirect(next || roleHomePath((userRow?.role as string | null) ?? "stakeholder"));

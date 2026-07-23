@@ -132,3 +132,27 @@ export async function changePassword(
 
   return { saved: true };
 }
+
+// ─── Revoke remembered devices ────────────────────────────────────────────────
+
+export type RevokeTrustedDevicesState = {
+  saved?: boolean;
+  errors?: { form?: string[] };
+};
+
+export async function revokeTrustedDevices(
+  _prev: RevokeTrustedDevicesState,
+  _formData: FormData
+): Promise<RevokeTrustedDevicesState> {
+  const user = await getSessionUser();
+  if (!user) return { errors: { form: ["Session expired. Please log in again."] } };
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.rpc("increment_trusted_device_version", {
+    p_user_id: user.id as string,
+  });
+
+  if (error) return { errors: { form: [error.message] } };
+
+  return { saved: true };
+}

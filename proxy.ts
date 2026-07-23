@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { UserRole } from "@/types";
+import { TRUSTED_DEVICE_COOKIE, verifyTrustedDeviceToken } from "@/lib/auth/trusted-device";
 
 // Inlined to avoid importing lib/auth/session.ts which pulls in next/headers
 const SESSION_EXPIRY_COOKIE = "ops-session-expires";
@@ -114,9 +115,18 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(new URL("/setup-2fa", request.url));
       }
       if (aalData.nextLevel === "aal2" && aalData.currentLevel === "aal1") {
-        const url = new URL("/verify-2fa", request.url);
-        url.searchParams.set("next", pathname);
-        return NextResponse.redirect(url);
+        const trustedToken = request.cookies.get(TRUSTED_DEVICE_COOKIE)?.value;
+        const { data: userRow } = await supabase
+          .from("users")
+          .select("trusted_device_version")
+          .eq("id", user.id)
+          .maybeSingle();
+        const version = userRow?.trusted_device_version ?? 0;
+        if (!verifyTrustedDeviceToken(trustedToken, user.id, version)) {
+          const url = new URL("/verify-2fa", request.url);
+          url.searchParams.set("next", pathname);
+          return NextResponse.redirect(url);
+        }
       }
     }
   }

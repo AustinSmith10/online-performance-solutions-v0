@@ -51,6 +51,18 @@ export function VerifyForm() {
           ))}
         </div>
 
+        <div className="flex items-center gap-2">
+          <input
+            id="remember_device"
+            name="remember_device"
+            type="checkbox"
+            className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+          />
+          <label htmlFor="remember_device" className="text-sm text-zinc-600">
+            Remember this device for 30 days
+          </label>
+        </div>
+
         <button
           type="submit"
           disabled={pending}
