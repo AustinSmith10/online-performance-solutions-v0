@@ -1067,7 +1067,7 @@ export function ActionPanel({
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
             Action required
           </h2>
-          <div className={`grid grid-cols-1 gap-3 ${heroCategories.length > 1 ? "sm:grid-cols-2" : ""}`}>
+          <div className={`grid grid-cols-1 items-start gap-3 ${heroCategories.length > 1 ? "sm:grid-cols-2" : ""}`}>
             {heroCategories.map((cat) => (
               <HeroCard
                 key={cat.key}
