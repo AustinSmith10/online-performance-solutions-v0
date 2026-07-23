@@ -145,6 +145,45 @@ async function archiveInboundEmailAsEvidence(
   return (inserted?.id as string | null) ?? null;
 }
 
+// A document attached by email, uploaded to storage but not yet filed as a
+// project_files row — pdfLabel (if set) is the "Attachment N" identifier
+// passed to extractDocumentFields, letting the insert step below know which
+// uploaded file (if any) a given po_number candidate actually came from.
+interface UploadedEmailFile {
+  attachment: DownloadedAttachment;
+  storagePath: string;
+  pdfLabel?: string;
+}
+
+// Files project_files rows for attachments pulled off an inbound email.
+// file_type is a *suggestion* — whichever attachment extraction actually
+// found the PO number in is filed as "purchase_order", everything else
+// "building_drawing_plans" — never a final answer: file_type_confirmed is
+// always false here, so it shows as needing review on the project's
+// Documents panel until an admin/consultant confirms or reassigns it.
+// Replaces the old "first PDF in the first email is the PO" guess, which
+// broke as soon as documents arrived out of that assumed order across
+// multiple emails.
+async function insertUploadedFiles(
+  files: UploadedEmailFile[],
+  poSourceLabels: Set<string>,
+  projectId: string,
+  uploadedBy: string,
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<void> {
+  for (const file of files) {
+    const fileType = file.pdfLabel && poSourceLabels.has(file.pdfLabel) ? "purchase_order" : "building_drawing_plans";
+    await supabase.from("project_files").insert({
+      project_id: projectId,
+      file_type: fileType,
+      file_type_confirmed: false,
+      storage_path: file.storagePath,
+      original_filename: file.attachment.Name,
+      uploaded_by: uploadedBy,
+    });
+  }
+}
+
 async function executeNewSubmission(
   row: QueueRowForExecution,
   supabase: ReturnType<typeof createAdminClient>
@@ -234,12 +273,11 @@ async function executeNewSubmission(
 
   const files = await downloadPendingAttachments(row, supabase);
   const uploadedPendingPaths: string[] = [];
+  const uploadedFiles: UploadedEmailFile[] = [];
   const pdfBuffers: Buffer[] = [];
 
-  for (let i = 0; i < files.length; i++) {
-    const attachment = files[i];
+  for (const attachment of files) {
     const storagePath = `${org.id}/${projectId}/${attachment.Name}`;
-    const fileType = i === 0 && attachment.ContentType === "application/pdf" ? "purchase_order" : "building_drawing_plans";
 
     const { error: uploadError } = await supabase.storage
       .from("submissions")
@@ -254,26 +292,24 @@ async function executeNewSubmission(
     }
     uploadedPendingPaths.push(attachment.path);
 
-    await supabase.from("project_files").insert({
-      project_id: projectId,
-      file_type: fileType,
-      storage_path: storagePath,
-      original_filename: attachment.Name,
-      uploaded_by: user.id,
-    });
-
+    let pdfLabel: string | undefined;
     if (attachment.ContentType === "application/pdf") {
+      pdfLabel = `Attachment ${pdfBuffers.length + 1}`;
       pdfBuffers.push(attachment.buffer);
     }
+    uploadedFiles.push({ attachment, storagePath, pdfLabel });
   }
 
   // Run field extraction if we have PDF files
   if (pdfBuffers.length > 0) {
+    let extracted: Awaited<ReturnType<typeof extractDocumentFields>> | null = null;
+    let extractTokens: { token: string; label: string; hint: string }[] = [];
+    let comparisonModeByToken = new Map<string, ComparisonMode>();
+    let metricsAutofillConfigs: Awaited<ReturnType<typeof getMetricsAutofillConfigs>> = [];
+
     try {
-      let extractTokens: { token: string; label: string; hint: string }[] = [];
-      const metricsAutofillConfigs = await getMetricsAutofillConfigs(supabase, org.id as string);
+      metricsAutofillConfigs = await getMetricsAutofillConfigs(supabase, org.id as string);
       const metricsExclusionTokens = getAutofillExclusionTokens(metricsAutofillConfigs);
-      let comparisonModeByToken = new Map<string, ComparisonMode>();
       if (templateId) {
         const { data: mappings } = await supabase
           .from("template_field_mappings")
@@ -297,91 +333,113 @@ async function executeNewSubmission(
         );
       }
 
-      const extracted = await extractDocumentFields(
+      extracted = await extractDocumentFields(
         pdfBuffers.map((buf, i) => ({ label: `Attachment ${i + 1}`, buffer: buf })),
         extractTokens
       );
-
-      resolveMetricsAutofill(metricsAutofillConfigs, extracted.fields);
-
-      const fieldValues = normalizeExtractedFields(
-        Object.fromEntries(Object.entries(extracted.fields).map(([k, v]) => [k, v.value]))
-      );
-
-      const flagRows: {
-        project_id: string;
-        type: string;
-        field_key: string;
-        status: string;
-        current_value: string;
-        candidate_values: unknown;
-      }[] = [];
-      for (const [token, rawCandidates] of Object.entries(extracted.candidates)) {
-        const normalizedCandidates = rawCandidates.map((c) => ({
-          ...c,
-          value: normalizeExtractedFields({ [token]: c.value })[token],
-        }));
-        const plan = await buildFieldFlagPlan(normalizedCandidates, comparisonModeByToken.get(token) ?? "exact");
-        if (!plan.needsFlag) continue;
-        flagRows.push({
-          project_id: projectId,
-          type: plan.flagType,
-          field_key: token,
-          status: "open",
-          current_value: fieldValues[token] ?? plan.finalValue,
-          candidate_values: plan.candidateRecords,
-        });
-      }
-
-      const siteAddress = (fieldValues["EXTRACT_ADDRESS"] ?? "").trim() || null;
-
-      if (siteAddress) {
-        const { data: dupe } = await supabase
-          .from("projects")
-          .select("id")
-          .eq("client_id", org.id)
-          .eq("site_address", siteAddress)
-          .is("deleted_at", null)
-          .neq("id", projectId)
-          .maybeSingle();
-
-        if (dupe) {
-          await sendEmail({
-            to: user.email as string,
-            subject: "OPS: Duplicate address detected",
-            html: duplicateAddressHtml(siteAddress, dupe.id as string),
-            source: "email_queue_duplicate_address",
-            projectId,
-          });
-          await auditLog("email.duplicate_address", user.id as string, user.email as string, {
-            orgId: org.id as string,
-            projectId,
-            metadata: { site_address: siteAddress, existing_project_id: dupe.id, queue_id: row.id },
-          });
-          await supabase
-            .from("projects")
-            .update({ deleted_at: new Date().toISOString() })
-            .eq("id", projectId);
-          await removePendingAttachments(uploadedPendingPaths, supabase);
-          return { ok: true, projectId };
-        }
-      }
-
-      if (flagRows.length > 0) {
-        await supabase.from("field_flags").insert(flagRows);
-      }
-
-      await supabase
-        .from("projects")
-        .update({
-          extracted_fields: fieldValues,
-          ...(extracted.po_number.value ? { po_number: extracted.po_number.value } : {}),
-          ...(siteAddress ? { site_address: siteAddress } : {}),
-        })
-        .eq("id", projectId);
     } catch (err) {
       console.error("[email-queue] Extraction failed (non-fatal):", err);
     }
+
+    // Whichever attachment(s) extraction actually found the PO number in are
+    // suggested as "purchase_order" — file_type_confirmed stays false either
+    // way, so a failed/empty extraction just means everything needs review,
+    // same as before this feature existed.
+    const poSourceLabels = new Set(
+      (extracted?.poCandidates ?? [])
+        .filter((c) => c.confidence !== "low")
+        .map((c) => c.source_document)
+    );
+    await insertUploadedFiles(uploadedFiles, poSourceLabels, projectId, user.id as string, supabase);
+
+    if (extracted) {
+      try {
+        resolveMetricsAutofill(metricsAutofillConfigs, extracted.fields);
+
+        const fieldValues = normalizeExtractedFields(
+          Object.fromEntries(Object.entries(extracted.fields).map(([k, v]) => [k, v.value]))
+        );
+
+        const flagRows: {
+          project_id: string;
+          type: string;
+          field_key: string;
+          status: string;
+          current_value: string;
+          candidate_values: unknown;
+        }[] = [];
+        for (const [token, rawCandidates] of Object.entries(extracted.candidates)) {
+          const normalizedCandidates = rawCandidates.map((c) => ({
+            ...c,
+            value: normalizeExtractedFields({ [token]: c.value })[token],
+          }));
+          const plan = await buildFieldFlagPlan(normalizedCandidates, comparisonModeByToken.get(token) ?? "exact");
+          if (!plan.needsFlag) continue;
+          flagRows.push({
+            project_id: projectId,
+            type: plan.flagType,
+            field_key: token,
+            status: "open",
+            current_value: fieldValues[token] ?? plan.finalValue,
+            candidate_values: plan.candidateRecords,
+          });
+        }
+
+        const siteAddress = (fieldValues["EXTRACT_ADDRESS"] ?? "").trim() || null;
+
+        if (siteAddress) {
+          const { data: dupe } = await supabase
+            .from("projects")
+            .select("id")
+            .eq("client_id", org.id)
+            .eq("site_address", siteAddress)
+            .is("deleted_at", null)
+            .neq("id", projectId)
+            .maybeSingle();
+
+          if (dupe) {
+            await sendEmail({
+              to: user.email as string,
+              subject: "OPS: Duplicate address detected",
+              html: duplicateAddressHtml(siteAddress, dupe.id as string),
+              source: "email_queue_duplicate_address",
+              projectId,
+            });
+            await auditLog("email.duplicate_address", user.id as string, user.email as string, {
+              orgId: org.id as string,
+              projectId,
+              metadata: { site_address: siteAddress, existing_project_id: dupe.id, queue_id: row.id },
+            });
+            await supabase
+              .from("projects")
+              .update({ deleted_at: new Date().toISOString() })
+              .eq("id", projectId);
+            await removePendingAttachments(uploadedPendingPaths, supabase);
+            return { ok: true, projectId };
+          }
+        }
+
+        if (flagRows.length > 0) {
+          await supabase.from("field_flags").insert(flagRows);
+        }
+
+        await supabase
+          .from("projects")
+          .update({
+            extracted_fields: fieldValues,
+            ...(extracted.po_number.value ? { po_number: extracted.po_number.value } : {}),
+            ...(siteAddress ? { site_address: siteAddress } : {}),
+          })
+          .eq("id", projectId);
+      } catch (err) {
+        console.error("[email-queue] Extraction post-processing failed (non-fatal):", err);
+      }
+    }
+  } else {
+    // No PDFs at all (images only) — nothing for extraction to suggest a PO
+    // source from, so every attachment lands as building_drawing_plans,
+    // still unconfirmed.
+    await insertUploadedFiles(uploadedFiles, new Set(), projectId, user.id as string, supabase);
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
@@ -462,6 +520,7 @@ async function executeThreadReply(
   }
 
   const uploadedPendingPaths: string[] = [];
+  const uploadedFiles: UploadedEmailFile[] = [];
   const pdfBuffers: Buffer[] = [];
 
   for (const attachment of files) {
@@ -480,27 +539,15 @@ async function executeThreadReply(
     }
     uploadedPendingPaths.push(attachment.path);
 
-    const { data: existing } = await supabase
-      .from("project_files")
-      .select("id")
-      .eq("project_id", projectId)
-      .eq("storage_path", storagePath)
-      .maybeSingle();
-
-    if (!existing) {
-      await supabase.from("project_files").insert({
-        project_id: projectId,
-        file_type: "building_drawing_plans",
-        storage_path: storagePath,
-        original_filename: attachment.Name,
-        uploaded_by: project.submitted_by,
-      });
-    }
-
+    let pdfLabel: string | undefined;
     if (attachment.ContentType === "application/pdf") {
+      pdfLabel = `Attachment ${pdfBuffers.length + 1}`;
       pdfBuffers.push(attachment.buffer);
     }
+    uploadedFiles.push({ attachment, storagePath, pdfLabel });
   }
+
+  let poSourceLabels = new Set<string>();
 
   if (pdfBuffers.length > 0) {
     try {
@@ -522,6 +569,13 @@ async function executeThreadReply(
       const extracted = await extractDocumentFields(
         pdfBuffers.map((buf, i) => ({ label: `Attachment ${i + 1}`, buffer: buf })),
         extractTokens
+      );
+
+      // Whichever attachment(s) on this thread reply actually contain the
+      // PO number are suggested as "purchase_order" — replaces the old
+      // hardcoded "every thread-reply attachment is building_drawing_plans".
+      poSourceLabels = new Set(
+        extracted.poCandidates.filter((c) => c.confidence !== "low").map((c) => c.source_document)
       );
 
       const { data: current } = await supabase
@@ -546,6 +600,27 @@ async function executeThreadReply(
         .eq("id", projectId);
     } catch (err) {
       console.error("[email-queue] Thread extraction failed (non-fatal):", err);
+    }
+  }
+
+  for (const file of uploadedFiles) {
+    const { data: existing } = await supabase
+      .from("project_files")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("storage_path", file.storagePath)
+      .maybeSingle();
+
+    if (!existing) {
+      const fileType = file.pdfLabel && poSourceLabels.has(file.pdfLabel) ? "purchase_order" : "building_drawing_plans";
+      await supabase.from("project_files").insert({
+        project_id: projectId,
+        file_type: fileType,
+        file_type_confirmed: false,
+        storage_path: file.storagePath,
+        original_filename: file.attachment.Name,
+        uploaded_by: project.submitted_by,
+      });
     }
   }
 

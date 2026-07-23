@@ -50,6 +50,11 @@ export interface DynamicExtractionResult {
   // comparison / flag creation. Absent tokens (e.g. metrics-autofill
   // outputs excluded from the AI call) simply have no entry.
   candidates: Record<string, ExtractedCandidate[]>;
+  // Every document's individual po_number contribution, source_document
+  // pointing back to the ExtractionDocument.label passed in — lets callers
+  // suggest which attachment is actually the Purchase Order instead of
+  // guessing by arrival order (email-attachment file-type suggestion).
+  poCandidates: ExtractedCandidate[];
 }
 
 export interface ExtractionDocument {
@@ -428,6 +433,7 @@ export async function extractDocumentFields(
     po_number: { ...EMPTY_FIELD },
     fields: Object.fromEntries(tokenNames.map((t) => [t, { ...EMPTY_FIELD }])),
     candidates: Object.fromEntries(tokenNames.map((t) => [t, []])),
+    poCandidates: [],
   };
 
   if (documents.length === 0) return emptyResult;
@@ -460,12 +466,12 @@ export async function extractDocumentFields(
     fields[token] = pickBest(candidates[token]) ?? { ...EMPTY_FIELD };
   }
 
-  const poCandidates = perDocResults
-    .map((r) => r.result.po_number)
+  const poCandidates: ExtractedCandidate[] = perDocResults
+    .map((r) => ({ ...r.result.po_number, source_document: r.label }))
     .filter((f) => f.value.trim());
   const po_number = pickBest(poCandidates) ?? { ...EMPTY_FIELD };
 
-  return { po_number, fields, candidates };
+  return { po_number, fields, candidates, poCandidates };
 }
 
 // Shared text-completion helper (same provider fallback as extraction) for

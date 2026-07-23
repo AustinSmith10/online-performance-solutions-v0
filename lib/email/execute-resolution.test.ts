@@ -21,6 +21,7 @@ const EMPTY_EXTRACTION = {
   po_number: { value: "", confidence: "low" },
   fields: {},
   candidates: {},
+  poCandidates: [],
 };
 
 function makeRow(overrides: Partial<QueueRowForExecution> = {}): QueueRowForExecution {
@@ -47,6 +48,7 @@ function makeQueryBuilder(overrides: Record<string, unknown> = {}) {
     neq: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
@@ -74,6 +76,9 @@ describe("executeQueueRowResolution", () => {
         select: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: { id: "proj-new" }, error: null }),
       });
+      const insertProjectFiles = vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: "evidence-file-1" }, error: null }) }),
+      });
 
       const fromMock = vi.fn((table: string) => {
         if (table === "users") {
@@ -91,12 +96,23 @@ describe("executeQueueRowResolution", () => {
         }
         if (table === "templates") return makeQueryBuilder();
         if (table === "projects") return makeQueryBuilder({ insert: insertProject });
+        if (table === "project_files") return makeQueryBuilder({ insert: insertProjectFiles });
         return makeQueryBuilder();
       });
 
       return {
         from: fromMock,
-        storage: { from: vi.fn().mockReturnValue({ download: vi.fn(), upload: vi.fn().mockResolvedValue({ error: null }), remove: vi.fn().mockResolvedValue({ error: null }) }) },
+        insertProjectFiles,
+        storage: {
+          from: vi.fn().mockReturnValue({
+            download: vi.fn().mockResolvedValue({
+              data: { arrayBuffer: async () => Buffer.from("%PDF-1.4").buffer },
+              error: null,
+            }),
+            upload: vi.fn().mockResolvedValue({ error: null }),
+            remove: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        },
       };
     }
 
@@ -123,6 +139,63 @@ describe("executeQueueRowResolution", () => {
       expect(result.ok).toBe(false);
       expect(result.error).toBeTruthy();
       expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    it("suggests purchase_order for whichever attachment extraction actually found the PO number in, not the first one — and leaves every file unconfirmed", async () => {
+      mockExtractDocumentFields.mockResolvedValue({
+        po_number: { value: "PO-123", confidence: "high" },
+        fields: {},
+        candidates: {},
+        // The PO was found in the SECOND attachment even though it's the
+        // building plans that arrived first — position must not matter.
+        poCandidates: [{ value: "PO-123", confidence: "high", source_document: "Attachment 2" }],
+      });
+
+      const supabase = makeSupabase();
+      const row = makeRow({
+        attachment_paths: [
+          { path: "q1/plans.pdf", filename: "plans.pdf", content_type: "application/pdf" },
+          { path: "q1/po.pdf", filename: "po.pdf", content_type: "application/pdf" },
+        ],
+      });
+
+      const result = await executeQueueRowResolution(row, { category: "new_submission" }, supabase as never);
+
+      expect(result.ok).toBe(true);
+      const fileCalls = supabase.insertProjectFiles.mock.calls
+        .map((c) => c[0] as Record<string, unknown>)
+        .filter((c) => c.file_type !== "evidence");
+
+      expect(fileCalls).toContainEqual(
+        expect.objectContaining({ original_filename: "plans.pdf", file_type: "building_drawing_plans", file_type_confirmed: false })
+      );
+      expect(fileCalls).toContainEqual(
+        expect.objectContaining({ original_filename: "po.pdf", file_type: "purchase_order", file_type_confirmed: false })
+      );
+    });
+
+    it("falls back to building_drawing_plans for every attachment when extraction finds no PO number", async () => {
+      mockExtractDocumentFields.mockResolvedValue({
+        po_number: { value: "", confidence: "low" },
+        fields: {},
+        candidates: {},
+        poCandidates: [],
+      });
+
+      const supabase = makeSupabase();
+      const row = makeRow({
+        attachment_paths: [{ path: "q1/plans.pdf", filename: "plans.pdf", content_type: "application/pdf" }],
+      });
+
+      const result = await executeQueueRowResolution(row, { category: "new_submission" }, supabase as never);
+
+      expect(result.ok).toBe(true);
+      const fileCalls = supabase.insertProjectFiles.mock.calls
+        .map((c) => c[0] as Record<string, unknown>)
+        .filter((c) => c.file_type !== "evidence");
+      expect(fileCalls).toContainEqual(
+        expect.objectContaining({ original_filename: "plans.pdf", file_type: "building_drawing_plans", file_type_confirmed: false })
+      );
     });
   });
 
@@ -175,16 +248,39 @@ describe("executeQueueRowResolution", () => {
       expect(result.ok).toBe(false);
     });
 
-    it("files the attachment against a draft project and audits", async () => {
+    it("files the attachment against a draft project as unconfirmed, defaulting to building_drawing_plans when no PO was found", async () => {
       const supabase = makeSupabase({ id: "proj-1", client_id: "org-1", status: "draft", template_id: null, submitted_by: "user-1" });
 
       const result = await executeQueueRowResolution(ROW_WITH_ATTACHMENT, { category: "thread_reply", projectId: "proj-1" }, supabase as never);
 
       expect(result.ok).toBe(true);
       expect(supabase.insertFiles).toHaveBeenCalledWith(
-        expect.objectContaining({ project_id: "proj-1", uploaded_by: "user-1", file_type: "building_drawing_plans" })
+        expect.objectContaining({
+          project_id: "proj-1",
+          uploaded_by: "user-1",
+          file_type: "building_drawing_plans",
+          file_type_confirmed: false,
+        })
       );
       expect(mockAuditLog).toHaveBeenCalledWith("email.thread_attachments_added", "user-1", "client@example.com", expect.anything());
+    });
+
+    it("suggests purchase_order when extraction finds the PO number in the thread-reply attachment — not the old hardcoded guess", async () => {
+      mockExtractDocumentFields.mockResolvedValue({
+        po_number: { value: "PO-999", confidence: "high" },
+        fields: {},
+        candidates: {},
+        poCandidates: [{ value: "PO-999", confidence: "high", source_document: "Attachment 1" }],
+      });
+
+      const supabase = makeSupabase({ id: "proj-1", client_id: "org-1", status: "draft", template_id: null, submitted_by: "user-1" });
+
+      const result = await executeQueueRowResolution(ROW_WITH_ATTACHMENT, { category: "thread_reply", projectId: "proj-1" }, supabase as never);
+
+      expect(result.ok).toBe(true);
+      expect(supabase.insertFiles).toHaveBeenCalledWith(
+        expect.objectContaining({ file_type: "purchase_order", file_type_confirmed: false })
+      );
     });
 
     it("is a no-op success when the row has no attachments", async () => {

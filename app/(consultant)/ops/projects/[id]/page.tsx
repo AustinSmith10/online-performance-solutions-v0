@@ -13,6 +13,7 @@ import { PendingDeliveryPanel } from "@/components/PendingDeliveryPanel";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { DownloadCard } from "@/components/DownloadCard";
+import { ConfirmFileTypeControl } from "@/components/ConfirmFileTypeControl";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { GeneratedPbdbDownload } from "@/components/GeneratedPbdbDownload";
@@ -177,7 +178,7 @@ export default async function ConsultantProjectDetailPage({
       : Promise.resolve({ data: [] }),
     supabase
       .from("project_files")
-      .select("id, file_type, original_filename, storage_path, created_at")
+      .select("id, file_type, file_type_confirmed, original_filename, storage_path, created_at")
       .eq("project_id", id)
       .not("file_type", "in", "(pbdb,pbdr,evidence,pbdb_pdf)")
       .order("created_at"),
@@ -718,6 +719,13 @@ export default async function ConsultantProjectDetailPage({
                 <p className="mt-0.5 text-xs text-zinc-500">
                   {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                 </p>
+                {!f.file_type_confirmed && (
+                  <ConfirmFileTypeControl
+                    projectId={id}
+                    fileId={f.id as string}
+                    currentFileType={f.file_type as string}
+                  />
+                )}
               </DownloadCard>
             ))}
           </div>

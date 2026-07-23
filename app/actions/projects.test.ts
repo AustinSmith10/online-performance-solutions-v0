@@ -9,7 +9,7 @@ vi.mock("@/lib/audit/log");
 vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/stakeholders/dispatch");
 
-import { uploadQaPbdb, adminDeleteProject } from "./projects";
+import { uploadQaPbdb, adminDeleteProject, confirmProjectFileType } from "./projects";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
@@ -245,5 +245,101 @@ describe("adminDeleteProject", () => {
 
     expect(result.error).toMatch(/not found/i);
     expect(mock.updateFn).not.toHaveBeenCalled();
+  });
+});
+
+describe("confirmProjectFileType", () => {
+  const FILE_ID = "file-1";
+
+  function buildFileTypeMock({
+    projectFound = true,
+    fileFound = true,
+    assignedConsultantId = ACTOR_ID,
+  }: {
+    projectFound?: boolean;
+    fileFound?: boolean;
+    assignedConsultantId?: string | null;
+  } = {}) {
+    const updateEqFn = vi.fn().mockResolvedValue({ error: null });
+    const updateFn = vi.fn().mockReturnValue({ eq: updateEqFn });
+
+    const project = projectFound
+      ? { id: PROJECT_ID, client_id: CLIENT_ID, assigned_consultant_id: assignedConsultantId }
+      : null;
+    const file = fileFound
+      ? { id: FILE_ID, file_type: "building_drawing_plans", original_filename: "po.pdf" }
+      : null;
+
+    const from = vi.fn((table: string) => {
+      if (table === "projects") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: project, error: null }),
+        };
+      }
+      if (table === "project_files") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: file, error: null }),
+          update: updateFn,
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    return { from, updateFn, updateEqFn };
+  }
+
+  it("rejects a value outside the confirmable file-type set", async () => {
+    const mock = buildFileTypeMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await confirmProjectFileType(PROJECT_ID, FILE_ID, "pbdb");
+
+    expect(result.error).toBeTruthy();
+    expect(mock.updateFn).not.toHaveBeenCalled();
+  });
+
+  it("returns an error when a consultant isn't assigned to the project", async () => {
+    vi.mocked(requireRole).mockResolvedValue({ id: ACTOR_ID, role: "consultant", email: "c@ddeg.com.au" } as never);
+    const mock = buildFileTypeMock({ projectFound: false });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await confirmProjectFileType(PROJECT_ID, FILE_ID, "purchase_order");
+
+    expect(result.error).toBeTruthy();
+    expect(mock.updateFn).not.toHaveBeenCalled();
+  });
+
+  it("returns an error when the document doesn't exist", async () => {
+    const mock = buildFileTypeMock({ fileFound: false });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await confirmProjectFileType(PROJECT_ID, FILE_ID, "purchase_order");
+
+    expect(result.error).toBeTruthy();
+    expect(mock.updateFn).not.toHaveBeenCalled();
+  });
+
+  it("updates the file type and marks it confirmed", async () => {
+    const mock = buildFileTypeMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await confirmProjectFileType(PROJECT_ID, FILE_ID, "purchase_order");
+
+    expect(result.error).toBeUndefined();
+    expect(mock.updateFn).toHaveBeenCalledWith({ file_type: "purchase_order", file_type_confirmed: true });
+    expect(mock.updateEqFn).toHaveBeenCalledWith("id", FILE_ID);
+    expect(vi.mocked(auditLog)).toHaveBeenCalledWith(
+      "project.file_type_confirmed",
+      ACTOR_ID,
+      "c@ddeg.com.au",
+      expect.objectContaining({
+        metadata: expect.objectContaining({ previous_file_type: "building_drawing_plans", confirmed_file_type: "purchase_order" }),
+      })
+    );
   });
 });

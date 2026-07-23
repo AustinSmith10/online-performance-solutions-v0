@@ -351,6 +351,73 @@ export async function replaceProjectFile(
   return { success: true };
 }
 
+// ─── Admin/consultant: confirm or correct a document's type ─────────────────
+//
+// Documents attached via inbound email get a file_type *suggestion* (which
+// attachment extraction found the PO number in), never a final answer —
+// file_type_confirmed starts false and the project's Documents panel shows
+// it as needing review until an admin/consultant confirms it here (#101
+// follow-up: don't let the AI just set it silently).
+
+export type ConfirmFileTypeState = { error?: string; success?: boolean };
+
+const CONFIRMABLE_FILE_TYPES = ["purchase_order", "building_drawing_plans", "additional"] as const;
+type ConfirmableFileType = (typeof CONFIRMABLE_FILE_TYPES)[number];
+
+function isConfirmableFileType(value: string): value is ConfirmableFileType {
+  return (CONFIRMABLE_FILE_TYPES as readonly string[]).includes(value);
+}
+
+export async function confirmProjectFileType(
+  projectId: string,
+  fileId: string,
+  fileType: string
+): Promise<ConfirmFileTypeState> {
+  const actor = await requireRole("super_admin", "admin", "consultant");
+  if (!isConfirmableFileType(fileType)) return { error: "Not a valid document type." };
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select("id, client_id, assigned_consultant_id")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
+
+  const { data: existingFile } = await supabase
+    .from("project_files")
+    .select("id, file_type, original_filename")
+    .eq("id", fileId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (!existingFile) return { error: "Document not found." };
+
+  const { error: updateError } = await supabase
+    .from("project_files")
+    .update({ file_type: fileType, file_type_confirmed: true })
+    .eq("id", fileId);
+  if (updateError) return { error: "Failed to update the document type. Please try again." };
+
+  await auditLog("project.file_type_confirmed", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.client_id as string,
+    metadata: {
+      file_id: fileId,
+      filename: existingFile.original_filename,
+      previous_file_type: existingFile.file_type,
+      confirmed_file_type: fileType,
+    },
+  });
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { success: true };
+}
+
 // ─── Stakeholder: edit submitted details + PO number (pre-pickup only) ───────
 
 export type UpdateSubmissionState = { error?: string; success?: boolean };
