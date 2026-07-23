@@ -734,7 +734,17 @@ export default async function ProjectDetailPage({
     const paymentReady = project.credit_deducted || project.payment_override;
     focusCard = paymentReady ? (
       <FocusCard tone="green" title="Ready to convert" subtitle="All stakeholders approved and payment is clear.">
-        <ConvertButton projectId={id} />
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+            <ProjectDeliveryDelayPresetSelect
+              projectId={id}
+              initialValue={project.delivery_delay_preset}
+              durations={deliveryDurations}
+            />
+          </div>
+          <ConvertButton projectId={id} />
+        </div>
       </FocusCard>
     ) : (
       <FocusCard tone="green" title="Clear the payment gate" subtitle="All stakeholders approved — convert is blocked until payment is resolved.">

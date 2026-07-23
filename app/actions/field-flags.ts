@@ -148,17 +148,20 @@ export type ReExtractResult =
 // flag — a conflicting re-extraction is surfaced to the caller instead, so
 // the UI can pre-load the resolution component with old + new candidates.
 export async function reExtractProject(projectId: string): Promise<ReExtractResult> {
-  await requireRole("stakeholder", "consultant", "super_admin", "admin");
+  const profile = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, client_id, template_id")
+    .select("id, client_id, template_id, assigned_consultant_id")
     .eq("id", projectId)
     .is("deleted_at", null)
     .maybeSingle();
   if (!project) return { ok: false, error: "Project not found." };
   if (!project.template_id) return { ok: false, error: "Project has no template." };
+  if (profile.role === "stakeholder" && project.assigned_consultant_id) {
+    return { ok: false, error: "This project has already been picked up by a consultant — re-checking documents is no longer available." };
+  }
 
   const [{ data: fileReqs }, { data: mappings }, { data: existingFlags }] = await Promise.all([
     supabase

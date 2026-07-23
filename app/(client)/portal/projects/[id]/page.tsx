@@ -443,8 +443,10 @@ export default async function ClientProjectDetailPage({
       )}
       {/* Draft projects already get a fresh extraction via the resume/step-2
           flow — re-extract is for re-checking documents added after
-          submission, so it only makes sense once a project is past draft. */}
-      {!isDeleted && project.status !== "draft" && (
+          submission, so it only makes sense once a project is past draft.
+          Once a consultant has picked it up, the client can no longer
+          re-check documents (mirrors isLocked below). */}
+      {!isDeleted && project.status !== "draft" && !isLocked && (
         <div className="rounded-lg border border-zinc-200 bg-white p-5">
           <h2 className="mb-1 text-sm font-semibold text-zinc-900">Re-check documents</h2>
           <p className="mb-3 text-sm text-zinc-500">

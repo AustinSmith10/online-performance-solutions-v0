@@ -602,7 +602,14 @@ export default async function ConsultantProjectDetailPage({
   } else {
     focusCard = (
       <FocusCard tone="green" title="All approvals in" subtitle="Awaiting conversion to PBDR.">
-        <p className="text-sm text-green-700">No action needed right now.</p>
+        <div>
+          <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+          <ProjectDeliveryDelayPresetSelect
+            projectId={id}
+            initialValue={project.delivery_delay_preset}
+            durations={deliveryDurations}
+          />
+        </div>
       </FocusCard>
     );
   }
