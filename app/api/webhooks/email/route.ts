@@ -68,6 +68,48 @@ export async function POST(req: NextRequest) {
   const fromEmail = senderEmail(payload);
   const supabase = createAdminClient();
 
+  // ── -1. Clarification-reply token match (#101 follow-up) ───────────────────
+  // A stakeholder_table_fallback queue entry has no project/review link at
+  // all, so an admin/consultant may have asked the sender to self-identify
+  // (requestClarification action, app/actions/email-queue.ts) via an email
+  // carrying this per-row token. Checked before the stakeholder-review token
+  // below since it's a distinct token space keyed on the same MailboxHash
+  // mechanism (lib/email/parser.ts's buildStakeholderReplyTo).
+  if (payload.MailboxHash) {
+    const { data: awaiting } = await supabase
+      .from("inbound_email_queue")
+      .select("id, status")
+      .eq("clarification_token", payload.MailboxHash)
+      .gt("clarification_expires_at", new Date().toISOString())
+      .maybeSingle();
+
+    if (awaiting) {
+      const replyText = payload.StrippedTextReply || payload.TextBody || null;
+      await supabase
+        .from("inbound_email_queue")
+        .update({
+          clarification_reply_text: replyText,
+          // Only reactivate if it was actually waiting — a stray second
+          // reply to an already-resolved entry shouldn't reopen it.
+          ...(awaiting.status === "awaiting_clarification" ? { status: "pending" } : {}),
+        })
+        .eq("id", awaiting.id as string);
+
+      await auditLog("email.clarification_replied", null, fromEmail, {
+        metadata: { queue_id: awaiting.id, message_id: payload.MessageID },
+      });
+
+      await sendEmail({
+        to: fromEmail,
+        subject: "OPS: We've received your reply",
+        html: holdingReplyHtml(),
+        source: "webhook_clarification_reply_holding",
+      });
+
+      return NextResponse.json({ ok: true });
+    }
+  }
+
   // ── 0. Stakeholder-reply token match (#68's MailboxHash token) ─────────────
   // Checked before the sender-lookup gate below: third-party stakeholders who
   // reply to their approval email typically have no `users` row at all (they're

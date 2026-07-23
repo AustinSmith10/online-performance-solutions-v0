@@ -9,14 +9,18 @@ const { mockExecute } = vi.hoisted(() => ({ mockExecute: vi.fn() }));
 vi.mock("@/lib/email/execute-resolution", () => ({ executeQueueRowResolution: mockExecute }));
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+vi.mock("@/lib/email/sender");
 
 import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendEmail } from "@/lib/email/sender";
 import {
   approveQueueEntry,
   reassignQueueEntry,
   rejectQueueEntry,
+  requestClarification,
+  getSuggestedReviewsForSender,
   searchProjectsForReassign,
   getReviewCyclesForProject,
 } from "./email-queue";
@@ -28,6 +32,7 @@ function makeQueryBuilder(overrides: Record<string, unknown> = {}) {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(),
+    ilike: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
@@ -36,6 +41,16 @@ function makeQueryBuilder(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+const CANDIDATE_ROWS = [
+  {
+    id: "review-1",
+    review_cycle: 2,
+    stakeholder_name: "Rattan",
+    project_id: "proj-9",
+    projects: { id: "proj-9", project_number: null, site_address: "42 Example St" },
+  },
+];
 
 const PENDING_ENTRY = {
   id: "queue-1",
@@ -58,6 +73,7 @@ describe("email-queue actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requireRole).mockResolvedValue(ACTOR as never);
+    vi.mocked(sendEmail).mockResolvedValue(true);
   });
 
   describe("approveQueueEntry", () => {
@@ -81,6 +97,24 @@ describe("email-queue actions", () => {
       const result = await approveQueueEntry("queue-1");
       expect(result.error).toBeTruthy();
       expect(mockExecute).not.toHaveBeenCalled();
+    });
+
+    it("is still resolvable when a clarification is pending (awaiting_clarification isn't final)", async () => {
+      mockExecute.mockResolvedValue({ ok: true, projectId: "proj-1" });
+      const eq = vi.fn().mockResolvedValue({ data: null, error: null });
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn().mockReturnValue(
+          makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: { ...PENDING_ENTRY, status: "awaiting_clarification" }, error: null }),
+            update: vi.fn().mockReturnValue({ eq }),
+          })
+        ),
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const result = await approveQueueEntry("queue-1");
+      expect(result.error).toBeUndefined();
+      expect(mockExecute).toHaveBeenCalled();
     });
 
     it("returns an error when the entry has no proposed target", async () => {
@@ -236,6 +270,110 @@ describe("email-queue actions", () => {
 
       const result = await rejectQueueEntry("queue-1", null);
       expect(result.error).toBeTruthy();
+    });
+  });
+
+  describe("requestClarification", () => {
+    it("returns an error when the entry doesn't exist", async () => {
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn().mockReturnValue(makeQueryBuilder()),
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const result = await requestClarification("missing", "Which project is this?");
+      expect(result.error).toBeTruthy();
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it("returns an error when the message is blank", async () => {
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn().mockReturnValue(makeQueryBuilder()),
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const result = await requestClarification("queue-1", "   ");
+      expect(result.error).toBeTruthy();
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it("returns an error when the entry is already resolved", async () => {
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn().mockReturnValue(
+          makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "queue-1", status: "approved", from_email: "rattan@ops.test" }, error: null }),
+          })
+        ),
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const result = await requestClarification("queue-1", "Which project is this?");
+      expect(result.error).toBeTruthy();
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it("sends the admin's free-text message and marks the row awaiting_clarification", async () => {
+      const eq = vi.fn().mockResolvedValue({ data: null, error: null });
+      const update = vi.fn().mockReturnValue({ eq });
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn().mockReturnValue(
+          makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "queue-1", status: "pending", from_email: "rattan@ops.test" }, error: null }),
+            limit: vi.fn().mockResolvedValue({ data: CANDIDATE_ROWS, error: null }),
+            update,
+          })
+        ),
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const result = await requestClarification("queue-1", "  Which of your reviews is this about?  ");
+
+      expect(result.error).toBeUndefined();
+      expect(sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: "rattan@ops.test",
+          html: expect.stringContaining("Which of your reviews is this about?"),
+          source: "email_queue_clarification_request",
+        })
+      );
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "awaiting_clarification",
+          clarification_requested_by: "actor-1",
+          clarification_message: "Which of your reviews is this about?",
+          clarification_candidates: expect.arrayContaining([expect.objectContaining({ projectLabel: "42 Example St" })]),
+        })
+      );
+      expect(eq).toHaveBeenCalledWith("id", "queue-1");
+      expect(vi.mocked(auditLog)).toHaveBeenCalledWith(
+        "email_queue.clarification_requested",
+        "actor-1",
+        "admin@example.com",
+        expect.objectContaining({ metadata: expect.objectContaining({ candidate_count: 1 }) })
+      );
+    });
+  });
+
+  describe("getSuggestedReviewsForSender", () => {
+    it("returns candidate reviews shaped for display", async () => {
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn().mockReturnValue(
+          makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: { from_email: "rattan@ops.test" }, error: null }),
+            limit: vi.fn().mockResolvedValue({ data: CANDIDATE_ROWS, error: null }),
+          })
+        ),
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const results = await getSuggestedReviewsForSender("queue-1");
+      expect(results).toEqual([
+        { reviewId: "review-1", projectId: "proj-9", projectLabel: "42 Example St", reviewLabel: "Cycle 2 — Rattan" },
+      ]);
+    });
+
+    it("returns an empty list when the entry doesn't exist", async () => {
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn().mockReturnValue(makeQueryBuilder()),
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const results = await getSuggestedReviewsForSender("missing");
+      expect(results).toEqual([]);
     });
   });
 

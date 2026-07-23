@@ -28,7 +28,7 @@ export default async function ConsultantLayout({
   const pendingQueueCount = await getPendingEmailQueueCount(createAdminClient());
   const NAV_ITEMS = [
     { href: "/ops", label: "Workspace" },
-    { href: "/email-queue", label: `Email Queue (${pendingQueueCount})` },
+    { href: "/ops/email-queue", label: `Email Queue (${pendingQueueCount})` },
   ];
 
   return (

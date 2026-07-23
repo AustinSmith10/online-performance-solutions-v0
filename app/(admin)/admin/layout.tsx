@@ -17,7 +17,7 @@ const ALL_NAV_ITEMS: { href: string; label: string; group?: string; key?: AdminN
   { href: "/admin/projects", label: "Projects", group: "Work", key: "projects" },
   { href: "/admin/stakeholders", label: "Stakeholders", group: "Work", key: "stakeholders" },
   { href: "/admin/users", label: "Internal Users", group: "Work", key: "users" },
-  { href: "/email-queue", label: "Email Queue", group: "Work" },
+  { href: "/admin/email-queue", label: "Email Queue", group: "Work" },
   { href: "/admin/templates", label: "Templates", group: "Admin", key: "templates" },
   { href: "/admin/credits", label: "Credits", group: "Admin", key: "credits" },
   { href: "/admin/audit", label: "Audit", group: "Admin", key: "audit" },
@@ -42,7 +42,7 @@ export default async function AdminShellLayout({
 
   const pendingQueueCount = await getPendingEmailQueueCount(supabase);
   NAV_ITEMS = NAV_ITEMS.map((item) =>
-    item.href === "/email-queue" ? { ...item, label: `${item.label} (${pendingQueueCount})` } : item
+    item.href === "/admin/email-queue" ? { ...item, label: `${item.label} (${pendingQueueCount})` } : item
   );
 
   return (

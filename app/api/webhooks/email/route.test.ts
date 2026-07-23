@@ -75,6 +75,7 @@ function makeQueryBuilder(overrides: Record<string, unknown> = {}) {
     eq: vi.fn().mockReturnThis(),
     ilike: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
+    gt: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
     single: vi.fn().mockResolvedValue({ data: null, error: null }),
@@ -571,6 +572,113 @@ describe("POST /api/webhooks/email", () => {
 
       expect(res.status).toBe(200);
       expect(insert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("clarification-reply token match → threads back onto the same queue row", () => {
+    const CLARIFICATION_TOKEN = "clarify-token-xyz";
+    const AWAITING_ROW = { id: "queue-1", status: "awaiting_clarification" };
+
+    it("attaches the reply and flips the row back to pending", async () => {
+      const eq = vi.fn().mockResolvedValue({ data: null, error: null });
+      let capturedUpdate: Record<string, unknown> | null = null;
+      const fromMock = vi.fn((table: string) => {
+        if (table === "inbound_email_queue") {
+          return makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: AWAITING_ROW, error: null }),
+            update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+              capturedUpdate = payload;
+              return { eq };
+            }),
+          });
+        }
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: fromMock,
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        From: "rattan@ops.test",
+        FromFull: { Email: "rattan@ops.test", Name: "Rattan", MailboxHash: CLARIFICATION_TOKEN },
+        MailboxHash: CLARIFICATION_TOKEN,
+        TextBody: "It's the Eagleby one, #2.",
+      };
+
+      const res = await POST(makeRequest(payload));
+
+      expect(res.status).toBe(200);
+      expect(eq).toHaveBeenCalledWith("id", "queue-1");
+      expect(capturedUpdate).toMatchObject({
+        clarification_reply_text: "It's the Eagleby one, #2.",
+        status: "pending",
+      });
+
+      // "users" must never be consulted — the token alone routes this, same
+      // as the stakeholder-review token match above.
+      expect(fromMock).not.toHaveBeenCalledWith("users");
+    });
+
+    it("does not reopen an already-resolved row, but still records the reply", async () => {
+      const eq = vi.fn().mockResolvedValue({ data: null, error: null });
+      let capturedUpdate: Record<string, unknown> | null = null;
+      const fromMock = vi.fn((table: string) => {
+        if (table === "inbound_email_queue") {
+          return makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "queue-1", status: "approved" }, error: null }),
+            update: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+              capturedUpdate = payload;
+              return { eq };
+            }),
+          });
+        }
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: fromMock,
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        From: "rattan@ops.test",
+        FromFull: { Email: "rattan@ops.test", Name: "Rattan", MailboxHash: CLARIFICATION_TOKEN },
+        MailboxHash: CLARIFICATION_TOKEN,
+      };
+
+      const res = await POST(makeRequest(payload));
+
+      expect(res.status).toBe(200);
+      expect(capturedUpdate).toMatchObject({ clarification_reply_text: BASE_PAYLOAD.TextBody });
+      expect(capturedUpdate).not.toHaveProperty("status");
+    });
+
+    it("falls through to the ordinary flow when the token doesn't match (bounces as unrecognised)", async () => {
+      const fromMock = vi.fn(() => makeQueryBuilder());
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: fromMock,
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        From: "rattan@ops.test",
+        FromFull: { Email: "rattan@ops.test", Name: "Rattan", MailboxHash: "no-such-token" },
+        MailboxHash: "no-such-token",
+      };
+
+      const res = await POST(makeRequest(payload));
+
+      expect(res.status).toBe(200);
+      const bounced = mockSendEmail.mock.calls.some((c) =>
+        (c[0] as { subject: string }).subject?.includes("Unrecognised")
+      );
+      expect(bounced).toBe(true);
     });
   });
 

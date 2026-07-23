@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
+import { sendEmail } from "@/lib/email/sender";
+import { buildStakeholderReplyTo } from "@/lib/email/parser";
+import { generateTokenString } from "@/lib/stakeholders/tokens";
+import { getCandidateReviewsForSender, type CandidateReview } from "@/lib/email-queue/candidate-reviews";
+import { renderClarificationRequestEmail } from "@/lib/email/templates/ClarificationRequestEmail";
 import {
   executeQueueRowResolution,
   type QueueAttachmentRef,
@@ -11,7 +16,20 @@ import {
   type ResolvedTarget,
 } from "@/lib/email/execute-resolution";
 
-const QUEUE_ROUTE = "/email-queue";
+const CLARIFICATION_TOKEN_VALID_DAYS = 30;
+
+// pending: untouched. awaiting_clarification: a request went out and the
+// sender hasn't replied yet — still resolvable directly if the admin already
+// knows the answer. Only approved/rejected are actually final.
+const RESOLVABLE_STATUSES = ["pending", "awaiting_clarification"];
+
+// The queue now lives inside each role's own shell (#101's nav-badge follow-up) —
+// revalidate both so whichever one the acting admin/consultant is on refreshes.
+const QUEUE_ROUTES = ["/admin/email-queue", "/ops/email-queue"];
+
+function revalidateQueueRoutes() {
+  for (const route of QUEUE_ROUTES) revalidatePath(route);
+}
 
 export interface QueueActionState {
   error?: string;
@@ -101,7 +119,7 @@ export async function approveQueueEntry(queueId: string): Promise<QueueActionSta
     .maybeSingle();
 
   if (!entry) return { error: "Queue entry not found." };
-  if ((entry as QueueDbRow).status !== "pending") return { error: "This entry has already been resolved." };
+  if (!RESOLVABLE_STATUSES.includes((entry as QueueDbRow).status)) return { error: "This entry has already been resolved." };
 
   const target = proposedTarget(entry as QueueDbRow);
   if (!target) return { error: "This entry has no proposed target — use Reassign instead." };
@@ -116,7 +134,7 @@ export async function approveQueueEntry(queueId: string): Promise<QueueActionSta
     metadata: { queue_id: queueId, category: target.category },
   });
 
-  revalidatePath(QUEUE_ROUTE);
+  revalidateQueueRoutes();
   return {};
 }
 
@@ -138,7 +156,7 @@ export async function reassignQueueEntry(
     .maybeSingle();
 
   if (!entry) return { error: "Queue entry not found." };
-  if ((entry as QueueDbRow).status !== "pending") return { error: "This entry has already been resolved." };
+  if (!RESOLVABLE_STATUSES.includes((entry as QueueDbRow).status)) return { error: "This entry has already been resolved." };
 
   let target: ResolvedTarget;
   if (category === "new_submission") {
@@ -166,7 +184,7 @@ export async function reassignQueueEntry(
     },
   });
 
-  revalidatePath(QUEUE_ROUTE);
+  revalidateQueueRoutes();
   return {};
 }
 
@@ -183,7 +201,7 @@ export async function rejectQueueEntry(queueId: string, reason: string | null): 
     .maybeSingle();
 
   if (!entry) return { error: "Queue entry not found." };
-  if ((entry.status as string) !== "pending") return { error: "This entry has already been resolved." };
+  if (!RESOLVABLE_STATUSES.includes(entry.status as string)) return { error: "This entry has already been resolved." };
 
   const trimmedReason = reason?.trim() || null;
 
@@ -201,7 +219,7 @@ export async function rejectQueueEntry(queueId: string, reason: string | null): 
     metadata: { queue_id: queueId, reason: trimmedReason },
   });
 
-  revalidatePath(QUEUE_ROUTE);
+  revalidateQueueRoutes();
   return {};
 }
 
@@ -264,4 +282,77 @@ export async function getReviewCyclesForProject(projectId: string): Promise<Revi
     id: r.id as string,
     label: `Cycle ${r.review_cycle} — ${r.stakeholder_name} (${r.stakeholder_email})`,
   }));
+}
+
+// ── Clarification (stakeholder_table_fallback entries with no project link) ──
+
+export async function getSuggestedReviewsForSender(queueId: string): Promise<CandidateReview[]> {
+  await requireRole("super_admin", "admin", "consultant");
+  const supabase = createAdminClient();
+
+  const { data: entry } = await supabase
+    .from("inbound_email_queue")
+    .select("from_email")
+    .eq("id", queueId)
+    .maybeSingle();
+
+  if (!entry) return [];
+  return getCandidateReviewsForSender(supabase, entry.from_email as string);
+}
+
+export async function requestClarification(queueId: string, message: string): Promise<QueueActionState> {
+  const actor = await requireRole("super_admin", "admin", "consultant");
+  const trimmedMessage = message.trim();
+  if (!trimmedMessage) return { error: "Write a message before sending." };
+
+  const supabase = createAdminClient();
+
+  const { data: entry } = await supabase
+    .from("inbound_email_queue")
+    .select("id, status, from_email")
+    .eq("id", queueId)
+    .maybeSingle();
+
+  if (!entry) return { error: "Queue entry not found." };
+  if (!RESOLVABLE_STATUSES.includes(entry.status as string)) return { error: "This entry has already been resolved." };
+
+  const fromEmail = entry.from_email as string;
+  // Still snapshotted for the admin-facing "asked to choose between" context
+  // even though the sender never sees this list verbatim anymore — the
+  // email itself is whatever the admin wrote.
+  const candidates = await getCandidateReviewsForSender(supabase, fromEmail);
+
+  const token = generateTokenString();
+  const expiresAt = new Date(Date.now() + CLARIFICATION_TOKEN_VALID_DAYS * 24 * 60 * 60 * 1000);
+  const replyTo = buildStakeholderReplyTo(token);
+
+  const html = renderClarificationRequestEmail({ message: trimmedMessage });
+
+  await sendEmail({
+    to: fromEmail,
+    subject: "OPS: Which project is this regarding?",
+    html,
+    source: "email_queue_clarification_request",
+    ...(replyTo ? { replyTo } : {}),
+  });
+
+  await supabase
+    .from("inbound_email_queue")
+    .update({
+      status: "awaiting_clarification",
+      clarification_token: token,
+      clarification_expires_at: expiresAt.toISOString(),
+      clarification_requested_at: new Date().toISOString(),
+      clarification_requested_by: actor.id,
+      clarification_candidates: candidates,
+      clarification_message: trimmedMessage,
+    })
+    .eq("id", queueId);
+
+  await auditLog("email_queue.clarification_requested", actor.id as string, actor.email as string, {
+    metadata: { queue_id: queueId, candidate_count: candidates.length },
+  });
+
+  revalidateQueueRoutes();
+  return {};
 }

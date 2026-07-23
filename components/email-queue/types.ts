@@ -4,7 +4,7 @@ export type MatchReason =
   | "mailbox_hash_projectid_match"
   | "stakeholder_table_fallback"
   | "no_match";
-export type QueueStatus = "pending" | "approved" | "rejected";
+export type QueueStatus = "pending" | "approved" | "rejected" | "awaiting_clarification";
 
 export interface QueueAttachmentView {
   filename: string;
@@ -34,6 +34,10 @@ export interface QueueRow {
   resolvedTarget: TargetRef | null;
   resolvedAt: string | null;
   rejectionReason: string | null;
+  clarificationRequestedAt: string | null;
+  clarificationCandidates: { projectLabel: string; reviewLabel: string }[] | null;
+  clarificationReplyText: string | null;
+  clarificationMessage: string | null;
 }
 
 export const CATEGORY_LABEL: Record<QueueCategory, string> = {
