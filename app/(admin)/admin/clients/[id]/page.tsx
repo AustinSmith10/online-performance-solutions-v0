@@ -10,10 +10,8 @@ import { OrgCreateAccountModal } from "./_components/org-create-account-modal";
 import { DeleteOrgButton } from "./_components/delete-org-button";
 import { MetricsTablesPanel } from "./_components/metrics-tables-panel";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
-import { UnsavedChangesProvider } from "@/components/UnsavedChangesProvider";
-import { ProfileAccordion } from "@/components/workspace/ProfileAccordion";
+import { ProfileTabs } from "@/components/workspace/ProfileTabs";
 import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_components/HeaderStatInline";
-import { CollapsibleSection } from "@/app/(consultant)/ops/projects/[id]/_components/CollapsibleSection";
 import type { Client, User } from "@/types";
 import type { MetricsTable, MetricsRow, TemplateTokenGroup } from "@/app/actions/client-metrics";
 import { getClientTemplateTokenGroups } from "@/app/actions/client-metrics";
@@ -202,16 +200,14 @@ export default async function OrganisationDetailPage({
   );
 
   const overviewContent = (
-    <UnsavedChangesProvider>
-      <div className="space-y-3">
-        <OrgDetailReadonly org={orgData} />
-        <OrgConfigReadonly
-          orgId={orgData.id}
-          tokens={orgConfigTokens}
-          currentConfig={orgData.client_config ?? {}}
-        />
-      </div>
-    </UnsavedChangesProvider>
+    <div className="space-y-3">
+      <OrgDetailReadonly org={orgData} />
+      <OrgConfigReadonly
+        orgId={orgData.id}
+        tokens={orgConfigTokens}
+        currentConfig={orgData.client_config ?? {}}
+      />
+    </div>
   );
 
   const templatesContent = (
@@ -343,49 +339,14 @@ export default async function OrganisationDetailPage({
           ← Clients
         </Link>
 
-        <ProfileAccordion
+        <ProfileTabs
           header={header}
-          sections={[
-            {
-              id: "overview",
-              content: (
-                <CollapsibleSection title="Overview" defaultOpen>
-                  <div className="p-4">{overviewContent}</div>
-                </CollapsibleSection>
-              ),
-            },
-            {
-              id: "templates",
-              content: (
-                <CollapsibleSection title="Templates" defaultOpen={false}>
-                  <div className="p-4">{templatesContent}</div>
-                </CollapsibleSection>
-              ),
-            },
-            {
-              id: "stakeholders",
-              content: (
-                <CollapsibleSection title="Stakeholders" defaultOpen={false}>
-                  <div className="p-4">{stakeholdersContent}</div>
-                </CollapsibleSection>
-              ),
-            },
-            {
-              id: "metrics",
-              content: (
-                <CollapsibleSection title="Data tables" defaultOpen={false}>
-                  <div className="p-4">{metricsContent}</div>
-                </CollapsibleSection>
-              ),
-            },
-            {
-              id: "danger",
-              content: (
-                <CollapsibleSection title="Delete" defaultOpen={false}>
-                  <div className="p-4">{dangerContent}</div>
-                </CollapsibleSection>
-              ),
-            },
+          tabs={[
+            { id: "overview", label: "Overview", content: overviewContent },
+            { id: "templates", label: "Templates", content: templatesContent },
+            { id: "stakeholders", label: "Stakeholders", content: stakeholdersContent },
+            { id: "metrics", label: "Data tables", content: metricsContent },
+            { id: "danger", label: "Danger zone", content: dangerContent },
           ]}
         />
       </div>
