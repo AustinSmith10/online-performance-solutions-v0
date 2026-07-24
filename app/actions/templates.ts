@@ -265,11 +265,12 @@ export async function restoreTemplate(
 
 export type ReuploadConflict = { token: string; tableName: string };
 
-// A reupload wipes and recreates template_field_mappings from whatever tokens
-// the new .docx contains. client_metrics_tables/output_mappings reference
-// tokens by plain text with no FK, so a renamed/removed token silently
+// A reupload only removes mappings for tokens that disappeared from the new
+// .docx (in_template=false extraction-only tokens are never touched — they
+// aren't sourced from the document at all). client_metrics_tables/output_mappings
+// reference tokens by plain text with no FK, so a renamed/removed token silently
 // orphans any auto-fill config that pointed at it — this checks for that
-// before the destructive replace happens.
+// before the removal happens.
 async function findAutofillConflicts(
   supabase: ReturnType<typeof createAdminClient>,
   templateId: string,
@@ -278,12 +279,13 @@ async function findAutofillConflicts(
 ): Promise<ReuploadConflict[]> {
   const { data: oldMappings } = await supabase
     .from("template_field_mappings")
-    .select("placeholder_token")
+    .select("placeholder_token, in_template")
     .eq("template_id", templateId);
 
   const newTokenSet = new Set(newTokens);
   const removedTokens = new Set(
     (oldMappings ?? [])
+      .filter((r) => r.in_template !== false)
       .map((r) => r.placeholder_token as string)
       .filter((t) => !newTokenSet.has(t))
   );
@@ -387,18 +389,45 @@ export async function reuploadTemplate(
 
   if (updateErr) return { error: updateErr.message };
 
-  // Replace all token mappings
-  await supabase
+  // Reconcile token mappings against the new document: tokens that still
+  // exist keep their row untouched (display_label, extraction_hint,
+  // comparison_mode, is_required, sort_order all survive), tokens that
+  // disappeared get removed, and only genuinely new tokens get inserted.
+  // Extraction-only tokens (in_template=false) aren't sourced from the
+  // .docx at all, so they're excluded from this reconciliation entirely.
+  const { data: existingMappings, error: existingErr } = await supabase
     .from("template_field_mappings")
-    .delete()
+    .select("id, placeholder_token, in_template, sort_order")
     .eq("template_id", templateId);
 
-  if (tokens.length > 0) {
-    const mappingRows = tokens.map((token) => ({
+  if (existingErr) return { error: existingErr.message };
+
+  const docRows = (existingMappings ?? []).filter((m) => m.in_template !== false);
+  const newTokenSet = new Set(tokens);
+  const existingTokenSet = new Set(docRows.map((m) => m.placeholder_token as string));
+
+  const removedRowIds = docRows
+    .filter((m) => !newTokenSet.has(m.placeholder_token as string))
+    .map((m) => m.id as string);
+  const addedTokens = tokens.filter((t) => !existingTokenSet.has(t));
+
+  if (removedRowIds.length > 0) {
+    const { error: deleteErr } = await supabase
+      .from("template_field_mappings")
+      .delete()
+      .in("id", removedRowIds);
+
+    if (deleteErr) return { error: deleteErr.message };
+  }
+
+  if (addedTokens.length > 0) {
+    const maxSortOrder = docRows.reduce((max, m) => Math.max(max, (m.sort_order as number) ?? 0), 0);
+    const mappingRows = addedTokens.map((token, i) => ({
       template_id: templateId,
       placeholder_token: token,
       field_key: detectSource(token),
       is_mapped: isKnownToken(token),
+      sort_order: maxSortOrder + i + 1,
     }));
     const { error: mappingError } = await supabase
       .from("template_field_mappings")
