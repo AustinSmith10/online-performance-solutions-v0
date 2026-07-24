@@ -263,7 +263,69 @@ export async function restoreTemplate(
   return {};
 }
 
-export type ReuploadTemplateState = { error?: string };
+export type ReuploadConflict = { token: string; tableName: string };
+
+// A reupload wipes and recreates template_field_mappings from whatever tokens
+// the new .docx contains. client_metrics_tables/output_mappings reference
+// tokens by plain text with no FK, so a renamed/removed token silently
+// orphans any auto-fill config that pointed at it — this checks for that
+// before the destructive replace happens.
+async function findAutofillConflicts(
+  supabase: ReturnType<typeof createAdminClient>,
+  templateId: string,
+  clientId: string,
+  newTokens: string[]
+): Promise<ReuploadConflict[]> {
+  const { data: oldMappings } = await supabase
+    .from("template_field_mappings")
+    .select("placeholder_token")
+    .eq("template_id", templateId);
+
+  const newTokenSet = new Set(newTokens);
+  const removedTokens = new Set(
+    (oldMappings ?? [])
+      .map((r) => r.placeholder_token as string)
+      .filter((t) => !newTokenSet.has(t))
+  );
+  if (removedTokens.size === 0) return [];
+
+  const { data: tables } = await supabase
+    .from("client_metrics_tables")
+    .select("id, name, match_token")
+    .eq("client_id", clientId);
+
+  const tableById = new Map((tables ?? []).map((t) => [t.id as string, t.name as string]));
+  const conflicts: ReuploadConflict[] = [];
+
+  for (const t of tables ?? []) {
+    if (t.match_token && removedTokens.has(t.match_token as string)) {
+      conflicts.push({ token: t.match_token as string, tableName: t.name as string });
+    }
+  }
+
+  const tableIds = [...tableById.keys()];
+  if (tableIds.length > 0) {
+    const { data: outputMappings } = await supabase
+      .from("client_metrics_output_mappings")
+      .select("table_id, output_token")
+      .in("table_id", tableIds);
+
+    for (const om of outputMappings ?? []) {
+      const token = om.output_token as string;
+      if (removedTokens.has(token)) {
+        conflicts.push({ token, tableName: tableById.get(om.table_id as string) ?? "Unknown table" });
+      }
+    }
+  }
+
+  return conflicts;
+}
+
+export type ReuploadTemplateState = {
+  error?: string;
+  success?: boolean;
+  conflicts?: ReuploadConflict[];
+};
 
 export async function reuploadTemplate(
   templateId: string,
@@ -294,6 +356,13 @@ export async function reuploadTemplate(
     tokens = await extractPlaceholderTokens(fileBuffer);
   } catch {
     return { error: "Could not parse the .docx file. Ensure it is a valid Word document." };
+  }
+
+  const confirmed = formData.get("confirmed") === "1";
+
+  if (!confirmed) {
+    const conflicts = await findAutofillConflicts(supabase, templateId, template.client_id as string, tokens);
+    if (conflicts.length > 0) return { conflicts };
   }
 
   const newStoragePath = `${template.client_id}/${templateId}/${file.name}`;
@@ -344,7 +413,7 @@ export async function reuploadTemplate(
   });
 
   revalidatePath(`/admin/templates/${templateId}`);
-  return {};
+  return { success: true };
 }
 
 export type UpdateTokenLabelsState = { error?: string; success?: boolean };
