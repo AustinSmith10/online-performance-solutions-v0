@@ -9,6 +9,7 @@ import { TopNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { AvailabilityPill } from "@/components/AvailabilityPill";
 import { ReplayTourButton } from "@/components/onboarding-tour/ReplayTourButton";
+import { Logo } from "@/components/Logo";
 import type { ConsultantAvailability } from "@/types";
 
 // Compact single-row top nav — same idiom as the client portal
@@ -37,7 +38,7 @@ export default async function ConsultantLayout({
         <div className="mx-auto max-w-5xl px-4">
           <div className="flex h-11 items-center justify-between">
             <div className="flex min-w-0 items-center gap-5">
-              <span className="shrink-0 text-sm font-semibold text-zinc-900">OPS</span>
+              <Logo className="h-6 w-auto shrink-0" />
               <nav className="hidden sm:flex gap-4">
                 <TopNavLinks items={NAV_ITEMS} />
               </nav>

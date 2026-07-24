@@ -5,6 +5,7 @@ import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { NotificationToasts } from "@/components/NotificationToasts";
 import { TopNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
+import { Logo } from "@/components/Logo";
 import { ClientOnboardingReplayButton } from "./_components/ClientOnboardingReplayButton";
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +19,7 @@ export default async function ClientLayout({ children }: { children: React.React
               14px-tall two-row treatment the old header used. */}
           <div className="flex h-11 items-center justify-between">
             <div className="flex min-w-0 items-center gap-5">
-              <span className="shrink-0 text-sm font-semibold text-zinc-900">OPS</span>
+              <Logo className="h-6 w-auto shrink-0" />
               {/* Desktop: nav inline */}
               <nav className="hidden sm:flex gap-4">
                 <TopNavLinks items={[

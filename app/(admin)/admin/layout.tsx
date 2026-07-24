@@ -10,6 +10,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { SidebarNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { ReplayTourButton } from "@/components/onboarding-tour/ReplayTourButton";
+import { Logo } from "@/components/Logo";
 
 const ALL_NAV_ITEMS: { href: string; label: string; group?: string; key?: AdminNavKey }[] = [
   { href: "/admin/dashboard", label: "Dashboard" },
@@ -50,6 +51,7 @@ export default async function AdminShellLayout({
       {/* Mobile top bar + drawer (hidden on desktop) */}
       <MobileNav
         title="OPS Admin"
+        logo={<Logo className="h-6 w-auto" />}
         navItems={NAV_ITEMS}
         userName={[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
         profileHref="/admin/profile"
@@ -66,7 +68,7 @@ export default async function AdminShellLayout({
       {/* Desktop sidebar (hidden on mobile) */}
       <aside className="hidden w-56 shrink-0 flex-col border-r border-zinc-200 bg-white lg:flex">
         <div className="flex h-11 items-center justify-between border-b border-zinc-200 px-4">
-          <span className="text-sm font-semibold text-zinc-900">OPS Admin</span>
+          <Logo className="h-6 w-auto" />
           <div className="flex items-center gap-1">
             <NotificationTrayServer projectBasePath="/admin/projects" includeNeedsAttention />
           </div>

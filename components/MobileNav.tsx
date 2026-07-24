@@ -12,6 +12,7 @@ interface NavItem {
 
 export function MobileNav({
   title,
+  logo,
   navItems,
   userName,
   profileHref,
@@ -19,6 +20,7 @@ export function MobileNav({
   notifications,
 }: {
   title: string;
+  logo?: React.ReactNode;
   navItems: NavItem[];
   userName: string;
   profileHref?: string;
@@ -31,7 +33,7 @@ export function MobileNav({
     <>
       {/* Mobile top bar — hidden on desktop */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-4 lg:hidden">
-        <span className="text-sm font-semibold text-zinc-900">{title}</span>
+        {logo ?? <span className="text-sm font-semibold text-zinc-900">{title}</span>}
         <div className="flex items-center gap-1">
           {notifications}
           <button
@@ -61,7 +63,7 @@ export function MobileNav({
         }`}
       >
         <div className="flex h-14 items-center justify-between border-b border-zinc-200 px-4">
-          <span className="text-sm font-semibold text-zinc-900">{title}</span>
+          {logo ?? <span className="text-sm font-semibold text-zinc-900">{title}</span>}
           <button
             onClick={() => setOpen(false)}
             className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
