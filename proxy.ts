@@ -101,17 +101,23 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/api/auth/signout", request.url));
   }
 
-  // Profile completeness check (pages only — API callers are always fully enrolled)
+  // Profile completeness check
   const profileComplete = user.user_metadata?.profile_complete === true;
-  if (!profileComplete && !isApiRoute) {
+  if (!profileComplete) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Profile setup incomplete" }, { status: 403 });
+    }
     return NextResponse.redirect(new URL("/complete-profile", request.url));
   }
 
   // TOTP enforcement (skipped in development for easier local testing)
-  if (process.env.NODE_ENV !== "development" && !isApiRoute) {
+  if (process.env.NODE_ENV !== "development") {
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalData) {
       if (aalData.nextLevel === "aal1") {
+        if (isApiRoute) {
+          return NextResponse.json({ error: "2FA setup required" }, { status: 403 });
+        }
         return NextResponse.redirect(new URL("/setup-2fa", request.url));
       }
       if (aalData.nextLevel === "aal2" && aalData.currentLevel === "aal1") {
@@ -123,6 +129,9 @@ export async function proxy(request: NextRequest) {
           .maybeSingle();
         const version = userRow?.trusted_device_version ?? 0;
         if (!verifyTrustedDeviceToken(trustedToken, user.id, version)) {
+          if (isApiRoute) {
+            return NextResponse.json({ error: "2FA verification required" }, { status: 403 });
+          }
           const url = new URL("/verify-2fa", request.url);
           url.searchParams.set("next", pathname);
           return NextResponse.redirect(url);

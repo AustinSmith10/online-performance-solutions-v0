@@ -368,5 +368,28 @@ describe("executeQueueRowResolution", () => {
       expect(result.ok).toBe(false);
       expect(mockAuditLog).toHaveBeenCalledWith("email.stakeholder_reply_invalid", null, row.from_email, expect.anything());
     });
+
+    it("escapes HTML in the reply body and stakeholder name before embedding them in the internal notification email", async () => {
+      const maliciousReview = {
+        ...REVIEW,
+        stakeholder_name: '<img src=x onerror=alert(document.cookie)>Sam',
+      };
+      const supabase = makeSupabase({ review: maliciousReview, senderKnown: true });
+      const row = makeRow({
+        from_email: "stakeholder@external.com",
+        stripped_reply_text: 'Approved, but also <img src=x onerror=alert(document.cookie)> and <a href="http://evil.example/phish">click here</a>',
+      });
+
+      const result = await executeQueueRowResolution(row, { category: "stakeholder_response", stakeholderReviewId: "review-1" }, supabase as never);
+
+      expect(result.ok).toBe(true);
+      expect(mockNotify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          emailHtml: expect.stringContaining("&lt;img src=x onerror=alert(document.cookie)&gt;"),
+        })
+      );
+      const [[call]] = mockNotify.mock.calls;
+      expect(call.emailHtml).not.toContain("<img src=x");
+    });
   });
 });

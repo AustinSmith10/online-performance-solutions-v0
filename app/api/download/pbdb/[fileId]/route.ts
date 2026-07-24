@@ -67,11 +67,18 @@ export async function GET(
     },
   });
 
-  await supabase
+  const { error: downloadedAtError } = await supabase
     .from("projects")
     .update({ pbdb_downloaded_at: new Date().toISOString() })
     .eq("id", file.project_id as string)
     .is("pbdb_downloaded_at", null);
+
+  if (downloadedAtError) {
+    console.error(
+      `[pbdb-download] Failed to set pbdb_downloaded_at for project ${file.project_id as string}:`,
+      downloadedAtError
+    );
+  }
 
   return NextResponse.redirect(signed.signedUrl);
 }

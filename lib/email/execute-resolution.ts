@@ -13,6 +13,7 @@ import {
 } from "@/lib/documents/metrics-autofill";
 import { buildFieldFlagPlan } from "@/lib/documents/field-flags";
 import type { ComparisonMode } from "@/lib/documents/compare-candidates";
+import { e } from "@/lib/email/templates/shell";
 
 // #100: the real per-category pipelines, extracted out of the old webhook
 // handlers (see #98's since-removed lib/email/inbound-handlers.ts) into a
@@ -262,10 +263,10 @@ async function executeNewSubmission(
         notify({
           recipientId: a.id as string,
           type: "email_reply_without_thread_token",
-          message: `${user.email} sent an email that looks like a reply, but it arrived with no thread reference — it was processed as a new report request instead of added to an existing thread. Please verify.`,
+          message: `${user.email as string} sent an email that looks like a reply, but it arrived with no thread reference — it was processed as a new report request instead of added to an existing thread. Please verify.`,
           projectId,
           emailSubject: "OPS: Possible misrouted email reply — please verify",
-          emailHtml: `<p>An email from <strong>${user.email}</strong> looks like a reply (Postmark detected reply-style content), but it had no thread reference, so it was processed as a brand-new report request rather than threaded onto an existing draft.</p><p>Please check whether <a href="${appUrl}/admin/projects/${projectId}">this project</a> is correct, or whether its attachments actually belong on an existing thread.</p>`,
+          emailHtml: `<p>An email from <strong>${e(user.email as string)}</strong> looks like a reply (Postmark detected reply-style content), but it had no thread reference, so it was processed as a brand-new report request rather than threaded onto an existing draft.</p><p>Please check whether <a href="${e(appUrl)}/admin/projects/${projectId}">this project</a> is correct, or whether its attachments actually belong on an existing thread.</p>`,
         }).catch(() => {})
       )
     );
@@ -482,7 +483,7 @@ async function executeNewSubmission(
             message: `A draft was created from ${user.email}'s emailed report request, but the "your draft is ready" notification failed to send — they haven't been told it exists yet.`,
             projectId,
             emailSubject: "OPS: Stakeholder was not notified of their email-created draft",
-            emailHtml: `<p>A draft project was created from an email sent by <strong>${user.email}</strong>, but the notification telling them to confirm it failed to send (check the Email delivery log for details).</p><p>They don't know the draft exists yet. Consider following up manually or resending from <a href="${appUrl}/admin/projects/${projectId}">the project page</a>.</p>`,
+            emailHtml: `<p>A draft project was created from an email sent by <strong>${e(user.email as string)}</strong>, but the notification telling them to confirm it failed to send (check the Email delivery log for details).</p><p>They don't know the draft exists yet. Consider following up manually or resending from <a href="${e(appUrl)}/admin/projects/${projectId}">the project page</a>.</p>`,
           }).catch(() => {})
         )
       );
@@ -743,7 +744,7 @@ async function executeStakeholderResponse(
         message: `${review.stakeholder_name} replied by email on ${projectRef}${verifiedNote} — needs manual resolution.${snippet ? ` "${snippet}"` : ""}`,
         projectId: project.id as string,
         emailSubject: `Stakeholder replied by email — needs action (ref: ${(project.id as string).slice(0, 8)})`,
-        emailHtml: `<p style="font-family:sans-serif">${review.stakeholder_name} (${review.stakeholder_email}) replied by email to their approval request for <strong>${projectRef}</strong>${verifiedNote}.</p><p style="font-family:sans-serif">Their reply is not auto-interpreted — please review it and log the response manually.</p><p style="font-family:sans-serif"><a href="${projectUrl}">Open the project</a></p>`,
+        emailHtml: `<p style="font-family:sans-serif">${e(review.stakeholder_name as string)} (${e(review.stakeholder_email as string)}) replied by email to their approval request for <strong>${e(projectRef)}</strong>${e(verifiedNote)}.</p><p style="font-family:sans-serif">Their reply is not auto-interpreted — please review it and log the response manually.</p><p style="font-family:sans-serif"><a href="${e(projectUrl)}">Open the project</a></p>`,
       }).catch(() => {})
     )
   );
@@ -768,8 +769,8 @@ export async function executeQueueRowResolution(
 
 function portalLinkHtml(orgName: string, portalLink: string): string {
   return `<p>Hi,</p>
-<p>We've received your documents for <strong>${orgName}</strong> and pre-filled a draft report request with the extracted information.</p>
-<p>Please <a href="${portalLink}">click here to review and confirm your draft</a> before it is processed. You may need to log in first.</p>
+<p>We've received your documents for <strong>${e(orgName)}</strong> and pre-filled a draft report request with the extracted information.</p>
+<p>Please <a href="${e(portalLink)}">click here to review and confirm your draft</a> before it is processed. You may need to log in first.</p>
 <p>If any fields look incorrect, you can edit them in the portal before submitting.</p>
 <p>If you have additional documents to attach, simply reply to this email with them included.</p>
 <p>Regards,<br>OPS Team</p>`;
@@ -778,7 +779,7 @@ function portalLinkHtml(orgName: string, portalLink: string): string {
 function duplicateAddressHtml(siteAddress: string, existingProjectId: string): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return `<p>Hi,</p>
-<p>We received your email but detected a duplicate address: <strong>${siteAddress}</strong>.</p>
+<p>We received your email but detected a duplicate address: <strong>${e(siteAddress)}</strong>.</p>
 <p>An active project for this address already exists. Please <a href="${appUrl}/portal/projects/${existingProjectId}">view the existing project</a> or contact your OPS account manager if you believe this is incorrect.</p>
 <p>Regards,<br>OPS Team</p>`;
 }

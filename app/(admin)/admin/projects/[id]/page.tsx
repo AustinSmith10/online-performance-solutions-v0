@@ -753,7 +753,7 @@ export default async function ProjectDetailPage({
             <span className="text-zinc-500">Credit deducted</span>
             <span className="font-medium text-zinc-500">No</span>
           </div>
-          <OverrideForm projectId={id} alreadyOverridden={project.payment_override} />
+          <OverrideForm projectId={id} alreadyOverridden={project.payment_override} paymentResolved={project.credit_deducted} />
         </div>
       </FocusCard>
     );
@@ -1100,7 +1100,7 @@ export default async function ProjectDetailPage({
                 {project.payment_override_reason}
               </div>
             )}
-            <OverrideForm projectId={id} alreadyOverridden={project.payment_override} />
+            <OverrideForm projectId={id} alreadyOverridden={project.payment_override} paymentResolved={project.credit_deducted} />
           </>
         )}
       </div>

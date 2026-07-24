@@ -4,9 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
-import { topUpCredit, logOverride } from "@/lib/payments/ledger";
+import { topUpCredit, logOverride, reconcileOverride } from "@/lib/payments/ledger";
 import { auditLog } from "@/lib/audit/log";
-import type { CreditEventType } from "@/types";
 
 export type FreezeState = { error?: string; success?: boolean };
 
@@ -80,11 +79,17 @@ export async function overridePaymentGateAction(
     return { error: "Reason must be at least 10 characters." };
   }
 
-  // Guard: don't allow overriding an already-overridden project
+  // Guard: don't allow overriding an already-overridden project, or one with
+  // nothing to override in the first place — without this, a project whose
+  // payment was already resolved normally (credit_deducted already true)
+  // silently "succeeds" here: the RPC's already_deducted idempotency guard
+  // (shared with the real double-override race) treats it as a no-op rather
+  // than an error, so the caller would otherwise land on the success page
+  // having overridden nothing.
   const supabase = createAdminClient();
   const { data: project } = await supabase
     .from("projects")
-    .select("payment_override, status")
+    .select("payment_override, status, credit_deducted")
     .eq("id", projectId)
     .maybeSingle();
   if (project?.status === "paused") {
@@ -92,6 +97,9 @@ export async function overridePaymentGateAction(
   }
   if (project?.payment_override) {
     return { error: "This project already has a payment override applied." };
+  }
+  if (project?.credit_deducted) {
+    return { error: "This project's payment has already been resolved — there is no payment gate to override." };
   }
 
   try {
@@ -109,54 +117,11 @@ export async function reconcileOverrideAction(
 ): Promise<ReconcileState> {
   const actor = await requireRole("super_admin");
 
-  const supabase = createAdminClient();
-
-  const { data: project, error: projErr } = await supabase
-    .from("projects")
-    .select("payment_override, client_id, project_number")
-    .eq("id", projectId)
-    .maybeSingle();
-
-  if (projErr || !project) return { error: "Project not found." };
-  if (!project.payment_override) return { error: "No active override to reconcile." };
-
-  const { data: org } = await supabase
-    .from("clients")
-    .select("credit_balance")
-    .eq("id", project.client_id as string)
-    .maybeSingle();
-
-  const now = new Date().toISOString();
-
-  const { error: updateErr } = await supabase
-    .from("projects")
-    .update({
-      payment_override: false,
-      payment_override_reason: null,
-      payment_override_at: null,
-      payment_override_by: null,
-      updated_at: now,
-    })
-    .eq("id", projectId);
-
-  if (updateErr) return { error: updateErr.message };
-
-  // Log reconciliation as an override event with a note
-  await supabase.from("credit_ledger").insert({
-    client_id: project.client_id,
-    project_id: projectId,
-    event_type: "override" as CreditEventType,
-    amount: 0,
-    balance_after: (org?.credit_balance as number) ?? 0,
-    performed_by: actor.id,
-    notes: `Override reconciled by ${actor.email ?? actor.id}`,
-  });
-
-  await auditLog("payment.override_reconciled", actor.id, actor.email, {
-    projectId,
-    orgId: project.client_id as string,
-    metadata: { project_number: project.project_number ?? null },
-  });
+  try {
+    await reconcileOverride(projectId, actor.id, actor.email ?? null);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Reconciliation failed." };
+  }
 
   redirect(`/admin/projects/${projectId}?payment_reconciled=1`);
 }

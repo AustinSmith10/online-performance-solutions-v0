@@ -12,7 +12,7 @@ vi.mock("@/lib/email/templates/LowCreditEmail", () => ({
   renderLowCreditEmail: vi.fn().mockReturnValue("<html>low-credit</html>"),
 }));
 
-import { topUpCredit, deductCredit, debitDeferred, logUpfront, logOverride } from "./ledger";
+import { topUpCredit, deductCredit, debitDeferred, logUpfront, logOverride, reconcileOverride } from "./ledger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
 import { auditLog } from "@/lib/audit/log";
@@ -341,6 +341,61 @@ describe("logOverride", () => {
       "payment.override_applied",
       ACTOR_ID,
       null,
+      expect.objectContaining({ projectId: PROJECT_ID, orgId: ORG_ID })
+    );
+  });
+});
+
+// ─── reconcileOverride ──────────────────────────────────────────────────────
+
+describe("reconcileOverride", () => {
+  it("throws when the project is not found", async () => {
+    const mock = buildMock({ data: { status: "not_found", balance: null }, error: null });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await expect(reconcileOverride(PROJECT_ID, ACTOR_ID, "actor@ops.test")).rejects.toThrow("Project not found.");
+  });
+
+  it("on no_override (double-reconcile race): records a credit_race_events row and throws, instead of silently clearing", async () => {
+    const mock = buildMock(
+      { data: { status: "no_override", balance: null }, error: null },
+      { projects: () => chain({ client_id: ORG_ID }) }
+    );
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await expect(reconcileOverride(PROJECT_ID, ACTOR_ID, "actor@ops.test")).rejects.toThrow(
+      "No active override to reconcile."
+    );
+
+    expect(mock.insertCalls).toContainEqual(
+      expect.objectContaining({
+        table: "credit_race_events",
+        payload: expect.objectContaining({ event_type: "reconcile_override", client_id: ORG_ID }),
+      })
+    );
+  });
+
+  it("on success: passes a reconciliation note to the atomic RPC and audit-logs payment.override_reconciled", async () => {
+    const mock = buildMock(
+      { data: { status: "ok", balance: 6 }, error: null },
+      { projects: () => chain({ client_id: ORG_ID, project_number: "OPS-1" }) }
+    );
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await reconcileOverride(PROJECT_ID, ACTOR_ID, "actor@ops.test");
+
+    expect(mock.rpc).toHaveBeenCalledWith(
+      "reconcile_override",
+      expect.objectContaining({
+        p_project_id: PROJECT_ID,
+        p_performed_by: ACTOR_ID,
+        p_notes: expect.stringContaining("actor@ops.test"),
+      })
+    );
+    expect(vi.mocked(auditLog)).toHaveBeenCalledWith(
+      "payment.override_reconciled",
+      ACTOR_ID,
+      "actor@ops.test",
       expect.objectContaining({ projectId: PROJECT_ID, orgId: ORG_ID })
     );
   });

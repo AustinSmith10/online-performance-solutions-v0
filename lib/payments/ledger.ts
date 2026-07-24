@@ -83,7 +83,7 @@ async function fireLowCreditNotifications(orgId: string, balance: number, orgNam
 // successes — but they must not fail silently, so every "already_deducted"
 // outcome from the atomic RPCs lands here for admin visibility (issue #103).
 async function recordCreditRaceEvent(
-  eventType: "deduct_credit" | "debit_deferred" | "log_upfront" | "log_override",
+  eventType: "deduct_credit" | "debit_deferred" | "log_upfront" | "log_override" | "reconcile_override",
   clientId: string | null,
   projectId: string | null
 ) {
@@ -372,6 +372,59 @@ export async function logOverride(
     projectId,
     orgId: (project?.client_id as string) ?? null,
     metadata: { reason, project_number: project?.project_number ?? null },
+  });
+
+  revalidatePath(`/admin/projects/${projectId}`);
+  revalidatePath("/admin/projects");
+}
+
+export async function reconcileOverride(
+  projectId: string,
+  performedById: string,
+  performedByEmail: string | null
+): Promise<void> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .rpc("reconcile_override", {
+      p_project_id: projectId,
+      p_performed_by: performedById,
+      p_notes: `Override reconciled by ${performedByEmail ?? performedById}`,
+    })
+    .single();
+  if (error) throw new Error(error.message);
+
+  const { status } = data as { status: string; balance: number | null };
+
+  if (status === "not_found") throw new Error("Project not found.");
+
+  if (status === "no_override") {
+    // Either there was never an override, or someone else already reconciled
+    // it (double-submit) — the same idempotency-guard shape as log_override's
+    // already_deducted, so it's recorded as a race rather than thrown.
+    const { data: project } = await supabase
+      .from("projects")
+      .select("client_id")
+      .eq("id", projectId)
+      .maybeSingle();
+    await recordCreditRaceEvent(
+      "reconcile_override",
+      (project?.client_id as string | undefined) ?? null,
+      projectId
+    );
+    throw new Error("No active override to reconcile.");
+  }
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("client_id, project_number")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  await auditLog("payment.override_reconciled", performedById, performedByEmail, {
+    projectId,
+    orgId: (project?.client_id as string) ?? null,
+    metadata: { project_number: project?.project_number ?? null },
   });
 
   revalidatePath(`/admin/projects/${projectId}`);

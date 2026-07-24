@@ -87,32 +87,25 @@ export async function login(
   });
 
   if (error) {
-    // Increment failed login count (best effort — don't block on DB error)
+    // Increment failed login count atomically (best effort — don't block on DB error)
     const adminClient = createAdminClient();
-    const { data: userRow } = await adminClient
-      .from("users")
-      .select("id, failed_login_count, is_locked")
-      .eq("email", email)
-      .maybeSingle();
+    const { data: recordResult } = await adminClient
+      .rpc("record_failed_login", { p_email: email })
+      .single();
+    const record = recordResult as
+      | { status: string; user_id: string | null; new_count: number | null; locked: boolean | null }
+      | null;
 
-    if (userRow && !userRow.is_locked) {
-      const newCount = userRow.failed_login_count + 1;
-      await adminClient
-        .from("users")
-        .update({ failed_login_count: newCount, is_locked: newCount >= 15 })
-        .eq("id", userRow.id);
-
-      if (newCount >= 15) {
-        return {
-          errors: {
-            form: ["Account locked after repeated failed attempts."],
-          },
-          locked: true,
-        };
-      }
+    if (record?.status === "ok" && record.locked) {
+      return {
+        errors: {
+          form: ["Account locked after repeated failed attempts."],
+        },
+        locked: true,
+      };
     }
 
-    if (userRow?.is_locked) {
+    if (record?.status === "already_locked") {
       return {
         errors: {
           form: ["Your account is locked."],

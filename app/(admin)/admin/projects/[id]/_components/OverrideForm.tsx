@@ -11,6 +11,8 @@ import {
 interface Props {
   projectId: string;
   alreadyOverridden: boolean;
+  /** True once payment has been resolved by any means (normal deduction or a prior override) — nothing left to override. */
+  paymentResolved?: boolean;
 }
 
 function ReconcileButton({ projectId }: { projectId: string }) {
@@ -36,7 +38,7 @@ function ReconcileButton({ projectId }: { projectId: string }) {
               >
                 Cancel
               </button>
-              <form action={action} className="flex-1" onSubmit={() => setOpen(false)}>
+              <form action={action} className="flex-1">
                 <button
                   type="submit"
                   disabled={pending}
@@ -66,7 +68,7 @@ function ReconcileButton({ projectId }: { projectId: string }) {
   );
 }
 
-export function OverrideForm({ projectId, alreadyOverridden }: Props) {
+export function OverrideForm({ projectId, alreadyOverridden, paymentResolved }: Props) {
   const boundAction = overridePaymentGateAction.bind(null, projectId);
   const [state, action, pending] = useActionState<OverrideState, FormData>(boundAction, {});
   const [open, setOpen] = useState(false);
@@ -74,6 +76,19 @@ export function OverrideForm({ projectId, alreadyOverridden }: Props) {
 
   if (alreadyOverridden) {
     return <ReconcileButton projectId={projectId} />;
+  }
+
+  if (paymentResolved) {
+    return (
+      <button
+        type="button"
+        disabled
+        title="Payment has already been resolved — there is no payment gate to override."
+        className="cursor-not-allowed rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs font-medium text-zinc-400"
+      >
+        Apply payment override
+      </button>
+    );
   }
 
   return (
@@ -86,11 +101,7 @@ export function OverrideForm({ projectId, alreadyOverridden }: Props) {
               This bypasses the credit gate and flags the project as Override — Payment Pending.
               The reason will be logged to the audit trail.
             </p>
-            <form
-              action={action}
-              className="mt-4 space-y-4"
-              onSubmit={() => setOpen(false)}
-            >
+            <form action={action} className="mt-4 space-y-4">
               <div>
                 <label htmlFor="override-reason" className="mb-1.5 block text-xs font-medium text-zinc-700">
                   Written reason (required)
