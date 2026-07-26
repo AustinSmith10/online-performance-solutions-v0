@@ -205,6 +205,58 @@ export async function updateOrgConfig(
   return { saved: true };
 }
 
+export type TokenLinkState = { error?: string; saved?: boolean };
+
+export async function setOrgConfigTokenLink(
+  orgId: string,
+  token: string,
+  _prev: TokenLinkState,
+  formData: FormData
+): Promise<TokenLinkState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const stakeholderId = formData.get("stakeholderId") as string | null;
+  const field = formData.get("field") as string | null;
+
+  if (!stakeholderId) return { error: "Select a reviewer from the roster." };
+  if (field !== "name" && field !== "email" && field !== "company") {
+    return { error: "Select which field to pull." };
+  }
+
+  const { error } = await supabase.from("client_config_token_links").upsert(
+    { client_id: orgId, token, stakeholder_id: stakeholderId, field },
+    { onConflict: "client_id,token" }
+  );
+  if (error) return { error: error.message };
+
+  await auditLog("org.config_token_linked", actor.id, actor.email, {
+    orgId,
+    metadata: { token, stakeholderId, field },
+  });
+
+  revalidatePath(`/admin/clients/${orgId}`);
+  return { saved: true };
+}
+
+export async function removeOrgConfigTokenLink(orgId: string, token: string): Promise<void> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  await supabase
+    .from("client_config_token_links")
+    .delete()
+    .eq("client_id", orgId)
+    .eq("token", token);
+
+  await auditLog("org.config_token_unlinked", actor.id, actor.email, {
+    orgId,
+    metadata: { token },
+  });
+
+  revalidatePath(`/admin/clients/${orgId}`);
+}
+
 const DomainSchema = z
   .string()
   .min(1, "Domain required")

@@ -660,7 +660,7 @@ async function executeStakeholderResponse(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, client_id, submitted_by, assigned_consultant_id, qa_completed_by, extracted_fields, project_number")
+    .select("id, client_id, template_id, submitted_by, assigned_consultant_id, qa_completed_by, extracted_fields, project_number")
     .eq("id", review.project_id as string)
     .is("deleted_at", null)
     .maybeSingle();
@@ -673,7 +673,7 @@ async function executeStakeholderResponse(
   }
 
   const knownEmails = new Set<string>([(review.stakeholder_email as string).toLowerCase()]);
-  const roster = await resolveStakeholders(project.id as string, project.client_id as string);
+  const roster = await resolveStakeholders(project.id as string, project.template_id as string | null);
   for (const s of roster) knownEmails.add(s.email.toLowerCase());
   if (project.submitted_by) {
     const { data: submitter } = await supabase

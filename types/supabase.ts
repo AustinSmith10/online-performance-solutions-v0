@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       app_settings: {
@@ -103,28 +128,34 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          message_id: string | null
           project_id: string | null
           raw_payload: Json | null
           reason: string | null
           resolved_at: string | null
+          type: string
         }
         Insert: {
           created_at?: string
           email: string
           id?: string
+          message_id?: string | null
           project_id?: string | null
           raw_payload?: Json | null
           reason?: string | null
           resolved_at?: string | null
+          type?: string
         }
         Update: {
           created_at?: string
           email?: string
           id?: string
+          message_id?: string | null
           project_id?: string | null
           raw_payload?: Json | null
           reason?: string | null
           resolved_at?: string | null
+          type?: string
         }
         Relationships: [
           {
@@ -132,6 +163,48 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_config_token_links: {
+        Row: {
+          client_id: string
+          created_at: string
+          field: string
+          id: string
+          stakeholder_id: string
+          token: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          field: string
+          id?: string
+          stakeholder_id: string
+          token: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          field?: string
+          id?: string
+          stakeholder_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_config_token_links_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_config_token_links_stakeholder_id_fkey"
+            columns: ["stakeholder_id"]
+            isOneToOne: false
+            referencedRelation: "stakeholders"
             referencedColumns: ["id"]
           },
         ]
@@ -424,11 +497,54 @@ export type Database = {
           },
         ]
       }
+      credit_race_events: {
+        Row: {
+          client_id: string | null
+          detected_at: string
+          event_type: string
+          id: string
+          project_id: string | null
+          resolved_at: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          detected_at?: string
+          event_type: string
+          id?: string
+          project_id?: string | null
+          resolved_at?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          detected_at?: string
+          event_type?: string
+          id?: string
+          project_id?: string | null
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_race_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_race_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_send_log: {
         Row: {
           created_at: string
           error: string | null
           id: string
+          message_id: string | null
           project_id: string | null
           source: string
           status: string
@@ -439,6 +555,7 @@ export type Database = {
           created_at?: string
           error?: string | null
           id?: string
+          message_id?: string | null
           project_id?: string | null
           source: string
           status: string
@@ -449,6 +566,7 @@ export type Database = {
           created_at?: string
           error?: string | null
           id?: string
+          message_id?: string | null
           project_id?: string | null
           source?: string
           status?: string
@@ -1291,6 +1409,42 @@ export type Database = {
           },
         ]
       }
+      template_stakeholders: {
+        Row: {
+          created_at: string
+          id: string
+          stakeholder_id: string
+          template_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          stakeholder_id: string
+          template_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          stakeholder_id?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_stakeholders_stakeholder_id_fkey"
+            columns: ["stakeholder_id"]
+            isOneToOne: false
+            referencedRelation: "stakeholders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_stakeholders_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       templates: {
         Row: {
           client_id: string
@@ -1429,6 +1583,28 @@ export type Database = {
     Functions: {
       admin_delete_client: { Args: { p_org_id: string }; Returns: undefined }
       admin_delete_user: { Args: { p_user_id: string }; Returns: undefined }
+      debit_deferred: {
+        Args: {
+          p_client_id: string
+          p_performed_by: string
+          p_project_id: string
+        }
+        Returns: {
+          new_deferred_balance: number
+          status: string
+        }[]
+      }
+      deduct_credit: {
+        Args: {
+          p_client_id: string
+          p_performed_by: string
+          p_project_id: string
+        }
+        Returns: {
+          new_balance: number
+          status: string
+        }[]
+      }
       get_failed_jobs: {
         Args: never
         Returns: {
@@ -1446,9 +1622,55 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      log_override: {
+        Args: { p_performed_by: string; p_project_id: string; p_reason: string }
+        Returns: {
+          balance: number
+          status: string
+        }[]
+      }
+      log_upfront: {
+        Args: {
+          p_client_id: string
+          p_performed_by: string
+          p_project_id: string
+        }
+        Returns: {
+          balance: number
+          status: string
+        }[]
+      }
       purge_project: { Args: { p_project_id: string }; Returns: undefined }
+      reconcile_override: {
+        Args: { p_notes: string; p_performed_by: string; p_project_id: string }
+        Returns: {
+          balance: number
+          status: string
+        }[]
+      }
+      record_failed_login: {
+        Args: { p_email: string }
+        Returns: {
+          locked: boolean
+          new_count: number
+          status: string
+          user_id: string
+        }[]
+      }
       restore_client: { Args: { p_client_id: string }; Returns: undefined }
       soft_delete_client: { Args: { p_client_id: string }; Returns: undefined }
+      top_up_credit: {
+        Args: {
+          p_amount: number
+          p_client_id: string
+          p_notes?: string
+          p_performed_by: string
+        }
+        Returns: {
+          new_balance: number
+          status: string
+        }[]
+      }
     }
     Enums: {
       consultant_availability: "available" | "on_leave" | "at_capacity"
@@ -1584,6 +1806,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       consultant_availability: ["available", "on_leave", "at_capacity"],

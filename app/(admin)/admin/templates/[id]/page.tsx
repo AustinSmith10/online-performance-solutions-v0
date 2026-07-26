@@ -14,6 +14,7 @@ import { SectionLabelsForm } from "./_components/SectionLabelsForm";
 import { TemplateTabs } from "./_components/TemplateTabs";
 import { AddFileRequirementForm } from "./_components/AddFileRequirementForm";
 import { ClientProfileSection, type ClientProfileRow } from "./_components/ClientProfileSection";
+import { TemplateReviewersSection } from "./_components/TemplateReviewersSection";
 
 const TEMPLATE_ACCENT: Record<string, string> = {
   active: "border-l-green-500",
@@ -76,6 +77,23 @@ export default async function TemplatePage({
       .eq("template_id", id)
       .order("sort_order", { ascending: true }),
   ]);
+
+  const orgId = (tmpl?.org as unknown as { id: string } | null)?.id ?? null;
+  const [{ data: roster }, { data: requiredRows }] = orgId
+    ? await Promise.all([
+        supabase
+          .from("stakeholders")
+          .select("id, name, email, company")
+          .eq("scope", "org")
+          .eq("scope_id", orgId)
+          .is("deleted_at", null)
+          .order("sort_order", { ascending: true }),
+        supabase.from("template_stakeholders").select("stakeholder_id").eq("template_id", id),
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const reviewerRoster = (roster ?? []) as { id: string; name: string; email: string; company: string | null }[];
+  const requiredReviewerIds = new Set((requiredRows ?? []).map((r) => r.stakeholder_id as string));
 
   // A query error here (e.g. a schema column the DB hasn't migrated yet)
   // otherwise renders as an empty, silently misleading "no tokens" state —
@@ -322,6 +340,26 @@ export default async function TemplatePage({
                   </p>
                 </div>
                 <ClientProfileSection templateId={id} tokens={clientProfileTokens} />
+              </div>
+            ),
+          },
+          {
+            label: `Reviewers (${requiredReviewerIds.size})`,
+            content: (
+              <div className="rounded-xl border border-zinc-200 bg-white">
+                <div className="border-b border-zinc-100 px-5 py-4">
+                  <h2 className="text-sm font-semibold text-zinc-900">Required reviewers</h2>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    Reviewers marked here are automatically added to every project built from this
+                    template and can&apos;t be removed at the project level — only added to.
+                  </p>
+                </div>
+                <TemplateReviewersSection
+                  templateId={id}
+                  orgId={orgId ?? ""}
+                  roster={reviewerRoster}
+                  requiredIds={requiredReviewerIds}
+                />
               </div>
             ),
           },

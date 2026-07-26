@@ -23,24 +23,29 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   if (!project.project_number) throw new Error("Project number must be set before generating PBDB");
   if (!project.template_id) throw new Error("No template assigned to this project");
 
-  const [{ data: template, error: templateError }, { data: orgData }, { data: submitter }] = await Promise.all([
-    supabase
-      .from("templates")
-      .select("id, storage_path, name")
-      .eq("id", project.template_id as string)
-      .eq("status", "active")
-      .single(),
-    supabase
-      .from("clients")
-      .select("client_config")
-      .eq("id", project.client_id as string)
-      .single(),
-    supabase
-      .from("users")
-      .select("first_name, last_name")
-      .eq("id", project.submitted_by as string)
-      .maybeSingle(),
-  ]);
+  const [{ data: template, error: templateError }, { data: orgData }, { data: submitter }, { data: tokenLinkRows }] =
+    await Promise.all([
+      supabase
+        .from("templates")
+        .select("id, storage_path, name")
+        .eq("id", project.template_id as string)
+        .eq("status", "active")
+        .single(),
+      supabase
+        .from("clients")
+        .select("client_config")
+        .eq("id", project.client_id as string)
+        .single(),
+      supabase
+        .from("users")
+        .select("first_name, last_name")
+        .eq("id", project.submitted_by as string)
+        .maybeSingle(),
+      supabase
+        .from("client_config_token_links")
+        .select("token, field, stakeholders(name, email, company)")
+        .eq("client_id", project.client_id as string),
+    ]);
 
   if (templateError || !template) {
     throw new Error("No active template found — template may be inactive or missing");
@@ -80,6 +85,24 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     if (k.startsWith("ORG_") && !extractedFields[k]) {
       orgValues[k] = v;
     }
+  }
+
+  // Tokens explicitly linked to a roster (third-party stakeholder) entry pull
+  // the live value from that entry instead of the static client_config
+  // string, so editing the roster once keeps the document in sync. Still
+  // yields to a client-confirmed override, same as plain org config above.
+  for (const row of tokenLinkRows ?? []) {
+    const token = row.token as string;
+    if (extractedFields[token]) continue;
+    const linked = row.stakeholders as
+      | { name: string; email: string; company: string | null }
+      | { name: string; email: string; company: string | null }[]
+      | null;
+    const entry = Array.isArray(linked) ? linked[0] : linked;
+    if (!entry) continue;
+    const field = row.field as "name" | "email" | "company";
+    const value = entry[field];
+    if (value) orgValues[token] = value;
   }
 
   const genDate = new Date();

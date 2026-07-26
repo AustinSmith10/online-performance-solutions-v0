@@ -9,6 +9,7 @@ import { EmailWhitelistDrawer } from "./_components/email-whitelist-drawer";
 import { OrgCreateAccountModal } from "./_components/org-create-account-modal";
 import { DeleteOrgButton } from "./_components/delete-org-button";
 import { MetricsTablesPanel } from "./_components/metrics-tables-panel";
+import { StakeholderList } from "./_components/stakeholder-list";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { ProfileTabs } from "@/components/workspace/ProfileTabs";
 import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_components/HeaderStatInline";
@@ -30,7 +31,7 @@ export default async function OrganisationDetailPage({
   const supabase = createAdminClient();
   const caller = await requireRole("super_admin", "admin");
 
-  const [{ data: org }, { data: users }, { data: templates }] =
+  const [{ data: org }, { data: users }, { data: templates }, { data: orgStakeholders }] =
     await Promise.all([
       supabase.from("clients").select("*").eq("id", id).maybeSingle(),
       supabase
@@ -44,6 +45,13 @@ export default async function OrganisationDetailPage({
         .eq("client_id", id)
         .is("deleted_at", null)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("stakeholders")
+        .select("id, name, email, company")
+        .eq("scope", "org")
+        .eq("scope_id", id)
+        .is("deleted_at", null)
+        .order("sort_order", { ascending: true }),
     ]);
 
   if (!org) notFound();
@@ -139,6 +147,47 @@ export default async function OrganisationDetailPage({
     orgConfigTokens = [...seen].sort();
   }
 
+  const roster = (orgStakeholders ?? []) as { id: string; name: string; email: string; company: string | null }[];
+
+  const [{ data: tokenLinkRows }, { data: templateRequiredRows }] = await Promise.all([
+    supabase
+      .from("client_config_token_links")
+      .select("token, stakeholder_id, field")
+      .eq("client_id", id),
+    templateIds.length > 0
+      ? supabase
+          .from("template_stakeholders")
+          .select("stakeholder_id, templates(name)")
+          .in("template_id", templateIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const tokenLinks: Record<string, { stakeholderId: string; field: "name" | "email" | "company" }> = {};
+  for (const row of tokenLinkRows ?? []) {
+    tokenLinks[row.token as string] = {
+      stakeholderId: row.stakeholder_id as string,
+      field: row.field as "name" | "email" | "company",
+    };
+  }
+
+  const referencedByTemplate = new Map<string, string[]>();
+  for (const row of (templateRequiredRows ?? []) as { stakeholder_id: string; templates: { name: string }[] | { name: string } | null }[]) {
+    const names = Array.isArray(row.templates)
+      ? row.templates.map((t) => t.name)
+      : row.templates
+      ? [row.templates.name]
+      : [];
+    if (names.length === 0) continue;
+    const existing = referencedByTemplate.get(row.stakeholder_id) ?? [];
+    referencedByTemplate.set(row.stakeholder_id, [...existing, ...names]);
+  }
+
+  const referencedByToken = new Map<string, string[]>();
+  for (const [token, l] of Object.entries(tokenLinks)) {
+    const existing = referencedByToken.get(l.stakeholderId) ?? [];
+    referencedByToken.set(l.stakeholderId, [...existing, token]);
+  }
+
   const freezeAction = setOrgFrozen.bind(null, id, !orgData.is_frozen);
 
   const header = (
@@ -206,6 +255,8 @@ export default async function OrganisationDetailPage({
         orgId={orgData.id}
         tokens={orgConfigTokens}
         currentConfig={orgData.client_config ?? {}}
+        roster={roster}
+        tokenLinks={tokenLinks}
       />
     </div>
   );
@@ -301,6 +352,24 @@ export default async function OrganisationDetailPage({
     </div>
   );
 
+  const rosterContent = (
+    <div className="rounded-xl border border-zinc-200 bg-white p-5">
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold text-zinc-900">Reviewer roster</h2>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          Third-party approvers for this client (e.g. certifiers). Pick from this list when setting a
+          template&apos;s required reviewers or adding a one-off reviewer to a project.
+        </p>
+      </div>
+      <StakeholderList
+        orgId={id}
+        stakeholders={roster}
+        referencedByTemplate={Object.fromEntries(referencedByTemplate)}
+        referencedByToken={Object.fromEntries(referencedByToken)}
+      />
+    </div>
+  );
+
   const metricsContent = (
     <MetricsTablesPanel
       clientId={id}
@@ -345,6 +414,7 @@ export default async function OrganisationDetailPage({
             { id: "overview", label: "Overview", content: overviewContent },
             { id: "templates", label: "Templates", content: templatesContent },
             { id: "stakeholders", label: "Stakeholders", content: stakeholdersContent },
+            { id: "roster", label: "Reviewer roster", content: rosterContent },
             { id: "metrics", label: "Data tables", content: metricsContent },
             { id: "danger", label: "Danger zone", content: dangerContent },
           ]}
