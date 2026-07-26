@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { addTemplateStakeholder, removeTemplateStakeholder } from "@/app/actions/stakeholders";
+import { addTemplateStakeholder, removeTemplateStakeholder } from "@/app/actions/template-stakeholders";
 
 interface RosterRow {
   id: string;

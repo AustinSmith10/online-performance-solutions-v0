@@ -4,9 +4,9 @@ import { useActionState } from "react";
 import {
   removeProjectStakeholder,
   addProjectStakeholder,
-  addProjectStakeholderFromRoster,
   type StakeholderActionState,
 } from "@/app/actions/stakeholders";
+import { addProjectStakeholderFromRoster } from "@/app/actions/roster-management";
 
 interface StakeholderRow {
   id: string;

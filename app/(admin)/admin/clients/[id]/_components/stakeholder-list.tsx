@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { removeOrgStakeholder, type StakeholderActionState } from "@/app/actions/stakeholders";
+import type { StakeholderActionState } from "@/app/actions/stakeholders";
+import { removeOrgStakeholder } from "@/app/actions/roster-management";
 import { AddStakeholderForm } from "./add-stakeholder-form";
 
 interface StakeholderRow {

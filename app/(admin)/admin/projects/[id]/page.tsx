@@ -285,6 +285,8 @@ export default async function ProjectDetailPage({
     { data: rawAssignments },
     { data: rawFullAuditEntries },
     { data: openFieldFlags },
+    { data: rawTemplateRequired },
+    { data: rawOrgRoster },
   ] = await Promise.all([
     project.template_id
       ? supabase
@@ -349,6 +351,21 @@ export default async function ProjectDetailPage({
       .select("id, field_key, candidate_values, type")
       .eq("project_id", id)
       .eq("status", "open"),
+    project.template_id
+      ? supabase
+          .from("template_stakeholders")
+          .select("stakeholders(id, name, email, company, is_active, deleted_at)")
+          .eq("template_id", project.template_id)
+      : Promise.resolve({ data: [] }),
+    project.clients?.id
+      ? supabase
+          .from("stakeholders")
+          .select("id, name, email, company")
+          .eq("scope", "org")
+          .eq("scope_id", project.clients.id)
+          .is("deleted_at", null)
+          .order("sort_order", { ascending: true })
+      : Promise.resolve({ data: [] }),
   ]);
 
   const auditEntries = (rawFullAuditEntries ?? []) as ProjectAuditRow[];
@@ -417,6 +434,21 @@ export default async function ProjectDetailPage({
   const projectStakeholders = (rawProjectStakeholders ?? []) as {
     id: string; name: string; email: string; company: string | null;
   }[];
+
+  const templateRequiredStakeholders = (
+    (rawTemplateRequired ?? []) as {
+      stakeholders: { id: string; name: string; email: string; company: string | null; is_active: boolean; deleted_at: string | null }[];
+    }[]
+  )
+    .flatMap((r) => r.stakeholders)
+    .filter((s) => s.is_active && !s.deleted_at)
+    .map(({ id, name, email, company }) => ({ id, name, email, company }));
+
+  const orgRoster = (rawOrgRoster ?? []) as {
+    id: string; name: string; email: string; company: string | null;
+  }[];
+
+  const stakeholdersLocked = project.status === "converting" || isTerminal;
 
   const currentCycleReviews = reviews.filter(
     (r) => r.review_cycle === project.review_cycle
@@ -977,11 +1009,17 @@ export default async function ProjectDetailPage({
   const stakeholdersTab = (
     <>
       <CollapsibleSection
-        title="Project stakeholders"
-        subtitle="If set, these override the template- and org-level defaults for this project only. Leave empty to use the inherited list."
-        defaultOpen={projectStakeholders.length > 0}
+        title="Reviewers"
+        subtitle="Required reviewers come from the template and can't be removed here. Add extra one-off reviewers from the client's roster or a one-off contact."
+        defaultOpen
       >
-        <ProjectStakeholderSection projectId={id} stakeholders={projectStakeholders} />
+        <ProjectStakeholderSection
+          projectId={id}
+          templateRequired={templateRequiredStakeholders}
+          extras={projectStakeholders}
+          orgRoster={orgRoster}
+          locked={stakeholdersLocked}
+        />
       </CollapsibleSection>
 
       {reviews.length === 0 ? (
