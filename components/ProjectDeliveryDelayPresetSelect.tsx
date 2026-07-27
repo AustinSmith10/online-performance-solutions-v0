@@ -25,9 +25,11 @@ export function ProjectDeliveryDelayPresetSelect({
    *  (e.g. "Normal — 1 working day") instead of just the bare preset name. */
   durations?: DeliveryDelayDurations;
 }) {
-  const [preset, setPreset] = useState<DeliveryDelayPreset>(initialValue);
+  const [saved, setSaved] = useState<DeliveryDelayPreset>(initialValue);
+  const [draft, setDraft] = useState<DeliveryDelayPreset>(initialValue);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
 
   function optionLabel(value: DeliveryDelayPreset): string {
     if (!durations) return LABELS[value];
@@ -35,26 +37,31 @@ export function ProjectDeliveryDelayPresetSelect({
     return `${LABELS[value]} — ${formatDelayDuration(durations[value])} after approval`;
   }
 
-  function handleChange(next: DeliveryDelayPreset) {
-    const previous = preset;
-    setPreset(next);
+  function handleSave() {
+    setJustSaved(false);
     startTransition(async () => {
-      const result = await setProjectDeliveryDelayPreset(projectId, next);
+      const result = await setProjectDeliveryDelayPreset(projectId, draft);
       if (result.error) {
         setError(result.error);
-        setPreset(previous);
       } else {
         setError(null);
+        setSaved(draft);
+        setJustSaved(true);
       }
     });
   }
 
+  const dirty = draft !== saved;
+
   return (
     <div className="space-y-2">
       <select
-        value={preset}
+        value={draft}
         disabled={pending}
-        onChange={(e) => handleChange(e.target.value as DeliveryDelayPreset)}
+        onChange={(e) => {
+          setDraft(e.target.value as DeliveryDelayPreset);
+          setJustSaved(false);
+        }}
         className="block w-full max-w-xs rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-50"
       >
         {(Object.keys(LABELS) as DeliveryDelayPreset[]).map((value) => (
@@ -63,6 +70,17 @@ export function ProjectDeliveryDelayPresetSelect({
           </option>
         ))}
       </select>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={pending || !dirty}
+          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+        >
+          {pending ? "Saving…" : "Save"}
+        </button>
+        {!dirty && justSaved && <span className="text-xs text-green-700">Saved ✓</span>}
+      </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
