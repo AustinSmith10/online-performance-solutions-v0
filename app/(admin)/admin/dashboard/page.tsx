@@ -170,7 +170,13 @@ export default async function AdminDashboardPage({
     label: projectLabel(p),
     client: p.clients?.name ?? null,
     consultant: consultantName(p.consultant),
-    status: p.status,
+    // Once every current-cycle review resolves, treat it as converting even
+    // though the DB status stays "dispatched" until scheduleOrDeliverPbdr's
+    // scheduled delivery time actually arrives — otherwise this list showed
+    // "Awaiting Approval" for a project the detail page already showed as
+    // converting. pendingReviewsResult is fetched pending-only and system-wide,
+    // so a dispatched project absent from it has nothing left outstanding.
+    status: p.status === "dispatched" && !pendingProjectIds.has(p.id) ? "converting" : p.status,
     dueLabel: p.expected_delivery_date ? new Date(p.expected_delivery_date).toLocaleDateString("en-AU") : null,
     overdue: !!(p.expected_delivery_date && p.expected_delivery_date < todayIso),
     awaitingStakeholder: pendingProjectIds.has(p.id),
