@@ -98,7 +98,7 @@ Dummy project `OPS-0001` (status: submitted, unassigned) exists for assignment t
 |------|---------|
 | `app/auth/confirm/route.ts` | Invite link handler — recently fixed |
 | `lib/auth/invite.ts` | `sendInvite()` — calls Supabase admin invite API |
-| `app/actions/auth.ts` | `login()`, `completeProfile()`, `verifyTotp()` |
+| `app/actions/auth.ts` | `login()`, `completeProfile()`, `confirmTotpEnrollment()` |
 | `lib/auth/session.ts` | `getSessionUser()`, `requireRole()`, session durations |
 | `supabase/seed.ts` | Creates all test accounts and dummy project |
 | `lib/notifications/notify.ts` | Dual-channel notify (DB row + Resend email) |

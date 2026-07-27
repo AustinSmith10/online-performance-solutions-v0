@@ -2,7 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { UserRole } from "@/types";
-import { TRUSTED_DEVICE_COOKIE, verifyTrustedDeviceToken } from "@/lib/auth/trusted-device";
 
 // Inlined to avoid importing lib/auth/session.ts which pulls in next/headers
 const SESSION_EXPIRY_COOKIE = "ops-session-expires";
@@ -20,7 +19,7 @@ const PUBLIC_PATHS = [
 ];
 
 // Auth flow paths that require a valid session but skip TOTP/profile checks
-const AUTH_FLOW_PATHS = ["/complete-profile", "/setup-2fa", "/verify-2fa"];
+const AUTH_FLOW_PATHS = ["/complete-profile", "/setup-2fa"];
 
 // Route prefix → required roles
 const ROLE_ROUTES: Array<{ prefix: string; roles: UserRole[] }> = [
@@ -110,33 +109,17 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/complete-profile", request.url));
   }
 
-  // TOTP enforcement (skipped in development for easier local testing)
+  // TOTP enrollment enforcement (skipped in development for easier local testing).
+  // Only gates first-time setup — once a user has a verified TOTP factor
+  // (nextLevel advances past "aal1"), later logins are password-only; there is
+  // no per-session or per-device re-challenge.
   if (process.env.NODE_ENV !== "development") {
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aalData) {
-      if (aalData.nextLevel === "aal1") {
-        if (isApiRoute) {
-          return NextResponse.json({ error: "2FA setup required" }, { status: 403 });
-        }
-        return NextResponse.redirect(new URL("/setup-2fa", request.url));
+    if (aalData?.nextLevel === "aal1") {
+      if (isApiRoute) {
+        return NextResponse.json({ error: "2FA setup required" }, { status: 403 });
       }
-      if (aalData.nextLevel === "aal2" && aalData.currentLevel === "aal1") {
-        const trustedToken = request.cookies.get(TRUSTED_DEVICE_COOKIE)?.value;
-        const { data: userRow } = await supabase
-          .from("users")
-          .select("trusted_device_version")
-          .eq("id", user.id)
-          .maybeSingle();
-        const version = userRow?.trusted_device_version ?? 0;
-        if (!verifyTrustedDeviceToken(trustedToken, user.id, version)) {
-          if (isApiRoute) {
-            return NextResponse.json({ error: "2FA verification required" }, { status: 403 });
-          }
-          const url = new URL("/verify-2fa", request.url);
-          url.searchParams.set("next", pathname);
-          return NextResponse.redirect(url);
-        }
-      }
+      return NextResponse.redirect(new URL("/setup-2fa", request.url));
     }
   }
 

@@ -6,11 +6,6 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SESSION_DURATION, SESSION_EXPIRY_COOKIE } from "@/lib/auth/session";
-import {
-  TRUSTED_DEVICE_COOKIE,
-  TRUSTED_DEVICE_MAX_AGE,
-  signTrustedDeviceToken,
-} from "@/lib/auth/trusted-device";
 import { auditLog } from "@/lib/audit/log";
 import type { UserRole } from "@/types";
 
@@ -434,65 +429,6 @@ export async function completeOnboarding(
   await auditLog("auth.onboarding_completed", user.id, user.email ?? null, {});
 
   redirect("/setup-2fa");
-}
-
-// ─── TOTP verification (login step 2) ────────────────────────────────────────
-
-export type VerifyTotpState = {
-  errors?: { code?: string[]; form?: string[] };
-};
-
-export async function verifyTotp(
-  _prev: VerifyTotpState,
-  formData: FormData
-): Promise<VerifyTotpState> {
-  const validated = VerifyTotpSchema.safeParse({ code: formData.get("code") });
-  if (!validated.success) {
-    return { errors: validated.error.flatten().fieldErrors };
-  }
-
-  const supabase = await createClient();
-
-  // Get the enrolled TOTP factor
-  const { data: factors } = await supabase.auth.mfa.listFactors();
-  const totpFactor = factors?.totp?.[0];
-  if (!totpFactor) {
-    return { errors: { form: ["No TOTP factor found. Please set up 2FA."] } };
-  }
-
-  const { error } = await supabase.auth.mfa.challengeAndVerify({
-    factorId: totpFactor.id,
-    code: validated.data.code,
-  });
-
-  if (error) {
-    return { errors: { form: ["Invalid code. Please try again."] } };
-  }
-
-  const { data: { user: authedUser } } = await supabase.auth.getUser();
-  const adminClient = createAdminClient();
-  const { data: userRow } = authedUser
-    ? await adminClient
-        .from("users")
-        .select("role, trusted_device_version")
-        .eq("id", authedUser.id)
-        .maybeSingle()
-    : { data: null };
-
-  if (authedUser && formData.get("remember_device") === "on") {
-    const cookieStore = await cookies();
-    const version = userRow?.trusted_device_version ?? 0;
-    cookieStore.set(TRUSTED_DEVICE_COOKIE, signTrustedDeviceToken(authedUser.id, version), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: TRUSTED_DEVICE_MAX_AGE,
-    });
-  }
-
-  const next = formData.get("next") as string | null;
-  redirect(next || roleHomePath((userRow?.role as string | null) ?? "stakeholder"));
 }
 
 // ─── TOTP enrollment confirmation ─────────────────────────────────────────────

@@ -34,6 +34,11 @@ import { ProjectNumberCard } from "./_components/ProjectNumberCard";
 import { PbdbVersionsCard } from "./_components/PbdbVersionsCard";
 import { ResendBufferUpdateButton } from "./_components/ResendBufferUpdateButton";
 import { ResendPbdrButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendPbdrButton";
+import { ResendTokenButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendTokenButton";
+import { UpdateEmailReveal } from "@/app/(admin)/admin/projects/[id]/_components/UpdateEmailReveal";
+import { WaiveForm } from "@/app/(admin)/admin/projects/[id]/_components/WaiveForm";
+import { ConvertButton } from "@/app/(admin)/admin/projects/[id]/_components/ConvertButton";
+import { HighlightRing } from "@/components/HighlightRing";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { Stage } from "@/components/workspace/StageRail";
 
@@ -99,13 +104,15 @@ export default async function ConsultantProjectDetailPage({
   const justUploadedQa = sp.qa_uploaded === "1";
   const justQueueApproved = sp.queue_approved === "1";
   const justPbdrResent = sp.pbdr_resent === "1";
+  const justReviewWaived = sp.review_waived === "1";
+  const justEmailUpdated = sp.email_updated ?? null;
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, delivery_recipient_email, qa_completed_by, accepted_at, pbdb_downloaded_at, clients(name, state_territory, client_config, revision_notes_required), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, delivery_recipient_email, qa_completed_by, accepted_at, pbdb_downloaded_at, credit_deducted, payment_override, clients(name, state_territory, client_config, revision_notes_required), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -131,6 +138,8 @@ export default async function ConsultantProjectDetailPage({
     qa_completed_by: string | null;
     accepted_at: string | null;
     pbdb_downloaded_at: string | null;
+    credit_deducted: boolean;
+    payment_override: boolean;
     clients: {
       name: string;
       state_territory: string | null;
@@ -368,7 +377,8 @@ export default async function ConsultantProjectDetailPage({
 
   const currentCycleReviews = reviewsByCycle.get(project.review_cycle) ?? [];
   const currentCycleComments = currentCycleReviews.filter((r) => r.comments);
-  const pendingCount = currentCycleReviews.filter((r) => r.status === "pending").length;
+  const pendingReviews = currentCycleReviews.filter((r) => r.status === "pending");
+  const pendingCount = pendingReviews.length;
   // Single source of truth for "what stage is this project really at" —
   // collapses dispatched+all-approved into "converting" the same way every
   // other surface (dashboard lists, client portal, stepper) does, instead of
@@ -541,13 +551,63 @@ export default async function ConsultantProjectDetailPage({
         subtitle={`${pendingCount} of ${currentCycleReviews.length} approvals outstanding.`}
       >
         <div className="space-y-4">
-          <div>
+          <div className="space-y-2">
+            {pendingReviews.map((r) => {
+              const emailReplyEvidence = evidenceByReviewId.get(r.id);
+              const inner = (
+                <div className="space-y-2 rounded-md border border-amber-200 bg-white px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                    <p className="truncate text-xs text-zinc-500">{r.stakeholder_email}</p>
+                  </div>
+                  {r.email_reply_text && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold text-amber-800">Replied by email — needs action</p>
+                        {r.email_reply_sender_verified === false && (
+                          <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                            Unverified sender
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-amber-900">
+                        {r.email_reply_text}
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <ResendTokenButton reviewId={r.id} projectId={id} />
+                    <LogStakeholderResponseForm
+                      reviewId={r.id}
+                      projectId={id}
+                      stakeholderName={r.stakeholder_name}
+                      stakeholderEmail={r.stakeholder_email}
+                      prefilledEvidence={
+                        emailReplyEvidence
+                          ? {
+                              storagePath: emailReplyEvidence.storage_path as string,
+                              filename: emailReplyEvidence.original_filename as string,
+                            }
+                          : undefined
+                      }
+                      prefilledComments={r.email_reply_text ?? undefined}
+                    />
+                    <UpdateEmailReveal reviewId={r.id} projectId={id} currentEmail={r.stakeholder_email} />
+                    <WaiveForm reviewId={r.id} projectId={id} stakeholderName={r.stakeholder_name} requireEvidence />
+                  </div>
+                </div>
+              );
+              return <div key={r.id}>{justEmailUpdated === r.id ? <HighlightRing>{inner}</HighlightRing> : inner}</div>;
+            })}
+          </div>
+          <div className="border-t border-amber-200/60 pt-4">
             <p className="mb-2 text-xs text-zinc-500">
               Nudge everyone (not just non-responders) with a status update before the automatic 1-working-day reminder fires.
             </p>
             <ResendBufferUpdateButton projectId={id} />
           </div>
           <div className="border-t border-amber-200/60 pt-4">
+            <p className="mb-2 text-xs text-zinc-500">Need to fix something before everyone responds?</p>
             <PbdbQaUploadForm
               projectId={id}
               submitLabel="Upload new version"
@@ -625,16 +685,26 @@ export default async function ConsultantProjectDetailPage({
       </FocusCard>
     );
   } else {
-    focusCard = (
-      <FocusCard tone="green" title="All approvals in" subtitle="Awaiting conversion to PBDR.">
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
-          <ProjectDeliveryDelayPresetSelect
-            projectId={id}
-            initialValue={project.delivery_delay_preset}
-            durations={deliveryDurations}
-          />
+    const paymentReady = project.credit_deducted || project.payment_override;
+    focusCard = paymentReady ? (
+      <FocusCard tone="green" title="Ready to convert" subtitle="All stakeholders approved and payment is clear.">
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+            <ProjectDeliveryDelayPresetSelect
+              projectId={id}
+              initialValue={project.delivery_delay_preset}
+              durations={deliveryDurations}
+            />
+          </div>
+          <ConvertButton projectId={id} />
         </div>
+      </FocusCard>
+    ) : (
+      <FocusCard tone="green" title="Awaiting conversion to PBDR" subtitle="All stakeholders approved — convert is blocked until payment is resolved.">
+        <p className="text-sm text-zinc-500">
+          Contact an admin to clear the payment gate before this can convert.
+        </p>
       </FocusCard>
     );
   }
@@ -998,6 +1068,20 @@ export default async function ConsultantProjectDetailPage({
           cleanUrl={`/ops/projects/${id}`}
           title="Delivery email resent"
           body="A fresh 30-day download link has been sent to the submitter."
+        />
+      )}
+      {justReviewWaived && (
+        <AdminSuccessBanner
+          cleanUrl={`/ops/projects/${id}`}
+          title="Review waived"
+          body="The stakeholder's review has been waived and the audit trail updated."
+        />
+      )}
+      {justEmailUpdated && (
+        <AdminSuccessBanner
+          cleanUrl={`/ops/projects/${id}`}
+          title="Email updated"
+          body="The stakeholder's email has been updated and a fresh approval link has been resent."
         />
       )}
       <Link href="/ops" className="text-sm text-zinc-500 hover:text-zinc-700">

@@ -11,16 +11,29 @@ import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
 export type ConvertState = { error?: string; success?: boolean };
 
 /**
- * Super Admin manual retry for PBDR conversion.
+ * Manual retry for PBDR conversion, for admins and the assigned consultant.
  * Auto-conversion fires from submitApproval when all stakeholders acknowledge.
- * This button is a fallback if that auto-trigger failed.
+ * This button is a fallback if that auto-trigger failed or is still staged
+ * (e.g. waiting on a delivery-delay preset) and the project needs to go out now.
  */
 export async function triggerPbdrConversion(
   projectId: string,
   _prev: ConvertState,
   _formData: FormData
 ): Promise<ConvertState> {
-  const actor = await requireRole("super_admin", "admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
+
+  if (actor.role === "consultant") {
+    const supabase = createAdminClient();
+    const { data: project } = await supabase
+      .from("projects")
+      .select("assigned_consultant_id")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (project?.assigned_consultant_id !== actor.id) {
+      return { error: "You are not assigned to this project." };
+    }
+  }
 
   const result = await deliverPbdr(projectId, actor.id, actor.email as string);
 
@@ -29,6 +42,7 @@ export async function triggerPbdrConversion(
   }
 
   revalidatePath(`/admin/projects/${projectId}`);
+  revalidatePath(`/ops/projects/${projectId}`);
   return { success: true };
 }
 

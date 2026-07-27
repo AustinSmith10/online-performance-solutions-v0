@@ -614,7 +614,12 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 
 ---
 
-### 3-014 · Login redirects to 2FA screen for enrolled user `[MANUAL]`
+### 3-014 · Login is password-only once 2FA is enrolled `[MANUAL]`
+
+TOTP is now verified once, at enrollment (3-012), and never re-challenged on
+later logins — there is no per-login or per-device 2FA re-verification step
+(the old `/verify-2fa` screen and "remember this device" cookie have been
+removed).
 
 **Pre-conditions:** 3-012 completed (the invited user has TOTP enrolled). Currently logged out.
 
@@ -625,47 +630,7 @@ Dummy project: OPS-0001 (status: submitted, unassigned) → /admin/projects
 3. In **Password**, enter: `ComplexPass1!@` (the password you set in 3-009).
 4. Click Sign in.
 
-**Expected:** Redirected to `/verify-2fa`.
-
-
-| Result | Notes            |
-| ------ | ---------------- |
-| FAIL   | did not redirect |
-
-
----
-
-### 3-015 · 2FA verification — wrong code rejected `[MANUAL]`
-
-**Pre-conditions:** On `/verify-2fa` (arrived after 3-014).
-
-**Steps:**
-
-1. In the code field, enter: `000000`
-2. Click Verify.
-
-**Expected:** Error message: "Invalid code. Please try again."
-
-
-| Result | Notes |
-| ------ | ----- |
-| PASS   |       |
-
-
----
-
-### 3-016 · 2FA verification — correct code accepted `[MANUAL]`
-
-**Pre-conditions:** On `/verify-2fa`. Authenticator app open on your phone.
-
-**Steps:**
-
-1. Open your authenticator app and find the entry for the invited user.
-2. Read the current 6-digit code.
-3. Enter the code into the input field.
-4. Click Verify.
-
-**Expected:** Redirected to `/` (or the `next` destination). You are now logged in as the invited client user.
+**Expected:** Redirected straight to the invited user's portal — no 2FA code prompt.
 
 
 | Result | Notes |

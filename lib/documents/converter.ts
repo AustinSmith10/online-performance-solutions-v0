@@ -278,14 +278,26 @@ export function convertPbdbToPbdr(docxBuffer: Buffer): Buffer {
   // computed line height instead of expanding to fit the 18pt image. Changing
   // to "atLeast" makes LibreOffice treat 204 as a minimum and expand the line
   // box to accommodate larger inline content.
+  //
+  // Scoped to just the Header style block — styles.xml has 20+ other styles
+  // with their own w:lineRule="auto" (e.g. CoverPageText, used by the cover
+  // page's Address/Project no./Date/Revision values). A blanket replace across
+  // the whole file previously caught those too, and "atLeast" gives w:line a
+  // completely different meaning (an absolute minimum height in twips, not a
+  // fraction of single spacing) — turning CoverPageText's 240 (single
+  // spacing) into a 12pt minimum line height for its ~6.5pt font, which
+  // visibly bloated the Address row and pushed every row below it out of
+  // alignment with its label.
   const stylesFile = zip.files["word/styles.xml"];
   if (stylesFile) {
-    const fixed = stylesFile
-      .asText()
-      .replace(
-        /<w:spacing\b([^/]*)w:lineRule="auto"([^/]*)\/>/g,
-        (m, before, after) => `<w:spacing${before}w:lineRule="atLeast"${after}/>`
-      );
+    const fixed = stylesFile.asText().replace(
+      /<w:style\b[^>]*\bw:styleId="Header"[^>]*>[\s\S]*?<\/w:style>/,
+      (styleBlock) =>
+        styleBlock.replace(
+          /<w:spacing\b([^/]*)w:lineRule="auto"([^/]*)\/>/g,
+          (m, before, after) => `<w:spacing${before}w:lineRule="atLeast"${after}/>`
+        )
+    );
     zip.file("word/styles.xml", fixed);
   }
 

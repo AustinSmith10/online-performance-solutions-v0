@@ -483,12 +483,45 @@ export async function waiveStakeholderResponse(
   _prevState: WaiveState,
   formData: FormData
 ): Promise<WaiveState> {
-  const actor = await requireRole("super_admin", "admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
+
+  let projectQuery = supabase
+    .from("projects")
+    .select("id, assigned_consultant_id")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    projectQuery = projectQuery.eq("assigned_consultant_id", actor.id);
+  }
+  const { data: ownedProject } = await projectQuery.maybeSingle();
+  if (!ownedProject) return { error: "Project not found or access denied." };
 
   const reason = (formData.get("reason") as string | null)?.trim();
   if (!reason || reason.length < 10) {
     return { error: "A written reason of at least 10 characters is required." };
+  }
+
+  // Consultants can waive too, but — unlike admin — must justify it with an
+  // attached evidence file (e.g. proof the stakeholder is unreachable), same
+  // as logStakeholderResponseOnBehalf's evidence requirement above.
+  let evidenceFileId: string | null = null;
+  if (actor.role === "consultant") {
+    const storagePath = (formData.get("storagePath") as string | null)?.trim();
+    const filename = (formData.get("filename") as string | null)?.trim();
+    if (!storagePath || !filename) {
+      return { error: "Attach evidence — waiving as a consultant requires it." };
+    }
+    const evidenceResult = await attachEvidence(projectId, storagePath, filename, `stakeholder_review:${reviewId}`);
+    if (evidenceResult.error) return { error: evidenceResult.error };
+
+    const { data: evidenceFile } = await supabase
+      .from("project_files")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("storage_path", storagePath)
+      .maybeSingle();
+    evidenceFileId = (evidenceFile?.id as string | undefined) ?? null;
   }
 
   const now = new Date().toISOString();
@@ -510,7 +543,7 @@ export async function waiveStakeholderResponse(
 
   await auditLog("stakeholder.waived", actor.id, actor.email as string, {
     projectId,
-    metadata: { review_id: reviewId, reason },
+    metadata: { review_id: reviewId, reason, evidence_file_id: evidenceFileId },
   });
 
   // Check if all reviews for this cycle are now complete
@@ -537,7 +570,11 @@ export async function waiveStakeholderResponse(
     }
   }
 
-  redirect(`/admin/projects/${projectId}?review_waived=1`);
+  redirect(
+    actor.role === "consultant"
+      ? `/ops/projects/${projectId}?review_waived=1`
+      : `/admin/projects/${projectId}?review_waived=1`
+  );
 }
 
 // ─── Resend fresh token ───────────────────────────────────────────────────────
@@ -553,8 +590,21 @@ export async function resendFreshToken(
   _prevState: ResendTokenState,
   _formData: FormData
 ): Promise<ResendTokenState> {
-  const actor = await requireRole("super_admin", "admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
+
+  let projectQuery = supabase
+    .from("projects")
+    .select(
+      "client_id, review_cycle, strip_token_color, clients(state_territory), extracted_fields, project_number, assigned_consultant_id"
+    )
+    .eq("id", projectId)
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    projectQuery = projectQuery.eq("assigned_consultant_id", actor.id);
+  }
+  const { data: project } = await projectQuery.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
 
   const { data: review } = await supabase
     .from("stakeholder_reviews")
@@ -566,12 +616,6 @@ export async function resendFreshToken(
   if (!review || (review.status as string) !== "pending") {
     return { error: "Review not found or not pending." };
   }
-
-  const { data: project } = await supabase
-    .from("projects")
-    .select("client_id, review_cycle, strip_token_color, clients(state_territory), extracted_fields, project_number")
-    .eq("id", projectId)
-    .single();
 
   const stateTerritory =
     (project?.clients as unknown as { state_territory: string | null } | null)
@@ -644,6 +688,7 @@ export async function resendFreshToken(
   });
 
   revalidatePath(`/admin/projects/${projectId}`);
+  revalidatePath(`/ops/projects/${projectId}`);
   return { sent: true };
 }
 
@@ -718,8 +763,19 @@ export async function updateStakeholderEmail(
   _prevState: UpdateEmailState,
   formData: FormData
 ): Promise<UpdateEmailState> {
-  const actor = await requireRole("super_admin", "admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
+
+  let ownedProjectQuery = supabase
+    .from("projects")
+    .select("id, assigned_consultant_id")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    ownedProjectQuery = ownedProjectQuery.eq("assigned_consultant_id", actor.id);
+  }
+  const { data: ownedProject } = await ownedProjectQuery.maybeSingle();
+  if (!ownedProject) return { error: "Project not found or access denied." };
 
   const newEmail = (formData.get("email") as string | null)?.trim().toLowerCase();
   if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
@@ -816,7 +872,11 @@ export async function updateStakeholderEmail(
     console.error(`[update-email] email to ${newEmail} failed:`, err);
   });
 
-  redirect(`/admin/projects/${projectId}?email_updated=${reviewId}`);
+  redirect(
+    actor.role === "consultant"
+      ? `/ops/projects/${projectId}?email_updated=${reviewId}`
+      : `/admin/projects/${projectId}?email_updated=${reviewId}`
+  );
 }
 
 // ─── Log a decision on a stakeholder's behalf (#65) ───────────────────────────
