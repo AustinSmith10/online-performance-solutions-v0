@@ -159,19 +159,47 @@ export default async function ConsultantOpsPage({
 
   const availableProjects = (rawAvailable ?? []) as unknown as AvailableProject[];
 
+  // Once every current-cycle review resolves, the project detail page treats
+  // it as "Converting to PBDR" even though the DB status stays "dispatched"
+  // until the scheduled delivery time actually arrives (scheduleOrDeliverPbdr
+  // may defer this by up to a working day or more, per delivery_delay_preset)
+  // — mirrors pbdbCardState's allCurrentApproved check on the detail page.
+  // Without this, the landing page kept showing "Awaiting Approval" for a
+  // project the detail page already showed as converting.
+  const dispatchedIds = withStakeholders.filter((p) => p.status === "dispatched").map((p) => p.id);
+  const allApprovedMap = new Map<string, boolean>();
+  if (dispatchedIds.length > 0) {
+    const { data: reviewRows } = await supabase
+      .from("stakeholder_reviews")
+      .select("project_id, review_cycle, status")
+      .in("project_id", dispatchedIds);
+    const reviewCycleById = new Map(withStakeholders.map((p) => [p.id, p.review_cycle]));
+    for (const pid of dispatchedIds) {
+      const cycle = reviewCycleById.get(pid);
+      const currentCycleRows = (reviewRows ?? []).filter(
+        (r) => r.project_id === pid && r.review_cycle === cycle
+      );
+      allApprovedMap.set(
+        pid,
+        currentCycleRows.length > 0 && currentCycleRows.every((r) => r.status !== "pending")
+      );
+    }
+  }
+
   function toDashboardProject(p: ProjectRow): DashboardProject {
     const isOverdue =
       !!p.expected_delivery_date && p.expected_delivery_date < todayIso && !TERMINAL_STATUSES.has(p.status);
     const isPending = !p.accepted_at;
     const isRevision = p.status === "revision_required";
+    const showsAsConverting = p.status === "dispatched" && allApprovedMap.get(p.id) === true;
     return {
       id: p.id,
       href: `/ops/projects/${p.id}`,
       label: projectLabel(p),
       clientName: p.clients?.name ?? null,
       submitterName: clientName(p.submitter),
-      statusLabel: STATUS_LABELS[p.status],
-      statusClassName: STATUS_CLASSES[p.status],
+      statusLabel: showsAsConverting ? STATUS_LABELS.converting : STATUS_LABELS[p.status],
+      statusClassName: showsAsConverting ? STATUS_CLASSES.converting : STATUS_CLASSES[p.status],
       expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
       submittedLabel: formatAuDate(p.created_at),
       isOverdue,
