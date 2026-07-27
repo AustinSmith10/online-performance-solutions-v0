@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { notify } from "@/lib/notifications/notify";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
+import { renderAllApprovedEmail } from "@/lib/email/templates/AllApprovedEmail";
 import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 
 /** Human-friendly reference for a project: site address, else project number, else a short id. */
@@ -117,5 +118,47 @@ export async function autoDeliverIfFullyApproved(
     scheduleOrDeliverPbdr(projectId).catch((err) => {
       console.error(`${logPrefix} auto-deliver-pbdr failed for ${projectId}:`, err);
     });
+    notifySubmitterAllApproved(supabase, projectId, logPrefix).catch((err) => {
+      console.error(`${logPrefix} all-approved notification failed for ${projectId}:`, err);
+    });
   }
+}
+
+/** Tells the submitter (not every org stakeholder) that their report is clear to finalise. */
+async function notifySubmitterAllApproved(
+  supabase: SupabaseClient,
+  projectId: string,
+  logPrefix: string
+): Promise<void> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("submitted_by, project_number, extracted_fields")
+    .eq("id", projectId)
+    .single();
+
+  if (!project?.submitted_by) return;
+
+  const { data: submitter } = await supabase
+    .from("users")
+    .select("first_name")
+    .eq("id", project.submitted_by as string)
+    .maybeSingle();
+
+  const projectRef = resolveProjectRef(project, projectId);
+  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/projects/${projectId}`;
+
+  await notify({
+    recipientId: project.submitted_by as string,
+    type: "all_acknowledged",
+    message: `All stakeholders have approved ${projectRef} — your report is being finalised.`,
+    projectId,
+    emailSubject: `All approvals in — ${projectRef}`,
+    emailHtml: renderAllApprovedEmail({
+      recipientName: (submitter?.first_name as string | null) ?? "there",
+      projectRef,
+      portalUrl,
+    }),
+  }).catch((err) => {
+    console.error(`${logPrefix} notify(all_acknowledged) failed for ${projectId}:`, err);
+  });
 }

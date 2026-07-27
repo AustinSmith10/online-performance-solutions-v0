@@ -24,6 +24,14 @@ export interface StepperInput {
   showConsultantName: boolean;
   consultantFirstName: string | null;
   viewerFirstName: string | null;
+  /**
+   * True once every current-cycle stakeholder review has resolved (approved —
+   * a rejection flips status away from "dispatched" before this is ever
+   * true). The project is still "dispatched" in the DB at this point;
+   * conversion is a separate step. Cosmetic only — shows "Finalizing" a beat
+   * early instead of adding a real status value.
+   */
+  allApproved?: boolean;
 }
 
 export interface StepperResult {
@@ -58,8 +66,9 @@ const STAGE_INDEX: Partial<Record<ProjectStatus, number>> = {
 export function resolveStepperState(input: StepperInput): StepperResult {
   const effectiveStatus =
     input.status === "paused" ? input.pausedPreviousStatus ?? input.status : input.status;
+  const finalizing = effectiveStatus === "dispatched" && input.allApproved === true;
 
-  const activeIndex = STAGE_INDEX[effectiveStatus] ?? 0;
+  const activeIndex = finalizing ? 3 : STAGE_INDEX[effectiveStatus] ?? 0;
   // `converting` renders as stage 5 in its in-progress (not yet complete) state.
   const activeIsComplete = effectiveStatus === "delivered" || effectiveStatus === "complete";
 
@@ -85,7 +94,7 @@ export function resolveStepperState(input: StepperInput): StepperResult {
     showRevisionLoop,
     isPaused: input.status === "paused",
     roundBadge: input.reviewCycle > 1 ? input.reviewCycle : null,
-    caption: captionFor(effectiveStatus, input),
+    caption: finalizing ? "Finalizing your report" : captionFor(effectiveStatus, input),
   };
 }
 

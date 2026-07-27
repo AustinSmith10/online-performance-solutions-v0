@@ -9,6 +9,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { AcknowledgementEmail } from "../lib/email/templates/AcknowledgementEmail";
+import { renderAllApprovedEmail } from "../lib/email/templates/AllApprovedEmail";
 import { renderApprovalRequestEmail } from "../lib/email/templates/ApprovalRequestEmail";
 import { renderAvailableRequestsDigestEmail } from "../lib/email/templates/AvailableRequestsDigestEmail";
 import { ConsultantAssignedEmail } from "../lib/email/templates/ConsultantAssignedEmail";
@@ -137,6 +138,14 @@ const templates: { name: string; html: string }[] = [
       projectRef: "14 Marine Parade",
       response: "rejected",
       comments: "The glazing schedule doesn't match the drawings.",
+      portalUrl: `${APP}/portal`,
+    }),
+  },
+  {
+    name: "AllApprovedEmail",
+    html: renderAllApprovedEmail({
+      recipientName: "Jane Smith",
+      projectRef: "14 Marine Parade",
       portalUrl: `${APP}/portal`,
     }),
   },

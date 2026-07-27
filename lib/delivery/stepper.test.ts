@@ -88,6 +88,24 @@ describe("resolveStepperState", () => {
       const result = resolveStepperState(base({ status: "dispatched", viewerFirstName: null }));
       expect(result.caption).toBe("Please review the brief");
     });
+
+    it("moves to stage 4 (finalizing) once allApproved is true, even though status is still dispatched", () => {
+      const result = resolveStepperState(base({ status: "dispatched", allApproved: true }));
+      expect(result.stages.map((s) => s.visual)).toEqual([
+        "complete",
+        "complete",
+        "complete",
+        "current",
+        "upcoming",
+      ]);
+      expect(result.caption).toBe("Finalizing your report");
+    });
+
+    it("stays on the review stage while allApproved is false or unset", () => {
+      const result = resolveStepperState(base({ status: "dispatched", allApproved: false }));
+      expect(result.stages.map((s) => s.visual)[2]).toBe("current");
+      expect(result.caption).toBe("Jordan, please review the brief");
+    });
   });
 
   describe("status: delivered / complete", () => {

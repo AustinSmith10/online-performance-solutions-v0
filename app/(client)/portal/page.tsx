@@ -204,6 +204,30 @@ export default async function ClientPortalPage({
     }
   }
 
+  // Whether every current-cycle stakeholder review has resolved for
+  // dispatched projects — shown as "Finalising" instead of "Awaiting
+  // Approval" even though the DB status hasn't changed yet. Mirrors the
+  // outstanding-review check autoDeliverIfFullyApproved uses.
+  const dispatchedIds = activeProjects.filter((p) => p.status === "dispatched").map((p) => p.id);
+  const allApprovedMap = new Map<string, boolean>();
+  if (dispatchedIds.length > 0) {
+    const { data: reviewRows } = await supabase
+      .from("stakeholder_reviews")
+      .select("project_id, review_cycle, status")
+      .in("project_id", dispatchedIds);
+    const reviewCycleById = new Map(activeProjects.map((p) => [p.id, p.review_cycle]));
+    for (const pid of dispatchedIds) {
+      const cycle = reviewCycleById.get(pid);
+      const currentCycleRows = (reviewRows ?? []).filter(
+        (r) => r.project_id === pid && r.review_cycle === cycle
+      );
+      const outstanding = currentCycleRows.some((r) =>
+        ["pending", "rejected_with_comments", "rejected_without_comments"].includes(r.status as string)
+      );
+      allApprovedMap.set(pid, currentCycleRows.length > 0 && !outstanding);
+    }
+  }
+
   // Real-status-only stepper state per row — draft has no stepper (stakeholders never see progress pre-submission)
   const stepperMap = new Map<string, StepperResult>();
   for (const p of activeProjects) {
@@ -220,6 +244,7 @@ export default async function ClientPortalPage({
           ? consultantNameMap.get(p.assigned_consultant_id) ?? null
           : null,
         viewerFirstName: (user.first_name as string | null) ?? null,
+        allApproved: allApprovedMap.get(p.id) ?? false,
       })
     );
   }
@@ -245,8 +270,8 @@ export default async function ClientPortalPage({
       id: p.id,
       href: `/portal/projects/${p.id}`,
       label: projectLabel(p),
-      statusLabel: STATUS_LABELS[p.status],
-      statusClassName: STATUS_CLASSES[p.status],
+      statusLabel: allApprovedMap.get(p.id) ? "Finalising" : STATUS_LABELS[p.status],
+      statusClassName: allApprovedMap.get(p.id) ? STATUS_CLASSES.converting : STATUS_CLASSES[p.status],
       stepper: stepperMap.get(p.id) ?? null,
       submittedLabel: formatAuDate(p.created_at),
       expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,

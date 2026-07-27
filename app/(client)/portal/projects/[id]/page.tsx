@@ -107,7 +107,7 @@ export default async function ClientProjectDetailPage({
   const pbdbVisible = PBDB_VISIBLE_STATUSES.has(project.status);
 
   // Stepper — resolve stage/caption from real status only, no simulated progress
-  const [{ data: orgRow }, { data: consultant }, { data: templateRow }, { data: revisionNoteRow }] = await Promise.all([
+  const [{ data: orgRow }, { data: consultant }, { data: templateRow }, { data: revisionNoteRow }, { data: reviewRows }] = await Promise.all([
     supabase.from("clients").select("show_consultant_name").eq("id", user.client_id as string).maybeSingle(),
     project.assigned_consultant_id
       ? supabase.from("users").select("first_name").eq("id", project.assigned_consultant_id).maybeSingle()
@@ -121,10 +121,26 @@ export default async function ClientProjectDetailPage({
       .eq("project_id", id)
       .eq("review_cycle", project.review_cycle)
       .maybeSingle(),
+    project.status === "dispatched"
+      ? supabase
+          .from("stakeholder_reviews")
+          .select("status")
+          .eq("project_id", id)
+          .eq("review_cycle", project.review_cycle)
+      : Promise.resolve({ data: null }),
   ]);
 
   const templateName = (templateRow?.name as string | null) ?? null;
   const consultantRevisionNote = (revisionNoteRow?.note as string | null) ?? null;
+  // Mirrors autoDeliverIfFullyApproved's outstanding-review check — see
+  // lib/delivery/stepper.ts's `allApproved` for why this stays cosmetic
+  // rather than a real status change.
+  const allApproved =
+    !!reviewRows &&
+    reviewRows.length > 0 &&
+    !reviewRows.some((r) =>
+      ["pending", "rejected_with_comments", "rejected_without_comments"].includes(r.status as string)
+    );
 
   const stepperResult = resolveStepperState({
     status: project.status,
@@ -134,6 +150,7 @@ export default async function ClientProjectDetailPage({
     showConsultantName: orgRow?.show_consultant_name ?? true,
     consultantFirstName: consultant?.first_name ?? null,
     viewerFirstName: (user.first_name as string | null) ?? null,
+    allApproved,
   });
   const stages = mapStepperStages(stepperResult.stages);
   const currentStageLabel = stages.find((s) => s.state === "current")?.label ?? null;
