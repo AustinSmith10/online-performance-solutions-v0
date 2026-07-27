@@ -22,11 +22,13 @@ export function ReuploadForm({ templateId }: { templateId: string }) {
   useEffect(() => { queueMicrotask(() => setMounted(true)); }, []);
 
   useEffect(() => {
-    if (state.success) setHasFile(false);
     if ((state.success || state.error) && confirmedInputRef.current) {
       confirmedInputRef.current.value = "";
     }
-    setDismissed(false);
+    queueMicrotask(() => {
+      if (state.success) setHasFile(false);
+      setDismissed(false);
+    });
   }, [state]);
 
   const conflicts = state.conflicts ?? [];
@@ -48,7 +50,7 @@ export function ReuploadForm({ templateId }: { templateId: string }) {
           ))}
         </ul>
         <p className="mt-3 text-sm text-zinc-500">
-          Those mappings will be left pointing at a token that no longer exists. You'll need to
+          Those mappings will be left pointing at a token that no longer exists. You&apos;ll need to
           re-map them afterwards.
         </p>
         <div className="mt-6 flex gap-3">
