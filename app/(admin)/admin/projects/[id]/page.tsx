@@ -44,6 +44,7 @@ import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_componen
 import { FocusCard } from "@/components/workspace/FocusCard";
 import type { Stage } from "@/components/workspace/StageRail";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
+import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
 
 // Adopts the same StageRail + FocusCard + pill-tab + SettingsPill shell
@@ -454,9 +455,11 @@ export default async function ProjectDetailPage({
   const currentCycleReviews = reviews.filter(
     (r) => r.review_cycle === project.review_cycle
   );
-  const allCurrentAcknowledged =
-    currentCycleReviews.length > 0 &&
-    currentCycleReviews.every((r) => r.status !== "pending");
+  // Single source of truth for "what stage is this project really at" —
+  // every badge/card on this page derives from this instead of separately
+  // recomputing "are all reviews resolved."
+  const effectiveStatus = resolveEffectiveStatus(project.status, currentCycleReviews);
+  const allCurrentAcknowledged = effectiveStatus === "converting";
 
   const pendingReviews = currentCycleReviews.filter((r) => r.status === "pending");
 
@@ -519,12 +522,12 @@ export default async function ProjectDetailPage({
 
   // ── Header card — matches the consultant page's altHeaderCard exactly ───────
   const headerCard = (
-    <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[project.status]} bg-white p-5`}>
+    <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[effectiveStatus]} bg-white p-5`}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
         <h1 className="text-base font-semibold text-zinc-900">{pageTitle}</h1>
         <span className="text-sm text-zinc-400">{project.clients?.name ?? "No organisation"}</span>
-        <span className={`self-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}>
-          {STATUS_LABELS[project.status]}
+        <span className={`self-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[effectiveStatus]}`}>
+          {STATUS_LABELS[effectiveStatus]}
         </span>
         <span className={`self-center inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
           project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"

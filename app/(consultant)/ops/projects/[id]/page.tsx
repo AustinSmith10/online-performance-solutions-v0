@@ -34,6 +34,7 @@ import { ProjectNumberCard } from "./_components/ProjectNumberCard";
 import { PbdbVersionsCard } from "./_components/PbdbVersionsCard";
 import { ResendBufferUpdateButton } from "./_components/ResendBufferUpdateButton";
 import { ResendPbdrButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendPbdrButton";
+import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { Stage } from "@/components/workspace/StageRail";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -368,20 +369,19 @@ export default async function ConsultantProjectDetailPage({
   const currentCycleReviews = reviewsByCycle.get(project.review_cycle) ?? [];
   const currentCycleComments = currentCycleReviews.filter((r) => r.comments);
   const pendingCount = currentCycleReviews.filter((r) => r.status === "pending").length;
-  // A rejection flips project.status to "revision_required" immediately (see
-  // portalApproval.ts/approval.ts), so while status is still "dispatched"
-  // every non-pending review here is necessarily an approval.
-  const allCurrentApproved = currentCycleReviews.length > 0 && pendingCount === 0;
+  // Single source of truth for "what stage is this project really at" —
+  // collapses dispatched+all-approved into "converting" the same way every
+  // other surface (dashboard lists, client portal, stepper) does, instead of
+  // this page recomputing its own version of the same check.
+  const effectiveStatus = resolveEffectiveStatus(project.status, currentCycleReviews);
 
   const pbdbCardState: "locked" | "upload" | "pending" | "revision" | "approved" = !latestPbdb
     ? "locked"
-    : project.status === "dispatched"
-    ? allCurrentApproved
-      ? "approved"
-      : "pending"
-    : project.status === "revision_required"
+    : effectiveStatus === "dispatched"
+    ? "pending"
+    : effectiveStatus === "revision_required"
     ? "revision"
-    : isTerminal || project.status === "converting"
+    : isTerminal || effectiveStatus === "converting"
     ? "approved"
     : "upload";
 
@@ -389,12 +389,12 @@ export default async function ConsultantProjectDetailPage({
     "Uploading a new version will reset all stakeholder approvals and resend the approval email with the updated document.";
 
   const altHeaderCard = (
-    <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[project.status]} bg-white p-5`}>
+    <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[effectiveStatus]} bg-white p-5`}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
         <h1 className="text-base font-semibold text-zinc-900">{title}</h1>
         <span className="text-sm text-zinc-400">{project.clients?.name ?? "No organisation"}</span>
-        <span className={`self-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[project.status]}`}>
-          {STATUS_LABELS[project.status]}
+        <span className={`self-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[effectiveStatus]}`}>
+          {STATUS_LABELS[effectiveStatus]}
         </span>
         <span className={`self-center inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
           project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"

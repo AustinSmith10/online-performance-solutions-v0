@@ -6,6 +6,7 @@ import { ActiveProjectsList, type ActiveProjectItem } from "./_components/Active
 import { OnboardingTourProvider } from "@/components/onboarding-tour/context";
 import { TourHighlight } from "@/components/onboarding-tour/TourHighlight";
 import { ADMIN_TOUR_STEPS } from "@/lib/onboarding/steps";
+import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { ProjectStatus } from "@/types";
 
 const IN_FLIGHT_STATUSES: ProjectStatus[] = [
@@ -31,6 +32,7 @@ type ProjectRow = {
   review_buffer_fired_at: string | null;
   qa_completed_by: string | null;
   created_at: string;
+  review_cycle: number;
   clients: { name: string } | null;
   consultant: { first_name: string | null; last_name: string | null; email: string; phone: string | null } | null;
 };
@@ -87,7 +89,7 @@ export default async function AdminDashboardPage({
       .select(`
         id, project_number, po_number, site_address, status, expected_delivery_date,
         payment_override, payment_override_at, payment_override_reason, assigned_consultant_id,
-        review_buffer_fired_at, qa_completed_by, created_at,
+        review_buffer_fired_at, qa_completed_by, created_at, review_cycle,
         clients(name),
         consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email, phone)
       `)
@@ -164,19 +166,36 @@ export default async function AdminDashboardPage({
   const systemErrors = (systemErrorsResult.data ?? []) as SystemError[];
   const emailFailures = (emailFailuresResult.data ?? []) as unknown as EmailFailureRow[];
 
+  // Single source of truth for "what stage is this project really at" —
+  // every list/badge derives from this instead of separately recomputing
+  // "are all reviews resolved," which is what let this list disagree with
+  // the project detail page about a fully-approved project still being
+  // "dispatched" in the DB until scheduleOrDeliverPbdr's scheduled delivery
+  // time actually arrives (can lag by a working day or more).
+  const dispatchedIds = allActive.filter((p) => p.status === "dispatched").map((p) => p.id);
+  const reviewsByProjectId = new Map<string, { status: string }[]>();
+  if (dispatchedIds.length > 0) {
+    const { data: reviewRows } = await supabase
+      .from("stakeholder_reviews")
+      .select("project_id, review_cycle, status")
+      .in("project_id", dispatchedIds);
+    const reviewCycleById = new Map(allActive.map((p) => [p.id, p.review_cycle]));
+    for (const pid of dispatchedIds) {
+      const cycle = reviewCycleById.get(pid);
+      reviewsByProjectId.set(
+        pid,
+        (reviewRows ?? []).filter((r) => r.project_id === pid && r.review_cycle === cycle)
+      );
+    }
+  }
+
   const activeProjectItems: ActiveProjectItem[] = allActive.map((p) => ({
     id: p.id,
     href: `/admin/projects/${p.id}`,
     label: projectLabel(p),
     client: p.clients?.name ?? null,
     consultant: consultantName(p.consultant),
-    // Once every current-cycle review resolves, treat it as converting even
-    // though the DB status stays "dispatched" until scheduleOrDeliverPbdr's
-    // scheduled delivery time actually arrives — otherwise this list showed
-    // "Awaiting Approval" for a project the detail page already showed as
-    // converting. pendingReviewsResult is fetched pending-only and system-wide,
-    // so a dispatched project absent from it has nothing left outstanding.
-    status: p.status === "dispatched" && !pendingProjectIds.has(p.id) ? "converting" : p.status,
+    status: resolveEffectiveStatus(p.status, reviewsByProjectId.get(p.id) ?? []),
     dueLabel: p.expected_delivery_date ? new Date(p.expected_delivery_date).toLocaleDateString("en-AU") : null,
     overdue: !!(p.expected_delivery_date && p.expected_delivery_date < todayIso),
     awaitingStakeholder: pendingProjectIds.has(p.id),

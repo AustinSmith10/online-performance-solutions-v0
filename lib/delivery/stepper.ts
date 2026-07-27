@@ -17,6 +17,13 @@ export interface StepperStage {
 }
 
 export interface StepperInput {
+  /**
+   * The project's *effective* status — pass the result of
+   * resolveEffectiveStatus(project.status, currentCycleReviews), not
+   * project.status directly. That resolver is what decides whether a
+   * fully-approved-but-still-"dispatched" project should render here as
+   * "converting"; this function just renders whatever status it's given.
+   */
   status: ProjectStatus;
   pausedPreviousStatus: ProjectStatus | null;
   reviewCycle: number;
@@ -24,14 +31,6 @@ export interface StepperInput {
   showConsultantName: boolean;
   consultantFirstName: string | null;
   viewerFirstName: string | null;
-  /**
-   * True once every current-cycle stakeholder review has resolved (approved —
-   * a rejection flips status away from "dispatched" before this is ever
-   * true). The project is still "dispatched" in the DB at this point;
-   * conversion is a separate step. Cosmetic only — shows "Finalizing" a beat
-   * early instead of adding a real status value.
-   */
-  allApproved?: boolean;
 }
 
 export interface StepperResult {
@@ -58,7 +57,7 @@ const STAGE_INDEX: Partial<Record<ProjectStatus, number>> = {
   in_progress: 1,
   revision_required: 1,
   dispatched: 2,
-  converting: 4,
+  converting: 3,
   delivered: 4,
   complete: 4,
 };
@@ -66,10 +65,10 @@ const STAGE_INDEX: Partial<Record<ProjectStatus, number>> = {
 export function resolveStepperState(input: StepperInput): StepperResult {
   const effectiveStatus =
     input.status === "paused" ? input.pausedPreviousStatus ?? input.status : input.status;
-  const finalizing = effectiveStatus === "dispatched" && input.allApproved === true;
 
-  const activeIndex = finalizing ? 3 : STAGE_INDEX[effectiveStatus] ?? 0;
-  // `converting` renders as stage 5 in its in-progress (not yet complete) state.
+  const activeIndex = STAGE_INDEX[effectiveStatus] ?? 0;
+  // `converting` renders stage 4 (finalizing) as current, not complete — it's
+  // still in progress until status becomes "delivered".
   const activeIsComplete = effectiveStatus === "delivered" || effectiveStatus === "complete";
 
   const stages: StepperStage[] = DEFAULT_STAGES.map((stage, index) => ({
@@ -94,7 +93,7 @@ export function resolveStepperState(input: StepperInput): StepperResult {
     showRevisionLoop,
     isPaused: input.status === "paused",
     roundBadge: input.reviewCycle > 1 ? input.reviewCycle : null,
-    caption: finalizing ? "Finalizing your report" : captionFor(effectiveStatus, input),
+    caption: captionFor(effectiveStatus, input),
   };
 }
 

@@ -6,6 +6,7 @@ import { DeclinedBanner } from "./_components/DeclinedBanner";
 import { OnboardingCard } from "./_components/OnboardingCard";
 import { Dashboard } from "./_components/Dashboard";
 import type { DashboardData, DashboardProject } from "./_components/dashboardTypes";
+import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -135,15 +136,47 @@ export default async function ConsultantOpsPage({
       pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version };
     }
   }
+  // Single source of truth for "what stage is this project really at" — every
+  // list, tab bucket, and label below derives from this instead of separately
+  // recomputing "are all reviews resolved," which is what let this landing
+  // page disagree with the project detail page about a fully-approved
+  // project still being "dispatched" in the DB until scheduleOrDeliverPbdr's
+  // scheduled delivery time actually arrives (can lag by a working day or
+  // more, per delivery_delay_preset).
+  const dispatchedIds = projects.filter((p) => p.status === "dispatched").map((p) => p.id);
+  const reviewsByProjectId = new Map<string, { status: string }[]>();
+  if (dispatchedIds.length > 0) {
+    const { data: reviewRows } = await supabase
+      .from("stakeholder_reviews")
+      .select("project_id, review_cycle, status")
+      .in("project_id", dispatchedIds);
+    const reviewCycleById = new Map(projects.map((p) => [p.id, p.review_cycle]));
+    for (const pid of dispatchedIds) {
+      const cycle = reviewCycleById.get(pid);
+      reviewsByProjectId.set(
+        pid,
+        (reviewRows ?? []).filter((r) => r.project_id === pid && r.review_cycle === cycle)
+      );
+    }
+  }
+  const effectiveStatusMap = new Map<string, ProjectStatus>(
+    projects.map((p) => [p.id, resolveEffectiveStatus(p.status, reviewsByProjectId.get(p.id) ?? [])])
+  );
+  const effectiveStatusOf = (p: ProjectRow) => effectiveStatusMap.get(p.id) ?? p.status;
+
   // One consistent "actionable = highlighted card" list, no separate tray (#95):
   // admin-pushed assignments awaiting acceptance float to the very top (a decision
   // is owed), then revision-required cards, then the rest of the active work.
+  // "Converting" (real or effective) lives here too, not under "With
+  // stakeholders" — nothing is actually waiting on a stakeholder anymore.
   const activeAccepted = projects
-    .filter((p) => (["assigned", "in_progress", "revision_required"] as ProjectStatus[]).includes(p.status))
+    .filter((p) =>
+      (["assigned", "in_progress", "revision_required", "converting"] as ProjectStatus[]).includes(
+        effectiveStatusOf(p)
+      )
+    )
     .sort((a, b) => Number(b.status === "revision_required") - Number(a.status === "revision_required"));
-  const withStakeholders = projects.filter((p) =>
-    (["dispatched", "converting"] as ProjectStatus[]).includes(p.status)
-  );
+  const withStakeholders = projects.filter((p) => effectiveStatusOf(p) === "dispatched");
   const done = projects.filter((p) =>
     (["delivered", "complete"] as ProjectStatus[]).includes(p.status)
   );
@@ -159,47 +192,20 @@ export default async function ConsultantOpsPage({
 
   const availableProjects = (rawAvailable ?? []) as unknown as AvailableProject[];
 
-  // Once every current-cycle review resolves, the project detail page treats
-  // it as "Converting to PBDR" even though the DB status stays "dispatched"
-  // until the scheduled delivery time actually arrives (scheduleOrDeliverPbdr
-  // may defer this by up to a working day or more, per delivery_delay_preset)
-  // — mirrors pbdbCardState's allCurrentApproved check on the detail page.
-  // Without this, the landing page kept showing "Awaiting Approval" for a
-  // project the detail page already showed as converting.
-  const dispatchedIds = withStakeholders.filter((p) => p.status === "dispatched").map((p) => p.id);
-  const allApprovedMap = new Map<string, boolean>();
-  if (dispatchedIds.length > 0) {
-    const { data: reviewRows } = await supabase
-      .from("stakeholder_reviews")
-      .select("project_id, review_cycle, status")
-      .in("project_id", dispatchedIds);
-    const reviewCycleById = new Map(withStakeholders.map((p) => [p.id, p.review_cycle]));
-    for (const pid of dispatchedIds) {
-      const cycle = reviewCycleById.get(pid);
-      const currentCycleRows = (reviewRows ?? []).filter(
-        (r) => r.project_id === pid && r.review_cycle === cycle
-      );
-      allApprovedMap.set(
-        pid,
-        currentCycleRows.length > 0 && currentCycleRows.every((r) => r.status !== "pending")
-      );
-    }
-  }
-
   function toDashboardProject(p: ProjectRow): DashboardProject {
     const isOverdue =
       !!p.expected_delivery_date && p.expected_delivery_date < todayIso && !TERMINAL_STATUSES.has(p.status);
     const isPending = !p.accepted_at;
     const isRevision = p.status === "revision_required";
-    const showsAsConverting = p.status === "dispatched" && allApprovedMap.get(p.id) === true;
+    const effectiveStatus = effectiveStatusOf(p);
     return {
       id: p.id,
       href: `/ops/projects/${p.id}`,
       label: projectLabel(p),
       clientName: p.clients?.name ?? null,
       submitterName: clientName(p.submitter),
-      statusLabel: showsAsConverting ? STATUS_LABELS.converting : STATUS_LABELS[p.status],
-      statusClassName: showsAsConverting ? STATUS_CLASSES.converting : STATUS_CLASSES[p.status],
+      statusLabel: STATUS_LABELS[effectiveStatus],
+      statusClassName: STATUS_CLASSES[effectiveStatus],
       expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
       submittedLabel: formatAuDate(p.created_at),
       isOverdue,

@@ -13,6 +13,7 @@ import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { DownloadCard } from "@/components/DownloadCard";
 import { resolveStepperState, type StepperStage, type StepperStageKey } from "@/lib/delivery/stepper";
+import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import { SUPPORT_MAILTO } from "@/lib/config/support";
 import { ClientWorkspace } from "../../_components/ClientWorkspace";
 import { ClientHeaderCard } from "../../_components/ClientHeaderCard";
@@ -132,25 +133,16 @@ export default async function ClientProjectDetailPage({
 
   const templateName = (templateRow?.name as string | null) ?? null;
   const consultantRevisionNote = (revisionNoteRow?.note as string | null) ?? null;
-  // Mirrors autoDeliverIfFullyApproved's outstanding-review check — see
-  // lib/delivery/stepper.ts's `allApproved` for why this stays cosmetic
-  // rather than a real status change.
-  const allApproved =
-    !!reviewRows &&
-    reviewRows.length > 0 &&
-    !reviewRows.some((r) =>
-      ["pending", "rejected_with_comments", "rejected_without_comments"].includes(r.status as string)
-    );
+  const effectiveStatus = resolveEffectiveStatus(project.status, reviewRows ?? []);
 
   const stepperResult = resolveStepperState({
-    status: project.status,
+    status: effectiveStatus,
     pausedPreviousStatus: project.paused_previous_status,
     reviewCycle: project.review_cycle,
     pbdbDownloadedAt: project.pbdb_downloaded_at,
     showConsultantName: orgRow?.show_consultant_name ?? true,
     consultantFirstName: consultant?.first_name ?? null,
     viewerFirstName: (user.first_name as string | null) ?? null,
-    allApproved,
   });
   const stages = mapStepperStages(stepperResult.stages);
   const currentStageLabel = stages.find((s) => s.state === "current")?.label ?? null;
@@ -384,7 +376,7 @@ export default async function ClientProjectDetailPage({
         )}
       </FocusCard>
     );
-  } else if (project.status === "converting") {
+  } else if (effectiveStatus === "converting") {
     focusCard = (
       <FocusCard tone="neutral" title="Finalising your report" subtitle="Almost there.">
         <p className="text-sm text-zinc-600">Your brief is approved — the final report is being prepared now.</p>
