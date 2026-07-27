@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderApprovalRequestEmail } from "./ApprovalRequestEmail";
 import { renderModificationsRequestedEmail } from "./ModificationsRequestedEmail";
-import { renderRevisionNoticeEmail } from "./RevisionNoticeEmail";
 
 // ─── renderApprovalRequestEmail ───────────────────────────────────────────────
 
@@ -131,34 +130,5 @@ describe("renderModificationsRequestedEmail", () => {
     });
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
-  });
-});
-
-// ─── renderRevisionNoticeEmail ────────────────────────────────────────────────
-
-describe("renderRevisionNoticeEmail", () => {
-  it("includes the stakeholder name", () => {
-    const html = renderRevisionNoticeEmail({ stakeholderName: "Jane Smith", projectId: "OPS-001" });
-    expect(html).toContain("Jane Smith");
-  });
-
-  it("includes the project reference", () => {
-    const html = renderRevisionNoticeEmail({ stakeholderName: "Jane", projectId: "OPS-001" });
-    expect(html).toContain("OPS-001");
-  });
-
-  it("mentions that previous approval has been reset", () => {
-    const html = renderRevisionNoticeEmail({ stakeholderName: "Jane", projectId: "OPS-001" });
-    expect(html).toContain("previous approval has been reset");
-  });
-
-  it("tells the stakeholder a new approval request is incoming", () => {
-    const html = renderRevisionNoticeEmail({ stakeholderName: "Jane", projectId: "OPS-001" });
-    expect(html).toContain("new approval");
-  });
-
-  it("does not contain a tokenised approval link (informational only)", () => {
-    const html = renderRevisionNoticeEmail({ stakeholderName: "Jane", projectId: "OPS-001" });
-    expect(html).not.toContain("/approve/");
   });
 });

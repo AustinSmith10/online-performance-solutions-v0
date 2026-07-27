@@ -44,7 +44,11 @@ export async function sendAvailableRequestsDigest(
     .map((r) => r.email as string | null)
     .filter((email): email is string => Boolean(email));
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) {
+    console.error("[available-requests-digest] NEXT_PUBLIC_APP_URL is not set — skipping digest send");
+    return { sent: false, count: available, queueCount, recipients: 0 };
+  }
   const portalUrl = `${appUrl}/ops`;
   const queueUrl = `${appUrl}/email-queue`;
   const html = renderAvailableRequestsDigestEmail({ count: available, portalUrl, queueCount, queueUrl });

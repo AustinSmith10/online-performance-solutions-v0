@@ -236,7 +236,12 @@ max_frequency = "1s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
-otp_expiry = 3600
+# Set to 48 hours — shared by the welcome-account "set password" link, admin
+# password reset, and self-service "forgot password", so all three get the
+# longer window. Must also be set in the Supabase Dashboard for the hosted
+# project (Authentication → Emails → OTP expiry); this file only governs
+# local dev.
+otp_expiry = 172800
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]

@@ -18,7 +18,6 @@ import { renderModificationsRequestedEmail } from "../lib/email/templates/Modifi
 import { renderPbdrDeliveryEmail } from "../lib/email/templates/PBDRDeliveryEmail";
 import { QaCompleteEmail } from "../lib/email/templates/QaCompleteEmail";
 import { renderReviewResponseConfirmationEmail } from "../lib/email/templates/ReviewResponseConfirmationEmail";
-import { renderRevisionNoticeEmail } from "../lib/email/templates/RevisionNoticeEmail";
 import { renderStakeholderBufferUpdateEmail } from "../lib/email/templates/StakeholderBufferUpdateEmail";
 import { WelcomeAccountEmail } from "../lib/email/templates/WelcomeAccountEmail";
 
@@ -139,14 +138,6 @@ const templates: { name: string; html: string }[] = [
       response: "rejected",
       comments: "The glazing schedule doesn't match the drawings.",
       portalUrl: `${APP}/portal`,
-    }),
-  },
-  {
-    name: "RevisionNoticeEmail",
-    html: renderRevisionNoticeEmail({
-      stakeholderName: "Bob Johnson",
-      projectId: "OPS-2026-118",
-      note: "Updated following the glazing schedule correction.",
     }),
   },
   {

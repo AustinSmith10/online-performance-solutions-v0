@@ -99,6 +99,7 @@ export interface BounceEvent {
   email: string;
   project_id: string | null;
   reason: string | null;
+  type: "bounce" | "complaint";
   created_at: string;
   resolved_at: string | null;
 }

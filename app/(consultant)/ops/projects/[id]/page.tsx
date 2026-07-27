@@ -32,6 +32,8 @@ import { AltWorkspace } from "./_components/AltWorkspace";
 import { RevisionNoteField } from "./_components/RevisionNoteField";
 import { ProjectNumberCard } from "./_components/ProjectNumberCard";
 import { PbdbVersionsCard } from "./_components/PbdbVersionsCard";
+import { ResendBufferUpdateButton } from "./_components/ResendBufferUpdateButton";
+import { ResendPbdrButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendPbdrButton";
 import type { Stage } from "@/components/workspace/StageRail";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -95,13 +97,14 @@ export default async function ConsultantProjectDetailPage({
   const justPickedUp = sp.picked_up === "1";
   const justUploadedQa = sp.qa_uploaded === "1";
   const justQueueApproved = sp.queue_approved === "1";
+  const justPbdrResent = sp.pbdr_resent === "1";
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, qa_completed_by, accepted_at, pbdb_downloaded_at, clients(name, state_territory, client_config, revision_notes_required), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, delivery_recipient_email, qa_completed_by, accepted_at, pbdb_downloaded_at, clients(name, state_territory, client_config, revision_notes_required), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -123,6 +126,7 @@ export default async function ConsultantProjectDetailPage({
     source: "portal" | "email";
     strip_token_color: boolean;
     delivery_delay_preset: DeliveryDelayPreset;
+    delivery_recipient_email: string | null;
     qa_completed_by: string | null;
     accepted_at: string | null;
     pbdb_downloaded_at: string | null;
@@ -530,17 +534,27 @@ export default async function ConsultantProjectDetailPage({
         title="Awaiting stakeholder review"
         subtitle={`${pendingCount} of ${currentCycleReviews.length} approvals outstanding.`}
       >
-        <PbdbQaUploadForm
-          projectId={id}
-          submitLabel="Upload new version"
-          requireConfirmation
-          confirmCopy={UPLOAD_NEW_VERSION_COPY}
-        >
-          <RevisionNoteField
-            reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
-            required={project.clients?.revision_notes_required ?? false}
-          />
-        </PbdbQaUploadForm>
+        <div className="space-y-4">
+          <div>
+            <p className="mb-2 text-xs text-zinc-500">
+              Nudge everyone (not just non-responders) with a status update before the automatic 1-working-day reminder fires.
+            </p>
+            <ResendBufferUpdateButton projectId={id} />
+          </div>
+          <div className="border-t border-amber-200/60 pt-4">
+            <PbdbQaUploadForm
+              projectId={id}
+              submitLabel="Upload new version"
+              requireConfirmation
+              confirmCopy={UPLOAD_NEW_VERSION_COPY}
+            >
+              <RevisionNoteField
+                reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
+                required={project.clients?.revision_notes_required ?? false}
+              />
+            </PbdbQaUploadForm>
+          </div>
+        </div>
       </FocusCard>
     );
   } else if (pbdbCardState === "revision") {
@@ -596,6 +610,11 @@ export default async function ConsultantProjectDetailPage({
               </p>
             </DownloadCard>
           ))}
+          <p className="text-xs text-zinc-500">
+            Resends a fresh 30-day download link to the submitter
+            {project.delivery_recipient_email ? " and the delivery recipient" : ""}.
+          </p>
+          <ResendPbdrButton projectId={id} />
         </div>
       </FocusCard>
     );
@@ -966,6 +985,13 @@ export default async function ConsultantProjectDetailPage({
           cleanUrl={`/ops/projects/${id}`}
           title="Submission approved"
           body="Please confirm the document types flagged below before continuing."
+        />
+      )}
+      {justPbdrResent && (
+        <AdminSuccessBanner
+          cleanUrl={`/ops/projects/${id}`}
+          title="Delivery email resent"
+          body="A fresh 30-day download link has been sent to the submitter."
         />
       )}
       <Link href="/ops" className="text-sm text-zinc-500 hover:text-zinc-700">

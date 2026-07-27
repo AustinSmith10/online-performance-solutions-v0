@@ -9,11 +9,11 @@ const base = {
 };
 
 describe("renderEmailShell", () => {
-  it("renders the heading, status pill, wordmark and footer", () => {
+  it("renders the heading, status pill, logo and footer", () => {
     const html = renderEmailShell(base);
     expect(html).toContain("Something happened");
     expect(html).toContain("For information");
-    expect(html).toContain("DDEG&nbsp;OPS");
+    expect(html).toContain("/logo.svg");
     expect(html).toContain("DDEG Online Performance Solution");
   });
 

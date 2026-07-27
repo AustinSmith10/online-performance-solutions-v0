@@ -10,7 +10,6 @@ vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/audit/log");
 vi.mock("@/lib/email/sender");
 vi.mock("@/lib/email/templates/ApprovalRequestEmail");
-vi.mock("@/lib/email/templates/RevisionNoticeEmail");
 vi.mock("@/lib/documents/pdf");
 
 import { dispatchPbdb } from "./dispatch";
@@ -21,7 +20,6 @@ import { checkDispatchGate } from "@/lib/payments/gate";
 import { logUpfront } from "@/lib/payments/ledger";
 import { sendEmail } from "@/lib/email/sender";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
-import { renderRevisionNoticeEmail } from "@/lib/email/templates/RevisionNoticeEmail";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { auditLog } from "@/lib/audit/log";
 
@@ -65,7 +63,7 @@ function chain(data: unknown, error: unknown = null) {
   return obj;
 }
 
-function buildSupabaseMock(priorAcknowledged: unknown[] = []) {
+function buildSupabaseMock() {
   const upsertFn = vi.fn().mockResolvedValue({ data: null, error: null });
   const calls: Record<string, number> = {};
 
@@ -95,12 +93,7 @@ function buildSupabaseMock(priorAcknowledged: unknown[] = []) {
 
       if (table === "project_files") return chain(null);
 
-      if (table === "stakeholder_reviews") {
-        // First call (cycle > 1 only): select prior-cycle acknowledged rows
-        if (n === 1 && priorAcknowledged.length > 0) return chain(priorAcknowledged);
-        // Remaining calls: upsert for each stakeholder
-        return { upsert: upsertFn };
-      }
+      if (table === "stakeholder_reviews") return { upsert: upsertFn };
 
       return chain(null);
     }),
@@ -116,7 +109,6 @@ beforeEach(() => {
   vi.mocked(generateTokenString).mockReturnValue("mock-token-123");
   vi.mocked(computeTokenExpiry).mockResolvedValue(new Date("2026-06-30T00:00:00Z"));
   vi.mocked(renderApprovalRequestEmail).mockReturnValue("<html>approval</html>");
-  vi.mocked(renderRevisionNoticeEmail).mockReturnValue("<html>notice</html>");
   vi.mocked(sendEmail).mockResolvedValue(true);
   vi.mocked(resolveStakeholders).mockResolvedValue(ORG_STAKEHOLDERS);
 });
@@ -270,55 +262,6 @@ describe("dispatchPbdb — stakeholder-facing artifact is a PDF, never the docx"
     // The emailed link must point at the PDF path, never the raw docx path.
     expect(createSignedUrlFn).toHaveBeenCalledWith(expectedPdfPath, 7 * 24 * 3600);
     expect(createSignedUrlFn).not.toHaveBeenCalledWith(docxRow.storage_path, expect.anything());
-  });
-});
-
-describe("dispatchPbdb — revision cycle notice", () => {
-  it("sends revision notices to prior-cycle acknowledged stakeholders on cycle 2", async () => {
-    const cycle2Project = { ...BASE_PROJECT, review_cycle: 2 };
-    const priorAcknowledged = [
-      { stakeholder_email: "planner@council.gov", stakeholder_name: "Planner", status: "approved_without_comments" },
-    ];
-    const upsertFn = vi.fn().mockResolvedValue({ data: null, error: null });
-    const calls: Record<string, number> = {};
-
-    const mock = {
-      from: vi.fn((table: string) => {
-        calls[table] = (calls[table] ?? 0) + 1;
-        const n = calls[table];
-        if (table === "projects") {
-          return n === 1
-            ? { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: cycle2Project, error: null }) }
-            : { update: vi.fn().mockReturnValue(chain(null)) };
-        }
-        if (table === "users") {
-          if (n === 1) return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: SUBMITTER_USER, error: null }) };
-          return chain([]);
-        }
-        if (table === "project_files") return chain(null);
-        if (table === "stakeholder_reviews") {
-          // n=1: select prior-cycle acknowledged rows
-          if (n === 1) return chain(priorAcknowledged);
-          // n=2+: upsert for each new-cycle stakeholder
-          return { upsert: upsertFn };
-        }
-        return chain(null);
-      }),
-      storage: { from: vi.fn().mockReturnValue({ createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: null }, error: null }) }) },
-    };
-
-    vi.mocked(createAdminClient).mockReturnValue(mock as never);
-    await dispatchPbdb(PROJECT_ID, ACTOR_ID);
-
-    expect(vi.mocked(renderRevisionNoticeEmail)).toHaveBeenCalled();
-  });
-
-  it("does not send revision notices on cycle 1 (first dispatch)", async () => {
-    vi.mocked(createAdminClient).mockReturnValue(buildSupabaseMock() as never);
-
-    await dispatchPbdb(PROJECT_ID, ACTOR_ID);
-
-    expect(vi.mocked(renderRevisionNoticeEmail)).not.toHaveBeenCalled();
   });
 });
 

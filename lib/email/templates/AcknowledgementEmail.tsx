@@ -5,6 +5,7 @@ export interface AcknowledgementEmailProps {
   projectId: string;
   expectedDeliveryDate: string;
   portalUrl: string;
+  poNumber?: string | null;
 }
 
 export function AcknowledgementEmail({
@@ -12,12 +13,14 @@ export function AcknowledgementEmail({
   projectId,
   expectedDeliveryDate,
   portalUrl,
+  poNumber,
 }: AcknowledgementEmailProps): string {
   const body = [
     paragraph(`Hi ${e(recipientName)},`),
     paragraph("Thank you for submitting your request. We'll be in touch once your report is ready."),
     fieldTable([
       { label: "Reference", value: e(projectId) },
+      ...(poNumber ? [{ label: "PO number", value: e(poNumber) }] : []),
       { label: "Report due by", value: e(expectedDeliveryDate) },
     ]),
   ].join("");

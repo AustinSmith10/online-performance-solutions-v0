@@ -397,6 +397,40 @@ export async function restoreClient(
   return {};
 }
 
+export type PurgeClientState = { error?: string; success?: boolean };
+
+export async function purgeClient(
+  orgId: string,
+  _prev: PurgeClientState,
+  _formData: FormData
+): Promise<PurgeClientState> {
+  const actor = await requireRole("super_admin");
+  const supabase = createAdminClient();
+
+  const { data: org } = await supabase
+    .from("clients")
+    .select("name")
+    .eq("id", orgId)
+    .not("deleted_at", "is", null)
+    .maybeSingle();
+
+  if (!org) return { error: "Client not found in recovery bin." };
+
+  const { error } = await supabase.rpc("admin_delete_client", { p_client_id: orgId });
+  if (error) return { error: error.message };
+
+  await auditLog("org.purged", actor.id, actor.email, {
+    orgId,
+    metadata: { name: org.name },
+  });
+
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin/templates");
+  revalidatePath("/admin/recovery");
+
+  return { success: true };
+}
+
 export async function setOrgFrozen(id: string, frozen: boolean) {
   const actor = await requireRole("super_admin", "admin");
 

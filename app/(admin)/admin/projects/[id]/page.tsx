@@ -38,6 +38,7 @@ import { ProjectAuditTrail, type ProjectAuditRow } from "@/app/(consultant)/ops/
 import { PbdbVersionsCard } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbVersionsCard";
 import { CollapsibleSection } from "@/app/(consultant)/ops/projects/[id]/_components/CollapsibleSection";
 import { LogStakeholderResponseForm } from "@/app/(consultant)/ops/projects/[id]/_components/LogStakeholderResponseForm";
+import { ResendBufferUpdateButton } from "@/app/(consultant)/ops/projects/[id]/_components/ResendBufferUpdateButton";
 import { AltWorkspace } from "@/app/(consultant)/ops/projects/[id]/_components/AltWorkspace";
 import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_components/HeaderStatInline";
 import { FocusCard } from "@/components/workspace/FocusCard";
@@ -709,6 +710,12 @@ export default async function ProjectDetailPage({
               );
               return <div key={r.id}>{justEmailUpdated === r.id ? <HighlightRing>{inner}</HighlightRing> : inner}</div>;
             })}
+          </div>
+          <div className="border-t border-amber-200/60 pt-4">
+            <p className="mb-2 text-xs text-zinc-500">
+              Nudge everyone (not just non-responders) with a status update before the automatic 1-working-day reminder fires.
+            </p>
+            <ResendBufferUpdateButton projectId={id} />
           </div>
           <div className="border-t border-amber-200/60 pt-4">
             <p className="mb-2 text-xs text-zinc-500">Need to fix something before everyone responds?</p>

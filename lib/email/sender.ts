@@ -17,7 +17,7 @@ export interface SendEmailOptions {
   projectId?: string;
 }
 
-async function logSend(fields: { to: string; subject: string; source: string; projectId?: string; status: "sent" | "failed"; error?: string }) {
+async function logSend(fields: { to: string; subject: string; source: string; projectId?: string; status: "sent" | "failed"; error?: string; messageId?: string }) {
   try {
     const { createAdminClient } = await import("@/lib/supabase/admin");
     const admin = createAdminClient();
@@ -28,6 +28,7 @@ async function logSend(fields: { to: string; subject: string; source: string; pr
       project_id: fields.projectId ?? null,
       status: fields.status,
       error: fields.error?.slice(0, 2000) ?? null,
+      message_id: fields.messageId ?? null,
     });
   } catch (logError) {
     console.error("[email] failed to write email_send_log:", logError);
@@ -51,14 +52,14 @@ export async function sendEmail({ to, subject, html, replyTo, throwOnError, sour
   const { ServerClient } = await import("postmark");
   const client = new ServerClient(token);
   try {
-    await client.sendEmail({
+    const result = await client.sendEmail({
       From: FROM,
       To: to,
       Subject: subject,
       HtmlBody: html,
       ...(replyTo ? { ReplyTo: replyTo } : {}),
     });
-    await logSend({ to, subject, source, projectId, status: "sent" });
+    await logSend({ to, subject, source, projectId, status: "sent", messageId: result.MessageID });
     return true;
   } catch (error) {
     // Log but do not throw by default — callers must not be blocked by email

@@ -4,9 +4,12 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
-import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
 import { renderReviewResponseConfirmationEmail } from "@/lib/email/templates/ReviewResponseConfirmationEmail";
-import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
+import {
+  resolveProjectRef,
+  notifyModificationsRequested,
+  autoDeliverIfFullyApproved,
+} from "@/lib/stakeholders/review-outcome";
 
 export interface PortalApprovalState {
   error?: string;
@@ -101,10 +104,8 @@ export async function submitPortalApproval(
 
   if (!project) return { submitted: true, response };
 
-  const projectRef =
-    (project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ??
-    (project.project_number as string | null) ??
-    (review.project_id as string).slice(0, 8);
+  const projectRef = resolveProjectRef(project, review.project_id as string);
+  const cycle = project.review_cycle as number;
 
   if (response === "rejected") {
     await supabase
@@ -112,67 +113,25 @@ export async function submitPortalApproval(
       .update({ status: "revision_required", updated_at: now })
       .eq("id", review.project_id);
 
-    const cycle = project.review_cycle as number;
-    const { data: allRejected } = await supabase
-      .from("stakeholder_reviews")
-      .select("stakeholder_name, comments")
-      .eq("project_id", review.project_id)
-      .eq("review_cycle", cycle)
-      .in("status", ["rejected_with_comments", "rejected_without_comments"]);
-
-    const modifications = (allRejected ?? [])
-      .filter((r) => r.comments)
-      .map((r) => ({
-        stakeholderName: r.stakeholder_name as string,
-        comments: r.comments as string,
-      }));
-
-    const consultantId =
-      (project.qa_completed_by as string | null) ??
-      (project.assigned_consultant_id as string | null);
-    const recipientIds: string[] = [...(consultantId ? [consultantId] : [])];
-    const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
-    for (const a of admins ?? []) recipientIds.push(a.id as string);
-
-    const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/ops/projects/${review.project_id}`;
-    const { data: recipientRows } = await supabase
-      .from("users")
-      .select("id, first_name")
-      .in("id", recipientIds);
-
-    await Promise.all(
-      (recipientRows ?? []).map((u) => {
-        const firstName = (u.first_name as string | null) ?? "there";
-        const emailHtml = renderModificationsRequestedEmail({
-          consultantName: firstName,
-          projectId: projectRef,
-          modifications,
-          projectUrl,
-        });
-        return notify({
-          recipientId: u.id as string,
-          type: "modifications_requested",
-          message: `${review.stakeholder_name} requested changes to ${projectRef}${comments ? ` — "${comments.slice(0, 80)}${comments.length > 80 ? "…" : ""}"` : "."}`,
-          projectId: review.project_id as string,
-          emailSubject: `Changes requested — ${projectRef}`,
-          emailHtml,
-        }).catch(() => {});
-      })
-    );
+    await notifyModificationsRequested({
+      supabase,
+      projectId: review.project_id as string,
+      reviewCycle: cycle,
+      projectRef,
+      stakeholderName: review.stakeholder_name as string,
+      comments,
+      qaCompletedBy: project.qa_completed_by as string | null,
+      assignedConsultantId: project.assigned_consultant_id as string | null,
+      messageVerb: "requested changes to",
+      subjectLabel: "Changes requested",
+    });
   } else {
-    const cycle = project.review_cycle as number;
-    const { data: pending } = await supabase
-      .from("stakeholder_reviews")
-      .select("id")
-      .eq("project_id", review.project_id)
-      .eq("review_cycle", cycle)
-      .eq("status", "pending");
-
-    if (!pending || pending.length === 0) {
-      scheduleOrDeliverPbdr(review.project_id as string).catch((err) => {
-        console.error(`[submitPortalApproval] auto-deliver-pbdr failed for ${review.project_id}:`, err);
-      });
-    }
+    await autoDeliverIfFullyApproved(
+      supabase,
+      review.project_id as string,
+      cycle,
+      "[submitPortalApproval]"
+    );
   }
 
   // Confirm to the client that their response was recorded

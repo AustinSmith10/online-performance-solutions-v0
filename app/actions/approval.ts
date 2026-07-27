@@ -3,11 +3,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateToken, generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
 import { auditLog } from "@/lib/audit/log";
-import { notify } from "@/lib/notifications/notify";
-import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
-import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 import { sendEmail } from "@/lib/email/sender";
+import {
+  resolveProjectRef,
+  notifyModificationsRequested,
+  autoDeliverIfFullyApproved,
+} from "@/lib/stakeholders/review-outcome";
 
 export interface ApprovalState {
   error?: string;
@@ -99,10 +101,8 @@ export async function submitApproval(
 
   if (!project) return { submitted: true, response };
 
-  const projectRef =
-    (project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ??
-    (project.project_number as string | null) ??
-    review.project_id.slice(0, 8);
+  const projectRef = resolveProjectRef(project, review.project_id);
+  const cycle = project.review_cycle as number;
 
   if (response === "rejected") {
     await supabase
@@ -110,71 +110,20 @@ export async function submitApproval(
       .update({ status: "revision_required", updated_at: now })
       .eq("id", review.project_id);
 
-    // Aggregate all rejected reviews for this cycle (with or without comments)
-    const cycle = project.review_cycle as number;
-    const { data: allRejected } = await supabase
-      .from("stakeholder_reviews")
-      .select("stakeholder_name, comments")
-      .eq("project_id", review.project_id)
-      .eq("review_cycle", cycle)
-      .in("status", ["rejected_with_comments", "rejected_without_comments"]);
-
-    const modifications = (allRejected ?? [])
-      .filter((r) => r.comments)
-      .map((r) => ({
-        stakeholderName: r.stakeholder_name as string,
-        comments: r.comments as string,
-      }));
-
-    // Prefer the consultant who completed QA; fall back to currently assigned
-    const consultantId =
-      (project.qa_completed_by as string | null) ??
-      (project.assigned_consultant_id as string | null);
-    const recipientIds: string[] = [...(consultantId ? [consultantId] : [])];
-    const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
-    for (const a of admins ?? []) recipientIds.push(a.id as string);
-
-    const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/ops/projects/${review.project_id}`;
-    const { data: recipientRows } = await supabase
-      .from("users")
-      .select("id, first_name")
-      .in("id", recipientIds);
-
-    await Promise.all(
-      (recipientRows ?? []).map((u) => {
-        const firstName = (u.first_name as string | null) ?? "there";
-        const emailHtml = renderModificationsRequestedEmail({
-          consultantName: firstName,
-          projectId: projectRef,
-          modifications,
-          projectUrl,
-        });
-        return notify({
-          recipientId: u.id as string,
-          type: "modifications_requested",
-          message: `${review.stakeholder_name} rejected ${projectRef}${comments ? ` — "${comments.slice(0, 80)}${comments.length > 80 ? "…" : ""}"` : "."}`,
-          projectId: review.project_id,
-          emailSubject: `Rejection received — ${projectRef}`,
-          emailHtml,
-        }).catch(() => {});
-      })
-    );
+    await notifyModificationsRequested({
+      supabase,
+      projectId: review.project_id,
+      reviewCycle: cycle,
+      projectRef,
+      stakeholderName: review.stakeholder_name as string,
+      comments,
+      qaCompletedBy: project.qa_completed_by as string | null,
+      assignedConsultantId: project.assigned_consultant_id as string | null,
+      messageVerb: "rejected",
+      subjectLabel: "Rejection received",
+    });
   } else {
-    // Approved — check if all stakeholders for this cycle have approved (none pending, none rejected)
-    const cycle = project.review_cycle as number;
-    const { data: outstanding } = await supabase
-      .from("stakeholder_reviews")
-      .select("id")
-      .eq("project_id", review.project_id)
-      .eq("review_cycle", cycle)
-      .in("status", ["pending", "rejected_with_comments", "rejected_without_comments"]);
-
-    if (!outstanding || outstanding.length === 0) {
-      // All stakeholders approved — auto-trigger PBDR conversion and delivery
-      scheduleOrDeliverPbdr(review.project_id).catch((err) => {
-        console.error(`[submitApproval] auto-deliver-pbdr failed for ${review.project_id}:`, err);
-      });
-    }
+    await autoDeliverIfFullyApproved(supabase, review.project_id, cycle, "[submitApproval]");
   }
 
   return { submitted: true, response };

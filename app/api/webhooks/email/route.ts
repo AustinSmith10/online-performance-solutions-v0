@@ -11,37 +11,20 @@ import {
   type PostmarkInboundEmail,
 } from "@/lib/email/parser";
 import { validateToken } from "@/lib/stakeholders/tokens";
+import { e } from "@/lib/email/templates/shell";
+import { isPostmarkWebhookAuthorized } from "@/lib/email/webhook-auth";
 
 // Postmark retries on non-2xx — always return 200 so it doesn't retry on expected failures.
 // This does not apply to auth failures below: Postmark won't retry with different
 // credentials, so a 401 there is safe and won't trigger a retry storm.
 
 function isAuthorized(req: NextRequest): boolean {
-  const user = process.env.POSTMARK_INBOUND_WEBHOOK_USER;
-  const password = process.env.POSTMARK_INBOUND_WEBHOOK_PASSWORD;
-  if (!user || !password) {
-    if (process.env.NODE_ENV === "production") {
-      console.error("[email-webhook] POSTMARK_INBOUND_WEBHOOK_* not set in production — rejecting request");
-      return false;
-    }
-    console.warn("[email-webhook] POSTMARK_INBOUND_WEBHOOK_* not set — skipping auth check (dev only)");
-    return true;
-  }
-
-  const header = req.headers.get("authorization") ?? "";
-  const [scheme, encoded] = header.split(" ");
-  if (scheme !== "Basic" || !encoded) {
-    return false;
-  }
-
-  let decoded: string;
-  try {
-    decoded = Buffer.from(encoded, "base64").toString("utf8");
-  } catch {
-    return false;
-  }
-
-  return decoded === `${user}:${password}`;
+  return isPostmarkWebhookAuthorized(
+    req,
+    "POSTMARK_INBOUND_WEBHOOK_USER",
+    "POSTMARK_INBOUND_WEBHOOK_PASSWORD",
+    "email-webhook"
+  );
 }
 
 type ProposedCategory = "new_submission" | "thread_reply" | "stakeholder_response";
@@ -366,24 +349,24 @@ async function queueInboundEmail(
 
 function unrecognisedSenderHtml(email: string): string {
   return `<p>Hi,</p>
-<p>We received an email from <strong>${email}</strong> but could not find an OPS account registered to this address.</p>
+<p>We received an email from <strong>${e(email)}</strong> but could not find an OPS account registered to this address.</p>
 <p>If you believe this is an error, please contact your OPS account manager to ensure your email address is registered.</p>
 <p>Regards,<br>OPS Team</p>`;
 }
 
 function whitelistBlockedHtml(email: string): string {
   return `<p>Hi,</p>
-<p>Email submissions from <strong>${email}</strong> are not permitted for your organisation. Please submit your report request via the OPS portal.</p>
+<p>Email submissions from <strong>${e(email)}</strong> are not permitted for your organisation. Please submit your report request via the OPS portal.</p>
 <p>Regards,<br>OPS Team</p>`;
 }
 
 function noAttachmentHtml(email: string, orgName: string): string {
   return `<p>Hi,</p>
-<p>We received your email for <strong>${orgName}</strong> but could not find any supported file attachments (PDF, JPG, PNG, or TIFF).</p>
+<p>We received your email for <strong>${e(orgName)}</strong> but could not find any supported file attachments (PDF, JPG, PNG, or TIFF).</p>
 <p>Please either:</p>
 <ul>
   <li>Reply to this email with your Purchase Order and building plans attached, or</li>
-  <li>Submit your request directly via the <a href="${process.env.NEXT_PUBLIC_APP_URL ?? ""}/portal/submit">OPS portal</a>.</li>
+  <li>Submit your request directly via the <a href="${e(process.env.NEXT_PUBLIC_APP_URL ?? "")}/portal/submit">OPS portal</a>.</li>
 </ul>
 <p>Regards,<br>OPS Team</p>`;
 }

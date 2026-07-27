@@ -5,10 +5,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { RestoreButton } from "./_components/RestoreButton";
 import { PurgeButton } from "./_components/PurgeButton";
 import { EntityRestoreButton } from "./_components/EntityRestoreButton";
+import { EntityPurgeButton } from "./_components/EntityPurgeButton";
 import { StakeholderRestoreButton } from "./_components/StakeholderRestoreButton";
 import { restoreTemplate } from "@/app/actions/templates";
-import { restoreDeletedUser } from "@/app/actions/admin-users";
-import { restoreClient } from "@/app/actions/clients";
+import { restoreDeletedUser, purgeUser } from "@/app/actions/admin-users";
+import { restoreClient, purgeClient } from "@/app/actions/clients";
+import { purgeStakeholder } from "@/app/actions/stakeholders";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -358,7 +360,15 @@ function RecoveryLayout({
           key: s.id,
           primary: s.name,
           meta: `${s.email} · ${s.scope === "org" ? "Org" : "Project"} scope · Deleted ${new Date(s.deleted_at).toLocaleDateString("en-AU")}`,
-          action: <StakeholderRestoreButton scope={s.scope} scopeId={s.scope_id} stakeholderId={s.id} />,
+          action: (
+            <>
+              <StakeholderRestoreButton scope={s.scope} scopeId={s.scope_id} stakeholderId={s.id} />
+              <EntityPurgeButton
+                action={purgeStakeholder.bind(null, s.scope, s.scope_id, s.id)}
+                warning="This will permanently remove the stakeholder. This cannot be undone."
+              />
+            </>
+          ),
         })}
       />
 
@@ -370,7 +380,19 @@ function RecoveryLayout({
           key: u.id,
           primary: [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email,
           meta: `${u.role.replace("_", " ")} · ${u.clients?.name ?? "—"} · Deleted ${new Date(u.deleted_at).toLocaleDateString("en-AU")}`,
-          action: <EntityRestoreButton action={restoreDeletedUser.bind(null, u.id)} />,
+          action: (
+            <>
+              <EntityRestoreButton action={restoreDeletedUser.bind(null, u.id)} />
+              {u.role === "super_admin" ? (
+                <span className="text-xs text-zinc-400">Cannot be deleted</span>
+              ) : (
+                <EntityPurgeButton
+                  action={purgeUser.bind(null, u.id)}
+                  warning="This will permanently remove the user account. This cannot be undone."
+                />
+              )}
+            </>
+          ),
         })}
       />
 
@@ -383,7 +405,13 @@ function RecoveryLayout({
           primary: c.name,
           meta: `Deleted ${new Date(c.deleted_at).toLocaleDateString("en-AU")}`,
           action: canRestoreClients ? (
-            <EntityRestoreButton action={restoreClient.bind(null, c.id)} />
+            <>
+              <EntityRestoreButton action={restoreClient.bind(null, c.id)} />
+              <EntityPurgeButton
+                action={purgeClient.bind(null, c.id)}
+                warning="This will permanently remove the client and its templates and org-scoped stakeholders. This cannot be undone."
+              />
+            </>
           ) : (
             <span className="text-xs text-zinc-400">Super admin only</span>
           ),

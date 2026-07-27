@@ -67,6 +67,7 @@ function makeSupabase({
 beforeEach(() => {
   vi.mocked(sendEmail).mockReset();
   vi.mocked(sendEmail).mockResolvedValue(true);
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://ops.example.test");
 });
 
 describe("sendAvailableRequestsDigest", () => {

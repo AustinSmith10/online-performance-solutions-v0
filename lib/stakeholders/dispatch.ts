@@ -8,7 +8,6 @@ import { auditLog } from "@/lib/audit/log";
 import { sendEmail } from "@/lib/email/sender";
 import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
-import { renderRevisionNoticeEmail } from "@/lib/email/templates/RevisionNoticeEmail";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 
 function e(s: string): string {
@@ -74,7 +73,7 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
   }
 
   // Resolve stakeholders, then always prepend the submitting client
-  const resolved = await resolveStakeholders(projectId, orgId);
+  const resolved = await resolveStakeholders(projectId, project.template_id as string | null);
 
   const { data: submitter } = await supabase
     .from("users")
@@ -156,40 +155,6 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
         id: project.submitted_by as string,
         email: submitter.email as string,
         role: "stakeholder",
-      });
-    }
-  }
-
-  // On revision cycles, notify stakeholders who previously approved that the document changed
-  if (reviewCycle > 1) {
-    const { data: priorAcknowledged } = await supabase
-      .from("stakeholder_reviews")
-      .select("stakeholder_email, stakeholder_name")
-      .eq("project_id", projectId)
-      .eq("review_cycle", reviewCycle - 1)
-      .in("status", ["approved_without_comments", "approved_with_comments"]);
-
-    const { data: revisionNoteRow } = await supabase
-      .from("revision_notes")
-      .select("note")
-      .eq("project_id", projectId)
-      .eq("review_cycle", reviewCycle)
-      .maybeSingle();
-
-    for (const prior of priorAcknowledged ?? []) {
-      const noticeHtml = renderRevisionNoticeEmail({
-        stakeholderName: prior.stakeholder_name as string,
-        projectId: projectId.slice(0, 8),
-        note: revisionNoteRow?.note as string | undefined,
-      });
-      await sendEmail({
-        to: prior.stakeholder_email as string,
-        subject: `Document revised — re-approval required (ref: ${projectId.slice(0, 8)})`,
-        html: noticeHtml,
-        source: "stakeholder_dispatch_revision_notice",
-        projectId,
-      }).catch((err) => {
-        console.error(`[dispatch-pbdb] revision notice to ${prior.stakeholder_email} failed:`, err);
       });
     }
   }

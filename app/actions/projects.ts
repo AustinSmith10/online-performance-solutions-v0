@@ -13,6 +13,32 @@ import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { expediteDelivery } from "@/lib/documents/pending-delivery";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+async function notifyAdminsQaComplete(
+  supabase: SupabaseClient,
+  projectId: string,
+  projectRef: string
+): Promise<void> {
+  const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
+  if (!admins || admins.length === 0) return;
+
+  await Promise.all(
+    admins.map((admin) =>
+      notify({
+        recipientId: admin.id as string,
+        type: "qa_complete",
+        message: `QA complete for ${projectRef} — dispatching to stakeholders now.`,
+        projectId,
+        emailSubject: `QA complete — ${projectRef}`,
+        emailHtml: QaCompleteEmail({
+          projectRef,
+          portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/admin/projects/${projectId}`,
+        }),
+      }).catch((err) => console.error(`[notifyAdminsQaComplete] notify failed for ${admin.id}:`, err))
+    )
+  );
+}
 
 export type AssignState = { error?: string; success?: boolean };
 
@@ -1061,24 +1087,7 @@ export async function uploadQaPbdb(
       (project.project_number as string | null) ??
       projectId.slice(0, 8);
 
-    const { data: admins } = await supabase.from("users").select("id").eq("role", "super_admin");
-    if (admins && admins.length > 0) {
-      await Promise.all(
-        admins.map((admin) =>
-          notify({
-            recipientId: admin.id as string,
-            type: "qa_complete",
-            message: `QA complete for ${projectRef} — dispatching to stakeholders now.`,
-            projectId,
-            emailSubject: `QA complete — ${projectRef}`,
-            emailHtml: QaCompleteEmail({
-              projectRef,
-              portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/admin/projects/${projectId}`,
-            }),
-          })
-        )
-      );
-    }
+    await notifyAdminsQaComplete(supabase, projectId, projectRef);
 
     await auditLog("project.qa_complete", actor.id, actor.email as string, {
       projectId,
@@ -1153,28 +1162,7 @@ export async function markQaComplete(
     (project.project_number as string | null) ??
     projectId.slice(0, 8);
 
-  const { data: admins } = await supabase
-    .from("users")
-    .select("id")
-    .eq("role", "super_admin");
-
-  if (admins && admins.length > 0) {
-    await Promise.all(
-      admins.map((admin) =>
-        notify({
-          recipientId: admin.id as string,
-          type: "qa_complete",
-          message: `QA complete for ${projectRef} — dispatching to stakeholders now.`,
-          projectId,
-          emailSubject: `QA complete — ${projectRef}`,
-          emailHtml: QaCompleteEmail({
-            projectRef,
-            portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/admin/projects/${projectId}`,
-          }),
-        })
-      )
-    );
-  }
+  await notifyAdminsQaComplete(supabase, projectId, projectRef);
 
   await auditLog("project.qa_complete", actor.id, actor.email as string, {
     projectId,

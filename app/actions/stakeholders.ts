@@ -6,15 +6,20 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
+import { inviteLateStakeholder } from "@/lib/stakeholders/late-add";
 import { deliverPbdr } from "@/lib/documents/delivery";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
 import { sendEmail } from "@/lib/email/sender";
 import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
-import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
 import { notify } from "@/lib/notifications/notify";
-import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
+import {
+  resolveProjectRef,
+  notifyModificationsRequested,
+  autoDeliverIfFullyApproved,
+} from "@/lib/stakeholders/review-outcome";
+import { sendStakeholderBufferUpdate } from "@/lib/stakeholders/buffer-update";
 import { attachEvidence } from "@/app/actions/evidence";
 import { parseEmlBody } from "@/lib/email/parseEml";
 
@@ -81,8 +86,10 @@ export async function addOrgStakeholder(
 
 export async function removeOrgStakeholder(
   orgId: string,
-  stakeholderId: string
-): Promise<void> {
+  stakeholderId: string,
+  _prevState: StakeholderActionState,
+  _formData: FormData
+): Promise<StakeholderActionState> {
   const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
@@ -95,7 +102,28 @@ export async function removeOrgStakeholder(
     .is("deleted_at", null)
     .maybeSingle();
 
-  if (!stakeholder) return;
+  if (!stakeholder) return {};
+
+  const [{ data: requiredBy }, { data: linkedTokens }] = await Promise.all([
+    supabase.from("template_stakeholders").select("templates(name)").eq("stakeholder_id", stakeholderId),
+    supabase.from("client_config_token_links").select("token").eq("stakeholder_id", stakeholderId),
+  ]);
+
+  const templateNames =
+    requiredBy
+      ?.flatMap((r) => (r.templates as { name: string }[] | null) ?? [])
+      .map((t) => t.name)
+      .filter((n): n is string => !!n) ?? [];
+  const tokenNames = (linkedTokens ?? []).map((r) => `{${r.token as string}}`);
+
+  if (templateNames.length > 0 || tokenNames.length > 0) {
+    const parts: string[] = [];
+    if (templateNames.length > 0) parts.push(`required by ${templateNames.join(", ")}`);
+    if (tokenNames.length > 0) parts.push(`linked to ${tokenNames.join(", ")}`);
+    return {
+      error: `Can't remove — ${parts.join("; ")}. Unlink it there first.`,
+    };
+  }
 
   await supabase
     .from("stakeholders")
@@ -109,6 +137,7 @@ export async function removeOrgStakeholder(
 
   revalidatePath(`/admin/clients/${orgId}`);
   revalidatePath("/admin/recovery");
+  return { saved: true };
 }
 
 export async function restoreOrgStakeholder(
@@ -143,6 +172,95 @@ export async function restoreOrgStakeholder(
   revalidatePath("/admin/recovery");
 }
 
+export type PurgeStakeholderState = { error?: string; success?: boolean };
+
+export async function purgeStakeholder(
+  scope: "org" | "project",
+  scopeId: string,
+  stakeholderId: string,
+  _prevState: PurgeStakeholderState,
+  _formData: FormData
+): Promise<PurgeStakeholderState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: stakeholder } = await supabase
+    .from("stakeholders")
+    .select("name, email")
+    .eq("id", stakeholderId)
+    .eq("scope", scope)
+    .eq("scope_id", scopeId)
+    .not("deleted_at", "is", null)
+    .maybeSingle();
+
+  if (!stakeholder) return { error: "Stakeholder not found in recovery bin." };
+
+  const { error } = await supabase.rpc("admin_delete_stakeholder", {
+    p_stakeholder_id: stakeholderId,
+  });
+  if (error) return { error: error.message };
+
+  await auditLog("stakeholder.purged", actor.id, actor.email as string, {
+    metadata: { stakeholderId, name: stakeholder.name, email: stakeholder.email, scope, scopeId },
+  });
+
+  revalidatePath("/admin/recovery");
+  revalidatePath(scope === "org" ? `/admin/clients/${scopeId}` : `/admin/projects/${scopeId}`);
+
+  return { success: true };
+}
+
+// ─── Template required-reviewer management ───────────────────────────────────
+// Which of the client's org-roster stakeholders must always be added as a
+// reviewer on any project built from this template (e.g. Stockland's
+// certifier). Locked at the project level — added here, never removable
+// per-project.
+
+export async function addTemplateStakeholder(
+  templateId: string,
+  stakeholderId: string
+): Promise<void> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("template_stakeholders")
+    .upsert(
+      { template_id: templateId, stakeholder_id: stakeholderId },
+      { onConflict: "template_id,stakeholder_id", ignoreDuplicates: true }
+    );
+  if (error) {
+    console.error(`[addTemplateStakeholder] failed:`, error);
+    return;
+  }
+
+  await auditLog("template.required_reviewer_added", actor.id, actor.email as string, {
+    metadata: { templateId, stakeholderId },
+  });
+
+  revalidatePath(`/admin/templates/${templateId}`);
+}
+
+export async function removeTemplateStakeholder(
+  templateId: string,
+  stakeholderId: string
+): Promise<void> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  await supabase
+    .from("template_stakeholders")
+    .delete()
+    .eq("template_id", templateId)
+    .eq("stakeholder_id", stakeholderId);
+
+  await auditLog("template.required_reviewer_removed", actor.id, actor.email as string, {
+    metadata: { templateId, stakeholderId },
+  });
+
+  revalidatePath(`/admin/templates/${templateId}`);
+}
+
 // ─── Project stakeholder management ──────────────────────────────────────────
 
 export async function addProjectStakeholder(
@@ -150,7 +268,7 @@ export async function addProjectStakeholder(
   _prevState: StakeholderActionState,
   formData: FormData
 ): Promise<StakeholderActionState> {
-  await requireRole("super_admin", "admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const name = (formData.get("name") as string | null)?.trim();
@@ -188,6 +306,72 @@ export async function addProjectStakeholder(
     sort_order: sortOrder,
   });
   if (error) return { error: error.message };
+
+  await inviteLateStakeholder(projectId, { name, email }, actor.id).catch((err) => {
+    console.error(`[addProjectStakeholder] late-add invite failed for ${email}:`, err);
+  });
+
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { saved: true };
+}
+
+export async function addProjectStakeholderFromRoster(
+  projectId: string,
+  _prevState: StakeholderActionState,
+  formData: FormData
+): Promise<StakeholderActionState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const rosterStakeholderId = formData.get("stakeholderId") as string | null;
+  if (!rosterStakeholderId) return { error: "Select a reviewer." };
+
+  const { data: rosterEntry } = await supabase
+    .from("stakeholders")
+    .select("name, email, company")
+    .eq("id", rosterStakeholderId)
+    .eq("scope", "org")
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!rosterEntry) return { error: "Roster entry not found." };
+
+  const name = rosterEntry.name as string;
+  const email = (rosterEntry.email as string).toLowerCase();
+  const company = rosterEntry.company as string | null;
+
+  const { data: existing } = await supabase
+    .from("stakeholders")
+    .select("id")
+    .eq("scope", "project")
+    .eq("scope_id", projectId)
+    .ilike("email", email)
+    .maybeSingle();
+  if (existing) return { error: "Already added to this project." };
+
+  const { data: last } = await supabase
+    .from("stakeholders")
+    .select("sort_order")
+    .eq("scope", "project")
+    .eq("scope_id", projectId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sortOrder = ((last?.sort_order as number | null) ?? -1) + 1;
+
+  const { error } = await supabase.from("stakeholders").insert({
+    scope: "project",
+    scope_id: projectId,
+    name,
+    email,
+    company,
+    sort_order: sortOrder,
+  });
+  if (error) return { error: error.message };
+
+  await inviteLateStakeholder(projectId, { name, email }, actor.id).catch((err) => {
+    console.error(`[addProjectStakeholderFromRoster] late-add invite failed for ${email}:`, err);
+  });
 
   revalidatePath(`/admin/projects/${projectId}`);
   return { saved: true };
@@ -463,6 +647,65 @@ export async function resendFreshToken(
   return { sent: true };
 }
 
+// ─── Manual status-update resend ──────────────────────────────────────────────
+// Same email/token-refresh the "approval-buffer" worker job sends automatically
+// 1 working day after the first response — exposed here so a consultant/admin
+// can nudge stakeholders (and reissue tokens) on demand instead of waiting.
+
+export interface BufferUpdateState {
+  error?: string;
+  sent?: boolean;
+  total?: number;
+  responded?: number;
+}
+
+export async function resendStakeholderStatusUpdate(
+  projectId: string,
+  _prevState: BufferUpdateState,
+  _formData: FormData
+): Promise<BufferUpdateState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select("id, status, review_cycle, assigned_consultant_id, clients(state_territory)")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found." };
+  if ((project.status as string) !== "dispatched") {
+    return { error: "This project is not currently awaiting stakeholder review." };
+  }
+
+  const stateTerritory =
+    (project.clients as unknown as { state_territory: string | null } | null)?.state_territory ?? null;
+
+  const result = await sendStakeholderBufferUpdate(
+    supabase,
+    projectId,
+    project.review_cycle as number,
+    stateTerritory,
+    "[manual-buffer-resend]"
+  );
+
+  if (!result) return { error: "No stakeholder reviews found for this cycle." };
+
+  await auditLog("stakeholder.buffer_update_resent", actor.id, actor.email as string, {
+    projectId,
+    metadata: { total: result.total, responded: result.responded, fresh_tokens_issued: result.freshTokensIssued },
+  });
+
+  revalidatePath(`/admin/projects/${projectId}`);
+  revalidatePath(`/ops/projects/${projectId}`);
+  return { sent: true, total: result.total, responded: result.responded };
+}
+
 // ─── Update stakeholder email + resend ────────────────────────────────────────
 
 export interface UpdateEmailState {
@@ -697,10 +940,7 @@ export async function logStakeholderResponseOnBehalf(
 
   if (projectDetail) {
     const cycle = projectDetail.review_cycle as number;
-    const projectRef =
-      (projectDetail.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ??
-      (projectDetail.project_number as string | null) ??
-      projectId.slice(0, 8);
+    const projectRef = resolveProjectRef(projectDetail, projectId);
 
     if (response === "rejected") {
       await supabase
@@ -708,65 +948,20 @@ export async function logStakeholderResponseOnBehalf(
         .update({ status: "revision_required", updated_at: now })
         .eq("id", projectId);
 
-      const { data: allRejected } = await supabase
-        .from("stakeholder_reviews")
-        .select("stakeholder_name, comments")
-        .eq("project_id", projectId)
-        .eq("review_cycle", cycle)
-        .in("status", ["rejected_with_comments", "rejected_without_comments"]);
-
-      const modifications = (allRejected ?? [])
-        .filter((r) => r.comments)
-        .map((r) => ({
-          stakeholderName: r.stakeholder_name as string,
-          comments: r.comments as string,
-        }));
-
-      const consultantId =
-        (projectDetail.qa_completed_by as string | null) ??
-        (projectDetail.assigned_consultant_id as string | null);
-      const recipientIds: string[] = [...(consultantId ? [consultantId] : [])];
-      const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
-      for (const a of admins ?? []) recipientIds.push(a.id as string);
-
-      const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/ops/projects/${projectId}`;
-      const { data: recipientRows } = await supabase
-        .from("users")
-        .select("id, first_name")
-        .in("id", recipientIds);
-
-      await Promise.all(
-        (recipientRows ?? []).map((u) => {
-          const firstName = (u.first_name as string | null) ?? "there";
-          const emailHtml = renderModificationsRequestedEmail({
-            consultantName: firstName,
-            projectId: projectRef,
-            modifications,
-            projectUrl,
-          });
-          return notify({
-            recipientId: u.id as string,
-            type: "modifications_requested",
-            message: `${review.stakeholder_name} requested changes to ${projectRef}${trimmedComments ? ` — "${trimmedComments.slice(0, 80)}${trimmedComments.length > 80 ? "…" : ""}"` : "."}`,
-            projectId,
-            emailSubject: `Changes requested — ${projectRef}`,
-            emailHtml,
-          }).catch(() => {});
-        })
-      );
+      await notifyModificationsRequested({
+        supabase,
+        projectId,
+        reviewCycle: cycle,
+        projectRef,
+        stakeholderName: review.stakeholder_name as string,
+        comments: trimmedComments,
+        qaCompletedBy: projectDetail.qa_completed_by as string | null,
+        assignedConsultantId: projectDetail.assigned_consultant_id as string | null,
+        messageVerb: "requested changes to",
+        subjectLabel: "Changes requested",
+      });
     } else {
-      const { data: pending } = await supabase
-        .from("stakeholder_reviews")
-        .select("id")
-        .eq("project_id", projectId)
-        .eq("review_cycle", cycle)
-        .eq("status", "pending");
-
-      if (!pending || pending.length === 0) {
-        scheduleOrDeliverPbdr(projectId).catch((err) => {
-          console.error(`[logStakeholderResponseOnBehalf] auto-deliver-pbdr failed for ${projectId}:`, err);
-        });
-      }
+      await autoDeliverIfFullyApproved(supabase, projectId, cycle, "[logStakeholderResponseOnBehalf]");
     }
   }
 

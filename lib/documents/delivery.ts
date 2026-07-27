@@ -7,8 +7,7 @@ import { buildPbdrFilename } from "@/lib/documents/naming";
 import { formatAddress } from "@/lib/documents/formatters";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
-import { sendEmail } from "@/lib/email/sender";
-import { renderPbdrDeliveryEmail } from "@/lib/email/templates/PBDRDeliveryEmail";
+import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
 import { renderEmailShell, e, paragraph, strong, noticeBox } from "@/lib/email/templates/shell";
 
 export interface DeliverPbdrResult {
@@ -201,55 +200,20 @@ export async function deliverPbdr(
       year: "numeric",
     });
 
-    // Deliver to submitter via notify() — writes in-app notification + sends email
-    const { data: submitter } = await supabase
-      .from("users")
-      .select("id, email, first_name, last_name")
-      .eq("id", project.submitted_by as string)
-      .maybeSingle();
-
-    if (submitter && downloadUrl) {
-      const firstName = (submitter.first_name as string | null) ?? "";
-      const lastName = (submitter.last_name as string | null) ?? "";
-      const recipientName =
-        [firstName, lastName].filter(Boolean).join(" ") || (submitter.email as string);
-      await notify({
-        recipientId: submitter.id as string,
-        type: "pbdr_delivery",
-        message: `Your PBDR for project ${projectId.slice(0, 8)} has been delivered.`,
+    if (downloadUrl) {
+      await deliverPbdrEmails({
+        supabase,
         projectId,
-        emailSubject: `Your Performance Report is ready — ${projectId.slice(0, 8)}`,
-        emailHtml: renderPbdrDeliveryEmail({
-          recipientName,
-          projectId: projectId.slice(0, 8),
-          downloadUrl,
-          expiresAt,
-        }),
-      }).catch((err) => {
-        console.error("[deliver-pbdr] submitter notify failed:", err);
+        templateProjectRef: projectId.slice(0, 8),
+        submittedBy: project.submitted_by as string | null,
+        deliveryRecipientEmail: project.delivery_recipient_email as string | null,
+        downloadUrl,
+        expiresAt,
+        subject: `Your Performance Report is ready — ${projectId.slice(0, 8)}`,
+        notifyMessage: `Your PBDR for project ${projectId.slice(0, 8)} has been delivered.`,
+        recipientEmailSource: "document_delivery_recipient",
+        logPrefix: "[deliver-pbdr]",
       });
-    }
-
-    // Also deliver to delivery_recipient_email if set and different from submitter
-    const recipientEmail = project.delivery_recipient_email as string | null;
-    if (recipientEmail && downloadUrl) {
-      const submitterEmail = (submitter?.email as string | null)?.toLowerCase();
-      if (recipientEmail.toLowerCase() !== submitterEmail) {
-        await sendEmail({
-          to: recipientEmail,
-          subject: `Your Performance Report is ready — ${projectId.slice(0, 8)}`,
-          html: renderPbdrDeliveryEmail({
-            recipientName: recipientEmail,
-            projectId: projectId.slice(0, 8),
-            downloadUrl,
-            expiresAt,
-          }),
-          source: "document_delivery_recipient",
-          projectId,
-        }).catch((err) => {
-          console.error("[deliver-pbdr] delivery_recipient email failed:", err);
-        });
-      }
     }
 
     const conversionEnd = new Date();

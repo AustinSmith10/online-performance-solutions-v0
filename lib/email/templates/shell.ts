@@ -9,6 +9,12 @@
  * Everything is tables + inline styles: Outlook has no flexbox or grid, and
  * <style> blocks are stripped by several clients. Authored light-on-light;
  * clients apply their own dark-mode transforms and cannot be relied upon.
+ *
+ * The header logo is an <img> pointing at NEXT_PUBLIC_APP_URL/logo.svg, not
+ * an inline <svg> — Outlook desktop (Word rendering engine) doesn't render
+ * inline SVG or <img src="*.svg"> at all, so it'll show a broken-image icon
+ * there. Every other major client (Gmail, Apple Mail, Outlook.com/mobile)
+ * renders it fine. Swap to a hosted PNG if Outlook desktop coverage matters.
  */
 
 export type EmailStatus = "action" | "success" | "error" | "info";
@@ -139,7 +145,7 @@ export function renderEmailShell({
                   <span style="font-family:${FONT};font-size:11px;font-weight:700;color:${tone.pillText};text-transform:uppercase;letter-spacing:0.05em">${e(statusLabel)}</span>
                 </td></tr></table>
               </td>
-              <td align="right" style="font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:0.08em;color:${INK_FAINT};text-transform:uppercase">DDEG&nbsp;OPS</td>
+              <td align="right"><img src="${e(process.env.NEXT_PUBLIC_APP_URL ?? "")}/logo.svg" alt="DDEG" width="34" height="20" style="display:block;border:0"></td>
             </tr></table>
           </td>
         </tr>

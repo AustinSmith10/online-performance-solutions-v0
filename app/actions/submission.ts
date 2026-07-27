@@ -13,8 +13,8 @@ import { buildFieldFlagPlan, type FieldFlagPlan } from "@/lib/documents/field-fl
 import type { ComparisonMode } from "@/lib/documents/compare-candidates";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { addWorkingDays } from "@/lib/delivery/working-days";
-import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/config/support";
 import { performAssignment } from "@/lib/projects/assign";
+import { AcknowledgementEmail } from "@/lib/email/templates/AcknowledgementEmail";
 import {
   getMetricsAutofillConfigs,
   getAutofillExclusionTokens,
@@ -723,6 +723,16 @@ export async function submitProject(
 
   // Defer all post-success side effects so they don't block the redirect
   after(async () => {
+    let recipientName = (actor.first_name as string | null) ?? "there";
+    if (actsOnBehalf) {
+      const { data: recipientUser } = await supabase
+        .from("users")
+        .select("first_name")
+        .eq("id", adminClientId as string)
+        .single();
+      recipientName = (recipientUser?.first_name as string | null) ?? "there";
+    }
+
     await Promise.all([
       notify({
         recipientId: actsOnBehalf ? adminClientId : actor.id,
@@ -730,7 +740,15 @@ export async function submitProject(
         message: `Your report request for ${siteAddress ?? "your property"} has been received and is being processed.`,
         projectId,
         emailSubject: "Report request received — OPS",
-        emailHtml: submissionConfirmationEmail({ poNumber }),
+        emailHtml: AcknowledgementEmail({
+          recipientName,
+          projectId: siteAddress ?? projectId.slice(0, 8),
+          expectedDeliveryDate: expectedDeliveryDate
+            ? new Date(expectedDeliveryDate).toLocaleDateString("en-AU")
+            : "To be confirmed",
+          portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/portal/projects/${projectId}`,
+          poNumber,
+        }),
       }).catch((err) => console.error("[submitProject] client notify failed:", err)),
 
       auditLog("project.submitted", actor.id, actor.email as string, {
@@ -777,22 +795,6 @@ export async function submitProject(
 }
 
 // ─── Email templates ─────────────────────────────────────────────────────────
-
-function submissionConfirmationEmail({ poNumber }: { poNumber: string | null }) {
-  return `<!DOCTYPE html>
-<html>
-<body style="font-family: sans-serif; color: #18181b; max-width: 560px; margin: 0 auto; padding: 24px;">
-  <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Report request received</h2>
-  <p style="color: #52525b; margin-bottom: 16px;">
-    Thank you — your report request${poNumber ? ` for PO <strong>${escHtml(poNumber)}</strong>` : ""} has been received and is being processed.
-  </p>
-  <p style="color: #52525b; margin-bottom: 16px;">
-    You will be notified once your report is ready. If you have any questions, please contact your account manager at <a href="${SUPPORT_MAILTO}" style="color: #18181b">${SUPPORT_EMAIL}</a>.
-  </p>
-  <p style="color: #a1a1aa; font-size: 13px;">OPS — Online Performance Solution</p>
-</body>
-</html>`;
-}
 
 function duplicateSubmissionEmail({
   siteAddress,

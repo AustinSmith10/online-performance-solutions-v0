@@ -53,10 +53,11 @@ export function failedJobToEntry(job: FailedJob, projectBasePath: string): TrayE
 }
 
 export function bounceEventToEntry(b: BounceEvent, projectBasePath: string): TrayEntry {
+  const verb = b.type === "complaint" ? "Spam complaint from" : "Email bounced:";
   return {
     id: trayId.bounce(b.id),
     kind: "hard_error",
-    message: `Email bounced: ${b.email}${b.reason ? ` (${b.reason})` : ""}`,
+    message: `${verb} ${b.email}${b.reason ? ` (${b.reason})` : ""}`,
     href: b.project_id ? `${projectBasePath}/${b.project_id}` : null,
     timestamp: b.created_at,
     isRead: false,

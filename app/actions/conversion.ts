@@ -6,9 +6,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deliverPbdr } from "@/lib/documents/delivery";
 import { auditLog } from "@/lib/audit/log";
-import { notify } from "@/lib/notifications/notify";
-import { sendEmail } from "@/lib/email/sender";
-import { renderPbdrDeliveryEmail } from "@/lib/email/templates/PBDRDeliveryEmail";
+import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
 
 export type ConvertState = { error?: string; success?: boolean };
 
@@ -43,16 +41,20 @@ export async function resendPbdrEmail(
   _prev: ResendPbdrEmailState,
   _formData: FormData
 ): Promise<ResendPbdrEmailState> {
-  const actor = await requireRole("super_admin", "admin");
+  const actor = await requireRole("super_admin", "admin", "consultant");
   const supabase = createAdminClient();
 
-  const { data: project } = await supabase
+  let projectQuery = supabase
     .from("projects")
     .select("id, client_id, project_number, delivery_recipient_email, submitted_by")
     .eq("id", projectId)
     .in("status", ["delivered", "complete"])
-    .is("deleted_at", null)
-    .maybeSingle();
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    projectQuery = projectQuery.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { data: project } = await projectQuery.maybeSingle();
 
   if (!project) return { error: "Project not found or not yet delivered." };
 
@@ -81,57 +83,26 @@ export async function resendPbdrEmail(
     ? `${project.project_number as string}-S`
     : projectId.slice(0, 8);
 
-  const { data: submitter } = await supabase
-    .from("users")
-    .select("id, email, first_name, last_name")
-    .eq("id", project.submitted_by as string)
-    .maybeSingle();
-
-  if (submitter) {
-    const name =
-      [(submitter.first_name as string | null), (submitter.last_name as string | null)]
-        .filter(Boolean)
-        .join(" ") || (submitter.email as string);
-
-    await notify({
-      recipientId: submitter.id as string,
-      type: "pbdr_delivery",
-      message: `Your PBDR for project ${projectRef} has been resent.`,
-      projectId,
-      emailSubject: `Your Performance Report — ${projectRef}`,
-      emailHtml: renderPbdrDeliveryEmail({
-        recipientName: name,
-        projectId: projectRef,
-        downloadUrl,
-        expiresAt,
-      }),
-    }).catch((err) => console.warn("[resend-pbdr-email] submitter notify failed:", err));
-  }
-
-  const recipientEmail = project.delivery_recipient_email as string | null;
-  if (recipientEmail) {
-    const submitterEmail = (submitter?.email as string | null)?.toLowerCase();
-    if (recipientEmail.toLowerCase() !== submitterEmail) {
-      await sendEmail({
-        to: recipientEmail,
-        subject: `Your Performance Report — ${projectRef}`,
-        html: renderPbdrDeliveryEmail({
-          recipientName: recipientEmail,
-          projectId: projectRef,
-          downloadUrl,
-          expiresAt,
-        }),
-        source: "conversion_resend_delivery_recipient",
-        projectId,
-      }).catch((err) => console.warn("[resend-pbdr-email] delivery_recipient email failed:", err));
-    }
-  }
+  await deliverPbdrEmails({
+    supabase,
+    projectId,
+    templateProjectRef: projectRef,
+    submittedBy: project.submitted_by as string | null,
+    deliveryRecipientEmail: project.delivery_recipient_email as string | null,
+    downloadUrl,
+    expiresAt,
+    subject: `Your Performance Report — ${projectRef}`,
+    notifyMessage: `Your PBDR for project ${projectRef} has been resent.`,
+    recipientEmailSource: "conversion_resend_delivery_recipient",
+    logPrefix: "[resend-pbdr-email]",
+  });
 
   await auditLog("pbdr.redelivered", actor.id, actor.email as string, {
     projectId,
     orgId: project.client_id as string,
-    metadata: { pbdr_version: pbdrFile.version, triggered_by: "admin_resend" },
+    metadata: { pbdr_version: pbdrFile.version, triggered_by: `${actor.role}_resend` },
   });
 
-  redirect(`/admin/projects/${projectId}?pbdr_resent=1`);
+  const basePath = actor.role === "consultant" ? "/ops/projects" : "/admin/projects";
+  redirect(`${basePath}/${projectId}?pbdr_resent=1`);
 }

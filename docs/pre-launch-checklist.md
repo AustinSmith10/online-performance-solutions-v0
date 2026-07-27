@@ -11,7 +11,9 @@ Items to complete before going live. Not blocking development.
 - [ ] Rotate all keys and secrets — generate fresh `SUPABASE_SERVICE_ROLE_KEY`, `POSTMARK_SERVER_TOKEN`, etc. for production. Do not reuse dev credentials.
 - [ ] Set `NEXT_PUBLIC_APP_URL` to the production domain in Railway environment variables.
 - [ ] Confirm `NODE_ENV=production` is set in Railway — this re-enables 2FA enforcement in the proxy.
-- [ ] Set `POSTMARK_INBOUND_WEBHOOK_USER` / `POSTMARK_INBOUND_WEBHOOK_PASSWORD` in Railway, and configure the matching Basic Auth credentials in the inbound webhook URL in the Postmark dashboard (`https://<user>:<password>@yourdomain.com/api/webhooks/email`).
+- [x] Set `POSTMARK_INBOUND_WEBHOOK_USER` / `POSTMARK_INBOUND_WEBHOOK_PASSWORD` in Railway, and configure the matching Basic Auth credentials in the inbound webhook URL in the Postmark dashboard (`https://<user>:<password>@yourdomain.com/api/webhooks/email`). Done 2026-07-23, ahead of the production domain — inbound webhook can't receive real mail until MX/domain (below) are also done.
+- [ ] Set `POSTMARK_BOUNCE_WEBHOOK_USER` / `POSTMARK_BOUNCE_WEBHOOK_PASSWORD` in Railway, and in the Postmark dashboard's server settings add a "Bounce" webhook (covers both bounces and spam complaints) pointed at `https://<user>:<password>@yourdomain.com/api/webhooks/email-bounce`. Surfaces in the admin "needs attention" panel once configured.
+- [ ] Set the hosted Supabase project's OTP expiry to 48 hours (Authentication → Emails → OTP expiry) to match `supabase/config.toml`'s `otp_expiry = 172800` — governs the welcome-account set-password link, admin password reset, and self-service forgot-password. `config.toml` only applies to local dev; the Dashboard setting is what production actually uses.
 
 ## Email
 

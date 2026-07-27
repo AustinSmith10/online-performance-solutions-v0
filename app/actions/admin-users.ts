@@ -200,6 +200,50 @@ export async function restoreDeletedUser(
   return {};
 }
 
+// ─── Permanent delete (from the recovery bin only) ──────────────────────────
+
+export type PurgeUserState = { error?: string; success?: boolean };
+
+export async function purgeUser(
+  userId: string,
+  _prev: PurgeUserState,
+  _formData: FormData
+): Promise<PurgeUserState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: user } = await supabase
+    .from("users")
+    .select("email, role")
+    .eq("id", userId)
+    .not("deleted_at", "is", null)
+    .maybeSingle();
+
+  if (!user) return { error: "User not found in recovery bin." };
+
+  if (user.role === "super_admin") {
+    return { error: "Super admin accounts cannot be deleted." };
+  }
+
+  if (actor.role === "admin" && user.role === "admin") {
+    return { error: "Insufficient permissions to delete this account." };
+  }
+
+  const { error } = await supabase.rpc("admin_delete_user", { p_user_id: userId });
+  if (error) return { error: error.message };
+
+  await auditLog("user.purged", actor.id, actor.email, {
+    metadata: { target_user_id: userId, target_email: user.email, role: user.role },
+  });
+
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/stakeholders");
+  revalidatePath("/admin/consultants");
+  revalidatePath("/admin/recovery");
+
+  return { success: true };
+}
+
 export type ResetPasswordState = { link?: string; error?: string };
 
 export async function resetUserPassword(

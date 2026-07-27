@@ -82,7 +82,7 @@ export async function getNeedsAttentionSignals(
     supabase.rpc("get_failed_jobs"),
     supabase
       .from("bounce_events")
-      .select("id, email, project_id, reason, created_at, resolved_at")
+      .select("id, email, project_id, reason, type, created_at, resolved_at")
       .is("resolved_at", null)
       .order("created_at", { ascending: false })
       .limit(100),

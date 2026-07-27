@@ -12,7 +12,10 @@ export async function createAccount(
   orgId?: string
 ) {
   const supabase = createAdminClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) {
+    return { error: "NEXT_PUBLIC_APP_URL is not set — cannot build the welcome email link" };
+  }
 
   const { data, error } = await supabase.auth.admin.createUser({
     email,
