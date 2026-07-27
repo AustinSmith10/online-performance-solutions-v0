@@ -28,20 +28,17 @@ const PasswordSchema = z
   .regex(/[0-9]/, { error: "Must contain a number" })
   .regex(/[^A-Za-z0-9]/, { error: "Must contain a special character" });
 
-const CompleteProfileSchema = z
-  .object({
-    first_name: z.string().min(1, { error: "First name required" }).trim(),
-    last_name: z.string().min(1, { error: "Last name required" }).trim(),
-    phone: z.string().min(1, { error: "Phone required" }).trim(),
-    company_role: z.string().min(1, { error: "Role required" }).trim(),
-    state_territory: z.string().min(1, { error: "State/territory required" }),
-    password: PasswordSchema,
-    confirm_password: z.string(),
-  })
-  .refine((d) => d.password === d.confirm_password, {
-    error: "Passwords do not match",
-    path: ["confirm_password"],
-  });
+// No password fields here — every user reaches this page through the
+// recovery-link flow (/auth/update-password), which already sets the
+// password before a session exists to get here at all. Asking again was a
+// redundant second password step found during manual invite-flow QA.
+const CompleteProfileSchema = z.object({
+  first_name: z.string().min(1, { error: "First name required" }).trim(),
+  last_name: z.string().min(1, { error: "Last name required" }).trim(),
+  phone: z.string().min(1, { error: "Phone required" }).trim(),
+  company_role: z.string().min(1, { error: "Role required" }).trim(),
+  state_territory: z.string().min(1, { error: "State/territory required" }),
+});
 
 const VerifyTotpSchema = z.object({
   code: z
@@ -306,8 +303,6 @@ export type CompleteProfileState = {
     phone?: string[];
     company_role?: string[];
     state_territory?: string[];
-    password?: string[];
-    confirm_password?: string[];
     form?: string[];
   };
 };
@@ -322,8 +317,6 @@ export async function completeProfile(
     phone: formData.get("phone"),
     company_role: formData.get("company_role"),
     state_territory: formData.get("state_territory"),
-    password: formData.get("password"),
-    confirm_password: formData.get("confirm_password"),
   });
 
   if (!validated.success) {
@@ -334,12 +327,7 @@ export async function completeProfile(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { errors: { form: ["Session expired. Please log in again."] } };
 
-  const { first_name, last_name, phone, company_role, state_territory, password } =
-    validated.data;
-
-  // Set password
-  const { error: pwError } = await supabase.auth.updateUser({ password });
-  if (pwError) return { errors: { form: [pwError.message] } };
+  const { first_name, last_name, phone, company_role, state_territory } = validated.data;
 
   // Mark profile complete in auth user_metadata
   const { error: metaError } = await supabase.auth.updateUser({

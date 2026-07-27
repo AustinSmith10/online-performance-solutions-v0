@@ -156,55 +156,6 @@ export default function CompleteProfilePage() {
           ))}
         </div>
 
-        <hr className="border-zinc-200" />
-
-        <div>
-          <label
-            htmlFor="password"
-            className="block text-sm font-medium text-zinc-700"
-          >
-            Set a password
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-          />
-          <p className="mt-1 text-xs text-zinc-400">
-            12+ characters, with uppercase, number, and special character.
-          </p>
-          {state.errors?.password?.map((e) => (
-            <p key={e} className="mt-1 text-xs text-red-600">
-              {e}
-            </p>
-          ))}
-        </div>
-
-        <div>
-          <label
-            htmlFor="confirm_password"
-            className="block text-sm font-medium text-zinc-700"
-          >
-            Confirm password
-          </label>
-          <input
-            id="confirm_password"
-            name="confirm_password"
-            type="password"
-            autoComplete="new-password"
-            required
-            className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-          />
-          {state.errors?.confirm_password?.map((e) => (
-            <p key={e} className="mt-1 text-xs text-red-600">
-              {e}
-            </p>
-          ))}
-        </div>
-
         <button
           type="submit"
           disabled={pending}
