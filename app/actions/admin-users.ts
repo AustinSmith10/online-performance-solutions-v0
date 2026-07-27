@@ -5,9 +5,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
-import { createAccount } from "@/lib/auth/invite";
+import { createAccount, sendWelcomeEmail } from "@/lib/auth/invite";
 import { auditLog } from "@/lib/audit/log";
-import type { ConsultantAvailability } from "@/types";
+import type { ConsultantAvailability, UserRole } from "@/types";
 
 export type DeleteUserState = { error?: string };
 
@@ -274,6 +274,119 @@ export async function resetUserPassword(
   return { link: data.properties.action_link };
 }
 
+export type ResendInviteState = { success?: boolean; error?: string };
+
+export async function resendInvite(
+  userId: string,
+  _prev: ResendInviteState,
+  _formData: FormData
+): Promise<ResendInviteState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: user, error: fetchError } = await supabase
+    .from("users")
+    .select("email, role, first_name")
+    .eq("id", userId)
+    .single();
+
+  if (fetchError || !user?.email) return { error: "User not found." };
+
+  const { error } = await sendWelcomeEmail(
+    user.email,
+    user.role as UserRole,
+    user.first_name ?? "",
+    "invite_resend"
+  ).catch((err) => ({ error: err instanceof Error ? err.message : String(err) }));
+
+  if (error) return { error };
+
+  await auditLog("user.invite_resent", actor.id, actor.email, {
+    metadata: { target_user_id: userId, target_email: user.email },
+  });
+
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/stakeholders");
+  return { success: true };
+}
+
+export type ResendFailureState = { success?: boolean; error?: string };
+
+/**
+ * Resend from the dashboard's failed-email drawer, where we only have the
+ * email_send_log row (to_email/source), not a user id. Only handles invite
+ * failures — other sources aren't safely re-triggerable from stored data
+ * alone (no html body is persisted), so they're resolve-only from here.
+ */
+export async function resendInviteFailure(
+  failureId: string,
+  _prev: ResendFailureState,
+  _formData: FormData
+): Promise<ResendFailureState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: failure, error: failureError } = await supabase
+    .from("email_send_log")
+    .select("to_email, source")
+    .eq("id", failureId)
+    .single();
+
+  if (failureError || !failure) return { error: "Failure record not found." };
+  if (failure.source !== "invite" && failure.source !== "invite_resend") {
+    return { error: "This email type can't be resent from here." };
+  }
+
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("id, role, first_name")
+    .eq("email", failure.to_email)
+    .single();
+
+  if (userError || !user) return { error: "No matching user account found for this address." };
+
+  const { error } = await sendWelcomeEmail(
+    failure.to_email,
+    user.role as UserRole,
+    user.first_name ?? "",
+    "invite_resend"
+  ).catch((err) => ({ error: err instanceof Error ? err.message : String(err) }));
+
+  if (error) return { error };
+
+  await supabase
+    .from("email_send_log")
+    .update({ resolved_at: new Date().toISOString() })
+    .eq("id", failureId);
+
+  await auditLog("user.invite_resent", actor.id, actor.email, {
+    metadata: { target_user_id: user.id, target_email: failure.to_email, via: "dashboard" },
+  });
+
+  revalidatePath("/admin/dashboard");
+  revalidatePath(`/admin/users/${user.id}`);
+  return { success: true };
+}
+
+export async function resolveEmailFailure(failureId: string) {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("email_send_log")
+    .update({ resolved_at: new Date().toISOString() })
+    .eq("id", failureId);
+
+  if (error) throw new Error(error.message);
+
+  await auditLog("email.failure_resolved", actor.id, actor.email, {
+    metadata: { failure_id: failureId },
+  });
+
+  revalidatePath("/admin/dashboard");
+}
+
 const CreateAccountSchema = z.object({
   email: z.string().email({ error: "Valid email required" }).trim().toLowerCase(),
   first_name: z.string().min(1, { error: "First name required" }).trim(),
@@ -323,14 +436,18 @@ export async function createUserAccount(
   }
 
   const result = await createAccount(email, role, first_name, last_name, client_id || undefined);
-  if (result.error) return { errors: { form: [result.error] } };
+  if (!result.userId) return { errors: { form: [result.error ?? "Failed to create account"] } };
 
   await auditLog("user.account_created", caller.id, caller.email, {
     metadata: { target_user_id: result.userId, target_email: email, role },
   });
 
   revalidatePath("/admin/users");
-  redirect(`/admin/users/${result.userId}?created=1`);
+  revalidatePath("/admin/stakeholders");
+  // The account exists even if the welcome email failed to send — surface
+  // that on the detail page (with a resend action) instead of losing the
+  // created account behind a form error.
+  redirect(`/admin/users/${result.userId}?created=1${result.error ? "&email_failed=1" : ""}`);
 }
 
 export async function unlockUser(userId: string) {

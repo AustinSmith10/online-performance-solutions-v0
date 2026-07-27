@@ -546,6 +546,7 @@ export type Database = {
           id: string
           message_id: string | null
           project_id: string | null
+          resolved_at: string | null
           source: string
           status: string
           subject: string
@@ -557,6 +558,7 @@ export type Database = {
           id?: string
           message_id?: string | null
           project_id?: string | null
+          resolved_at?: string | null
           source: string
           status: string
           subject: string
@@ -568,6 +570,7 @@ export type Database = {
           id?: string
           message_id?: string | null
           project_id?: string | null
+          resolved_at?: string | null
           source?: string
           status?: string
           subject?: string

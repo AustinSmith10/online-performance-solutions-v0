@@ -5,11 +5,13 @@ import {
   deleteUser,
   restoreUser,
   resetUserPassword,
+  resendInvite,
   softDeleteUser,
   restoreDeletedUser,
   type DeleteUserState,
   type RestoreUserState,
   type ResetPasswordState,
+  type ResendInviteState,
   type SoftDeleteUserState,
   type RestoreDeletedUserState,
 } from "@/app/actions/admin-users";
@@ -21,6 +23,7 @@ type Props = {
   canDeactivate: boolean;
   isDeleted?: boolean;
   canDelete?: boolean;
+  inviteFailed?: boolean;
 };
 
 export function UserHeaderActions({
@@ -30,6 +33,7 @@ export function UserHeaderActions({
   canDeactivate,
   isDeleted = false,
   canDelete = false,
+  inviteFailed = false,
 }: Props) {
   const boundDelete = deleteUser.bind(null, userId);
   const [deleteState, deleteAction, deletePending] = useActionState<DeleteUserState, FormData>(
@@ -46,6 +50,12 @@ export function UserHeaderActions({
   const boundReset = resetUserPassword.bind(null, userId);
   const [resetState, resetAction, resetPending] = useActionState<ResetPasswordState, FormData>(
     boundReset,
+    {}
+  );
+
+  const boundResendInvite = resendInvite.bind(null, userId);
+  const [resendState, resendAction, resendPending] = useActionState<ResendInviteState, FormData>(
+    boundResendInvite,
     {}
   );
 
@@ -86,6 +96,29 @@ export function UserHeaderActions({
   return (
     <>
       <div className="flex shrink-0 items-center gap-2">
+        <form action={resendAction}>
+          <button
+            type="submit"
+            disabled={resendPending}
+            className={`rounded-md border px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+              inviteFailed
+                ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+            }`}
+          >
+            {resendPending
+              ? "Sending…"
+              : resendState.success
+              ? "Invite sent ✓"
+              : inviteFailed
+              ? "Resend invite (failed)"
+              : "Resend invite"}
+          </button>
+          {resendState.error && (
+            <p className="mt-1 text-right text-xs text-red-600">{resendState.error}</p>
+          )}
+        </form>
+
         <button
           type="button"
           onClick={() => setShowResetOverlay(true)}

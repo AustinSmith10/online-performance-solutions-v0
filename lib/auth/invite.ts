@@ -4,6 +4,50 @@ import { sendEmail } from "@/lib/email/sender";
 import { WelcomeAccountEmail } from "@/lib/email/templates/WelcomeAccountEmail";
 import type { UserRole } from "@/types";
 
+/**
+ * Generates a fresh password-setup link and sends the welcome email. Shared
+ * by account creation and by an admin manually resending a failed invite —
+ * the link itself is one-time-use, so a resend always needs a new one.
+ */
+export async function sendWelcomeEmail(
+  email: string,
+  role: UserRole,
+  firstName: string,
+  source: "invite" | "invite_resend" = "invite"
+): Promise<{ error?: string }> {
+  const supabase = createAdminClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) {
+    return { error: "NEXT_PUBLIC_APP_URL is not set — cannot build the welcome email link" };
+  }
+
+  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo: `${appUrl}/auth/update-password` },
+  });
+
+  if (linkError || !linkData?.properties?.action_link) {
+    return { error: linkError?.message ?? "Failed to generate welcome link" };
+  }
+
+  await sendEmail({
+    to: email,
+    subject: "Your DDEG OPS account is ready",
+    html: WelcomeAccountEmail({
+      firstName,
+      email,
+      role,
+      resetLink: linkData.properties.action_link,
+      appUrl,
+    }),
+    source,
+    throwOnError: true,
+  });
+
+  return {};
+}
+
 export async function createAccount(
   email: string,
   role: UserRole,
@@ -12,10 +56,6 @@ export async function createAccount(
   orgId?: string
 ) {
   const supabase = createAdminClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!appUrl) {
-    return { error: "NEXT_PUBLIC_APP_URL is not set — cannot build the welcome email link" };
-  }
 
   const { data, error } = await supabase.auth.admin.createUser({
     email,
@@ -44,28 +84,10 @@ export async function createAccount(
 
   if (insertError) return { error: insertError.message };
 
-  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-    type: "recovery",
-    email,
-    options: { redirectTo: `${appUrl}/auth/update-password` },
-  });
-
-  if (linkError || !linkData?.properties?.action_link) {
-    return { error: linkError?.message ?? "Failed to generate welcome link" };
-  }
-
-  await sendEmail({
-    to: email,
-    subject: "Your DDEG OPS account is ready",
-    html: WelcomeAccountEmail({
-      firstName,
-      email,
-      role,
-      resetLink: linkData.properties.action_link,
-      appUrl,
-    }),
-    source: "invite",
-  });
+  const { error: emailError } = await sendWelcomeEmail(email, role, firstName).catch((err) => ({
+    error: err instanceof Error ? err.message : String(err),
+  }));
+  if (emailError) return { error: emailError, userId };
 
   return { userId };
 }

@@ -119,12 +119,16 @@ export default async function AdminDashboardPage({
       .order("created_at", { ascending: false })
       .limit(10),
 
+    // resolved_at filter matters here: without it, unresolved failures older
+    // than the 20 most recent could get silently pushed off this list forever
+    // once enough newer ones stack up, with no other place surfacing them.
     supabase
       .from("email_send_log")
       .select("id, to_email, subject, source, project_id, created_at, error")
       .eq("status", "failed")
-      .order("created_at", { ascending: false })
-      .limit(10),
+      .is("resolved_at", null)
+      .order("created_at", { ascending: true })
+      .limit(20),
 
     // Consultants for the assign drawer
     supabase

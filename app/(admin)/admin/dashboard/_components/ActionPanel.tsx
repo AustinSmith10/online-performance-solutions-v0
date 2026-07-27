@@ -12,6 +12,11 @@ import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/Di
 import { reconcileOverrideAction, type ReconcileState } from "@/app/actions/credits";
 import { triggerPbdrConversion, type ConvertState } from "@/app/actions/conversion";
 import { adminSetProjectNumberFromDashboard, type AdminProjectNumberState } from "@/app/actions/projects";
+import {
+  resendInviteFailure,
+  resolveEmailFailure,
+  type ResendFailureState,
+} from "@/app/actions/admin-users";
 import type { ConsultantAvailability, ProjectStatus } from "@/types";
 
 // ── Types (serialisable — passed from server component) ──────────────────────
@@ -722,6 +727,30 @@ function ErrorDrawerContent({
 }
 
 function EmailFailureDrawerContent({ failure }: { failure: EmailFailure }) {
+  const router = useRouter();
+  const isInvite = failure.source === "invite" || failure.source === "invite_resend";
+
+  const boundResend = resendInviteFailure.bind(null, failure.id);
+  const [resendState, resendAction, resendPending] = useActionState<ResendFailureState, FormData>(
+    boundResend,
+    {}
+  );
+
+  const [resolvePending, setResolvePending] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  async function handleResolve() {
+    setResolvePending(true);
+    setResolveError(null);
+    try {
+      await resolveEmailFailure(failure.id);
+      router.refresh();
+    } catch (err) {
+      setResolveError(err instanceof Error ? err.message : "Failed to mark resolved.");
+    } finally {
+      setResolvePending(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
@@ -742,6 +771,29 @@ function EmailFailureDrawerContent({ failure }: { failure: EmailFailure }) {
         Check the Postmark Activity log for this recipient to confirm whether the send was rejected,
         bounced, or never reached Postmark at all.
       </p>
+      <div className="flex items-center gap-2">
+        {isInvite && (
+          <form action={resendAction}>
+            <button
+              type="submit"
+              disabled={resendPending || resendState.success}
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+            >
+              {resendPending ? "Resending…" : resendState.success ? "Resent ✓" : "Resend invite"}
+            </button>
+          </form>
+        )}
+        <button
+          type="button"
+          onClick={() => void handleResolve()}
+          disabled={resolvePending}
+          className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+        >
+          {resolvePending ? "Marking…" : "Mark resolved"}
+        </button>
+      </div>
+      {resendState.error && <p className="text-xs text-red-600">{resendState.error}</p>}
+      {resolveError && <p className="text-xs text-red-600">{resolveError}</p>}
     </div>
   );
 }

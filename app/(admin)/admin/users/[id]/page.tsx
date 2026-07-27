@@ -37,6 +37,20 @@ export default async function UserDetailPage({
   const u = userResult.data as User & { clients: Pick<Client, "id" | "name"> | null };
   const clients = (orgsResult.data ?? []) as Pick<Client, "id" | "name">[];
 
+  // Reflects the most recent invite attempt only — a later successful resend
+  // should clear this even if the earlier failure row is still unresolved.
+  const { data: latestInvite } = u.email
+    ? await supabase
+        .from("email_send_log")
+        .select("status")
+        .eq("to_email", u.email)
+        .in("source", ["invite", "invite_resend"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+  const inviteFailed = latestInvite?.status === "failed";
+
   const unlockAction = unlockUser.bind(null, id);
   const resetTotpAction = resetUserTotp.bind(null, id);
   const requireTotpAction = requireUserTotp.bind(null, id);
@@ -51,6 +65,7 @@ export default async function UserDetailPage({
   const deleted = sp.deleted === "1";
   const restored = sp.restored === "1";
   const removed = sp.removed === "1";
+  const emailFailedOnCreate = sp.email_failed === "1";
 
   const initials =
     u.first_name && u.last_name
@@ -92,6 +107,11 @@ export default async function UserDetailPage({
                 Locked
               </span>
             )}
+            {inviteFailed && (
+              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                Invite failed
+              </span>
+            )}
           </div>
         </div>
         <UserHeaderActions
@@ -101,6 +121,7 @@ export default async function UserDetailPage({
           canDeactivate={u.role !== "super_admin" && u.role !== "admin"}
           isDeleted={!!u.deleted_at}
           canDelete={u.role !== "super_admin"}
+          inviteFailed={inviteFailed}
         />
       </div>
 
@@ -194,7 +215,14 @@ export default async function UserDetailPage({
 
   return (
     <>
-      {created && (
+      {created && emailFailedOnCreate && (
+        <AdminSuccessBanner
+          cleanUrl={cleanUrl}
+          title="Account created — welcome email failed"
+          body="The account was created, but the welcome email could not be sent. Use Resend invite below once the issue is fixed."
+        />
+      )}
+      {created && !emailFailedOnCreate && (
         <AdminSuccessBanner
           cleanUrl={cleanUrl}
           title="Account created"

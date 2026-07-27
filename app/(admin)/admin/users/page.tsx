@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { getFailedInviteEmails } from "@/lib/admin/invite-status";
 import { CreateAccountModal } from "./_components/CreateAccountModal";
 import type { User, Client, ConsultantAvailability } from "@/types";
 
@@ -156,6 +157,10 @@ export default async function UsersPage({
     const users = (data ?? []) as unknown as UserRow[];
     const hasFilter = !!(q || availability || status);
     const params = { q, availability, status, sort, order, tab };
+    const failedInviteEmails = await getFailedInviteEmails(
+      supabase,
+      users.map((u) => u.email).filter((e): e is string => !!e)
+    );
 
     return (
       <div className="mx-auto max-w-4xl space-y-6">
@@ -243,6 +248,9 @@ export default async function UsersPage({
                     <p className="mt-0.5 truncate text-xs text-zinc-500">{u.clients?.name ?? "—"}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    {u.email && failedInviteEmails.has(u.email) && (
+                      <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Invite failed</span>
+                    )}
                     {u.is_locked ? (
                       <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Locked</span>
                     ) : (
@@ -280,6 +288,10 @@ export default async function UsersPage({
   const { data } = await query;
   const users = (data ?? []) as unknown as UserRow[];
   const hasFilter = !!(q || role || status);
+  const failedInviteEmails = await getFailedInviteEmails(
+    supabase,
+    users.map((u) => u.email).filter((e): e is string => !!e)
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -363,6 +375,9 @@ export default async function UsersPage({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
+                  {u.email && failedInviteEmails.has(u.email) && (
+                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Invite failed</span>
+                  )}
                   {u.is_locked ? (
                     <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Locked</span>
                   ) : u.role === "consultant" ? (

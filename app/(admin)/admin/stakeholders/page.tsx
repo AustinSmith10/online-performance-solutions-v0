@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { getFailedInviteEmails } from "@/lib/admin/invite-status";
 import { CreateAccountModal } from "../users/_components/CreateAccountModal";
 import type { User, Client } from "@/types";
 
@@ -100,6 +101,7 @@ export default async function ClientsPage({
           hasFilter
           orgs={orgs}
           callerRole={caller.role as string}
+          failedInviteEmails={new Set()}
         />
       );
     }
@@ -110,6 +112,11 @@ export default async function ClientsPage({
   const clients = (data ?? []) as unknown as ClientRow[];
   const hasFilter = !!(q || org || status);
 
+  const failedInviteEmails = await getFailedInviteEmails(
+    supabase,
+    clients.map((c) => c.email).filter((e): e is string => !!e)
+  );
+
   return (
     <ClientsLayout
       clients={clients}
@@ -119,6 +126,7 @@ export default async function ClientsPage({
       hasFilter={hasFilter}
       orgs={orgs}
       callerRole={caller.role as string}
+      failedInviteEmails={failedInviteEmails}
     />
   );
 }
@@ -131,6 +139,7 @@ function ClientsLayout({
   hasFilter,
   orgs,
   callerRole,
+  failedInviteEmails,
 }: {
   clients: ClientRow[];
   params: Record<string, string | undefined>;
@@ -139,6 +148,7 @@ function ClientsLayout({
   hasFilter: boolean;
   orgs: Pick<Client, "id" | "name">[];
   callerRole: string;
+  failedInviteEmails: Set<string>;
 }) {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -218,6 +228,9 @@ function ClientsLayout({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
+                  {c.email && failedInviteEmails.has(c.email) && (
+                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Invite failed</span>
+                  )}
                   {c.is_locked ? (
                     <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Locked</span>
                   ) : (
