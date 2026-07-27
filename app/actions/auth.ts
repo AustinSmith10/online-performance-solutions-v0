@@ -28,17 +28,37 @@ const PasswordSchema = z
   .regex(/[0-9]/, { error: "Must contain a number" })
   .regex(/[^A-Za-z0-9]/, { error: "Must contain a special character" });
 
-// No password fields here — every user reaches this page through the
-// recovery-link flow (/auth/update-password), which already sets the
-// password before a session exists to get here at all. Asking again was a
-// redundant second password step found during manual invite-flow QA.
-const CompleteProfileSchema = z.object({
-  first_name: z.string().min(1, { error: "First name required" }).trim(),
-  last_name: z.string().min(1, { error: "Last name required" }).trim(),
+// No name fields here — the admin sets first/last name (and the account's
+// system role) at creation, so re-asking would just duplicate data that
+// already exists. "company_role" below is a free-text job title (e.g.
+// "Property Manager"), unrelated to the system role and not set anywhere
+// else, so it's still collected.
+const ProfileFieldsSchema = {
   phone: z.string().min(1, { error: "Phone required" }).trim(),
   company_role: z.string().min(1, { error: "Role required" }).trim(),
   state_territory: z.string().min(1, { error: "State/territory required" }),
-});
+};
+
+// Fallback path for a session that reaches an authenticated, profile-
+// incomplete state without going through the merged onboarding form below
+// (e.g. /auth/confirm). No password field — by definition a session already
+// exists here, so a password is already set.
+const CompleteProfileSchema = z.object(ProfileFieldsSchema);
+
+// The normal invite path: password + profile fields collected together in
+// one form on /auth/update-password, instead of a password step followed by
+// a separate "complete your profile" page — found redundant during manual
+// invite-flow QA.
+const CompleteOnboardingSchema = z
+  .object({
+    password: PasswordSchema,
+    confirm_password: z.string(),
+    ...ProfileFieldsSchema,
+  })
+  .refine((d) => d.password === d.confirm_password, {
+    error: "Passwords do not match",
+    path: ["confirm_password"],
+  });
 
 const VerifyTotpSchema = z.object({
   code: z
@@ -294,12 +314,10 @@ export async function completePasswordReset(
   return { success: true };
 }
 
-// ─── Complete profile ─────────────────────────────────────────────────────────
+// ─── Complete profile (fallback — see CompleteProfileSchema above) ────────────
 
 export type CompleteProfileState = {
   errors?: {
-    first_name?: string[];
-    last_name?: string[];
     phone?: string[];
     company_role?: string[];
     state_territory?: string[];
@@ -312,8 +330,6 @@ export async function completeProfile(
   formData: FormData
 ): Promise<CompleteProfileState> {
   const validated = CompleteProfileSchema.safeParse({
-    first_name: formData.get("first_name"),
-    last_name: formData.get("last_name"),
     phone: formData.get("phone"),
     company_role: formData.get("company_role"),
     state_territory: formData.get("state_territory"),
@@ -327,7 +343,7 @@ export async function completeProfile(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { errors: { form: ["Session expired. Please log in again."] } };
 
-  const { first_name, last_name, phone, company_role, state_territory } = validated.data;
+  const { phone, company_role, state_territory } = validated.data;
 
   // Mark profile complete in auth user_metadata
   const { error: metaError } = await supabase.auth.updateUser({
@@ -339,9 +355,83 @@ export async function completeProfile(
   const adminClient = createAdminClient();
   const { error: dbError } = await adminClient
     .from("users")
-    .update({ first_name, last_name, phone, company_role, state_territory, profile_complete: true })
+    .update({ phone, company_role, state_territory, profile_complete: true })
     .eq("id", user.id);
   if (dbError) return { errors: { form: [dbError.message] } };
+
+  redirect("/setup-2fa");
+}
+
+// ─── Complete onboarding (password + profile, merged into one form) ───────────
+
+export type CompleteOnboardingState = {
+  errors?: {
+    password?: string[];
+    confirm_password?: string[];
+    phone?: string[];
+    company_role?: string[];
+    state_territory?: string[];
+    form?: string[];
+  };
+};
+
+export async function completeOnboarding(
+  _prev: CompleteOnboardingState,
+  formData: FormData
+): Promise<CompleteOnboardingState> {
+  const validated = CompleteOnboardingSchema.safeParse({
+    password: formData.get("password"),
+    confirm_password: formData.get("confirm_password"),
+    phone: formData.get("phone"),
+    company_role: formData.get("company_role"),
+    state_territory: formData.get("state_territory"),
+  });
+
+  if (!validated.success) {
+    return { errors: validated.error.flatten().fieldErrors };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { errors: { form: ["Your invite link has expired. Ask an admin to resend it."] } };
+  }
+
+  const { password, phone, company_role, state_territory } = validated.data;
+
+  const { error: pwError } = await supabase.auth.updateUser({ password });
+  if (pwError) return { errors: { form: [pwError.message] } };
+
+  const { error: metaError } = await supabase.auth.updateUser({
+    data: { profile_complete: true },
+  });
+  if (metaError) return { errors: { form: [metaError.message] } };
+
+  const adminClient = createAdminClient();
+  const { error: dbError } = await adminClient
+    .from("users")
+    .update({ phone, company_role, state_territory, profile_complete: true })
+    .eq("id", user.id);
+  if (dbError) return { errors: { form: [dbError.message] } };
+
+  // This flow never goes through login() (that's the whole point — the old
+  // update-password → login → complete-profile bounce was the redundant
+  // part), so the session-expiry cookie login() normally sets is missing
+  // here. Without it, the very first post-onboarding page load would look
+  // "expired" and bounce the user straight to signout.
+  const role = (user.app_metadata?.role ?? "stakeholder") as UserRole;
+  const durationMs = SESSION_DURATION[role];
+  const expiresAt = Date.now() + durationMs;
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_EXPIRY_COOKIE, String(expiresAt), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: durationMs / 1000,
+  });
+
+  await auditLog("auth.onboarding_completed", user.id, user.email ?? null, {});
 
   redirect("/setup-2fa");
 }
