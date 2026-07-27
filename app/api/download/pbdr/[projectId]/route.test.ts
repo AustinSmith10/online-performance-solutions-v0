@@ -14,7 +14,7 @@ vi.mock("@/lib/auth/session", () => ({ getSessionUser: mockGetSessionUser }));
 // of which combination of filters a given branch calls.
 function makeQuery(result: { data: unknown; error: unknown }) {
   const query: Record<string, unknown> = {};
-  for (const method of ["select", "eq", "in", "order", "limit"]) {
+  for (const method of ["select", "eq", "in", "order", "limit", "or"]) {
     query[method] = vi.fn().mockReturnValue(query);
   }
   query.maybeSingle = vi.fn().mockResolvedValue(result);
@@ -25,6 +25,7 @@ function makeSupabaseMock(opts: {
   projectResult: { data: unknown; error: unknown };
   pbdrFileResult?: { data: unknown; error: unknown };
   signedUrlResult?: { data: unknown; error: unknown };
+  reviewedProjectIds?: string[];
 }) {
   const projectQuery = makeQuery(opts.projectResult);
   const fileQuery = makeQuery(
@@ -33,9 +34,17 @@ function makeSupabaseMock(opts: {
       error: null,
     }
   );
+  const stakeholderReviewsQuery = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockResolvedValue({
+      data: (opts.reviewedProjectIds ?? []).map((id) => ({ project_id: id })),
+      error: null,
+    }),
+  };
   const from = vi.fn((table: string) => {
     if (table === "projects") return projectQuery;
     if (table === "project_files") return fileQuery;
+    if (table === "stakeholder_reviews") return stakeholderReviewsQuery;
     throw new Error(`Unexpected table: ${table}`);
   });
   const createSignedUrl = vi.fn().mockResolvedValue(
@@ -128,6 +137,25 @@ describe("GET /api/download/pbdr/[projectId]", () => {
       "stakeholder@example.com",
       expect.objectContaining({ orgId: "org-1" })
     );
+  });
+
+  it("allows a stakeholder who reviewed the project but did not submit it", async () => {
+    mockGetSessionUser.mockResolvedValue({
+      id: "stakeholder-2",
+      email: "reviewer@example.com",
+      role: "stakeholder",
+      client_id: "org-1",
+    });
+    (createAdminClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeSupabaseMock({
+        projectResult: { data: { id: "project-1", client_id: "org-1" }, error: null },
+        reviewedProjectIds: ["project-1"],
+      })
+    );
+
+    const res = await GET(new Request("http://localhost"), makeParams("project-1"));
+
+    expect(res.status).toBe(307);
   });
 
   it.each(["admin", "super_admin"] as const)(

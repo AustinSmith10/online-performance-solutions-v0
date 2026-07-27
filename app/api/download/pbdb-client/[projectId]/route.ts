@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
+import { getStakeholderReviewedProjectIds, stakeholderAccessFilter } from "@/lib/portal/access";
 
 const PBDB_VISIBLE_STATUSES = [
   "dispatched", "revision_required", "converting", "delivered", "complete",
@@ -20,12 +21,14 @@ export async function GET(
 
   const supabase = createAdminClient();
 
+  const reviewedProjectIds = await getStakeholderReviewedProjectIds(supabase, user.email as string);
   const { data: project } = await supabase
     .from("projects")
     .select("client_id, status, review_cycle")
     .eq("id", projectId)
     .eq("client_id", user.client_id as string)
     .in("status", PBDB_VISIBLE_STATUSES)
+    .or(stakeholderAccessFilter(user.id as string, reviewedProjectIds))
     .maybeSingle();
 
   if (!project) return new NextResponse("Not found", { status: 404 });

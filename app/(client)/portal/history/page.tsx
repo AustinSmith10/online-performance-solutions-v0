@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getStakeholderReviewedProjectIds, stakeholderAccessFilter } from "@/lib/portal/access";
 import { DownloadPbdrLink } from "../_components/DownloadPbdrLink";
 import type { ProjectStatus } from "@/types";
 
@@ -32,11 +33,14 @@ export default async function ClientHistoryPage() {
   const user = await requireRole("stakeholder");
   const supabase = createAdminClient();
 
+  const reviewedProjectIds = await getStakeholderReviewedProjectIds(supabase, user.email as string);
+
   const { data } = await supabase
     .from("projects")
     .select("id, po_number, extracted_fields, status, created_at, delivered_at, expected_delivery_date")
     .eq("client_id", user.client_id as string)
     .in("status", ["delivered", "complete"])
+    .or(stakeholderAccessFilter(user.id as string, reviewedProjectIds))
     .order("created_at", { ascending: false });
 
   const reports = (data ?? []) as DeliveredProject[];

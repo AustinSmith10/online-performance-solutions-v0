@@ -53,6 +53,7 @@ export default async function ClientRecoveryPage() {
     .from("projects")
     .select("id, po_number, site_address, status, deleted_at")
     .eq("client_id", user.client_id as string)
+    .eq("submitted_by", user.id as string)
     .not("deleted_at", "is", null)
     .order("deleted_at", { ascending: false });
 

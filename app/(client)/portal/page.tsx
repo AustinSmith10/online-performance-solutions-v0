@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getStakeholderReviewedProjectIds, stakeholderAccessFilter } from "@/lib/portal/access";
 import { DeletedBanner } from "./_components/DeletedBanner";
 import { RestoredBanner } from "./_components/RestoredBanner";
 import { PortalDashboard } from "./_components/PortalDashboard";
@@ -99,6 +100,10 @@ export default async function ClientPortalPage({
   const orgId = user.client_id as string;
   const todayIso = new Date().toISOString().slice(0, 10);
 
+  // A stakeholder may see a project it submitted, or one it's been asked to
+  // review — never every project the org has ever submitted.
+  const reviewedProjectIds = await getStakeholderReviewedProjectIds(supabase, user.email as string);
+
   const [{ data: projectsData }, { data: orgData }, { data: pendingReviewsData }] =
     await Promise.all([
       supabase
@@ -108,6 +113,7 @@ export default async function ClientPortalPage({
         )
         .eq("client_id", orgId)
         .is("deleted_at", null)
+        .or(stakeholderAccessFilter(user.id as string, reviewedProjectIds))
         .order("created_at", { ascending: false }),
       supabase
         .from("clients")

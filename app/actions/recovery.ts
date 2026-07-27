@@ -27,7 +27,9 @@ export async function purgeProject(
     .not("deleted_at", "is", null);
 
   if (user.role === "stakeholder") {
-    query = query.eq("client_id", user.client_id as string);
+    // Only the submitter, not other org stakeholders — a project's deletion
+    // lifecycle belongs to whoever created it, not whoever else the org has.
+    query = query.eq("client_id", user.client_id as string).eq("submitted_by", user.id as string);
   }
 
   const { data: project, error: fetchError } = await query.maybeSingle();
@@ -69,6 +71,7 @@ export async function softDeleteProject(projectId: string): Promise<{ error?: st
     .select("id, client_id, status, deleted_at")
     .eq("id", projectId)
     .eq("client_id", user.client_id as string)
+    .eq("submitted_by", user.id as string)
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -123,7 +126,7 @@ export async function restoreProject(
     .not("deleted_at", "is", null);
 
   if (user.role === "stakeholder") {
-    query = query.eq("client_id", user.client_id as string);
+    query = query.eq("client_id", user.client_id as string).eq("submitted_by", user.id as string);
   }
 
   const { data: project, error: fetchError } = await query.maybeSingle();

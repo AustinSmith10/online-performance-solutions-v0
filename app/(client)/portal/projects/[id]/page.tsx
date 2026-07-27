@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getStakeholderReviewedProjectIds, stakeholderAccessFilter } from "@/lib/portal/access";
 import { DeleteProjectButton } from "./_components/DeleteProjectButton";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { PortalApprovalForm } from "./_components/PortalApprovalForm";
@@ -70,6 +71,8 @@ export default async function ClientProjectDetailPage({
   const user = await requireRole("stakeholder");
   const supabase = createAdminClient();
 
+  const reviewedProjectIds = await getStakeholderReviewedProjectIds(supabase, user.email as string);
+
   const { data } = await supabase
     .from("projects")
     .select(
@@ -77,6 +80,7 @@ export default async function ClientProjectDetailPage({
     )
     .eq("id", id)
     .eq("client_id", user.client_id as string)
+    .or(stakeholderAccessFilter(user.id as string, reviewedProjectIds))
     .maybeSingle();
 
   if (!data) notFound();

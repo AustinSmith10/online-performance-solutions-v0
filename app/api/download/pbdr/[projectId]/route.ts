@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
+import { getStakeholderReviewedProjectIds, stakeholderAccessFilter } from "@/lib/portal/access";
 
 export async function GET(
   _req: Request,
@@ -32,12 +33,14 @@ export async function GET(
       .maybeSingle();
     project = data;
   } else if (user.role === "stakeholder") {
+    const reviewedProjectIds = await getStakeholderReviewedProjectIds(supabase, user.email as string);
     const { data } = await supabase
       .from("projects")
       .select("id, client_id")
       .eq("id", projectId)
       .eq("client_id", user.client_id as string)
       .in("status", ["delivered", "complete"])
+      .or(stakeholderAccessFilter(user.id as string, reviewedProjectIds))
       .maybeSingle();
     project = data;
   } else {
