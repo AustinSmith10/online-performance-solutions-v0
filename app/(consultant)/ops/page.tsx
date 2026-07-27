@@ -1,11 +1,9 @@
-import { Suspense } from "react";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ReviewRow } from "./_components/RevisionReviewDrawer";
 import { RealtimeProjectRefresher } from "./_components/RealtimeProjectRefresher";
 import { DeclinedBanner } from "./_components/DeclinedBanner";
-import { TourInviteCard } from "./_components/TourInviteCard";
-import { ConsultantTour } from "@/components/onboarding-tour/ConsultantTour";
+import { OnboardingCard } from "./_components/OnboardingCard";
 import { Dashboard } from "./_components/Dashboard";
 import type { DashboardData, DashboardProject } from "./_components/dashboardTypes";
 import type { ProjectStatus } from "@/types";
@@ -212,10 +210,7 @@ export default async function ConsultantOpsPage({
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <RealtimeProjectRefresher userId={user.id as string} />
-      <Suspense fallback={null}>
-        <ConsultantTour />
-      </Suspense>
-      {!(user.onboarding_steps_seen ?? []).includes("consultant_tour") && <TourInviteCard />}
+      {!(user.onboarding_steps_seen ?? []).includes("consultant_tour") && <OnboardingCard />}
       {declined === "1" && <DeclinedBanner />}
       <Dashboard data={dashboardData} />
     </div>

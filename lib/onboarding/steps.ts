@@ -10,10 +10,10 @@ export type TourStepConfig = {
   path?: string;
 };
 
-// The consultant tour is no longer driven by this shared config — it uses the
-// spotlight overlay in components/onboarding-tour/ConsultantTour.tsx with its
-// own step list in lib/onboarding/consultant-tour.ts. This file now only
-// serves the admin dashboard tour.
+// The consultant onboarding tour was a spotlight overlay over a hand-built
+// fake replica of the /ops UI; it drifted out of sync with the real UI and
+// was replaced with a static step list card (app/(consultant)/ops/_components/OnboardingCard.tsx).
+// This file now only serves the admin dashboard tour.
 export const ADMIN_TOUR_STEPS: TourStepConfig[] = [
   {
     id: "admin_intro",

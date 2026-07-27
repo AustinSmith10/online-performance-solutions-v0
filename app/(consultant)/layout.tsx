@@ -8,7 +8,6 @@ import { NotificationToasts } from "@/components/NotificationToasts";
 import { TopNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { AvailabilityPill } from "@/components/AvailabilityPill";
-import { ReplayTourButton } from "@/components/onboarding-tour/ReplayTourButton";
 import { Logo } from "@/components/Logo";
 import type { ConsultantAvailability } from "@/types";
 
@@ -45,15 +44,6 @@ export default async function ConsultantLayout({
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <NotificationTrayServer projectBasePath="/ops/projects" align="right" />
-              <ReplayTourButton href="/ops" className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600">
-                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    fillRule="evenodd"
-                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5.75.75 0 01.75.75v2.25a.75.75 0 001.5 0v-2.25a2.25 2.25 0 00-2.25-2.25z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </ReplayTourButton>
               <Link
                 href="/ops/profile"
                 className="hidden max-w-[160px] truncate text-xs text-zinc-400 hover:text-zinc-700 sm:block"
