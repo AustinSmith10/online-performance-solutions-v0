@@ -368,11 +368,17 @@ export default async function ConsultantProjectDetailPage({
   const currentCycleReviews = reviewsByCycle.get(project.review_cycle) ?? [];
   const currentCycleComments = currentCycleReviews.filter((r) => r.comments);
   const pendingCount = currentCycleReviews.filter((r) => r.status === "pending").length;
+  // A rejection flips project.status to "revision_required" immediately (see
+  // portalApproval.ts/approval.ts), so while status is still "dispatched"
+  // every non-pending review here is necessarily an approval.
+  const allCurrentApproved = currentCycleReviews.length > 0 && pendingCount === 0;
 
   const pbdbCardState: "locked" | "upload" | "pending" | "revision" | "approved" = !latestPbdb
     ? "locked"
     : project.status === "dispatched"
-    ? "pending"
+    ? allCurrentApproved
+      ? "approved"
+      : "pending"
     : project.status === "revision_required"
     ? "revision"
     : isTerminal || project.status === "converting"
