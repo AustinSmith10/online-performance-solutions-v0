@@ -440,8 +440,12 @@ function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: (messa
     <div className="flex flex-wrap items-center gap-2">
       <button
         onClick={handleApprove}
-        disabled={isPending || !row.proposedTarget}
-        title={!row.proposedTarget ? "No proposed target — use Reassign instead" : undefined}
+        disabled={isPending || (row.proposedCategory !== "new_submission" && !row.proposedTarget)}
+        title={
+          row.proposedCategory !== "new_submission" && !row.proposedTarget
+            ? "No proposed target — use Reassign instead"
+            : undefined
+        }
         className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white disabled:opacity-30"
       >
         {isPending ? "Working…" : "Approve as proposed"}
