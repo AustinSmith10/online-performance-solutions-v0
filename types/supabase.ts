@@ -108,7 +108,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "audit_log_org_id_fkey"
+            foreignKeyName: "audit_log_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
@@ -475,7 +475,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "credit_ledger_org_id_fkey"
+            foreignKeyName: "credit_ledger_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
@@ -1105,7 +1105,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "projects_org_id_fkey"
+            foreignKeyName: "projects_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
@@ -1484,17 +1484,17 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "templates_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "templates_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "templates_org_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
@@ -1571,7 +1571,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "users_org_id_fkey"
+            foreignKeyName: "users_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
@@ -1584,7 +1584,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      admin_delete_client: { Args: { p_org_id: string }; Returns: undefined }
+      admin_delete_client: { Args: { p_client_id: string }; Returns: undefined }
+      admin_delete_stakeholder: {
+        Args: { p_stakeholder_id: string }
+        Returns: undefined
+      }
       admin_delete_user: { Args: { p_user_id: string }; Returns: undefined }
       debit_deferred: {
         Args: {
@@ -1826,3 +1830,4 @@ export const Constants = {
     },
   },
 } as const
+
