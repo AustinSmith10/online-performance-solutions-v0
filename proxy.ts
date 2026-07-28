@@ -109,11 +109,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/complete-profile", request.url));
   }
 
-  // TOTP enrollment enforcement (skipped in development for easier local testing).
+  // TOTP enrollment enforcement (skipped in development for easier local testing,
+  // and for accounts explicitly flagged totp_exempt in app_metadata — used for
+  // UAT test accounts so testers aren't stuck sharing a TOTP secret).
   // Only gates first-time setup — once a user has a verified TOTP factor
   // (nextLevel advances past "aal1"), later logins are password-only; there is
   // no per-session or per-device re-challenge.
-  if (process.env.NODE_ENV !== "development") {
+  const totpExempt = user.app_metadata?.totp_exempt === true;
+  if (process.env.NODE_ENV !== "development" && !totpExempt) {
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalData?.nextLevel === "aal1") {
       if (isApiRoute) {
