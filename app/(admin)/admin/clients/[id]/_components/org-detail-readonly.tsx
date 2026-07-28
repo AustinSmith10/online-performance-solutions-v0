@@ -60,10 +60,19 @@ const FIELDS: FieldDef[] = [
 ];
 
 function displayValue(org: Client, field: FieldDef): string {
-  if (field.key === "payment_method") return PAYMENT_LABELS[org.payment_method] ?? org.payment_method;
-  if (field.key === "credit_limit") return org.credit_limit?.toLocaleString() ?? "0";
   const raw = org[field.key];
-  return raw !== null && raw !== undefined && raw !== "" ? String(raw) : "—";
+  return formatFieldValue(raw !== null && raw !== undefined ? String(raw) : "", field);
+}
+
+// Shared by the real (possibly stale) org prop and by the just-saved value we display
+// optimistically until revalidation catches up (see `justSaved` in EditableRow).
+function formatFieldValue(raw: string, field: FieldDef): string {
+  if (field.key === "payment_method") return PAYMENT_LABELS[raw] ?? raw;
+  if (field.key === "credit_limit") {
+    const n = Number(raw);
+    return Number.isFinite(n) && raw !== "" ? n.toLocaleString() : "0";
+  }
+  return raw !== "" ? raw : "—";
 }
 
 interface Props {
@@ -87,11 +96,32 @@ function EditableRow({ org, field }: { org: Client; field: FieldDef }) {
   const boundAction = updateClient.bind(null, org.id);
   const [state, formAction, pending] = useActionState<ClientFormState, FormData>(boundAction, {});
   const [editing, setEditing] = useState(false);
-  useUnsavedChanges(`org-detail-${field.key}`, editing);
+  const originalValue = String(org[field.key] ?? "");
+  const [value, setValue] = useState(originalValue);
+  // Only flag unsaved changes once the field's value actually diverges from what's
+  // saved — entering edit mode alone (before any keystroke) shouldn't trip the
+  // "unsaved changes" navigation guard.
+  useUnsavedChanges(`org-detail-${field.key}`, editing && value !== originalValue);
+
+  // Right after a successful save, the parent Server Component's `org` prop is still
+  // the pre-save value until revalidatePath's round-trip lands — displaying it as-is
+  // would flash the old value for a tick. Show what we just saved instead, until the
+  // prop actually catches up.
+  const [justSaved, setJustSaved] = useState<string | null>(null);
 
   useEffect(() => {
-    if (state.saved) queueMicrotask(() => setEditing(false));
+    if (state.saved) {
+      queueMicrotask(() => {
+        setJustSaved(value);
+        setEditing(false);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.saved]);
+
+  useEffect(() => {
+    if (justSaved !== null && originalValue === justSaved) queueMicrotask(() => setJustSaved(null));
+  }, [originalValue, justSaved]);
 
   const errors = state.errors?.[field.key];
 
@@ -100,9 +130,14 @@ function EditableRow({ org, field }: { org: Client; field: FieldDef }) {
       <div className="group flex items-baseline justify-between gap-4 py-2.5">
         <dt className="text-sm text-zinc-500">{field.label}</dt>
         <div className="flex items-center gap-2">
-          <dd className="text-sm font-medium text-zinc-900">{displayValue(org, field)}</dd>
+          <dd className="text-sm font-medium text-zinc-900">
+            {justSaved !== null ? formatFieldValue(justSaved, field) : displayValue(org, field)}
+          </dd>
           <EditIconButton
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              setValue(originalValue);
+              setEditing(true);
+            }}
             label={`Edit ${field.label}`}
             className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
           />
@@ -118,7 +153,8 @@ function EditableRow({ org, field }: { org: Client; field: FieldDef }) {
         {field.kind === "select" ? (
           <select
             name={field.key}
-            defaultValue={String(org[field.key] ?? "")}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
             disabled={pending}
             autoFocus
             className={inputClass}
@@ -133,7 +169,8 @@ function EditableRow({ org, field }: { org: Client; field: FieldDef }) {
             type={field.kind === "number" ? "number" : "text"}
             min={field.kind === "number" ? field.min : undefined}
             max={field.kind === "number" ? field.max : undefined}
-            defaultValue={String(org[field.key] ?? "")}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
             disabled={pending}
             autoFocus
             className={inputClass}
@@ -154,7 +191,10 @@ function EditableRow({ org, field }: { org: Client; field: FieldDef }) {
         </button>
         <button
           type="button"
-          onClick={() => setEditing(false)}
+          onClick={() => {
+            setValue(originalValue);
+            setEditing(false);
+          }}
           disabled={pending}
           aria-label="Cancel"
           className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50"

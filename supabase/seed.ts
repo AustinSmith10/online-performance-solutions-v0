@@ -55,6 +55,7 @@ async function seed() {
     lastName: string;
     clientId: string | null;
     availability?: "available" | "on_leave" | "at_capacity";
+    totpExempt?: boolean;
   };
 
   const testUsers: UserSpec[] = [
@@ -71,6 +72,7 @@ async function seed() {
       firstName: "Ops",
       lastName: "Admin",
       clientId: null,
+      totpExempt: true,
     },
     {
       email: "consultant@ops.test",
@@ -79,6 +81,7 @@ async function seed() {
       lastName: "Consultant",
       clientId: null,
       availability: "available",
+      totpExempt: true,
     },
     {
       email: "client@ops.test",
@@ -86,6 +89,7 @@ async function seed() {
       firstName: "Test",
       lastName: "Client",
       clientId: stockland.id,
+      totpExempt: true,
     },
   ];
 
@@ -99,13 +103,24 @@ async function seed() {
     if (alreadyExists) {
       console.log(`Auth user already exists: ${u.email}`);
       userId = alreadyExists.id;
+
+      if (u.totpExempt && alreadyExists.app_metadata?.totp_exempt !== true) {
+        await supabase.auth.admin.updateUserById(userId, {
+          app_metadata: { ...alreadyExists.app_metadata, totp_exempt: true },
+        });
+        console.log(`  set totp_exempt for ${u.email}`);
+      }
     } else {
       const { data: authUser, error: authError } =
         await supabase.auth.admin.createUser({
           email: u.email,
           password: "Ops@TestPass1!",
           email_confirm: true,
-          app_metadata: { role: u.role, client_id: u.clientId },
+          app_metadata: {
+            role: u.role,
+            client_id: u.clientId,
+            ...(u.totpExempt ? { totp_exempt: true } : {}),
+          },
           user_metadata: { profile_complete: true },
         });
 

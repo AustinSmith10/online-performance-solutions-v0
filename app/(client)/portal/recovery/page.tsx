@@ -84,7 +84,12 @@ export default async function ClientRecoveryPage() {
             const days = daysRemaining(p.deleted_at);
             const label = p.site_address ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
             return (
-              <div key={p.id} className="rounded-xl border border-zinc-200 bg-white p-5">
+              <div
+                key={p.id}
+                className={`rounded-xl border-l-4 border-y border-r border-zinc-200 bg-white p-5 ${
+                  days <= 3 ? "border-l-red-400" : "border-l-zinc-200"
+                }`}
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Link

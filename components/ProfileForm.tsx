@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   updateProfile,
@@ -26,6 +26,14 @@ export function ProfileForm({ profile }: { profile: ProfileData }) {
   const [editing, setEditing] = useState(false);
   const [editKey, setEditKey] = useState(0);
 
+  // `router.refresh()` re-fetches the Server Component tree asynchronously — until it
+  // lands, `profile` is still the pre-save value. Rendering it as-is right after save
+  // would flash the old value for a tick, so we show what was just submitted instead
+  // (`optimisticProfile`) until a fresh `profile` prop actually arrives from the refresh
+  // (detected by reference change against the pre-save snapshot).
+  const [optimisticProfile, setOptimisticProfile] = useState<ProfileData | null>(null);
+  const preSaveProfileRef = useRef<ProfileData | null>(null);
+
   const [profileState, profileAction, profilePending] = useActionState<UpdateProfileState, FormData>(
     updateProfile,
     {}
@@ -42,9 +50,27 @@ export function ProfileForm({ profile }: { profile: ProfileData }) {
     }
   }, [profileState.saved, router]);
 
+  useEffect(() => {
+    if (optimisticProfile && preSaveProfileRef.current && profile !== preSaveProfileRef.current) {
+      setOptimisticProfile(null);
+    }
+  }, [profile, optimisticProfile]);
+
   function handleEdit() {
     setEditKey((k) => k + 1);
     setEditing(true);
+  }
+
+  function handleFormSubmit(formData: FormData) {
+    preSaveProfileRef.current = profile;
+    setOptimisticProfile({
+      email: profile.email,
+      first_name: (formData.get("first_name") as string) || null,
+      last_name: (formData.get("last_name") as string) || null,
+      phone: (formData.get("phone") as string) || null,
+      company_role: (formData.get("company_role") as string) || null,
+      state_territory: (formData.get("state_territory") as string) || null,
+    });
   }
 
   return (
@@ -62,12 +88,13 @@ export function ProfileForm({ profile }: { profile: ProfileData }) {
           key={editKey}
           profile={profile}
           action={profileAction}
+          onSubmitCapture={handleFormSubmit}
           pending={profilePending}
           errors={profileState.errors}
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <ReadOnlyProfile profile={profile} />
+        <ReadOnlyProfile profile={optimisticProfile ?? profile} />
       )}
 
       <PasswordSection
@@ -104,12 +131,14 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function EditForm({
   profile,
   action,
+  onSubmitCapture,
   pending,
   errors,
   onCancel,
 }: {
   profile: ProfileData;
   action: (formData: FormData) => void;
+  onSubmitCapture: (formData: FormData) => void;
   pending: boolean;
   errors: UpdateProfileState["errors"];
   onCancel: () => void;
@@ -127,7 +156,11 @@ function EditForm({
         <p className="mt-0.5 text-sm text-zinc-900">{profile.email}</p>
       </div>
 
-      <form action={action} className="space-y-4">
+      <form
+        action={action}
+        onSubmit={(e) => onSubmitCapture(new FormData(e.currentTarget))}
+        className="space-y-4"
+      >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="First name" error={errors?.first_name?.[0]}>
             <input

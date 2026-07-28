@@ -100,7 +100,13 @@ function EditableRow({
   const boundUnlink = removeOrgConfigTokenLink.bind(null, orgId, token);
 
   const [mode, setMode] = useState<"view" | "editText" | "editLink">("view");
-  useUnsavedChanges(`org-config-${token}`, mode !== "view");
+  const [textValue, setTextValue] = useState(value);
+  const [linkStakeholderId, setLinkStakeholderId] = useState("");
+  // Entering edit mode alone shouldn't trip the "unsaved changes" navigation guard —
+  // only an actual edit (text changed, or a roster entry picked to link) should.
+  const isDirty =
+    (mode === "editText" && textValue !== value) || (mode === "editLink" && linkStakeholderId !== "");
+  useUnsavedChanges(`org-config-${token}`, isDirty);
 
   useEffect(() => {
     if (state.saved) queueMicrotask(() => setMode("view"));
@@ -135,14 +141,20 @@ function EditableRow({
             ) : (
               <button
                 type="button"
-                onClick={() => setMode("editLink")}
+                onClick={() => {
+                  setLinkStakeholderId("");
+                  setMode("editLink");
+                }}
                 className="text-xs text-zinc-400 hover:text-zinc-700"
               >
                 Link to roster
               </button>
             )}
             <EditIconButton
-              onClick={() => setMode("editText")}
+              onClick={() => {
+                setTextValue(value);
+                setMode("editText");
+              }}
               label={`Edit ${labelFromToken(token)}`}
               className="text-zinc-300 hover:text-zinc-600"
             />
@@ -163,7 +175,8 @@ function EditableRow({
           name="stakeholderId"
           required
           disabled={linkPending}
-          defaultValue=""
+          value={linkStakeholderId}
+          onChange={(e) => setLinkStakeholderId(e.target.value)}
           className="min-w-0 flex-1 rounded-md border border-zinc-300 px-2.5 py-1 text-sm focus:border-zinc-500 focus:outline-none"
         >
           <option value="" disabled>
@@ -215,7 +228,8 @@ function EditableRow({
         <input
           name={token}
           type="text"
-          defaultValue={value}
+          value={textValue}
+          onChange={(e) => setTextValue(e.target.value)}
           disabled={pending}
           autoFocus
           className="min-w-0 w-full rounded-md border border-zinc-300 px-2.5 py-1 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-60"

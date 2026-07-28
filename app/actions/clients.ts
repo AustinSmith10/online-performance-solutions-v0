@@ -330,7 +330,7 @@ export async function deleteClient(
   _prev: DeleteClientState,
   _formData: FormData
 ): Promise<DeleteClientState> {
-  const actor = await requireRole("super_admin");
+  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: org } = await supabase

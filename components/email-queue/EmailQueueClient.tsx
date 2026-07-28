@@ -394,7 +394,11 @@ function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: (messa
         router.push(result.redirectTo);
         return;
       }
-      onResolved("Approved");
+      onResolved(
+        row.proposedCategory === "stakeholder_response"
+          ? "Filed — needs manual review resolution"
+          : "Approved"
+      );
     });
   }
 
@@ -448,8 +452,18 @@ function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: (messa
         }
         className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white disabled:opacity-30"
       >
-        {isPending ? "Working…" : "Approve as proposed"}
+        {isPending
+          ? "Working…"
+          : row.proposedCategory === "stakeholder_response"
+          ? "File as proposed"
+          : "Approve as proposed"}
       </button>
+      {row.proposedCategory === "stakeholder_response" && (
+        <p className="w-full text-xs text-zinc-500">
+          Files the reply against the proposed review for manual resolution — it doesn&apos;t change the
+          review&apos;s status itself.
+        </p>
+      )}
       <button
         onClick={() => setReassigning(true)}
         disabled={isPending}

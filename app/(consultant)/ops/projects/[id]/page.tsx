@@ -1054,7 +1054,7 @@ export default async function ConsultantProjectDetailPage({
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      {justPickedUp && <PickedUpBanner projectId={id} />}
+      {justPickedUp && <PickedUpBanner projectId={id} isTerminal={isTerminal} />}
       {justUploadedQa && <QaUploadedBanner cleanUrl={`/ops/projects/${id}`} />}
       {justQueueApproved && (
         <AdminSuccessBanner

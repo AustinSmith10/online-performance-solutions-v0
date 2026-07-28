@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
@@ -52,6 +53,7 @@ export async function updateDigestScheduleAction(
     metadata: validated.data,
   });
 
+  revalidatePath("/admin/settings");
   return { saved: true };
 }
 
@@ -93,6 +95,7 @@ export async function updateBusinessHoursAction(
     metadata: validated.data,
   });
 
+  revalidatePath("/admin/settings");
   return { saved: true };
 }
 
@@ -154,6 +157,7 @@ export async function updateDeliveryDelayDurationsAction(
     { metadata: validated.data }
   );
 
+  revalidatePath("/admin/settings");
   return { saved: true };
 }
 
@@ -198,5 +202,6 @@ export async function updateAdminNavRestrictionsAction(
     { metadata: { restricted: validated.data.restricted } }
   );
 
+  revalidatePath("/admin/settings");
   return { saved: true };
 }

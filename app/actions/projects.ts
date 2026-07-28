@@ -929,7 +929,7 @@ export async function uploadQaPbdb(
   let query = supabase
     .from("projects")
     .select(
-      "id, client_id, status, review_cycle, project_number, extracted_fields, clients(revision_notes_required)"
+      "id, client_id, status, review_cycle, project_number, extracted_fields, first_response_at, review_buffer_fired_at, clients(revision_notes_required)"
     )
     .eq("id", projectId)
     .in("status", ["assigned", "in_progress", "revision_required", "dispatched"])
@@ -1072,6 +1072,20 @@ export async function uploadQaPbdb(
     try {
       await dispatchPbdb(projectId, actor.id);
     } catch (err) {
+      // dispatchPbdb can throw before it writes any stakeholder_reviews rows for the
+      // bumped cycle (payment gate, roster resolution, PDF generation). Revert the
+      // cycle bump above so project.review_cycle doesn't point at a cycle with no
+      // review rows — that desync makes every status badge lie ("Awaiting your
+      // review") while the portal correctly finds nothing to review.
+      await supabase
+        .from("projects")
+        .update({
+          review_cycle: cycle,
+          first_response_at: project.first_response_at,
+          review_buffer_fired_at: project.review_buffer_fired_at,
+          updated_at: now,
+        })
+        .eq("id", projectId);
       return { error: `File uploaded but dispatch failed: ${err instanceof Error ? err.message : "Unknown error"}` };
     }
   } else {

@@ -11,9 +11,8 @@ import { UserTabs } from "./_components/user-tabs";
 import { UserHeaderActions } from "./_components/user-header-actions";
 import { UserHeaderMeta } from "./_components/user-header-meta";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
-import { ProfileAccordion } from "@/components/workspace/ProfileAccordion";
+import { ProfileTabs } from "@/components/workspace/ProfileTabs";
 import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_components/HeaderStatInline";
-import { CollapsibleSection } from "@/app/(consultant)/ops/projects/[id]/_components/CollapsibleSection";
 import type { User, Client, ConsultantAvailability } from "@/types";
 
 export default async function UserDetailPage({
@@ -185,24 +184,27 @@ export default async function UserDetailPage({
           )}
         </div>
 
-        {u.is_locked && (
-          <div className="flex items-center justify-between py-3 last:pb-0">
-            <div>
-              <p className="text-sm font-medium text-red-800">Account locked</p>
-              <p className="text-xs text-red-600 mt-0.5">
-                Locked after {u.failed_login_count} failed login attempts.
-              </p>
-            </div>
-            <form action={unlockAction}>
-              <button
-                type="submit"
-                className="ml-4 shrink-0 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
-              >
-                Unlock account
-              </button>
-            </form>
+        <div className="flex items-center justify-between py-3 last:pb-0">
+          <div>
+            <p className={`text-sm font-medium ${u.is_locked ? "text-red-800" : "text-zinc-900"}`}>
+              {u.is_locked ? "Account locked" : "Account not locked"}
+            </p>
+            <p className={`text-xs mt-0.5 ${u.is_locked ? "text-red-600" : "text-zinc-500"}`}>
+              {u.is_locked
+                ? `Locked after ${u.failed_login_count} failed login attempts.`
+                : "No lockout in effect — nothing to unlock right now."}
+            </p>
           </div>
-        )}
+          <form action={unlockAction}>
+            <button
+              type="submit"
+              disabled={!u.is_locked}
+              className="ml-4 shrink-0 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
+            >
+              Unlock account
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -256,25 +258,11 @@ export default async function UserDetailPage({
           ← Users
         </Link>
 
-        <ProfileAccordion
+        <ProfileTabs
           header={header}
-          sections={[
-            {
-              id: "profile",
-              content: (
-                <CollapsibleSection title="Profile" defaultOpen>
-                  <div className="p-4">{profileContent}</div>
-                </CollapsibleSection>
-              ),
-            },
-            {
-              id: "security",
-              content: (
-                <CollapsibleSection title="Security" defaultOpen={false}>
-                  <div className="p-4">{securityContent}</div>
-                </CollapsibleSection>
-              ),
-            },
+          tabs={[
+            { id: "profile", label: "Profile", content: profileContent },
+            { id: "security", label: "Security", content: securityContent },
           ]}
         />
       </div>

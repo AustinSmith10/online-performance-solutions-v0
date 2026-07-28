@@ -167,8 +167,20 @@ export async function deductCredit(
           `A report request for ${strong(orgName)} could not proceed — the credit balance is 0.`
         ) + paragraph("Please top up credits or apply a payment override to continue.", 20),
     });
-    await Promise.all(
-      [...clientIds, ...adminIds].map((id) =>
+    await Promise.all([
+      // Stakeholders don't necessarily have portal access to this specific project (they may
+      // not be its submitter or reviewer) — an org-wide credit event shouldn't link its
+      // in-app "View" to a project page that 404s for them.
+      ...clientIds.map((id) =>
+        notify({
+          recipientId: id,
+          type: "insufficient_credit",
+          message: "Insufficient credits — dispatch blocked.",
+          emailSubject: "Insufficient credit balance — dispatch blocked",
+          emailHtml: html,
+        }).catch(() => {})
+      ),
+      ...adminIds.map((id) =>
         notify({
           recipientId: id,
           type: "insufficient_credit",
@@ -177,8 +189,8 @@ export async function deductCredit(
           emailSubject: "Insufficient credit balance — dispatch blocked",
           emailHtml: html,
         }).catch(() => {})
-      )
-    );
+      ),
+    ]);
     throw new Error("Insufficient credit balance — dispatch blocked.");
   }
 
@@ -191,19 +203,27 @@ export async function deductCredit(
   ]);
   const message = `1 credit deducted. New balance: ${newBalance}.`;
   // Client users and admins land on different account pages, so each group gets
-  // a CTA pointing at the view they can actually act on.
-  const deductionRecipients: { ids: string[]; portalUrl: string }[] = [
-    { ids: clientIds, portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/portal` },
-    { ids: adminIds, portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/admin/credits/${orgId}` },
+  // a CTA pointing at the view they can actually act on. Stakeholders as a group don't
+  // necessarily have portal access to the specific project that triggered the deduction
+  // (they may not be its submitter or reviewer), so their in-app notification omits
+  // `projectId` — otherwise the "View" link 404s for anyone but that project's own
+  // stakeholder(s). Admins always have access via /admin/projects/{id}, so theirs keeps it.
+  const deductionRecipients: { ids: string[]; portalUrl: string; includeProjectId: boolean }[] = [
+    { ids: clientIds, portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/portal`, includeProjectId: false },
+    {
+      ids: adminIds,
+      portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/admin/credits/${orgId}`,
+      includeProjectId: true,
+    },
   ];
   await Promise.all(
-    deductionRecipients.flatMap(({ ids, portalUrl }) =>
+    deductionRecipients.flatMap(({ ids, portalUrl, includeProjectId }) =>
       ids.map((id) =>
         notify({
           recipientId: id,
           type: "credit_deduction",
           message,
-          projectId,
+          ...(includeProjectId ? { projectId } : {}),
           emailSubject: "Credit deducted",
           emailHtml: renderCreditDeductionEmail({
             orgName,
