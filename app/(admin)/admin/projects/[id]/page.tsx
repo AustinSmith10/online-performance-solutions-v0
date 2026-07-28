@@ -569,7 +569,10 @@ export default async function ProjectDetailPage({
           value={project.expected_delivery_date ? new Date(project.expected_delivery_date).toLocaleDateString("en-AU") : "—"}
           valueClassName={isOverdue ? "text-red-600" : undefined}
         />
-        <HeaderStatInline value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"} />
+        <HeaderStatInline
+          value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"}
+          title={project.project_number ? "Project numbers aren't unique — check the site address to confirm this is the right job" : undefined}
+        />
       </div>
     </div>
   );

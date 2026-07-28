@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   updateDigestScheduleAction,
   type UpdateDigestScheduleState,
@@ -12,6 +12,32 @@ export function DigestScheduleForm({ schedule }: { schedule: DigestSchedule }) {
     updateDigestScheduleAction,
     {}
   );
+
+  // Same anti-flash pattern as ProfileForm/org-detail-readonly: revalidatePath
+  // re-fetches the Server Component tree asynchronously, so `schedule` is
+  // still the pre-save value for a tick after Save resolves. Show what was
+  // just submitted (`optimisticSchedule`) until a fresh `schedule` prop
+  // actually arrives (detected by reference change against the pre-save
+  // snapshot), keyeing the inputs so the (invisible, matching) value swap
+  // takes effect on these otherwise-uncontrolled fields.
+  const [optimisticSchedule, setOptimisticSchedule] = useState<DigestSchedule | null>(null);
+  const preSaveScheduleRef = useRef<DigestSchedule | null>(null);
+
+  useEffect(() => {
+    if (optimisticSchedule && preSaveScheduleRef.current && schedule !== preSaveScheduleRef.current) {
+      setOptimisticSchedule(null);
+    }
+  }, [schedule, optimisticSchedule]);
+
+  function handleSubmit(formData: FormData) {
+    preSaveScheduleRef.current = schedule;
+    setOptimisticSchedule({
+      morning: (formData.get("morning") as string) || schedule.morning,
+      afternoon: (formData.get("afternoon") as string) || schedule.afternoon,
+    });
+  }
+
+  const displaySchedule = optimisticSchedule ?? schedule;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
@@ -31,12 +57,17 @@ export function DigestScheduleForm({ schedule }: { schedule: DigestSchedule }) {
         <p className="mt-4 text-sm font-medium text-green-700">Schedule updated.</p>
       )}
 
-      <form action={action} className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <form
+        action={action}
+        onSubmit={(e) => handleSubmit(new FormData(e.currentTarget))}
+        className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2"
+      >
         <Field label="Morning send time" error={state.errors?.morning?.[0]}>
           <input
+            key={displaySchedule.morning}
             name="morning"
             type="time"
-            defaultValue={schedule.morning}
+            defaultValue={displaySchedule.morning}
             required
             className={input}
           />
@@ -44,9 +75,10 @@ export function DigestScheduleForm({ schedule }: { schedule: DigestSchedule }) {
 
         <Field label="Afternoon send time" error={state.errors?.afternoon?.[0]}>
           <input
+            key={displaySchedule.afternoon}
             name="afternoon"
             type="time"
-            defaultValue={schedule.afternoon}
+            defaultValue={displaySchedule.afternoon}
             required
             className={input}
           />

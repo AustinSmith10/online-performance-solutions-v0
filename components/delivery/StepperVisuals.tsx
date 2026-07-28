@@ -104,7 +104,7 @@ export function stepperNeedsStakeholderAction(stage: StepperStage): boolean {
 // from the full canonical wording (StepperStage.label) used on the project detail page.
 const SHORT_STAGE_LABELS: Record<StepperStage["key"], string> = {
   submitted: "Submitted",
-  prepared: "Prepared",
+  prepared: "Preparing",
   review: "Review",
   finalizing: "Finalizing",
   delivered: "Delivered",

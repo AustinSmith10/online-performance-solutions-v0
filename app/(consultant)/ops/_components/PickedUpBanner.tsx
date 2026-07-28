@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function PickedUpBanner({ projectId, isTerminal }: { projectId: string; isTerminal: boolean }) {
+export function PickedUpBanner({
+  projectId,
+  isTerminal,
+  hasProjectNumber,
+}: {
+  projectId: string;
+  isTerminal: boolean;
+  hasProjectNumber: boolean;
+}) {
   const router = useRouter();
   const [visible, setVisible] = useState(true);
 
@@ -27,7 +35,9 @@ export function PickedUpBanner({ projectId, isTerminal }: { projectId: string; i
         <p className="mt-2 text-sm text-zinc-500">
           {isTerminal
             ? "This project is now assigned to you. It's already been delivered — review its history below."
-            : "This project is now assigned to you. Set the project number below to unlock PBDB generation and get started."}
+            : hasProjectNumber
+              ? "This project is now assigned to you. Get started below."
+              : "This project is now assigned to you. Set the project number below to unlock PBDB generation and get started."}
         </p>
         <button
           type="button"

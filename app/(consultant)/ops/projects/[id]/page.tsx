@@ -435,6 +435,7 @@ export default async function ConsultantProjectDetailPage({
         />
         <HeaderStatInline
           value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"}
+          title={project.project_number ? "Project numbers aren't unique — check the site address to confirm this is the right job" : undefined}
         />
       </div>
     </div>
@@ -1054,7 +1055,9 @@ export default async function ConsultantProjectDetailPage({
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      {justPickedUp && <PickedUpBanner projectId={id} isTerminal={isTerminal} />}
+      {justPickedUp && (
+        <PickedUpBanner projectId={id} isTerminal={isTerminal} hasProjectNumber={!!project.project_number} />
+      )}
       {justUploadedQa && <QaUploadedBanner cleanUrl={`/ops/projects/${id}`} />}
       {justQueueApproved && (
         <AdminSuccessBanner

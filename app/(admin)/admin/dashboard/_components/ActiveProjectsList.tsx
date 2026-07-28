@@ -420,6 +420,9 @@ export function ActiveProjectsList({ projects, storageKey }: { projects: ActiveP
             >
               <span className={`mr-1.5 opacity-0 group-hover:opacity-100 ${activePresetId === preset.id ? "text-zinc-400" : "text-zinc-300"}`}>⠿</span>
               {preset.label}
+              <span className={`ml-1.5 ${activePresetId === preset.id ? "opacity-70" : "text-zinc-400"}`}>
+                ({projects.filter((p) => matchesFilters(p, preset.filters)).length})
+              </span>
               {!preset.builtin && (
                 <span
                   role="button"
