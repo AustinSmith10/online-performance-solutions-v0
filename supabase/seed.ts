@@ -60,14 +60,14 @@ async function seed() {
 
   const testUsers: UserSpec[] = [
     {
-      email: "admin@ops.test",
+      email: "superadmin@ops.test",
       role: "super_admin",
       firstName: "Admin",
       lastName: "User",
       clientId: null,
     },
     {
-      email: "admin2@ops.test",
+      email: "admin@ops.test",
       role: "admin",
       firstName: "Ops",
       lastName: "Admin",
@@ -84,7 +84,7 @@ async function seed() {
       totpExempt: true,
     },
     {
-      email: "client@ops.test",
+      email: "stakeholder@ops.test",
       role: "stakeholder",
       firstName: "Test",
       lastName: "Client",
@@ -159,10 +159,10 @@ async function seed() {
 
   console.log("\nSeed complete. Password for all accounts: Ops@TestPass1!");
   console.log("Note: 2FA setup required on first login.\n");
-  console.log("  admin@ops.test        — super_admin");
-  console.log("  admin2@ops.test       — admin");
+  console.log("  superadmin@ops.test   — super_admin");
+  console.log("  admin@ops.test        — admin");
   console.log("  consultant@ops.test   — consultant");
-  console.log("  client@ops.test       — client (Stockland)");
+  console.log("  stakeholder@ops.test  — stakeholder (Stockland)");
 }
 
 seed().catch((error) => {

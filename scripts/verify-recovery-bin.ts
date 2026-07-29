@@ -409,18 +409,18 @@ async function main() {
   console.log("\n🔐 Signing in test accounts...");
 
   const [stocklandCookie, meridianCookie, adminCookie] = await Promise.all([
-    signIn("client@ops.test", "Ops@TestPass1!"),
+    signIn("stakeholder@ops.test", "Ops@TestPass1!"),
     signIn("client4@ops.test", "Ops@TestPass1!"),
-    signIn("admin@ops.test", "Ops@TestPass1!"),
+    signIn("superadmin@ops.test", "Ops@TestPass1!"),
   ]);
 
   if (!stocklandCookie) { console.error("❌ Stockland client sign-in failed — aborting"); process.exit(1); }
   if (!meridianCookie)  { console.error("❌ Meridian client sign-in failed — aborting"); process.exit(1); }
   if (!adminCookie)     { console.error("❌ Admin sign-in failed — aborting"); process.exit(1); }
 
-  ok("client@ops.test  signed in (Stockland)");
+  ok("stakeholder@ops.test  signed in (Stockland)");
   ok("client4@ops.test signed in (Meridian Group)");
-  ok("admin@ops.test   signed in (super_admin)");
+  ok("superadmin@ops.test   signed in (super_admin)");
 
   await testDbState();
   await test2faGate(stocklandCookie, "client");

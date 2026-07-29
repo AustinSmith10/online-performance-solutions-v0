@@ -20,15 +20,15 @@ async function main() {
   const { data: users, error: usersErr } = await supabase
     .from("users")
     .select("id, email, role, org_id")
-    .in("email", ["admin@ops.test", "client@ops.test", "consultant@ops.test"]);
+    .in("email", ["superadmin@ops.test", "stakeholder@ops.test", "consultant@ops.test"]);
 
   if (usersErr || !users?.length) {
     console.error("Run the main seed first (supabase/seed.ts) — required users not found.");
     process.exit(1);
   }
 
-  const admin    = users.find((u) => u.email === "admin@ops.test");
-  const client   = users.find((u) => u.email === "client@ops.test");
+  const admin    = users.find((u) => u.email === "superadmin@ops.test");
+  const client   = users.find((u) => u.email === "stakeholder@ops.test");
   const consultant = users.find((u) => u.email === "consultant@ops.test");
 
   if (!admin || !client || !consultant) {

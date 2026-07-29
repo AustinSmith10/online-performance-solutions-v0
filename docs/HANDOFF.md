@@ -76,13 +76,13 @@ All created by `npm run seed`. Password for all: `Ops@TestPass1!` (redacted here
 
 | Role | Email |
 |------|-------|
-| Super Admin | `admin@ops.test` |
+| Super Admin | `superadmin@ops.test` |
 | Consultant (available) | `consultant@ops.test` |
 | Consultant (available) | `consultant2@ops.test` — Sarah Chen |
 | Consultant (on_leave) | `consultant3@ops.test` — Marcus Webb |
 | Consultant (at_capacity) | `consultant4@ops.test` — Priya Nair |
 | Consultant (available) | `consultant5@ops.test` — James O'Brien |
-| Client (Stockland) | `client@ops.test` |
+| Stakeholder (Stockland) | `stakeholder@ops.test` |
 | Client (Stockland) | `client2@ops.test` — Emma Davis |
 | Client (Stockland) | `client3@ops.test` — Ryan Thompson |
 

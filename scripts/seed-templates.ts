@@ -240,7 +240,7 @@ async function main() {
     console.log(`Created template "${tmpl.name}" (${tmpl.tokens.length} tokens) — id: ${templateId}`);
   }
 
-  console.log("\nDone. Log in as client@ops.test and go to /portal/submit");
+  console.log("\nDone. Log in as stakeholder@ops.test and go to /portal/submit");
   console.log("You should see a 'Report type' dropdown with both templates.");
 }
 

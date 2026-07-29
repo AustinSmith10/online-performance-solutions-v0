@@ -47,13 +47,13 @@ const DATABASE_URL = resolveConnectionUrl();
 // ── Seed manifests ────────────────────────────────────────────────────────────
 
 const SEEDED_EMAILS = [
-  "admin@ops.test",
+  "superadmin@ops.test",
   "consultant@ops.test",
   "consultant2@ops.test",
   "consultant3@ops.test",
   "consultant4@ops.test",
   "consultant5@ops.test",
-  "client@ops.test",
+  "stakeholder@ops.test",
   "client2@ops.test",
   "client3@ops.test",
   "client4@ops.test",

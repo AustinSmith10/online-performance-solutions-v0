@@ -2,7 +2,7 @@
  * Seeds a realistic project visible on the consultant workspace and profile,
  * so every section of /ops/projects/[id] has data to render:
  *
- *  - Client contact (submitted_by → client@ops.test)
+ *  - Client contact (submitted_by → stakeholder@ops.test)
  *  - Submitted details (EXTRACT_ / CLIENT_ tokens in extracted_fields)
  *  - Organisation values (ORG_ tokens written to org_config)
  *  - System values (project_number set, PBDB record created so dates compute)
@@ -30,15 +30,15 @@ async function main() {
   const { data: users, error: usersErr } = await supabase
     .from("users")
     .select("id, email, role, org_id")
-    .in("email", ["admin@ops.test", "client@ops.test", "consultant@ops.test"]);
+    .in("email", ["superadmin@ops.test", "stakeholder@ops.test", "consultant@ops.test"]);
 
   if (usersErr || !users?.length) {
     console.error("Seed users not found — run supabase/seed.ts first.");
     process.exit(1);
   }
 
-  const admin      = users.find((u) => u.email === "admin@ops.test");
-  const client     = users.find((u) => u.email === "client@ops.test");
+  const admin      = users.find((u) => u.email === "superadmin@ops.test");
+  const client     = users.find((u) => u.email === "stakeholder@ops.test");
   const consultant = users.find((u) => u.email === "consultant@ops.test");
 
   if (!admin || !client || !consultant) {
@@ -47,7 +47,7 @@ async function main() {
   }
 
   const orgId = client.org_id as string;
-  console.log(`Using org ${orgId} (from client@ops.test)`);
+  console.log(`Using org ${orgId} (from stakeholder@ops.test)`);
 
   // ── 2. Write ORG_ config to the organisation ──────────────────────────────
   const { error: orgErr } = await supabase
