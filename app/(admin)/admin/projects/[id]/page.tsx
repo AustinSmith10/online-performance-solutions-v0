@@ -311,7 +311,7 @@ export default async function ProjectDetailPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("project_files")
-      .select("id, original_filename, storage_path, version, created_at")
+      .select("id, original_filename, storage_path, version, review_cycle, created_at")
       .eq("project_id", id)
       .eq("file_type", "pbdb")
       .order("version", { ascending: true }),
@@ -1045,7 +1045,7 @@ export default async function ProjectDetailPage({
         >
           {reviewCycles.map((cycle) => {
             const cycleReviews = reviewsByCycle.get(cycle)!;
-            const pbdbForCycle = pbdbFiles.find((f) => (f.version as number) === cycle);
+            const pbdbForCycle = pbdbFiles.find((f) => (f.review_cycle as number) === cycle);
             const isCurrent = cycle === project.review_cycle;
             return (
               <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
