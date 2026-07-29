@@ -330,13 +330,13 @@ export default async function TemplatePage({
             ),
           },
           {
-            label: "Client profile",
+            label: "Stakeholder view",
             content: (
               <div className="rounded-xl border border-zinc-200 bg-white">
                 <div className="border-b border-zinc-100 px-5 py-4">
-                  <h2 className="text-sm font-semibold text-zinc-900">Client profile layout</h2>
+                  <h2 className="text-sm font-semibold text-zinc-900">Stakeholder Submitted Details Layout</h2>
                   <p className="mt-0.5 text-xs text-zinc-500">
-                    Controls which extracted values appear on the client&apos;s project page and in what order. Drag to reorder. Toggle visibility per field.
+                    Controls which extracted values appear on the stakeholder&apos;s project page (Submitted details card) and in what order. Drag to reorder. Toggle visibility per field.
                   </p>
                 </div>
                 <ClientProfileSection templateId={id} tokens={clientProfileTokens} />

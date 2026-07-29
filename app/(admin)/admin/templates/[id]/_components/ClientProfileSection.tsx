@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useRef, useEffect } from "react";
-import { updateClientProfile } from "@/app/actions/templates";
+import { updateClientProfile, toggleFieldVisibility } from "@/app/actions/templates";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 
 export interface ClientProfileRow {
@@ -34,14 +34,36 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
 
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [visibilitySaving, setVisibilitySaving] = useState<Record<string, "saving" | "error" | undefined>>({});
 
   function toggleVisible(index: number) {
+    const item = items[index];
+    const nextVisible = !item.client_visible;
+
+    // Optimistic update — the button already reads as an instant on/off
+    // switch, so it needs to actually behave like one instead of silently
+    // waiting on the separate bulk "Save profile layout" submit below.
     setItems((prev) =>
-      prev.map((item, i) =>
-        i === index ? { ...item, client_visible: !item.client_visible } : item
-      )
+      prev.map((it, i) => (i === index ? { ...it, client_visible: nextVisible } : it))
     );
-    setIsDirty(true);
+    setVisibilitySaving((prev) => ({ ...prev, [item.placeholder_token]: "saving" }));
+
+    toggleFieldVisibility(templateId, item.placeholder_token, nextVisible).then((result) => {
+      if (result.error) {
+        // Roll back on failure so the UI never shows a state that isn't
+        // actually persisted.
+        setItems((prev) =>
+          prev.map((it, i) => (i === index ? { ...it, client_visible: !nextVisible } : it))
+        );
+        setVisibilitySaving((prev) => ({ ...prev, [item.placeholder_token]: "error" }));
+      } else {
+        setVisibilitySaving((prev) => {
+          const next = { ...prev };
+          delete next[item.placeholder_token];
+          return next;
+        });
+      }
+    });
   }
 
   function onDragStart(index: number) {
@@ -130,12 +152,19 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
                 </div>
               </div>
 
-              {/* Visibility toggle */}
-              <div className="flex items-center border-l border-zinc-100 px-4">
+              {/* Visibility toggle — saves immediately on click */}
+              <div className="flex items-center gap-2 border-l border-zinc-100 px-4">
+                {visibilitySaving[item.placeholder_token] === "saving" && (
+                  <span className="text-xs text-zinc-400">Saving…</span>
+                )}
+                {visibilitySaving[item.placeholder_token] === "error" && (
+                  <span className="text-xs text-red-600">Failed — try again</span>
+                )}
                 <button
                   type="button"
                   onClick={() => toggleVisible(index)}
-                  className={`text-xs font-medium transition-colors ${
+                  disabled={visibilitySaving[item.placeholder_token] === "saving"}
+                  className={`text-xs font-medium transition-colors disabled:opacity-60 ${
                     item.client_visible
                       ? "text-green-700 hover:text-green-900"
                       : "text-zinc-400 hover:text-zinc-600"
@@ -152,11 +181,14 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
       <div className="flex items-center gap-3 border-t border-zinc-100 px-5 py-4">
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || !isDirty}
           className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
-          {pending ? "Saving…" : "Save profile layout"}
+          {pending ? "Saving…" : "Save field order"}
         </button>
+        <p className="text-xs text-zinc-400">
+          Visibility saves instantly when toggled above — this button is only for the drag-to-reorder order.
+        </p>
         {state.success && <p className="text-sm text-green-600">Saved.</p>}
         {state.error && <p className="text-sm text-red-600">{state.error}</p>}
       </div>

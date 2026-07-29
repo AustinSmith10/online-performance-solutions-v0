@@ -818,3 +818,29 @@ export async function updateClientProfile(
   revalidatePath(`/admin/templates/${templateId}`);
   return { success: true };
 }
+
+export type ToggleFieldVisibilityState = { error?: string; success?: boolean };
+
+// Saves a single field's client-visibility immediately when the toggle is
+// clicked, rather than waiting for the bulk "Save profile layout" submit —
+// the toggle already looks like an instant on/off switch, so it needs to
+// actually behave like one instead of silently requiring a separate save.
+export async function toggleFieldVisibility(
+  templateId: string,
+  placeholderToken: string,
+  visible: boolean
+): Promise<ToggleFieldVisibilityState> {
+  await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("template_field_mappings")
+    .update({ client_visible: visible })
+    .eq("template_id", templateId)
+    .eq("placeholder_token", placeholderToken);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return { success: true };
+}
