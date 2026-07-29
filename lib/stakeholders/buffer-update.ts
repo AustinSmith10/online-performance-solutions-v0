@@ -1,4 +1,3 @@
-import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
 import { sendEmail } from "@/lib/email/sender";

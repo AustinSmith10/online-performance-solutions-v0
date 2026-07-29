@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("server-only", () => ({}));
 vi.mock("@/lib/stakeholders/tokens", () => ({
   generateTokenString: vi.fn(() => "fresh-token"),
   computeTokenExpiry: vi.fn(async () => new Date("2026-08-01T00:00:00Z")),
