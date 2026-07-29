@@ -82,6 +82,7 @@ export default async function AdminDashboardPage({
     pendingReviewsResult,
     systemErrorsResult,
     emailFailuresResult,
+    emailFailuresCountResult,
     consultantsResult,
   ] = await Promise.all([
     supabase
@@ -132,6 +133,15 @@ export default async function AdminDashboardPage({
       .order("created_at", { ascending: true })
       .limit(20),
 
+    // True total, since the row query above is capped at 20 — without this,
+    // the "N emails failed to send" header would stay stuck at 20 forever
+    // whenever more than 20 are unresolved, making resolves look like no-ops.
+    supabase
+      .from("email_send_log")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "failed")
+      .is("resolved_at", null),
+
     // Consultants for the assign drawer
     supabase
       .from("users")
@@ -165,6 +175,7 @@ export default async function AdminDashboardPage({
   );
   const systemErrors = (systemErrorsResult.data ?? []) as SystemError[];
   const emailFailures = (emailFailuresResult.data ?? []) as unknown as EmailFailureRow[];
+  const emailFailuresCount = emailFailuresCountResult.count ?? emailFailures.length;
 
   // Single source of truth for "what stage is this project really at" —
   // every list/badge derives from this instead of separately recomputing
@@ -233,6 +244,7 @@ export default async function AdminDashboardPage({
           todayIso={todayIso}
           systemErrors={systemErrors}
           emailFailures={emailFailures}
+          emailFailuresCount={emailFailuresCount}
         />
       </TourHighlight>
 

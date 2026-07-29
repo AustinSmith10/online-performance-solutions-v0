@@ -77,6 +77,7 @@ interface Props {
   todayIso: string;
   systemErrors: { id: string; message: string; project_id: string | null; created_at: string }[];
   emailFailures: EmailFailure[];
+  emailFailuresCount: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -819,7 +820,7 @@ function EmailFailureDrawerContent({
 type Tone = "red" | "blue" | "orange" | "amber";
 type HeroIconKey = "clock" | "inbox" | "people" | "card" | "alert";
 type HeroItem = { id: string; label: string; meta: string; actionLabel: string; open: () => DrawerState };
-type HeroCategory = { key: string; tone: Tone; label: string; icon: HeroIconKey; subtitle: string; items: HeroItem[] };
+type HeroCategory = { key: string; tone: Tone; label: string; icon: HeroIconKey; subtitle: string; items: HeroItem[]; totalCount?: number };
 
 const HERO_TONE: Record<Tone, { box: string; title: string; button: string; iconBg: string }> = {
   red: { box: "border-red-200 bg-red-50", title: "text-red-900", button: "border-red-300 bg-white text-red-700 hover:bg-red-100", iconBg: "bg-red-500" },
@@ -898,7 +899,7 @@ function HeroCard({
             </button>
           ) : (
             <button type="button" onClick={onToggleExpand} className={`rounded-md border px-3 py-1.5 text-xs font-medium ${t.button}`}>
-              Review ({category.items.length}) {expanded ? "▲" : "▼"}
+              Review ({category.totalCount ?? category.items.length}) {expanded ? "▲" : "▼"}
             </button>
           )}
         </div>
@@ -947,6 +948,7 @@ export function ActionPanel({
   todayIso,
   systemErrors,
   emailFailures,
+  emailFailuresCount,
 }: Props) {
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [drawerSuccess, setDrawerSuccess] = useState<string | null>(null);
@@ -1106,7 +1108,10 @@ export function ActionPanel({
             tone: "red" as const,
             label: "Email Failed",
             icon: "alert" as const,
-            subtitle: `${emailFailures.length} email${emailFailures.length !== 1 ? "s" : ""} failed to send`,
+            subtitle: `${emailFailuresCount} email${emailFailuresCount !== 1 ? "s" : ""} failed to send${
+              emailFailuresCount > emailFailures.length ? ` (showing oldest ${emailFailures.length})` : ""
+            }`,
+            totalCount: emailFailuresCount,
             items: emailFailures.map((f) => ({
               id: f.id,
               label: `To: ${f.to_email}`,
