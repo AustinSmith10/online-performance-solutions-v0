@@ -104,6 +104,16 @@ export interface BounceEvent {
   resolved_at: string | null;
 }
 
+export interface EmailSendFailure {
+  id: string;
+  to_email: string;
+  subject: string;
+  source: string;
+  project_id: string | null;
+  created_at: string;
+  error: string | null;
+}
+
 export type CreditRaceEventType = "deduct_credit" | "debit_deferred" | "log_upfront" | "log_override";
 
 export interface CreditRaceEvent {

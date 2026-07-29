@@ -46,6 +46,10 @@ export function bounceGuidance(reason: string | null): string {
   return "The recipient's mail server rejected this message. Verify the address is correct and try an alternate contact method.";
 }
 
+export function emailSendFailureGuidance(source: string): string {
+  return `This "${source}" notification never reached Postmark or was rejected before sending — a different failure mode than a bounce (which means Postmark accepted it and the recipient's server rejected it). Check the Postmark Activity log for this recipient to see which happened, then resend from the affected record or the dashboard's Email Failed card.`;
+}
+
 export function stalledProjectGuidance(): string {
   return "This project hasn't moved in a while and its delivery date is close or has passed. Reach out to the assigned consultant or the client to find out what's blocking progress, or reassign it if the consultant is unavailable.";
 }

@@ -6,12 +6,14 @@ import type { TrayEntryKind } from "@/lib/notifications/tray";
 import {
   jobGuidance,
   bounceGuidance,
+  emailSendFailureGuidance,
   creditRaceEventGuidance,
   stalledProjectGuidance,
   pendingReviewGuidance,
   expiringTokenGuidance,
 } from "@/lib/admin/error-guidance";
 import { ResolveSignalButton } from "@/components/ResolveSignalButton";
+import { ResolveEmailFailureButton } from "@/components/ResolveEmailFailureButton";
 import type { CreditRaceEvent } from "@/types";
 
 const CREDIT_RACE_EVENT_LABEL: Record<CreditRaceEvent["event_type"], string> = {
@@ -73,12 +75,14 @@ function Row({
   guidance,
   timestamp,
   href,
+  resolveButton,
 }: {
-  signalId: string;
+  signalId?: string;
   message: string;
   guidance: string;
   timestamp: string;
   href: string | null;
+  resolveButton?: React.ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 px-4 py-3">
@@ -94,7 +98,7 @@ function Row({
           )}
         </div>
       </div>
-      <ResolveSignalButton signalId={signalId} />
+      {resolveButton ?? (signalId && <ResolveSignalButton signalId={signalId} />)}
     </div>
   );
 }
@@ -151,6 +155,24 @@ export default async function SystemHealthPage() {
             guidance={bounceGuidance(b.reason)}
             timestamp={b.created_at}
             href={b.project_id ? `/admin/projects/${b.project_id}` : null}
+          />
+        ))}
+      </Section>
+
+      <Section
+        title="Email send failures"
+        description="Notification emails that never reached Postmark, or were rejected before sending. Also shown on the Dashboard's Email Failed card."
+        kind="hard_error"
+        emptyText="No unresolved email send failures."
+      >
+        {data.emailSendFailures.map((f) => (
+          <Row
+            key={f.id}
+            message={`Email failed to send: ${f.to_email} (${f.source})${f.error ? ` — ${f.error}` : ""}`}
+            guidance={emailSendFailureGuidance(f.source)}
+            timestamp={f.created_at}
+            href={f.project_id ? `/admin/projects/${f.project_id}` : null}
+            resolveButton={<ResolveEmailFailureButton failureId={f.id} />}
           />
         ))}
       </Section>

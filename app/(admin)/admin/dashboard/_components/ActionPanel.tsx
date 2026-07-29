@@ -726,8 +726,13 @@ function ErrorDrawerContent({
   );
 }
 
-function EmailFailureDrawerContent({ failure }: { failure: EmailFailure }) {
-  const router = useRouter();
+function EmailFailureDrawerContent({
+  failure,
+  onSuccess,
+}: {
+  failure: EmailFailure;
+  onSuccess: (message: string) => void;
+}) {
   const isInvite = failure.source === "invite" || failure.source === "invite_resend";
 
   const boundResend = resendInviteFailure.bind(null, failure.id);
@@ -736,6 +741,10 @@ function EmailFailureDrawerContent({ failure }: { failure: EmailFailure }) {
     {}
   );
 
+  useEffect(() => {
+    if (resendState.success) onSuccess("Invite resent successfully.");
+  }, [resendState.success, onSuccess]);
+
   const [resolvePending, setResolvePending] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   async function handleResolve() {
@@ -743,7 +752,7 @@ function EmailFailureDrawerContent({ failure }: { failure: EmailFailure }) {
     setResolveError(null);
     try {
       await resolveEmailFailure(failure.id);
-      router.refresh();
+      onSuccess("Marked resolved.");
     } catch (err) {
       setResolveError(err instanceof Error ? err.message : "Failed to mark resolved.");
     } finally {
@@ -1192,7 +1201,10 @@ export function ActionPanel({
           <ErrorDrawerContent error={drawer.error} />
         )}
         {drawer?.type === "email-failure" && (
-          <EmailFailureDrawerContent failure={drawer.failure} />
+          <EmailFailureDrawerContent
+            failure={drawer.failure}
+            onSuccess={handleSuccess}
+          />
         )}
       </Drawer>
     </>
