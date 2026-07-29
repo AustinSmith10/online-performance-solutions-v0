@@ -42,6 +42,21 @@ async function logSend(fields: { to: string; subject: string; source: string; pr
  * admin) can await and inspect it instead of reaching for throwOnError.
  */
 export async function sendEmail({ to, subject, html, replyTo, throwOnError, source, projectId }: SendEmailOptions): Promise<boolean> {
+  let emailsEnabled = true;
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const { getEmailsEnabled } = await import("@/lib/settings/emails-enabled");
+    emailsEnabled = await getEmailsEnabled(createAdminClient());
+  } catch (error) {
+    console.error("[email] failed to read emails_enabled setting — defaulting to enabled:", error);
+  }
+  if (!emailsEnabled) {
+    console.warn("[email] emails disabled in system settings — skipping send");
+    await logSend({ to, subject, source, projectId, status: "failed", error: "Emails disabled in system settings — nothing was sent" });
+    if (throwOnError) throw new Error("Emails disabled in system settings — nothing was sent");
+    return false;
+  }
+
   const token = process.env.POSTMARK_SERVER_TOKEN;
   if (!token) {
     console.warn("[email] POSTMARK_SERVER_TOKEN not set — skipping send");

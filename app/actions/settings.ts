@@ -14,6 +14,7 @@ import {
   RESTRICTABLE_NAV_ITEMS,
   type AdminNavKey,
 } from "@/lib/settings/admin-nav-restrictions";
+import { setEmailsEnabled } from "@/lib/settings/emails-enabled";
 
 const DigestScheduleSchema = z.object({
   morning: z.string().refine(isValidTime, { error: "Enter a valid time (HH:MM)" }),
@@ -156,6 +157,32 @@ export async function updateDeliveryDelayDurationsAction(
     actor.email as string,
     { metadata: validated.data }
   );
+
+  revalidatePath("/admin/settings");
+  return { saved: true };
+}
+
+export type UpdateEmailsEnabledState = {
+  saved?: boolean;
+  errors?: { form?: string[] };
+};
+
+export async function updateEmailsEnabledAction(
+  _prev: UpdateEmailsEnabledState,
+  formData: FormData
+): Promise<UpdateEmailsEnabledState> {
+  const actor = await requireRole("super_admin");
+
+  const enabled = formData.get("enabled") === "on";
+
+  const supabase = createAdminClient();
+  const { error } = await setEmailsEnabled(supabase, enabled, actor.id as string);
+
+  if (error) return { errors: { form: [error] } };
+
+  await auditLog("settings.emails_enabled_updated", actor.id as string, actor.email as string, {
+    metadata: { enabled },
+  });
 
   revalidatePath("/admin/settings");
   return { saved: true };

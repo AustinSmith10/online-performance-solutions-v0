@@ -4,10 +4,12 @@ import { getDigestSchedule } from "@/lib/settings/digest-schedule";
 import { getBusinessHours } from "@/lib/settings/business-hours";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { getAdminNavRestrictions } from "@/lib/settings/admin-nav-restrictions";
+import { getEmailsEnabled } from "@/lib/settings/emails-enabled";
 import { DigestScheduleForm } from "./_components/DigestScheduleForm";
 import { BusinessHoursForm } from "./_components/BusinessHoursForm";
 import { DeliveryDelayDurationsForm } from "./_components/DeliveryDelayDurationsForm";
 import { AdminNavRestrictionsForm } from "./_components/AdminNavRestrictionsForm";
+import { EmailsEnabledForm } from "./_components/EmailsEnabledForm";
 import { SettingsSection } from "./_components/SettingsSection";
 
 export default async function AdminSettingsPage() {
@@ -19,6 +21,8 @@ export default async function AdminSettingsPage() {
   const deliveryDelayDurations = await getDeliveryDelayDurations(supabase);
   const navRestrictions =
     user.role === "super_admin" ? await getAdminNavRestrictions(supabase) : [];
+  const emailsEnabled =
+    user.role === "super_admin" ? await getEmailsEnabled(supabase) : true;
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -45,6 +49,12 @@ export default async function AdminSettingsPage() {
       {user.role === "super_admin" && (
         <SettingsSection title="Access control" description="Super admin only.">
           <AdminNavRestrictionsForm restricted={navRestrictions} />
+        </SettingsSection>
+      )}
+
+      {user.role === "super_admin" && (
+        <SettingsSection title="Email delivery" description="Super admin only.">
+          <EmailsEnabledForm enabled={emailsEnabled} />
         </SettingsSection>
       )}
     </div>

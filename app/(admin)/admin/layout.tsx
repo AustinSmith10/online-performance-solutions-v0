@@ -4,6 +4,7 @@ import { logout } from "@/app/actions/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminNavRestrictions, type AdminNavKey } from "@/lib/settings/admin-nav-restrictions";
 import { getPendingEmailQueueCount } from "@/lib/email/queue-pending-count";
+import { getEmailsEnabled } from "@/lib/settings/emails-enabled";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { NotificationToasts } from "@/components/NotificationToasts";
 import { MobileNav } from "@/components/MobileNav";
@@ -45,6 +46,8 @@ export default async function AdminShellLayout({
   NAV_ITEMS = NAV_ITEMS.map((item) =>
     item.href === "/admin/email-queue" ? { ...item, label: `${item.label} (${pendingQueueCount})` } : item
   );
+
+  const emailsEnabled = await getEmailsEnabled(supabase);
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 lg:h-screen lg:flex-row lg:overflow-hidden">
@@ -102,7 +105,22 @@ export default async function AdminShellLayout({
       </aside>
 
       {/* Main — min-w-0 prevents flex children from overflowing */}
-      <main className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-8">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-8">
+        {!emailsEnabled && (
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <span className="font-semibold">Outbound emails are disabled.</span> No emails are being
+            sent to anyone right now.{" "}
+            {user.role === "super_admin" ? (
+              <Link href="/admin/settings" className="underline hover:no-underline">
+                Turn back on in Settings
+              </Link>
+            ) : (
+              "Ask a super admin to turn it back on in Settings when you're done testing."
+            )}
+          </div>
+        )}
+        {children}
+      </main>
       <RealtimeRefresh userId={user.id as string} />
       <NotificationToasts
         userId={user.id as string}
