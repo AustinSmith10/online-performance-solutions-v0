@@ -124,17 +124,23 @@ const SHORT_BADGE_LABELS: Record<StepperStage["key"], string> = {
 
 // Derives a compact status pill straight from the stepper's active stage, so a row's badge
 // always matches its mini-stepper's current circle — amber marks "stakeholder needs to act",
-// blue marks "we're working on it", green marks done. No separate palette to drift out of sync.
+// blue marks "we're working on it", green marks done, red marks the consultant revising the
+// brief, purple marks the report being finalized. Same palette the admin dashboard's
+// project-status pill uses (ActiveProjectsList.tsx) so the two stay visually consistent.
 export function stepperBadge(result: StepperResult): { label: string; className: string } {
   if (result.isPaused) return { label: "On hold", className: "bg-amber-100 text-amber-700" };
   const activeStage = result.stages[stepperActiveIndexOf(result.stages)];
   const label = activeStage.visual === "revision-current" ? "Revising" : SHORT_BADGE_LABELS[activeStage.key];
   const className =
-    activeStage.visual === "complete"
-      ? "bg-green-100 text-green-700"
-      : stepperNeedsStakeholderAction(activeStage)
-        ? "bg-amber-100 text-amber-700"
-        : "bg-blue-100 text-blue-700";
+    activeStage.visual === "revision-current"
+      ? "bg-red-100 text-red-700"
+      : activeStage.visual === "complete"
+        ? "bg-green-100 text-green-700"
+        : stepperNeedsStakeholderAction(activeStage)
+          ? "bg-amber-100 text-amber-700"
+          : activeStage.key === "finalizing"
+            ? "bg-purple-100 text-purple-700"
+            : "bg-blue-100 text-blue-700";
   return { label, className };
 }
 

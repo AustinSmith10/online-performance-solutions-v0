@@ -277,7 +277,9 @@ function captionClassName(stepper: StepperResult | null, hasPendingReview: boole
   if (!stepper || stepper.isPaused) return "text-zinc-500";
   const activeStage = stepper.stages[stepperActiveIndexOf(stepper.stages)];
   if (hasPendingReview && stepperNeedsStakeholderAction(activeStage)) return "font-medium text-amber-700";
+  if (activeStage.visual === "revision-current") return "text-red-700";
   if (activeStage.visual === "complete") return "text-green-700";
+  if (activeStage.key === "finalizing") return "text-purple-700";
   return "text-blue-700";
 }
 
