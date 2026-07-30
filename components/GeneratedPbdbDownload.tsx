@@ -55,6 +55,7 @@ export function GeneratedPbdbDownload({
       </div>
       <a
         href={`/api/download/pbdb/${fileId}`}
+        download={filename}
         onClick={handleClick}
         className="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
       >
