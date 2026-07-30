@@ -92,6 +92,9 @@ export function WaiveForm({ reviewId, projectId, stakeholderName, requireEvidenc
                 </div>
               )}
               {!requireEvidence && state.error && <p className="text-sm text-red-600">{state.error}</p>}
+              {requireEvidence && !file && reason.length >= 10 && (
+                <p className="text-sm text-amber-700">Attach evidence above to enable the Waive response button.</p>
+              )}
               <div className="flex gap-3">
                 <button
                   type="button"

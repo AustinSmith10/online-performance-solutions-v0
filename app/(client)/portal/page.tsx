@@ -9,17 +9,20 @@ import { resolveEffectiveStatus, OUTSTANDING_STATUSES } from "@/lib/delivery/eff
 import type { ProjectStatus, PaymentMethod } from "@/types";
 import type { DashboardData } from "./_components/dashboardTypes";
 
+// Kept in sync with stepperBadge()'s SHORT_BADGE_LABELS (components/delivery/StepperVisuals.tsx)
+// so the Filters panel's status list matches the wording actually shown on each row's pill —
+// they used to diverge (e.g. "Awaiting Approval" here vs "Awaiting review" on the pill).
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
-  submitted: "Received",
-  assigned: "Received",
-  in_progress: "In Progress",
-  dispatched: "Awaiting Approval",
-  revision_required: "Changes Requested",
-  converting: "Finalising Report",
-  delivered: "Report Delivered",
-  complete: "Complete",
-  paused: "On Hold",
+  submitted: "Submitted",
+  assigned: "In progress",
+  in_progress: "In progress",
+  dispatched: "Awaiting review",
+  revision_required: "Revising",
+  converting: "Finalizing",
+  delivered: "Delivered",
+  complete: "Delivered",
+  paused: "On hold",
 };
 
 const STATUS_CLASSES: Record<ProjectStatus, string> = {

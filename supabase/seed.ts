@@ -86,8 +86,8 @@ async function seed() {
     {
       email: "stakeholder@ops.test",
       role: "stakeholder",
-      firstName: "Test",
-      lastName: "Client",
+      firstName: "Sarah",
+      lastName: "Whitmore",
       clientId: stockland.id,
       totpExempt: true,
     },
