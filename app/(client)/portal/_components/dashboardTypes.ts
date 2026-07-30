@@ -16,7 +16,9 @@ export interface DashboardRow {
   statusClassName: string;
   stepper: StepperResult | null;
   submittedLabel: string;
+  submittedAt: string;
   expectedDeliveryLabel: string | null;
+  expectedDeliveryAt: string | null;
   isDelivered: boolean;
   pbdrFilename?: string;
   pendingReview?: PendingReviewInfo;

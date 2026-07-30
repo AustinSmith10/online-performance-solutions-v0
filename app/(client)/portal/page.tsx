@@ -277,7 +277,9 @@ export default async function ClientPortalPage({
       statusClassName: STATUS_CLASSES[effectiveStatusMap.get(p.id) ?? p.status],
       stepper: stepperMap.get(p.id) ?? null,
       submittedLabel: formatAuDate(p.created_at),
+      submittedAt: p.created_at,
       expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
+      expectedDeliveryAt: p.expected_delivery_date,
       isDelivered: p.status === "delivered",
       pbdrFilename: pbdrFilenameMap.get(p.id),
       pendingReview: pendingReviewMap.has(p.id)

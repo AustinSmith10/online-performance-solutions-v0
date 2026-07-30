@@ -18,7 +18,7 @@ import { PendingReviewModal } from "./PendingReviewModal";
 import { usePendingReviewHeroAction, useReadyDownloadHeroAction } from "./HeroActionMenu";
 import { ClientOnboardingBanner, CLIENT_ONBOARDING_REPLAY_EVENT } from "./ClientOnboardingBanner";
 import { dismissClientOnboarding } from "@/app/actions/onboarding";
-import type { DashboardData } from "./dashboardTypes";
+import type { DashboardData, DashboardRow } from "./dashboardTypes";
 import type { StepperResult } from "@/lib/delivery/stepper";
 
 function Tile({
@@ -50,6 +50,41 @@ function Tile({
 function statusCaption(stepper: StepperResult | null): string | null {
   if (!stepper) return null;
   return stepper.isPaused ? "On hold" : stepper.caption || null;
+}
+
+type RowCategory = "needs_review" | "in_progress" | "delivered";
+
+function rowCategory(row: DashboardRow): RowCategory {
+  if (row.pendingReview) return "needs_review";
+  if (row.isDelivered) return "delivered";
+  return "in_progress";
+}
+
+type SortOption = "priority" | "newest" | "oldest" | "delivery";
+
+const SORT_LABELS: Record<SortOption, string> = {
+  priority: "Needs attention first",
+  newest: "Newest first",
+  oldest: "Oldest first",
+  delivery: "Expected delivery",
+};
+
+function sortRows(rows: DashboardRow[], sortBy: SortOption): DashboardRow[] {
+  if (sortBy === "priority") return rows;
+  const sorted = [...rows];
+  if (sortBy === "newest") {
+    sorted.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  } else if (sortBy === "oldest") {
+    sorted.sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+  } else if (sortBy === "delivery") {
+    sorted.sort((a, b) => {
+      if (!a.expectedDeliveryAt && !b.expectedDeliveryAt) return 0;
+      if (!a.expectedDeliveryAt) return 1;
+      if (!b.expectedDeliveryAt) return -1;
+      return new Date(a.expectedDeliveryAt).getTime() - new Date(b.expectedDeliveryAt).getTime();
+    });
+  }
+  return sorted;
 }
 
 function captionClassName(stepper: StepperResult | null): string {
@@ -113,6 +148,9 @@ export function PortalDashboard({
   const [showOnboarding, setShowOnboarding] = useState(
     initialShowOnboarding || searchParams.get("onboarding") === "replay"
   );
+  const [categoryFilter, setCategoryFilter] = useState<RowCategory | "all">("all");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("priority");
 
   useEffect(() => {
     function onReplay() {
@@ -147,6 +185,18 @@ export function PortalDashboard({
   );
   const readyDownloadHero = useReadyDownloadHeroAction(
     readyItems.map((r) => ({ id: r.id, label: r.label, filename: r.filename }))
+  );
+
+  const needsReviewCount = rows.filter((r) => rowCategory(r) === "needs_review").length;
+  const deliveredCount = rows.filter((r) => rowCategory(r) === "delivered").length;
+
+  const visibleRows = sortRows(
+    rows.filter((row) => {
+      if (categoryFilter !== "all" && rowCategory(row) !== categoryFilter) return false;
+      if (search.trim() && !row.label.toLowerCase().includes(search.trim().toLowerCase())) return false;
+      return true;
+    }),
+    sortBy
   );
 
   return (
@@ -229,7 +279,67 @@ export function PortalDashboard({
         </div>
       ) : (
         <div className="space-y-3">
-          {rows.map((row) => {
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                ["all", `All (${rows.length})`],
+                ["needs_review", `Needs your review (${needsReviewCount})`],
+                ["in_progress", `In progress (${inProgressCount})`],
+                ["delivered", `Delivered (${deliveredCount})`],
+              ] as [RowCategory | "all", string][]
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setCategoryFilter(value)}
+                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                  categoryFilter === value
+                    ? "bg-zinc-900 text-white"
+                    : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by project or address…"
+              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+            />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 focus:border-zinc-400 focus:outline-none"
+            >
+              {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([value, label]) => (
+                <option key={value} value={value}>
+                  Sort: {label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {visibleRows.length === 0 && (
+            <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center">
+              <p className="text-sm font-medium text-zinc-900">No report requests match these filters</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoryFilter("all");
+                  setSearch("");
+                }}
+                className="mt-2 text-sm text-zinc-600 hover:text-zinc-900 hover:underline"
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
+
+          {visibleRows.map((row) => {
             const badge = row.stepper ? stepperBadge(row.stepper) : { label: row.statusLabel, className: row.statusClassName };
             const caption = statusCaption(row.stepper);
             const rowAction = (row.isDelivered || row.pendingReview) && (
