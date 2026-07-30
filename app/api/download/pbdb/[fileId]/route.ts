@@ -46,14 +46,12 @@ export async function GET(
     .eq("id", file.project_id as string)
     .maybeSingle();
 
-  const { data: signed } = await supabase.storage
+  const { data: blob, error: downloadError } = await supabase.storage
     .from("documents")
-    .createSignedUrl(file.storage_path as string, 300, {
-      download: (file.original_filename as string) || true,
-    });
+    .download(file.storage_path as string);
 
-  if (!signed?.signedUrl) {
-    return new NextResponse("Could not generate download link", { status: 500 });
+  if (downloadError || !blob) {
+    return new NextResponse("Could not retrieve file", { status: 500 });
   }
 
   await auditLog("project.pbdb_downloaded", user.id as string, user.email as string, {
@@ -80,5 +78,12 @@ export async function GET(
     );
   }
 
-  return NextResponse.redirect(signed.signedUrl);
+  const filename = (file.original_filename as string) || "pbdb.pdf";
+
+  return new NextResponse(blob, {
+    headers: {
+      "Content-Type": blob.type || "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+    },
+  });
 }
