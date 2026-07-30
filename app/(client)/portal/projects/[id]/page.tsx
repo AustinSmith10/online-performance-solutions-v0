@@ -181,7 +181,7 @@ export default async function ClientProjectDetailPage({
 
   // Load template mappings, submission files, latest PBDB, latest PBDR, and
   // open field flags in parallel
-  const [{ data: mappings }, { data: rawFiles }, { data: rawPbdbs }, { data: rawPbdrs }, { data: openFieldFlags }] =
+  const [{ data: mappings }, { data: rawFileRequirements }, { data: rawFiles }, { data: rawPbdbs }, { data: rawPbdrs }, { data: openFieldFlags }] =
     await Promise.all([
       project.template_id
         ? supabase
@@ -190,6 +190,12 @@ export default async function ClientProjectDetailPage({
             .eq("template_id", project.template_id)
             .order("client_sort_order", { ascending: true })
             .order("placeholder_token", { ascending: true })
+        : Promise.resolve({ data: [] }),
+      project.template_id
+        ? supabase
+            .from("file_requirements")
+            .select("slug, name")
+            .eq("template_id", project.template_id)
         : Promise.resolve({ data: [] }),
       supabase
         .from("project_files")
@@ -266,6 +272,10 @@ export default async function ClientProjectDetailPage({
   };
 
   const mappingEntries = (mappings ?? []) as MappingEntry[];
+
+  const fileReqLabelMap = new Map<string, string>(
+    (rawFileRequirements ?? []).map((r) => [r.slug as string, r.name as string])
+  );
 
   const labelMap = new Map<string, string>(
     mappingEntries.map((m) => [
@@ -507,7 +517,7 @@ export default async function ClientProjectDetailPage({
                   buttonClassName="shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
                 >
                   <p className="truncate text-xs font-medium text-zinc-900">
-                    {FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
+                    {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
                   </p>
                   <p className="mt-0.5 text-[11px] text-zinc-400">
                     {new Date(f.created_at as string).toLocaleDateString("en-AU")}
