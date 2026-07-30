@@ -1,8 +1,14 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { markPbdbDownloaded } from "@/app/actions/projects";
+
+// Long enough for the browser to have visibly started the native download
+// (its own download-bar/notification) before this card is replaced by the
+// next step — the swap is otherwise near-instant, which reads as "nothing
+// happened" even when the file did land.
+const REFRESH_DELAY_MS = 1200;
 
 // Download button for the "Right now" Focus card's just-generated PBDB step.
 //
@@ -35,10 +41,13 @@ export function GeneratedPbdbDownload({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const [downloaded, setDownloaded] = useState(false);
 
   function handleClick() {
+    setDownloaded(true);
     startTransition(async () => {
       await markPbdbDownloaded(projectId, fileId);
+      await new Promise((resolve) => setTimeout(resolve, REFRESH_DELAY_MS));
       router.refresh();
     });
   }
@@ -53,14 +62,20 @@ export function GeneratedPbdbDownload({
           v{version} · {new Date(generatedDate).toLocaleDateString("en-AU")}
         </p>
       </div>
-      <a
-        href={`/api/download/pbdb/${fileId}`}
-        download={filename}
-        onClick={handleClick}
-        className="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
-      >
-        Download
-      </a>
+      {downloaded ? (
+        <span className="shrink-0 rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white">
+          Downloaded ✓
+        </span>
+      ) : (
+        <a
+          href={`/api/download/pbdb/${fileId}`}
+          download={filename}
+          onClick={handleClick}
+          className="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
+        >
+          Download
+        </a>
+      )}
     </div>
   );
 }

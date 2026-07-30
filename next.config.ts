@@ -3,7 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
-      bodySizeLimit: "50mb",
+      // Must be >= the largest file-size limit any server action itself
+      // enforces (uploadQaPbdb in app/actions/projects.ts allows up to
+      // 100MB) — otherwise Next.js's own body-size guard rejects the
+      // request with a raw platform-level error before that action's
+      // validation ever runs, surfacing as a broken page instead of a
+      // clean "File must be under 100 MB" message.
+      bodySizeLimit: "100mb",
     },
   },
   async redirects() {
