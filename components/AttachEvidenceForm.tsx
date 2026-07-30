@@ -7,6 +7,7 @@ import {
   type AttachEvidenceState,
 } from "@/app/actions/evidence";
 import { createClient } from "@/lib/supabase/client";
+import { withResolvedType } from "@/lib/supabase/withResolvedType";
 import { UploadDropzone } from "@/components/UploadDropzone";
 
 export function AttachEvidenceForm({ projectId }: { projectId: string }) {
@@ -28,9 +29,11 @@ export function AttachEvidenceForm({ projectId }: { projectId: string }) {
     const supabase = createClient();
     const { error: uploadError } = await supabase.storage
       .from("evidence")
-      .uploadToSignedUrl(requested.path, requested.token, file, {
-        contentType: requested.contentType,
-      });
+      .uploadToSignedUrl(
+        requested.path,
+        requested.token,
+        withResolvedType(file, requested.contentType)
+      );
     if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
 
     return attachEvidence(projectId, requested.path, file.name, reference);

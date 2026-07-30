@@ -8,6 +8,7 @@ import {
 } from "@/app/actions/stakeholders";
 import { requestEvidenceUploadUrl } from "@/app/actions/evidence";
 import { createClient } from "@/lib/supabase/client";
+import { withResolvedType } from "@/lib/supabase/withResolvedType";
 import { UploadDropzone } from "@/components/UploadDropzone";
 
 interface Props {
@@ -74,9 +75,11 @@ export function LogStakeholderResponseForm({
     const supabase = createClient();
     const { error: uploadError } = await supabase.storage
       .from("evidence")
-      .uploadToSignedUrl(requested.path, requested.token, selectedFile, {
-        contentType: requested.contentType,
-      });
+      .uploadToSignedUrl(
+        requested.path,
+        requested.token,
+        withResolvedType(selectedFile, requested.contentType)
+      );
     if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
 
     return logStakeholderResponseOnBehalf(

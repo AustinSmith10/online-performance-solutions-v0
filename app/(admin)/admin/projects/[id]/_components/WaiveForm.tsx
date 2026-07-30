@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { waiveStakeholderResponse, type WaiveState } from "@/app/actions/stakeholders";
 import { requestEvidenceUploadUrl } from "@/app/actions/evidence";
 import { createClient } from "@/lib/supabase/client";
+import { withResolvedType } from "@/lib/supabase/withResolvedType";
 import { UploadDropzone } from "@/components/UploadDropzone";
 
 interface Props {
@@ -29,9 +30,11 @@ export function WaiveForm({ reviewId, projectId, stakeholderName, requireEvidenc
       const supabase = createClient();
       const { error: uploadError } = await supabase.storage
         .from("evidence")
-        .uploadToSignedUrl(requested.path, requested.token, file, {
-          contentType: requested.contentType,
-        });
+        .uploadToSignedUrl(
+          requested.path,
+          requested.token,
+          withResolvedType(file, requested.contentType)
+        );
       if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
 
       formData.append("storagePath", requested.path);
