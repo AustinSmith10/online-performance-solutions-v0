@@ -3,7 +3,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { notify } from "@/lib/notifications/notify";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
 import { renderAllApprovedEmail } from "@/lib/email/templates/AllApprovedEmail";
-import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 
 /** Human-friendly reference for a project: site address, else project number, else a short id. */
 export function resolveProjectRef(
@@ -98,10 +97,15 @@ export async function notifyModificationsRequested({
 /**
  * A review cycle is fully approved once no review is left `pending` or
  * still-rejected (`rejected_with_comments`/`rejected_without_comments`) — a
- * rejection that hasn't been superseded by a new cycle must keep blocking
- * auto-delivery even if every other stakeholder has since approved.
+ * rejection that hasn't been superseded by a new cycle must keep counting as
+ * outstanding even if every other stakeholder has since approved.
+ *
+ * PBDR conversion does NOT auto-fire here: the admin/consultant picks the
+ * delivery timing and explicitly clicks Convert (see triggerPbdrConversion
+ * in app/actions/conversion.ts) — full approval only notifies the submitter
+ * that their report is ready to be finalised.
  */
-export async function autoDeliverIfFullyApproved(
+export async function notifyIfFullyApproved(
   supabase: SupabaseClient,
   projectId: string,
   reviewCycle: number,
@@ -115,9 +119,6 @@ export async function autoDeliverIfFullyApproved(
     .in("status", ["pending", "rejected_with_comments", "rejected_without_comments"]);
 
   if (!outstanding || outstanding.length === 0) {
-    scheduleOrDeliverPbdr(projectId).catch((err) => {
-      console.error(`${logPrefix} auto-deliver-pbdr failed for ${projectId}:`, err);
-    });
     notifySubmitterAllApproved(supabase, projectId, logPrefix).catch((err) => {
       console.error(`${logPrefix} all-approved notification failed for ${projectId}:`, err);
     });
@@ -150,7 +151,7 @@ async function notifySubmitterAllApproved(
   await notify({
     recipientId: project.submitted_by as string,
     type: "all_acknowledged",
-    message: `All stakeholders have approved ${projectRef} — your report is being finalised.`,
+    message: `All stakeholders have approved ${projectRef} — your report is ready to be finalised.`,
     projectId,
     emailSubject: `All approvals in — ${projectRef}`,
     emailHtml: renderAllApprovedEmail({

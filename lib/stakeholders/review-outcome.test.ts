@@ -8,12 +8,8 @@ vi.mock("@/lib/email/templates/ModificationsRequestedEmail", () => ({
 vi.mock("@/lib/email/templates/AllApprovedEmail", () => ({
   renderAllApprovedEmail: vi.fn().mockReturnValue("<html></html>"),
 }));
-vi.mock("@/lib/documents/pending-delivery", () => ({
-  scheduleOrDeliverPbdr: vi.fn().mockResolvedValue(undefined),
-}));
 
-import { resolveProjectRef, autoDeliverIfFullyApproved } from "./review-outcome";
-import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
+import { resolveProjectRef, notifyIfFullyApproved } from "./review-outcome";
 import { notify } from "@/lib/notifications/notify";
 
 function chain(data: unknown, error: unknown = null) {
@@ -74,24 +70,7 @@ describe("resolveProjectRef", () => {
   });
 });
 
-describe("autoDeliverIfFullyApproved", () => {
-  it("triggers delivery once no review is pending or still-rejected", async () => {
-    const supabase = makeSupabase({ outstanding: [] });
-    await autoDeliverIfFullyApproved(supabase as never, "proj-1", 1, "[test]");
-    expect(scheduleOrDeliverPbdr).toHaveBeenCalledWith("proj-1");
-  });
-
-  // Regression: two of the three call sites (portalApproval.ts,
-  // stakeholders.ts) used to only check for `status: "pending"`, which meant
-  // a stakeholder approving after another had already rejected (leaving a
-  // `rejected_with_comments` row on the same cycle) would incorrectly count
-  // as "fully approved" and auto-trigger delivery.
-  it("does not trigger delivery while a rejected review is still outstanding", async () => {
-    const supabase = makeSupabase({ outstanding: [{ id: "review-2" }] });
-    await autoDeliverIfFullyApproved(supabase as never, "proj-1", 1, "[test]");
-    expect(scheduleOrDeliverPbdr).not.toHaveBeenCalled();
-  });
-
+describe("notifyIfFullyApproved", () => {
   it("notifies the submitter, not every org stakeholder, once fully approved", async () => {
     const supabase = makeSupabase({
       outstanding: [],
@@ -99,8 +78,8 @@ describe("autoDeliverIfFullyApproved", () => {
       submitter: { first_name: "Macky" },
     });
 
-    await autoDeliverIfFullyApproved(supabase as never, "proj-1", 1, "[test]");
-    // Fire-and-forget inside autoDeliverIfFullyApproved — flush microtasks.
+    await notifyIfFullyApproved(supabase as never, "proj-1", 1, "[test]");
+    // Fire-and-forget inside notifyIfFullyApproved — flush microtasks.
     await new Promise((r) => setTimeout(r, 0));
 
     expect(notify).toHaveBeenCalledWith(
@@ -113,9 +92,14 @@ describe("autoDeliverIfFullyApproved", () => {
     );
   });
 
+  // Regression: two of the three call sites (portalApproval.ts,
+  // stakeholders.ts) used to only check for `status: "pending"`, which meant
+  // a stakeholder approving after another had already rejected (leaving a
+  // `rejected_with_comments` row on the same cycle) would incorrectly count
+  // as "fully approved".
   it("does not notify anyone when a review is still outstanding", async () => {
     const supabase = makeSupabase({ outstanding: [{ id: "review-2" }] });
-    await autoDeliverIfFullyApproved(supabase as never, "proj-1", 1, "[test]");
+    await notifyIfFullyApproved(supabase as never, "proj-1", 1, "[test]");
     await new Promise((r) => setTimeout(r, 0));
 
     expect(notify).not.toHaveBeenCalled();

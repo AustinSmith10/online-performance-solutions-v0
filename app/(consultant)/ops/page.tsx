@@ -140,9 +140,9 @@ export default async function ConsultantOpsPage({
   // list, tab bucket, and label below derives from this instead of separately
   // recomputing "are all reviews resolved," which is what let this landing
   // page disagree with the project detail page about a fully-approved
-  // project still being "dispatched" in the DB until scheduleOrDeliverPbdr's
-  // scheduled delivery time actually arrives (can lag by a working day or
-  // more, per delivery_delay_preset).
+  // project still being "dispatched" in the DB until an admin/consultant
+  // explicitly clicks Convert (conversion no longer auto-fires on full
+  // approval).
   const dispatchedIds = projects.filter((p) => p.status === "dispatched").map((p) => p.id);
   const reviewsByProjectId = new Map<string, { status: string }[]>();
   if (dispatchedIds.length > 0) {

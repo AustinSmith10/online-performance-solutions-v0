@@ -4,17 +4,19 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { deliverPbdr } from "@/lib/documents/delivery";
+import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 import { auditLog } from "@/lib/audit/log";
 import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
 
-export type ConvertState = { error?: string; success?: boolean };
+export type ConvertState = { error?: string; success?: boolean; scheduledFor?: string | null };
 
 /**
- * Manual retry for PBDR conversion, for admins and the assigned consultant.
- * Auto-conversion fires from submitApproval when all stakeholders acknowledge.
- * This button is a fallback if that auto-trigger failed or is still staged
- * (e.g. waiting on a delivery-delay preset) and the project needs to go out now.
+ * Admin/consultant-triggered PBDR conversion — the only trigger. Full
+ * stakeholder approval no longer auto-converts (see notifyIfFullyApproved in
+ * lib/stakeholders/review-outcome.ts); the admin/consultant picks the
+ * project's delivery timing preset first, then clicks Convert, and that
+ * preset governs whether this delivers now or stages for later release by
+ * the worker cron (lib/documents/pending-delivery.ts).
  */
 export async function triggerPbdrConversion(
   projectId: string,
@@ -35,15 +37,14 @@ export async function triggerPbdrConversion(
     }
   }
 
-  const result = await deliverPbdr(projectId, actor.id, actor.email as string);
-
-  if (!result.success) {
-    return { error: result.reason ?? "Conversion failed. Please try again." };
+  try {
+    const result = await scheduleOrDeliverPbdr(projectId, actor.id, actor.email as string);
+    revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath(`/ops/projects/${projectId}`);
+    return { success: true, scheduledFor: result.scheduledFor };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Conversion failed. Please try again." };
   }
-
-  revalidatePath(`/admin/projects/${projectId}`);
-  revalidatePath(`/ops/projects/${projectId}`);
-  return { success: true };
 }
 
 // ─── Resend PBDR delivery email ───────────────────────────────────────────────

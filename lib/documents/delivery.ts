@@ -19,8 +19,10 @@ export interface DeliverPbdrResult {
  * Core PBDB→PBDR conversion and delivery pipeline.
  *
  * Called from:
- *   - Auto-trigger: submitApproval when all stakeholders acknowledge
- *   - Manual trigger: triggerPbdrConversion server action (Super Admin button)
+ *   - triggerPbdrConversion server action (admin/consultant Convert button),
+ *     via scheduleOrDeliverPbdr once the effective delivery time has arrived
+ *   - The worker's release-pending-deliveries cron sweep, for conversions
+ *     staged behind a delivery-delay preset
  *
  * actorId / actorEmail may be null for system-triggered runs (audit log
  * records them as system events). Falls back to the first super admin ID

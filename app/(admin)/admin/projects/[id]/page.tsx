@@ -771,7 +771,7 @@ export default async function ProjectDetailPage({
     );
   } else if (project.status === "converting") {
     focusCard = (
-      <FocusCard tone="green" title="Converting to PBDR" subtitle="All stakeholders approved — this happens automatically.">
+      <FocusCard tone="green" title="Converting to PBDR" subtitle="Conversion is in progress.">
         <p className="text-sm text-green-700">No action needed right now.</p>
       </FocusCard>
     );

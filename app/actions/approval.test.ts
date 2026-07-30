@@ -8,9 +8,6 @@ vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/email/templates/ModificationsRequestedEmail");
 vi.mock("@/lib/email/templates/ApprovalRequestEmail");
 vi.mock("@/lib/email/sender", () => ({ sendEmail: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("@/lib/documents/pending-delivery", () => ({
-  scheduleOrDeliverPbdr: vi.fn().mockResolvedValue(undefined),
-}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { submitApproval, requestNewApprovalLink } from "./approval";
@@ -21,7 +18,6 @@ import { notify } from "@/lib/notifications/notify";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { sendEmail } from "@/lib/email/sender";
-import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -198,21 +194,6 @@ describe("submitApproval — approved", () => {
     expect(rejCalls).toHaveLength(0);
   });
 
-  it("triggers deliverPbdr automatically when all stakeholders have approved", async () => {
-    vi.mocked(createAdminClient).mockReturnValue(
-      buildMock({ secondaryReviews: [], admins: [{ id: "admin-1" }] }) as never
-    );
-    await submitApproval("tok", null, {}, makeFormData({ response: "approved" }));
-    expect(vi.mocked(scheduleOrDeliverPbdr)).toHaveBeenCalledWith("proj-1");
-  });
-
-  it("does not trigger deliverPbdr when other stakeholders are still pending", async () => {
-    vi.mocked(createAdminClient).mockReturnValue(
-      buildMock({ secondaryReviews: [{ id: "review-2" }] }) as never
-    );
-    await submitApproval("tok", null, {}, makeFormData({ response: "approved" }));
-    expect(vi.mocked(scheduleOrDeliverPbdr)).not.toHaveBeenCalled();
-  });
 });
 
 // ─── Rejected path ────────────────────────────────────────────────────────────

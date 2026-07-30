@@ -181,8 +181,8 @@ export default async function AdminDashboardPage({
   // every list/badge derives from this instead of separately recomputing
   // "are all reviews resolved," which is what let this list disagree with
   // the project detail page about a fully-approved project still being
-  // "dispatched" in the DB until scheduleOrDeliverPbdr's scheduled delivery
-  // time actually arrives (can lag by a working day or more).
+  // "dispatched" in the DB until an admin/consultant explicitly clicks
+  // Convert (conversion no longer auto-fires on full approval).
   const dispatchedIds = allActive.filter((p) => p.status === "dispatched").map((p) => p.id);
   const reviewsByProjectId = new Map<string, { status: string }[]>();
   if (dispatchedIds.length > 0) {

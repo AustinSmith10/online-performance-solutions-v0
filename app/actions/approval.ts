@@ -8,7 +8,7 @@ import { sendEmail } from "@/lib/email/sender";
 import {
   resolveProjectRef,
   notifyModificationsRequested,
-  autoDeliverIfFullyApproved,
+  notifyIfFullyApproved,
 } from "@/lib/stakeholders/review-outcome";
 
 export interface ApprovalState {
@@ -123,7 +123,7 @@ export async function submitApproval(
       subjectLabel: "Rejection received",
     });
   } else {
-    await autoDeliverIfFullyApproved(supabase, review.project_id, cycle, "[submitApproval]");
+    await notifyIfFullyApproved(supabase, review.project_id, cycle, "[submitApproval]");
   }
 
   return { submitted: true, response };

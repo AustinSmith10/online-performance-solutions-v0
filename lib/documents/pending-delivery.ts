@@ -6,13 +6,23 @@ import { getBusinessHours } from "@/lib/settings/business-hours";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { deliverPbdr } from "@/lib/documents/delivery";
 
-// Auto-triggered PBDR delivery, gated to business hours (#63) and the project's
-// delivery delay preset (#66). Effective delivery time is the later of "now +
-// preset delay" and the next business-hours window. Expedited has no delay, so
-// it reduces to today's behaviour: deliver immediately if within business
-// hours, otherwise stage for the next window. Normal/Extended push the time
-// out further, staging in `pending_deliveries` for a worker cron to pick up.
-export async function scheduleOrDeliverPbdr(projectId: string): Promise<void> {
+export interface ScheduleOrDeliverResult {
+  delivered: boolean;
+  scheduledFor: string | null;
+}
+
+// Explicit-trigger PBDR delivery (admin/consultant clicks Convert, having
+// already picked the project's delivery delay preset), gated to business
+// hours (#63) and that preset (#66). Effective delivery time is the later of
+// "now + preset delay" and the next business-hours window. Expedited has no
+// delay, so it reduces to delivering immediately if within business hours,
+// otherwise staging for the next window. Normal/Extended push the time out
+// further, staging in `pending_deliveries` for a worker cron to pick up.
+export async function scheduleOrDeliverPbdr(
+  projectId: string,
+  actorId: string | null = null,
+  actorEmail: string | null = null
+): Promise<ScheduleOrDeliverResult> {
   const supabase = createAdminClient();
   const now = new Date();
 
@@ -44,8 +54,9 @@ export async function scheduleOrDeliverPbdr(projectId: string): Promise<void> {
   );
 
   if (effectiveDeliveryTime.getTime() <= now.getTime()) {
-    await deliverPbdr(projectId, null, null);
-    return;
+    const result = await deliverPbdr(projectId, actorId, actorEmail);
+    if (!result.success) throw new Error(result.reason ?? "Conversion failed.");
+    return { delivered: true, scheduledFor: null };
   }
 
   const { error } = await supabase.from("pending_deliveries").upsert({
@@ -57,6 +68,8 @@ export async function scheduleOrDeliverPbdr(projectId: string): Promise<void> {
     console.error(`[scheduleOrDeliverPbdr] failed to stage delivery for ${projectId}:`, error);
     throw error;
   }
+
+  return { delivered: false, scheduledFor: effectiveDeliveryTime.toISOString() };
 }
 
 export interface ExpediteDeliveryResult {

@@ -14,7 +14,9 @@ export function ConvertButton({ projectId }: { projectId: string }) {
   if (state.success) {
     return (
       <p className="text-sm text-green-700 font-medium">
-        PBDR delivered. Project marked complete.
+        {state.scheduledFor
+          ? `Delivery scheduled for ${new Date(state.scheduledFor).toLocaleString("en-AU")}.`
+          : "PBDR delivered. Project marked complete."}
       </p>
     );
   }
@@ -31,7 +33,8 @@ export function ConvertButton({ projectId }: { projectId: string }) {
             </div>
             <p className="text-base font-semibold text-zinc-900">Convert &amp; deliver PBDR?</p>
             <p className="mt-2 text-sm text-zinc-500">
-              This will generate the final PBDR and email it to the stakeholders. This action
+              This generates the final PBDR and emails it to the stakeholders, applying the
+              delivery timing selected above (immediately, or staged for later). This action
               cannot be undone.
             </p>
             {state.error && (

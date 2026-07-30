@@ -14,7 +14,7 @@ export function renderAllApprovedEmail({
   const body = [
     paragraph(`Hi ${e(recipientName)},`),
     paragraph(
-      `All stakeholders have approved ${strong(projectRef)}. Your report is now being finalised and is on its way to delivery.`
+      `All stakeholders have approved ${strong(projectRef)}. Your report is now ready to be finalised for delivery.`
     ),
     fieldTable([{ label: "Project", value: e(projectRef) }]),
     paragraph("We'll be in touch as soon as it's ready to download.", 20),

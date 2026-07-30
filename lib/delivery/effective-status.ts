@@ -8,10 +8,9 @@ const OUTSTANDING_STATUSES = new Set(["pending", "rejected_with_comments", "reje
  * The status every surface should treat a project as being in — the single
  * source of truth for "Right now." Collapses the gap between "every
  * current-cycle stakeholder review has resolved" and the DB actually
- * flipping to "converting": that only happens once
- * scheduleOrDeliverPbdr's scheduled delivery job runs (lib/documents/pending-delivery.ts),
- * which can lag the last approval by a working day or more depending on the
- * project's delivery_delay_preset.
+ * flipping to "converting": that only happens once an admin/consultant
+ * explicitly clicks Convert (app/actions/conversion.ts), which can lag the
+ * last approval indefinitely since conversion no longer auto-fires.
  *
  * Badges, tab/list bucketing, and the stage rail should all call this once
  * and derive their display from its result — not separately recompute "is

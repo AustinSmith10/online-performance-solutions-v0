@@ -6,14 +6,16 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/auth/session");
 vi.mock("@/lib/supabase/admin");
 vi.mock("@/lib/documents/delivery");
+vi.mock("@/lib/documents/pending-delivery");
 vi.mock("@/lib/audit/log");
 vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/email/sender");
 vi.mock("@/lib/email/templates/PBDRDeliveryEmail");
 
-import { resendPbdrEmail } from "./conversion";
+import { resendPbdrEmail, triggerPbdrConversion } from "./conversion";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { sendEmail } from "@/lib/email/sender";
@@ -100,6 +102,47 @@ beforeEach(() => {
   vi.mocked(auditLog).mockResolvedValue(undefined as never);
   vi.mocked(notify).mockResolvedValue(undefined as never);
   vi.mocked(sendEmail).mockResolvedValue(true as never);
+});
+
+describe("triggerPbdrConversion", () => {
+  it("passes the acting admin through to scheduleOrDeliverPbdr and reports immediate delivery", async () => {
+    vi.mocked(scheduleOrDeliverPbdr).mockResolvedValue({ delivered: true, scheduledFor: null });
+
+    const result = await triggerPbdrConversion(PROJECT_ID, {}, new FormData());
+
+    expect(vi.mocked(scheduleOrDeliverPbdr)).toHaveBeenCalledWith(PROJECT_ID, ADMIN.id, ADMIN.email);
+    expect(result).toEqual({ success: true, scheduledFor: null });
+  });
+
+  it("surfaces a staged delivery time when the preset delays it", async () => {
+    const scheduledFor = "2026-08-01T00:00:00.000Z";
+    vi.mocked(scheduleOrDeliverPbdr).mockResolvedValue({ delivered: false, scheduledFor });
+
+    const result = await triggerPbdrConversion(PROJECT_ID, {}, new FormData());
+
+    expect(result).toEqual({ success: true, scheduledFor });
+  });
+
+  it("returns an error when scheduleOrDeliverPbdr throws", async () => {
+    vi.mocked(scheduleOrDeliverPbdr).mockRejectedValue(new Error("Not all stakeholders have acknowledged."));
+
+    const result = await triggerPbdrConversion(PROJECT_ID, {}, new FormData());
+
+    expect(result).toEqual({ error: "Not all stakeholders have acknowledged." });
+  });
+
+  it("blocks a consultant who isn't assigned to the project", async () => {
+    const CONSULTANT = { id: "consultant-1", email: "consultant@ddeg.com.au", role: "consultant" };
+    vi.mocked(requireRole).mockResolvedValue(CONSULTANT as never);
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn().mockReturnValue(queryable([{ id: PROJECT_ID, assigned_consultant_id: "someone-else" }])),
+    } as never);
+
+    const result = await triggerPbdrConversion(PROJECT_ID, {}, new FormData());
+
+    expect(result).toEqual({ error: "You are not assigned to this project." });
+    expect(vi.mocked(scheduleOrDeliverPbdr)).not.toHaveBeenCalled();
+  });
 });
 
 describe("resendPbdrEmail", () => {

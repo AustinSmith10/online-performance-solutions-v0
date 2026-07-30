@@ -8,7 +8,7 @@ import { renderReviewResponseConfirmationEmail } from "@/lib/email/templates/Rev
 import {
   resolveProjectRef,
   notifyModificationsRequested,
-  autoDeliverIfFullyApproved,
+  notifyIfFullyApproved,
 } from "@/lib/stakeholders/review-outcome";
 
 export interface PortalApprovalState {
@@ -126,7 +126,7 @@ export async function submitPortalApproval(
       subjectLabel: "Changes requested",
     });
   } else {
-    await autoDeliverIfFullyApproved(
+    await notifyIfFullyApproved(
       supabase,
       review.project_id as string,
       cycle,

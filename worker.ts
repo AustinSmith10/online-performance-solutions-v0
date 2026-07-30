@@ -276,8 +276,9 @@ async function main() {
     }
   );
 
-  // Release staged PBDR deliveries (#63): auto-triggered deliveries that landed
-  // outside business hours were staged in pending_deliveries by
+  // Release staged PBDR deliveries (#63): admin/consultant-triggered
+  // conversions whose delivery-delay preset pushed them past "now" (or
+  // outside business hours) were staged in pending_deliveries by
   // scheduleOrDeliverPbdr rather than run immediately. Sweep every 10 minutes
   // and run any whose scheduled_for has arrived.
   await boss.schedule("release-pending-deliveries", "*/10 * * * *", {});

@@ -7,7 +7,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 import { inviteLateStakeholder } from "@/lib/stakeholders/late-add";
-import { deliverPbdr } from "@/lib/documents/delivery";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
 import { sendEmail } from "@/lib/email/sender";
@@ -17,7 +16,7 @@ import { notify } from "@/lib/notifications/notify";
 import {
   resolveProjectRef,
   notifyModificationsRequested,
-  autoDeliverIfFullyApproved,
+  notifyIfFullyApproved,
 } from "@/lib/stakeholders/review-outcome";
 import { sendStakeholderBufferUpdate } from "@/lib/stakeholders/buffer-update";
 import { attachEvidence } from "@/app/actions/evidence";
@@ -546,7 +545,6 @@ export async function waiveStakeholderResponse(
     metadata: { review_id: reviewId, reason, evidence_file_id: evidenceFileId },
   });
 
-  // Check if all reviews for this cycle are now complete
   const { data: project } = await supabase
     .from("projects")
     .select("review_cycle")
@@ -554,20 +552,7 @@ export async function waiveStakeholderResponse(
     .single();
 
   if (project) {
-    const cycle = project.review_cycle as number;
-    const { data: outstanding } = await supabase
-      .from("stakeholder_reviews")
-      .select("id")
-      .eq("project_id", projectId)
-      .eq("review_cycle", cycle)
-      .in("status", ["pending", "rejected_with_comments", "rejected_without_comments"]);
-
-    if (!outstanding || outstanding.length === 0) {
-      // All stakeholders approved or waived — auto-trigger PBDR conversion and delivery
-      deliverPbdr(projectId, actor.id, actor.email as string).catch((err) => {
-        console.error(`[waiveStakeholderResponse] auto-deliver-pbdr failed for ${projectId}:`, err);
-      });
-    }
+    await notifyIfFullyApproved(supabase, projectId, project.review_cycle as number, "[waiveStakeholderResponse]");
   }
 
   redirect(
@@ -1021,7 +1006,7 @@ export async function logStakeholderResponseOnBehalf(
         subjectLabel: "Changes requested",
       });
     } else {
-      await autoDeliverIfFullyApproved(supabase, projectId, cycle, "[logStakeholderResponseOnBehalf]");
+      await notifyIfFullyApproved(supabase, projectId, cycle, "[logStakeholderResponseOnBehalf]");
     }
   }
 
