@@ -31,6 +31,10 @@ export interface StepperInput {
   showConsultantName: boolean;
   consultantFirstName: string | null;
   viewerFirstName: string | null;
+  /** True once the viewing stakeholder's own review for this cycle is no longer pending. */
+  viewerHasResponded?: boolean;
+  /** Count of other stakeholders' reviews still outstanding this cycle. */
+  outstandingReviewCount?: number;
 }
 
 export interface StepperResult {
@@ -120,6 +124,10 @@ function captionFor(status: ProjectStatus, input: StepperInput): string {
   }
 
   if (status === "dispatched") {
+    if (input.viewerHasResponded && (input.outstandingReviewCount ?? 0) > 0) {
+      const n = input.outstandingReviewCount as number;
+      return `Thanks for reviewing — waiting on ${n} more stakeholder${n === 1 ? "" : "s"} to respond.`;
+    }
     return input.viewerFirstName
       ? `${input.viewerFirstName}, please review the brief`
       : "Please review the brief";

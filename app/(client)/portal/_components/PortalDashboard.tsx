@@ -270,10 +270,13 @@ function FilterPanel({
   );
 }
 
-function captionClassName(stepper: StepperResult | null): string {
+// `hasPendingReview` is this viewer's own pending-review state (row.pendingReview) —
+// distinct from the stepper's stage, which reflects the project overall and stays on
+// "Review" until every stakeholder has responded, not just this one.
+function captionClassName(stepper: StepperResult | null, hasPendingReview: boolean): string {
   if (!stepper || stepper.isPaused) return "text-zinc-500";
   const activeStage = stepper.stages[stepperActiveIndexOf(stepper.stages)];
-  if (stepperNeedsStakeholderAction(activeStage)) return "font-medium text-amber-700";
+  if (hasPendingReview && stepperNeedsStakeholderAction(activeStage)) return "font-medium text-amber-700";
   if (activeStage.visual === "complete") return "text-green-700";
   return "text-blue-700";
 }
@@ -579,7 +582,11 @@ export function PortalDashboard({
                     <Link href={row.href} className="truncate text-base font-semibold text-zinc-900 hover:underline">
                       {row.label}
                     </Link>
-                    {caption && <p className={`mt-0.5 text-xs ${captionClassName(row.stepper)}`}>{caption}</p>}
+                    {caption && (
+                      <p className={`mt-0.5 text-xs ${captionClassName(row.stepper, !!row.pendingReview)}`}>
+                        {caption}
+                      </p>
+                    )}
                     <p className="mt-1 text-xs text-zinc-500">
                       Submitted {row.submittedLabel}
                       {row.expectedDeliveryLabel ? ` · Expected ${row.expectedDeliveryLabel}` : " · No delivery date set"}

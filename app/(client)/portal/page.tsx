@@ -5,7 +5,7 @@ import { DeletedBanner } from "./_components/DeletedBanner";
 import { RestoredBanner } from "./_components/RestoredBanner";
 import { PortalDashboard } from "./_components/PortalDashboard";
 import { resolveStepperState, type StepperResult } from "@/lib/delivery/stepper";
-import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
+import { resolveEffectiveStatus, OUTSTANDING_STATUSES } from "@/lib/delivery/effective-status";
 import type { ProjectStatus, PaymentMethod } from "@/types";
 import type { DashboardData } from "./_components/dashboardTypes";
 
@@ -210,11 +210,11 @@ export default async function ClientPortalPage({
   // duplication is what let the dashboard, project detail, and stepper
   // disagree about whether a project was still "awaiting approval".
   const dispatchedIds = activeProjects.filter((p) => p.status === "dispatched").map((p) => p.id);
-  const reviewsByProjectId = new Map<string, { status: string }[]>();
+  const reviewsByProjectId = new Map<string, { status: string; stakeholder_email: string }[]>();
   if (dispatchedIds.length > 0) {
     const { data: reviewRows } = await supabase
       .from("stakeholder_reviews")
-      .select("project_id, review_cycle, status")
+      .select("project_id, review_cycle, status, stakeholder_email")
       .in("project_id", dispatchedIds);
     const reviewCycleById = new Map(activeProjects.map((p) => [p.id, p.review_cycle]));
     for (const pid of dispatchedIds) {
@@ -232,6 +232,19 @@ export default async function ClientPortalPage({
     ])
   );
 
+  // Once this stakeholder's own review is no longer pending, the "please
+  // review" caption gives way to a "waiting on N more stakeholders" one —
+  // outstanding count excludes their own (already-resolved) row naturally,
+  // since OUTSTANDING_STATUSES only matches rows still needing a response.
+  const viewerHasRespondedMap = new Map<string, boolean>();
+  const outstandingReviewCountMap = new Map<string, number>();
+  for (const pid of dispatchedIds) {
+    const rows = reviewsByProjectId.get(pid) ?? [];
+    const viewerRow = rows.find((r) => r.stakeholder_email === (user.email as string));
+    viewerHasRespondedMap.set(pid, !!viewerRow && !OUTSTANDING_STATUSES.has(viewerRow.status));
+    outstandingReviewCountMap.set(pid, rows.filter((r) => OUTSTANDING_STATUSES.has(r.status)).length);
+  }
+
   // Real-status-only stepper state per row — draft has no stepper (stakeholders never see progress pre-submission)
   const stepperMap = new Map<string, StepperResult>();
   for (const p of activeProjects) {
@@ -248,6 +261,8 @@ export default async function ClientPortalPage({
           ? consultantNameMap.get(p.assigned_consultant_id) ?? null
           : null,
         viewerFirstName: (user.first_name as string | null) ?? null,
+        viewerHasResponded: viewerHasRespondedMap.get(p.id) ?? false,
+        outstandingReviewCount: outstandingReviewCountMap.get(p.id) ?? 0,
       })
     );
   }

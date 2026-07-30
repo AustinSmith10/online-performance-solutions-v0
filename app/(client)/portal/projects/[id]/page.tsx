@@ -13,7 +13,7 @@ import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { DownloadCard } from "@/components/DownloadCard";
 import { resolveStepperState, type StepperStage, type StepperStageKey } from "@/lib/delivery/stepper";
-import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
+import { resolveEffectiveStatus, OUTSTANDING_STATUSES } from "@/lib/delivery/effective-status";
 import { SUPPORT_MAILTO } from "@/lib/config/support";
 import { ClientWorkspace } from "../../_components/ClientWorkspace";
 import { ClientHeaderCard } from "../../_components/ClientHeaderCard";
@@ -125,7 +125,7 @@ export default async function ClientProjectDetailPage({
     project.status === "dispatched"
       ? supabase
           .from("stakeholder_reviews")
-          .select("status")
+          .select("status, stakeholder_email")
           .eq("project_id", id)
           .eq("review_cycle", project.review_cycle)
       : Promise.resolve({ data: null }),
@@ -135,6 +135,16 @@ export default async function ClientProjectDetailPage({
   const consultantRevisionNote = (revisionNoteRow?.note as string | null) ?? null;
   const effectiveStatus = resolveEffectiveStatus(project.status, reviewRows ?? []);
 
+  // Once this stakeholder's own review is no longer pending, the "please
+  // review" caption gives way to a "waiting on N more stakeholders" one.
+  const viewerReviewRow = (reviewRows ?? []).find(
+    (r) => r.stakeholder_email === (user.email as string)
+  );
+  const viewerHasResponded = !!viewerReviewRow && !OUTSTANDING_STATUSES.has(viewerReviewRow.status as string);
+  const outstandingReviewCount = (reviewRows ?? []).filter((r) =>
+    OUTSTANDING_STATUSES.has(r.status as string)
+  ).length;
+
   const stepperResult = resolveStepperState({
     status: effectiveStatus,
     pausedPreviousStatus: project.paused_previous_status,
@@ -143,6 +153,8 @@ export default async function ClientProjectDetailPage({
     showConsultantName: orgRow?.show_consultant_name ?? true,
     consultantFirstName: consultant?.first_name ?? null,
     viewerFirstName: (user.first_name as string | null) ?? null,
+    viewerHasResponded,
+    outstandingReviewCount,
   });
   const stages = mapStepperStages(stepperResult.stages);
   const currentStageLabel = stages.find((s) => s.state === "current")?.label ?? null;

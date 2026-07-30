@@ -2,7 +2,7 @@ import type { ProjectStatus } from "@/types";
 
 export type ReviewStatusRow = { status: string };
 
-const OUTSTANDING_STATUSES = new Set(["pending", "rejected_with_comments", "rejected_without_comments"]);
+export const OUTSTANDING_STATUSES = new Set(["pending", "rejected_with_comments", "rejected_without_comments"]);
 
 /**
  * The status every surface should treat a project as being in — the single

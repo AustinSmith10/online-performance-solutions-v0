@@ -89,6 +89,26 @@ describe("resolveStepperState", () => {
       expect(result.caption).toBe("Please review the brief");
     });
 
+    it("tells an already-responded viewer how many other stakeholders remain", () => {
+      const result = resolveStepperState(
+        base({ status: "dispatched", viewerHasResponded: true, outstandingReviewCount: 2 })
+      );
+      expect(result.caption).toBe("Thanks for reviewing — waiting on 2 more stakeholders to respond.");
+    });
+
+    it("uses singular phrasing when exactly one stakeholder remains", () => {
+      const result = resolveStepperState(
+        base({ status: "dispatched", viewerHasResponded: true, outstandingReviewCount: 1 })
+      );
+      expect(result.caption).toBe("Thanks for reviewing — waiting on 1 more stakeholder to respond.");
+    });
+
+    it("still asks the viewer to review if they've responded but no count is known", () => {
+      const result = resolveStepperState(
+        base({ status: "dispatched", viewerHasResponded: true, outstandingReviewCount: 0 })
+      );
+      expect(result.caption).toBe("Jordan, please review the brief");
+    });
   });
 
   describe("status: delivered / complete", () => {
