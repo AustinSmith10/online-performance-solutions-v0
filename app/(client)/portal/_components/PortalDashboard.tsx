@@ -10,7 +10,7 @@
 // MiniStepper the project-detail page already uses.
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { MiniStepper, stepperBadge, stepperActiveIndexOf, stepperNeedsStakeholderAction } from "@/components/delivery/StepperVisuals";
 import { DownloadPbdrLink } from "./DownloadPbdrLink";
@@ -87,6 +87,189 @@ function sortRows(rows: DashboardRow[], sortBy: SortOption): DashboardRow[] {
   return sorted;
 }
 
+// Canonical delivery-step options for the filter panel, in stepper order.
+// "draft" covers the (rare) not-yet-submitted row, which has no stepper.
+const STEP_OPTIONS: { key: string; label: string }[] = [
+  { key: "draft", label: "Not yet submitted" },
+  { key: "submitted", label: "Submitted" },
+  { key: "prepared", label: "Being prepared" },
+  { key: "review", label: "Awaiting your review" },
+  { key: "finalizing", label: "Finalizing" },
+  { key: "delivered", label: "Delivered" },
+];
+
+function rowStepKey(row: DashboardRow): string {
+  if (!row.stepper) return "draft";
+  return row.stepper.stages[stepperActiveIndexOf(row.stepper.stages)].key;
+}
+
+type Filters = {
+  statuses: string[];
+  steps: string[];
+  submittedFrom: string;
+  submittedTo: string;
+  expectedFrom: string;
+  expectedTo: string;
+};
+
+const EMPTY_FILTERS: Filters = {
+  statuses: [],
+  steps: [],
+  submittedFrom: "",
+  submittedTo: "",
+  expectedFrom: "",
+  expectedTo: "",
+};
+
+function isFilterActive(f: Filters): boolean {
+  return (
+    f.statuses.length > 0 ||
+    f.steps.length > 0 ||
+    f.submittedFrom !== "" ||
+    f.submittedTo !== "" ||
+    f.expectedFrom !== "" ||
+    f.expectedTo !== ""
+  );
+}
+
+// Date-only comparisons: an ISO timestamp's calendar date (in the viewer's
+// local time, same as submittedLabel/expectedDeliveryLabel) against a plain
+// yyyy-mm-dd <input type="date"> value.
+function dateOnly(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-CA");
+}
+
+function matchesFilters(row: DashboardRow, f: Filters): boolean {
+  if (f.statuses.length > 0 && !f.statuses.includes(row.statusLabel)) return false;
+  if (f.steps.length > 0 && !f.steps.includes(rowStepKey(row))) return false;
+  if (f.submittedFrom && dateOnly(row.submittedAt) < f.submittedFrom) return false;
+  if (f.submittedTo && dateOnly(row.submittedAt) > f.submittedTo) return false;
+  if (f.expectedFrom || f.expectedTo) {
+    if (!row.expectedDeliveryAt) return false;
+    const expected = dateOnly(row.expectedDeliveryAt);
+    if (f.expectedFrom && expected < f.expectedFrom) return false;
+    if (f.expectedTo && expected > f.expectedTo) return false;
+  }
+  return true;
+}
+
+function CheckboxRow({ checked, label, onChange }: { checked: boolean; label: string; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm text-zinc-700 hover:bg-zinc-50">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-3.5 w-3.5 rounded border-zinc-300"
+      />
+      {label}
+    </label>
+  );
+}
+
+function FilterPanel({
+  filters,
+  statuses,
+  steps,
+  onChange,
+  onClose,
+}: {
+  filters: Filters;
+  statuses: string[];
+  steps: { key: string; label: string }[];
+  onChange: (f: Filters) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [onClose]);
+
+  function toggle(key: "statuses" | "steps", value: string) {
+    const list = filters[key];
+    const next = list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+    onChange({ ...filters, [key]: next });
+  }
+
+  return (
+    <div ref={ref} className="absolute right-0 top-9 z-50 w-[20rem] rounded-xl border border-zinc-200 bg-white p-4 shadow-xl">
+      <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
+        {statuses.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Status</p>
+            <div className="space-y-0.5">
+              {statuses.map((s) => (
+                <CheckboxRow key={s} checked={filters.statuses.includes(s)} label={s} onChange={() => toggle("statuses", s)} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {steps.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Delivery step</p>
+            <div className="space-y-0.5">
+              {steps.map((s) => (
+                <CheckboxRow key={s.key} checked={filters.steps.includes(s.key)} label={s.label} onChange={() => toggle("steps", s.key)} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Submitted date</p>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={filters.submittedFrom}
+              onChange={(e) => onChange({ ...filters, submittedFrom: e.target.value })}
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+            />
+            <span className="text-xs text-zinc-400">to</span>
+            <input
+              type="date"
+              value={filters.submittedTo}
+              onChange={(e) => onChange({ ...filters, submittedTo: e.target.value })}
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Expected delivery date</p>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={filters.expectedFrom}
+              onChange={(e) => onChange({ ...filters, expectedFrom: e.target.value })}
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+            />
+            <span className="text-xs text-zinc-400">to</span>
+            <input
+              type="date"
+              value={filters.expectedTo}
+              onChange={(e) => onChange({ ...filters, expectedTo: e.target.value })}
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-3">
+        <button type="button" onClick={() => onChange(EMPTY_FILTERS)} className="text-xs text-zinc-500 hover:text-zinc-800 hover:underline">
+          Clear all
+        </button>
+        <span className="text-xs text-zinc-400">{isFilterActive(filters) ? "Filters applied" : "No filters"}</span>
+      </div>
+    </div>
+  );
+}
+
 function captionClassName(stepper: StepperResult | null): string {
   if (!stepper || stepper.isPaused) return "text-zinc-500";
   const activeStage = stepper.stages[stepperActiveIndexOf(stepper.stages)];
@@ -151,6 +334,8 @@ export function PortalDashboard({
   const [categoryFilter, setCategoryFilter] = useState<RowCategory | "all">("all");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("priority");
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     function onReplay() {
@@ -190,10 +375,15 @@ export function PortalDashboard({
   const needsReviewCount = rows.filter((r) => rowCategory(r) === "needs_review").length;
   const deliveredCount = rows.filter((r) => rowCategory(r) === "delivered").length;
 
+  const availableStatuses = Array.from(new Set(rows.map((r) => r.statusLabel))).sort();
+  const presentStepKeys = new Set(rows.map(rowStepKey));
+  const availableSteps = STEP_OPTIONS.filter((s) => presentStepKeys.has(s.key));
+
   const visibleRows = sortRows(
     rows.filter((row) => {
       if (categoryFilter !== "all" && rowCategory(row) !== categoryFilter) return false;
       if (search.trim() && !row.label.toLowerCase().includes(search.trim().toLowerCase())) return false;
+      if (!matchesFilters(row, filters)) return false;
       return true;
     }),
     sortBy
@@ -301,6 +491,29 @@ export function PortalDashboard({
                 {label}
               </button>
             ))}
+
+            <div className="relative ml-auto">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((v) => !v)}
+                className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium ${
+                  isFilterActive(filters)
+                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    : "border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                Filters {isFilterActive(filters) ? "•" : ""}
+              </button>
+              {filtersOpen && (
+                <FilterPanel
+                  filters={filters}
+                  statuses={availableStatuses}
+                  steps={availableSteps}
+                  onChange={setFilters}
+                  onClose={() => setFiltersOpen(false)}
+                />
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -331,6 +544,7 @@ export function PortalDashboard({
                 onClick={() => {
                   setCategoryFilter("all");
                   setSearch("");
+                  setFilters(EMPTY_FILTERS);
                 }}
                 className="mt-2 text-sm text-zinc-600 hover:text-zinc-900 hover:underline"
               >
