@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { ReviewRow } from "./_components/RevisionReviewDrawer";
 import { RealtimeProjectRefresher } from "./_components/RealtimeProjectRefresher";
 import { DeclinedBanner } from "./_components/DeclinedBanner";
-import { OnboardingCard } from "./_components/OnboardingCard";
+import { OnboardingFlow } from "./_components/OnboardingFlow";
 import { Dashboard } from "./_components/Dashboard";
 import type { DashboardData, DashboardProject } from "./_components/dashboardTypes";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
@@ -68,9 +68,9 @@ type AvailableProject = {
 export default async function ConsultantOpsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ declined?: string }>;
+  searchParams: Promise<{ declined?: string; tour?: string }>;
 }) {
-  const { declined } = await searchParams;
+  const { declined, tour } = await searchParams;
 
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
@@ -244,9 +244,14 @@ export default async function ConsultantOpsPage({
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <RealtimeProjectRefresher userId={user.id as string} />
-      {!(user.onboarding_steps_seen ?? []).includes("consultant_tour") && <OnboardingCard />}
-      {declined === "1" && <DeclinedBanner />}
-      <Dashboard data={dashboardData} />
+      <OnboardingFlow
+        seenConsultantTour={(user.onboarding_steps_seen ?? []).includes("consultant_tour")}
+        seenSteps={user.onboarding_steps_seen ?? []}
+        replay={tour === "replay"}
+      >
+        {declined === "1" && <DeclinedBanner />}
+        <Dashboard data={dashboardData} />
+      </OnboardingFlow>
     </div>
   );
 }

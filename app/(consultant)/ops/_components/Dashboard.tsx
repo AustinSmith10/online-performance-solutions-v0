@@ -11,6 +11,7 @@ import { InlineAssignmentActions } from "./InlineAssignmentActions";
 import { RevisionReviewDrawer } from "./RevisionReviewDrawer";
 import { SelfAssignButton } from "./SelfAssignButton";
 import { useAssignmentHeroAction, useReviewHeroAction } from "./HeroActions";
+import { TourHighlight } from "@/components/onboarding-tour/TourHighlight";
 import type { DashboardData, DashboardProject } from "./dashboardTypes";
 
 export function Tile({
@@ -156,49 +157,55 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile tone={pendingAssignments.length > 0 ? "amber" : "zinc"} label="Needs your response" value={pendingAssignments.length} />
-        <Tile tone="neutral" label="Active" value={active.length} />
-        <Tile tone="zinc" label="With stakeholders" value={withStakeholders.length} />
-        <Tile tone={available.length > 0 ? "green" : "zinc"} label="Available jobs" value={available.length} />
-      </div>
+      <TourHighlight id="consultant_dashboard_summary">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Tile tone={pendingAssignments.length > 0 ? "amber" : "zinc"} label="Needs your response" value={pendingAssignments.length} />
+            <Tile tone="neutral" label="Active" value={active.length} />
+            <Tile tone="zinc" label="With stakeholders" value={withStakeholders.length} />
+            <Tile tone={available.length > 0 ? "green" : "zinc"} label="Available jobs" value={available.length} />
+          </div>
 
-      {/* Two hero slots: pending assignment (a decision only you can make) and
-          "needs review" (revision-required + overdue, both need your eyes even
-          though only revision-required needs the review drawer). Both render
-          side by side when both apply, same pattern as the client portal's
-          pending-review / ready-to-download heroes. Each hero's action is a
-          single control when there's one item, or an expand-in-place picker
-          when there's more than one (see HeroActions.tsx) — never "act on the
-          first, ignore the rest". */}
-      {heroCount > 0 ? (
-        <div className={`grid grid-cols-1 gap-3 ${heroGridClass}`}>
-          {assignmentHero && (
-            <CompactHero tone="amber" subtitle={assignmentHero.subtitle} action={assignmentHero.action} expanded={assignmentHero.expanded} />
-          )}
-          {reviewHero && (
-            <CompactHero tone="red" subtitle={reviewHero.subtitle} action={reviewHero.action} expanded={reviewHero.expanded} />
+          {/* Two hero slots: pending assignment (a decision only you can make) and
+              "needs review" (revision-required + overdue, both need your eyes even
+              though only revision-required needs the review drawer). Both render
+              side by side when both apply, same pattern as the client portal's
+              pending-review / ready-to-download heroes. Each hero's action is a
+              single control when there's one item, or an expand-in-place picker
+              when there's more than one (see HeroActions.tsx) — never "act on the
+              first, ignore the rest". */}
+          {heroCount > 0 ? (
+            <div className={`grid grid-cols-1 gap-3 ${heroGridClass}`}>
+              {assignmentHero && (
+                <CompactHero tone="amber" subtitle={assignmentHero.subtitle} action={assignmentHero.action} expanded={assignmentHero.expanded} />
+              )}
+              {reviewHero && (
+                <CompactHero tone="red" subtitle={reviewHero.subtitle} action={reviewHero.action} expanded={reviewHero.expanded} />
+              )}
+            </div>
+          ) : (
+            <CompactHero tone="neutral" subtitle="You're all caught up — nothing needs your response." />
           )}
         </div>
-      ) : (
-        <CompactHero tone="neutral" subtitle="You're all caught up — nothing needs your response." />
-      )}
+      </TourHighlight>
 
-      <div className="flex gap-1 rounded-lg border border-zinc-200 bg-white p-1">
-        {sections.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setSection(s.key)}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              section === s.key ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"
-            }`}
-          >
-            {s.label}
-            {s.count > 0 && <span className="ml-1.5 opacity-70">({s.count})</span>}
-          </button>
-        ))}
-      </div>
+      <TourHighlight id="consultant_project_tabs">
+        <div className="flex gap-1 rounded-lg border border-zinc-200 bg-white p-1">
+          {sections.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setSection(s.key)}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                section === s.key ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              {s.label}
+              {s.count > 0 && <span className="ml-1.5 opacity-70">({s.count})</span>}
+            </button>
+          ))}
+        </div>
+      </TourHighlight>
 
       {section === "active" && (
         <div className="space-y-3">

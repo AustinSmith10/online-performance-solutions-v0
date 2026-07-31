@@ -39,7 +39,7 @@ Values extracted by Claude (Haiku) from the uploaded building plans. All `EXTRAC
 
 | Token                          | Description                                      | How resolved                                     |
 | ------------------------------ | ------------------------------------------------ | ------------------------------------------------ |
-| `{CLIENT_ADDRESS}`             | Site/project address                             | Claude reads directly from plans (moved from `CLIENT_` group, #58) |
+| `{EXTRACT_ADDRESS}`            | Site/project address                             | Claude reads directly from plans (moved from `CLIENT_` group, #58). Reserved name — also drives the generated filename, duplicate-project detection, and the `projects.site_address` column ([lib/documents/generator.ts](../lib/documents/generator.ts), [app/actions/submission.ts](../app/actions/submission.ts)). |
 | `{EXTRACT_HOUSE_TYPE}`         | House/dwelling type                              | Claude reads directly from plans                 |
 | `{EXTRACT_SITE_WD_NO}`         | Site working drawing number                      | Claude reads directly from plans                 |
 | `{EXTRACT_FLOOR_WD_NO}`        | Floor working drawing number                     | Claude reads directly from plans                 |
@@ -115,8 +115,8 @@ Values computed and written by the system at generation time. No user input requ
 
 | Group      | Tokens             | Template occurrences |
 | ---------- | ------------------ | -------------------- |
-| `CLIENT_`  | 1                  | 6                    |
-| `EXTRACT_` | 7 (+ 1 silent key) | 7                    |
+| `CLIENT_`  | 0                  | 0                    |
+| `EXTRACT_` | 8 (+ 1 silent key) | 13                   |
 | `ORG_`     | 3                  | 7                    |
 | `PROJECT_` | 1                  | 2                    |
 | `SYS_`     | 3                  | 5                    |

@@ -4,6 +4,8 @@ import { getStakeholderReviewedProjectIds, stakeholderAccessFilter } from "@/lib
 import { DeletedBanner } from "./_components/DeletedBanner";
 import { RestoredBanner } from "./_components/RestoredBanner";
 import { PortalDashboard } from "./_components/PortalDashboard";
+import { OnboardingTourProvider } from "@/components/onboarding-tour/context";
+import { STAKEHOLDER_TOUR_STEPS } from "@/lib/onboarding/steps";
 import { resolveStepperState, type StepperResult } from "@/lib/delivery/stepper";
 import { resolveEffectiveStatus, OUTSTANDING_STATUSES } from "@/lib/delivery/effective-status";
 import type { ProjectStatus, PaymentMethod } from "@/types";
@@ -324,10 +326,17 @@ export default async function ClientPortalPage({
     readyWindowDays: READY_WINDOW_DAYS,
   };
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 space-y-8">
-      {justDeleted && <DeletedBanner />}
-      {justRestored && <RestoredBanner />}
-      <PortalDashboard {...dashboardData} showOnboarding={!user.has_seen_client_onboarding} />
-    </div>
+    <OnboardingTourProvider
+      steps={STAKEHOLDER_TOUR_STEPS}
+      seenSteps={user.onboarding_steps_seen ?? []}
+      availableStepIds={["stakeholder_intro", "stakeholder_action_items", "stakeholder_project_list"]}
+      replay={sp.tour === "replay"}
+    >
+      <div className="mx-auto max-w-5xl px-4 py-10 space-y-8">
+        {justDeleted && <DeletedBanner />}
+        {justRestored && <RestoredBanner />}
+        <PortalDashboard {...dashboardData} />
+      </div>
+    </OnboardingTourProvider>
   );
 }

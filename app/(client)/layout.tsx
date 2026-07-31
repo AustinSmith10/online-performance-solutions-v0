@@ -6,7 +6,7 @@ import { NotificationToasts } from "@/components/NotificationToasts";
 import { TopNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { Logo } from "@/components/Logo";
-import { ClientOnboardingReplayButton } from "./_components/ClientOnboardingReplayButton";
+import { ReplayTourButton } from "@/components/onboarding-tour/ReplayTourButton";
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   const user = await requireRole("stakeholder");
@@ -30,7 +30,12 @@ export default async function ClientLayout({ children }: { children: React.React
               </nav>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <ClientOnboardingReplayButton />
+              <ReplayTourButton
+                href="/portal"
+                className="flex h-6 w-6 items-center justify-center rounded-full border border-zinc-300 text-xs font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
+              >
+                ?
+              </ReplayTourButton>
               <NotificationTrayServer projectBasePath="/portal/projects" align="right" />
               <Link
                 href="/portal/profile"

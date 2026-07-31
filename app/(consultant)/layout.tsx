@@ -9,6 +9,7 @@ import { TopNavLinks } from "@/components/NavLinks";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { AvailabilityPill } from "@/components/AvailabilityPill";
 import { Logo } from "@/components/Logo";
+import { ReplayTourButton } from "@/components/onboarding-tour/ReplayTourButton";
 import type { ConsultantAvailability } from "@/types";
 
 // Compact single-row top nav — same idiom as the client portal
@@ -43,6 +44,12 @@ export default async function ConsultantLayout({
               </nav>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <ReplayTourButton
+                href="/ops"
+                className="flex h-6 w-6 items-center justify-center rounded-full border border-zinc-300 text-xs font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
+              >
+                ?
+              </ReplayTourButton>
               <NotificationTrayServer projectBasePath="/ops/projects" align="right" />
               <Link
                 href="/ops/profile"

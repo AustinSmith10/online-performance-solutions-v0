@@ -11,13 +11,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { MiniStepper, stepperBadge, stepperActiveIndexOf, stepperNeedsStakeholderAction } from "@/components/delivery/StepperVisuals";
 import { DownloadPbdrLink } from "./DownloadPbdrLink";
 import { PendingReviewModal } from "./PendingReviewModal";
 import { usePendingReviewHeroAction, useReadyDownloadHeroAction } from "./HeroActionMenu";
-import { ClientOnboardingBanner, CLIENT_ONBOARDING_REPLAY_EVENT } from "./ClientOnboardingBanner";
-import { dismissClientOnboarding } from "@/app/actions/onboarding";
+import { TourHighlight } from "@/components/onboarding-tour/TourHighlight";
 import type { DashboardData, DashboardRow } from "./dashboardTypes";
 import type { StepperResult } from "@/lib/delivery/stepper";
 
@@ -330,30 +328,12 @@ export function PortalDashboard({
   readyItems,
   org,
   readyWindowDays,
-  showOnboarding: initialShowOnboarding,
-}: DashboardData & { showOnboarding: boolean }) {
-  const searchParams = useSearchParams();
-  const [showOnboarding, setShowOnboarding] = useState(
-    initialShowOnboarding || searchParams.get("onboarding") === "replay"
-  );
+}: DashboardData) {
   const [categoryFilter, setCategoryFilter] = useState<RowCategory | "all">("all");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("priority");
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
-
-  useEffect(() => {
-    function onReplay() {
-      setShowOnboarding(true);
-    }
-    window.addEventListener(CLIENT_ONBOARDING_REPLAY_EVENT, onReplay);
-    return () => window.removeEventListener(CLIENT_ONBOARDING_REPLAY_EVENT, onReplay);
-  }, []);
-
-  function dismissOnboarding() {
-    setShowOnboarding(false);
-    dismissClientOnboarding();
-  }
 
   const attentionCount = rows.filter((r) => r.pendingReview).length;
   const inProgressCount = rows.filter((r) => !r.pendingReview && !r.isDelivered).length;
@@ -396,74 +376,75 @@ export function PortalDashboard({
 
   return (
     <div className="space-y-5">
-      {showOnboarding && <ClientOnboardingBanner onDismiss={dismissOnboarding} />}
-
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900">My report requests</h1>
         <Link
           href="/portal/submit"
-          className={`rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 ${
-            showOnboarding ? "ring-2 ring-blue-500 ring-offset-2 transition-all" : ""
-          }`}
+          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
         >
           New report request
         </Link>
       </div>
 
-      {/* Summary strip */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile tone={attentionCount > 0 ? "amber" : "zinc"} label="Needs your review" value={attentionCount} />
-        <Tile tone="neutral" label="In progress" value={inProgressCount} />
-        <Tile tone={readyCount > 0 ? "green" : "zinc"} label={`Ready (${readyWindowDays}d window)`} value={readyCount} />
-        {org?.paymentMethod === "credit_deduction" ? (
-          <Tile tone={org.creditBalance === 0 ? "amber" : "zinc"} label="Credits remaining" value={org.creditBalance} />
-        ) : (
-          <Tile tone="zinc" label="Total active" value={rows.length} />
-        )}
-      </div>
+      <TourHighlight id="stakeholder_action_items">
+        <div className="space-y-3">
+          {/* Summary strip */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Tile tone={attentionCount > 0 ? "amber" : "zinc"} label="Needs your review" value={attentionCount} />
+            <Tile tone="neutral" label="In progress" value={inProgressCount} />
+            <Tile tone={readyCount > 0 ? "green" : "zinc"} label={`Ready (${readyWindowDays}d window)`} value={readyCount} />
+            {org?.paymentMethod === "credit_deduction" ? (
+              <Tile tone={org.creditBalance === 0 ? "amber" : "zinc"} label="Credits remaining" value={org.creditBalance} />
+            ) : (
+              <Tile tone="zinc" label="Total active" value={rows.length} />
+            )}
+          </div>
 
-      {/* Right-now banner(s). Pending review and ready-to-download don't
-          compete for one slot: when both exist they render as two cards
-          side by side on desktop (grid-cols-2) and stacked on mobile
-          (grid-cols-1) so neither is hidden. Each card's action button
-          resolves "which one do I pick" directly: with exactly one item
-          it's a single button; with more than one, clicking it expands the
-          card in place to list every project by name — no overlay, same
-          component on every screen size (see HeroActionMenu.tsx). */}
-      {firstPendingReview || firstReady ? (
-        <div className={`grid grid-cols-1 gap-3 ${firstPendingReview && firstReady ? "md:grid-cols-2" : ""}`}>
-          {firstPendingReview && (
-            <CompactHero
-              tone="amber"
-              title="Right now"
-              subtitle={
-                attentionCount > 1
-                  ? `Please review — ${firstPendingReview.label} (+${attentionCount - 1} more)`
-                  : `Please review — ${firstPendingReview.label}`
-              }
-              action={pendingReviewHero.button}
-              expanded={pendingReviewHero.expanded}
-            />
-          )}
-          {firstReady && (
-            <CompactHero
-              tone="green"
-              title="Right now"
-              subtitle={
-                readyCount > 1
-                  ? `Report ready — ${firstReady.label} (+${readyCount - 1} more)`
-                  : `Report ready — ${firstReady.label}`
-              }
-              action={readyDownloadHero.button}
-              expanded={readyDownloadHero.expanded}
-            />
+          {/* Right-now banner(s). Pending review and ready-to-download don't
+              compete for one slot: when both exist they render as two cards
+              side by side on desktop (grid-cols-2) and stacked on mobile
+              (grid-cols-1) so neither is hidden. Each card's action button
+              resolves "which one do I pick" directly: with exactly one item
+              it's a single button; with more than one, clicking it expands the
+              card in place to list every project by name — no overlay, same
+              component on every screen size (see HeroActionMenu.tsx). */}
+          {firstPendingReview || firstReady ? (
+            <div className={`grid grid-cols-1 gap-3 ${firstPendingReview && firstReady ? "md:grid-cols-2" : ""}`}>
+              {firstPendingReview && (
+                <CompactHero
+                  tone="amber"
+                  title="Right now"
+                  subtitle={
+                    attentionCount > 1
+                      ? `Please review — ${firstPendingReview.label} (+${attentionCount - 1} more)`
+                      : `Please review — ${firstPendingReview.label}`
+                  }
+                  action={pendingReviewHero.button}
+                  expanded={pendingReviewHero.expanded}
+                />
+              )}
+              {firstReady && (
+                <CompactHero
+                  tone="green"
+                  title="Right now"
+                  subtitle={
+                    readyCount > 1
+                      ? `Report ready — ${firstReady.label} (+${readyCount - 1} more)`
+                      : `Report ready — ${firstReady.label}`
+                  }
+                  action={readyDownloadHero.button}
+                  expanded={readyDownloadHero.expanded}
+                />
+              )}
+            </div>
+          ) : (
+            <CompactHero tone="neutral" title="Right now" subtitle="You're all caught up — nothing needs your attention." />
           )}
         </div>
-      ) : (
-        <CompactHero tone="neutral" title="Right now" subtitle="You're all caught up — nothing needs your attention." />
-      )}
+      </TourHighlight>
 
       {/* Project cards */}
+      <TourHighlight id="stakeholder_project_list">
       {rows.length === 0 ? (
         <div className="rounded-lg border border-zinc-200 bg-white p-12 text-center">
           <p className="text-sm font-medium text-zinc-900">No active report requests</p>
@@ -619,6 +600,7 @@ export function PortalDashboard({
           })}
         </div>
       )}
+      </TourHighlight>
     </div>
   );
 }

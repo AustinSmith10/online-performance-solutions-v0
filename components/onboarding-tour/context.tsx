@@ -35,12 +35,18 @@ export function OnboardingTourProvider({
   seenSteps,
   availableStepIds,
   replay = false,
+  enabled = true,
   children,
 }: {
   steps: TourStepConfig[];
   seenSteps: string[];
   availableStepIds: string[];
   replay?: boolean;
+  // Delays the tour's first appearance without affecting when it resolves
+  // its position — used to sequence a tour behind something else on the
+  // same page (e.g. the consultant's "how jobs flow" card) without the two
+  // ever being visible at once. See app/(consultant)/ops/_components/OnboardingFlow.tsx.
+  enabled?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -132,7 +138,7 @@ export function OnboardingTourProvider({
     setCurrentId(null);
   }
 
-  const activeHere = hydrated && availableHere;
+  const activeHere = hydrated && availableHere && enabled;
 
   return (
     <TourContext.Provider value={{ currentId: activeHere ? currentStep!.id : null }}>

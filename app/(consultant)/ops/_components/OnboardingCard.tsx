@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { markOnboardingStepSeen } from "@/app/actions/onboarding";
 
 const STEPS = [
@@ -22,17 +22,17 @@ const STEPS = [
   },
 ];
 
-export function OnboardingCard() {
-  const [dismissed, setDismissed] = useState(false);
+// Visibility is owned by the parent (OnboardingFlow) so it can sequence the
+// spotlight tour to start right after this card is dismissed, on the same
+// render — no reload needed to pick up the "seen" flag from the server.
+export function OnboardingCard({ onDismiss }: { onDismiss: () => void }) {
   const [, startTransition] = useTransition();
 
-  if (dismissed) return null;
-
   function gotIt() {
-    setDismissed(true);
     startTransition(() => {
       markOnboardingStepSeen("consultant_tour");
     });
+    onDismiss();
   }
 
   return (
