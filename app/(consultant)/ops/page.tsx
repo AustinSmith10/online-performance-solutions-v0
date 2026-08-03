@@ -47,6 +47,7 @@ type ProjectRow = {
   created_at: string;
   review_cycle: number;
   accepted_at: string | null;
+  paused_previous_status: ProjectStatus | null;
   clients: { name: string; revision_notes_required: boolean } | null;
   submitter: { first_name: string | null; last_name: string | null; email: string } | null;
 };
@@ -78,7 +79,7 @@ export default async function ConsultantOpsPage({
   const { data, error } = await supabase
     .from("projects")
     .select(`
-      id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle, accepted_at,
+      id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle, accepted_at, paused_previous_status,
       clients(name, revision_notes_required),
       submitter:users!projects_submitted_by_fkey(first_name, last_name, email)
     `)
@@ -164,6 +165,13 @@ export default async function ConsultantOpsPage({
   );
   const effectiveStatusOf = (p: ProjectRow) => effectiveStatusMap.get(p.id) ?? p.status;
 
+  // A paused project must still land in a tab — it should never just vanish
+  // from the consultant's workspace. Bucket it by where it was paused *from*
+  // (paused_previous_status) while its badge/label still reads "Paused" via
+  // effectiveStatusOf above, which leaves "paused" untouched.
+  const bucketStatusOf = (p: ProjectRow): ProjectStatus =>
+    p.status === "paused" ? p.paused_previous_status ?? "assigned" : effectiveStatusOf(p);
+
   // One consistent "actionable = highlighted card" list, no separate tray (#95):
   // admin-pushed assignments awaiting acceptance float to the very top (a decision
   // is owed), then revision-required cards, then the rest of the active work.
@@ -172,11 +180,11 @@ export default async function ConsultantOpsPage({
   const activeAccepted = projects
     .filter((p) =>
       (["assigned", "in_progress", "revision_required", "converting"] as ProjectStatus[]).includes(
-        effectiveStatusOf(p)
+        bucketStatusOf(p)
       )
     )
-    .sort((a, b) => Number(b.status === "revision_required") - Number(a.status === "revision_required"));
-  const withStakeholders = projects.filter((p) => effectiveStatusOf(p) === "dispatched");
+    .sort((a, b) => Number(bucketStatusOf(b) === "revision_required") - Number(bucketStatusOf(a) === "revision_required"));
+  const withStakeholders = projects.filter((p) => bucketStatusOf(p) === "dispatched");
   const done = projects.filter((p) =>
     (["delivered", "complete"] as ProjectStatus[]).includes(p.status)
   );

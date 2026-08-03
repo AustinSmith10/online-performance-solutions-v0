@@ -508,7 +508,18 @@ export default async function ConsultantProjectDetailPage({
 
   // --- Focus card: whichever single thing is actionable right now, spotlighted ---
   let focusCard: React.ReactNode;
-  if (step2Locked) {
+  if (project.status === "paused") {
+    // Must win over every other branch below — pbdbCardState still resolves
+    // off the pre-pause status (e.g. "upload"), which would otherwise invite
+    // a PBDB upload/dispatch on a project that's supposed to be frozen.
+    focusCard = (
+      <FocusCard tone="neutral" title="Project paused" subtitle="Nothing needed from you right now.">
+        <p className="text-sm text-zinc-600">
+          This project has been paused. No PBDB or stakeholder actions will go out while it&apos;s on hold — resume it to continue.
+        </p>
+      </FocusCard>
+    );
+  } else if (step2Locked) {
     focusCard = (
       <FocusCard tone="neutral" title="Set the project number" subtitle="Unlocks PBDB generation.">
         <ProjectNumberForm projectId={id} projectNumber={project.project_number} bare />
