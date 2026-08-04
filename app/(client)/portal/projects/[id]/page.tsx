@@ -323,6 +323,14 @@ export default async function ClientProjectDetailPage({
     project.status !== "draft" && dueLabel ? `Due ${dueLabel}` : null,
   ].filter(Boolean);
 
+  // This stakeholder's own review can still be open even after another
+  // stakeholder's rejection flipped the project to "revision_required" —
+  // that status only means someone else in this cycle rejected, not that
+  // this stakeholder's own pending review is closed.
+  const clientReviewOpen =
+    clientReview?.status === "pending" &&
+    (project.status === "dispatched" || project.status === "revision_required");
+
   // ── Focus card (the one thing that needs the client right now) ───────────
   let focusCard: React.ReactNode;
   if (isDeleted) {
@@ -350,7 +358,9 @@ export default async function ClientProjectDetailPage({
         <p className="text-sm text-zinc-600">This project has been paused. We&apos;ll notify you once it resumes.</p>
       </FocusCard>
     );
-  } else if (project.status === "dispatched" && clientReview && clientReview.status === "pending") {
+  } else if (clientReviewOpen) {
+    // Checked ahead of the blanket "revision_required" branch below so it
+    // takes priority whenever this stakeholder's own review is still open.
     focusCard = (
       <FocusCard
         tone="amber"
@@ -618,10 +628,10 @@ export default async function ClientProjectDetailPage({
   const reviewTab = (
     <div className="rounded-lg border border-zinc-200 bg-white p-5">
       <h2 className="text-sm font-semibold text-zinc-900">Review history</h2>
-      {reviewHistory.length === 0 && !(project.status === "dispatched" && clientReview?.status === "pending") && (
+      {reviewHistory.length === 0 && !clientReviewOpen && (
         <p className="mt-2 text-sm text-zinc-500">No review requested yet.</p>
       )}
-      {project.status === "dispatched" && clientReview?.status === "pending" && (
+      {clientReviewOpen && (
         <p className="mt-2 text-sm text-zinc-500">
           Round {project.review_cycle} pending — respond using the review card on the left.
         </p>

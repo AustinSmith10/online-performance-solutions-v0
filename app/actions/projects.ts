@@ -14,6 +14,7 @@ import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { expediteDelivery, scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
 import { buildPbdbFilename } from "@/lib/documents/naming";
+import { appendRevisionHistoryRow } from "@/lib/documents/revision-table";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function notifyAdminsQaComplete(
@@ -984,7 +985,7 @@ export async function uploadQaPbdb(
 
   const nextVersion = (existing?.[0]?.version ?? 0) + 1;
 
-  const fileBuffer = Buffer.from(await file.arrayBuffer());
+  let fileBuffer = Buffer.from(await file.arrayBuffer());
 
   const projectNum = (project.project_number as string | null) ?? "";
   const rawAddress = ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? "").trim();
@@ -998,6 +999,48 @@ export async function uploadQaPbdb(
   // a forced resend (isReupload with no rejection) or a plain QA correction
   // leaves the counter untouched, matching the file it's replacing.
   const expectedRev = await getCurrentRevNumber(supabase, projectId, "pbdb");
+
+  // Re-uploads are never re-rendered through docxtemplater (that would wipe
+  // the consultant's manual edits), so the Revision History table baked in
+  // at the project's original generation never grows on its own. Patch the
+  // new row in directly — idempotent, so a forced resend with an unchanged
+  // rev counter is a safe no-op (see appendRevisionHistoryRow).
+  if (isReupload) {
+    const { data: revHistoryRow } = await supabase
+      .from("revision_history")
+      .select("prepared_by, created_at")
+      .eq("project_id", projectId)
+      .eq("doc_type", "pbdb")
+      .eq("rev_number", expectedRev)
+      .maybeSingle();
+
+    let preparedByName = "";
+    if (revHistoryRow?.prepared_by) {
+      const { data: preparedByUser } = await supabase
+        .from("users")
+        .select("first_name, last_name")
+        .eq("id", revHistoryRow.prepared_by as string)
+        .maybeSingle();
+      preparedByName = [preparedByUser?.first_name as string | null, preparedByUser?.last_name as string | null]
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    const rowDate = revHistoryRow?.created_at
+      ? new Date(revHistoryRow.created_at as string)
+      : uploadDate;
+
+    fileBuffer = Buffer.from(
+      appendRevisionHistoryRow(fileBuffer, {
+        docType: "PBDB",
+        revNumber: String(expectedRev),
+        date: rowDate.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        purpose: "Stakeholder Review",
+        preparedBy: preparedByName,
+      })
+    );
+  }
+
   const storedFilename = buildPbdbFilename(projectNum, expectedRev, address, uploadDate, {
     forQa: true,
   });
@@ -1081,26 +1124,12 @@ export async function uploadQaPbdb(
       }
     );
 
-    try {
-      await scheduleOrDeliverPbdb(projectId, actor.id, actor.email as string);
-    } catch (err) {
-      // scheduleOrDeliverPbdb (via dispatchPbdb) can throw before it writes any
-      // stakeholder_reviews rows for the bumped cycle (payment gate, roster
-      // resolution, PDF generation). Revert the
-      // cycle bump above so project.review_cycle doesn't point at a cycle with no
-      // review rows — that desync makes every status badge lie ("Awaiting your
-      // review") while the portal correctly finds nothing to review.
-      await supabase
-        .from("projects")
-        .update({
-          review_cycle: cycle,
-          first_response_at: project.first_response_at,
-          review_buffer_fired_at: project.review_buffer_fired_at,
-          updated_at: now,
-        })
-        .eq("id", projectId);
-      return { error: `File uploaded but dispatch failed: ${err instanceof Error ? err.message : "Unknown error"}` };
-    }
+    // Redispatch is a deliberate separate step now (dispatchToStakeholders /
+    // DispatchButton), same "pick delivery timing, then click" pattern as the
+    // initial dispatch — this no longer auto-sends to every stakeholder
+    // (including non-responders) as a side effect of the upload. The bumped
+    // review_cycle above has no stakeholder_reviews rows yet, which is what
+    // the "ready to redispatch" Focus Card state is derived from.
   } else {
     // Initial QA upload (in_progress) — mark complete, notify admins. Dispatch
     // is a deliberate separate step now (dispatchToStakeholders / DispatchButton),

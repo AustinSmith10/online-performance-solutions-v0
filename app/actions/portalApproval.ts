@@ -58,7 +58,12 @@ export async function submitPortalApproval(
   if ((projectForGuard.review_cycle as number) !== review.review_cycle) {
     return { error: "This review is no longer valid — the project has moved to a new review cycle." };
   }
-  if ((projectForGuard.status as string) !== "dispatched") {
+  // "revision_required" is allowed alongside "dispatched" — see the matching
+  // comment in app/actions/approval.ts. It only means another stakeholder in
+  // this cycle already rejected, not that this stakeholder's own pending
+  // review is closed.
+  const openStatuses = new Set(["dispatched", "revision_required"]);
+  if (!openStatuses.has(projectForGuard.status as string)) {
     return { error: "This review is no longer valid — the project is no longer awaiting review." };
   }
 

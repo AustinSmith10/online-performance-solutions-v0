@@ -197,6 +197,26 @@ describe("submitApproval — approved", () => {
     expect(rejCalls).toHaveLength(0);
   });
 
+  // A different stakeholder in the same cycle already rejected, flipping
+  // project.status to "revision_required" — this stakeholder's own review is
+  // still "pending" (VALID_REVIEW) in the same cycle, so their submission
+  // must still succeed rather than being told the project "is no longer
+  // awaiting review."
+  it("still succeeds when project.status is revision_required (another stakeholder already rejected)", async () => {
+    const mock = buildMock({ guardProject: { status: "revision_required", review_cycle: 1 } });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    const result = await submitApproval("tok", null, {}, makeFormData({ response: "approved" }));
+    expect(result.submitted).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it("still blocks a genuinely closed status (e.g. converting)", async () => {
+    const mock = buildMock({ guardProject: { status: "converting", review_cycle: 1 } });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    const result = await submitApproval("tok", null, {}, makeFormData({ response: "approved" }));
+    expect(result.error).toMatch(/no longer awaiting review/i);
+  });
+
 });
 
 // ─── Rejected path ────────────────────────────────────────────────────────────

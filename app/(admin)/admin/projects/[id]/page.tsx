@@ -120,7 +120,7 @@ const LIVE_STATUSES: readonly ProjectStatus[] = [
 ];
 
 const UPLOAD_NEW_VERSION_COPY =
-  "Uploading a new version will reset all stakeholder approvals and resend the approval email with the updated document.";
+  "Uploading a new version will reset all stakeholder approvals for this cycle. The assigned consultant will pick the delivery timing and redispatch to everyone (including anyone who already approved) as a separate step after this.";
 
 function overdueInfo(
   deliveryDate: string | null,
@@ -678,6 +678,33 @@ export default async function ProjectDetailPage({
         </div>
       </FocusCard>
     );
+  } else if (
+    (project.status === "dispatched" || project.status === "revision_required") &&
+    currentCycleReviews.length === 0
+  ) {
+    // A revised PBDB was just uploaded (bumping review_cycle) — either an
+    // early reissue while status is still "dispatched" (consultant acting on
+    // one stakeholder's feedback before everyone's responded), or a
+    // correction after "revision_required" — and no stakeholder_reviews rows
+    // exist for the new cycle yet, so redispatch hasn't happened. Checked
+    // ahead of the "dispatched"/"revision_required" branches below, which
+    // only apply once this cycle's rows actually exist.
+    focusCard = (
+      <FocusCard tone="green" title="Ready to redispatch" subtitle="Revised PBDB uploaded — resend it to every stakeholder, including anyone who already approved.">
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+            <ProjectDeliveryDelayPresetSelect
+              projectId={id}
+              initialValue={project.pbdb_delivery_delay_preset}
+              durations={deliveryDurations}
+              docType="pbdb"
+            />
+          </div>
+          <DispatchButton projectId={id} />
+        </div>
+      </FocusCard>
+    );
   } else if (project.status === "dispatched" && pendingReviews.length > 0) {
     focusCard = (
       <FocusCard
@@ -776,7 +803,7 @@ export default async function ProjectDetailPage({
           )}
           <PbdbQaUploadForm
             projectId={id}
-            submitLabel="Upload revised PBDB and re-submit to stakeholders"
+            submitLabel="Upload revised PBDB"
             requireConfirmation
             confirmCopy={UPLOAD_NEW_VERSION_COPY}
           >

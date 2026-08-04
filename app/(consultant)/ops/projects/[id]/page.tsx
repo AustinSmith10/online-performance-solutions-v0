@@ -395,8 +395,17 @@ export default async function ConsultantProjectDetailPage({
   // this page recomputing its own version of the same check.
   const effectiveStatus = resolveEffectiveStatus(project.status, currentCycleReviews);
 
-  const pbdbCardState: "locked" | "upload" | "ready_to_dispatch" | "pending" | "revision" | "approved" = !latestPbdb
+  const pbdbCardState: "locked" | "upload" | "ready_to_dispatch" | "pending" | "revision" | "ready_to_redispatch" | "approved" = !latestPbdb
     ? "locked"
+    : (effectiveStatus === "dispatched" || effectiveStatus === "revision_required") && currentCycleReviews.length === 0
+    ? // A revised PBDB was just uploaded (bumping review_cycle) — either an
+      // early reissue while status is still "dispatched" (a consultant
+      // acting on one stakeholder's feedback before everyone's responded),
+      // or a correction after "revision_required" — and no stakeholder_reviews
+      // rows exist for the new cycle yet, so redispatch hasn't happened. If
+      // rows already exist for the current cycle, this cycle was already
+      // sent and is genuinely mid-review ("pending"/"revision" below).
+      "ready_to_redispatch"
     : effectiveStatus === "dispatched"
     ? "pending"
     : effectiveStatus === "revision_required"
@@ -408,7 +417,7 @@ export default async function ConsultantProjectDetailPage({
     : "upload";
 
   const UPLOAD_NEW_VERSION_COPY =
-    "Uploading a new version will reset all stakeholder approvals and resend the approval email with the updated document.";
+    "Uploading a new version will reset all stakeholder approvals for this cycle. You'll pick the delivery timing and redispatch to everyone (including anyone who already approved) as a separate step after this.";
 
   const altHeaderCard = (
     <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[effectiveStatus]} bg-white p-5`}>
@@ -681,7 +690,7 @@ export default async function ConsultantProjectDetailPage({
           )}
           <PbdbQaUploadForm
             projectId={id}
-            submitLabel="Upload revised PBDB and re-submit to stakeholders"
+            submitLabel="Upload revised PBDB"
             requireConfirmation
             confirmCopy={UPLOAD_NEW_VERSION_COPY}
           >
@@ -690,6 +699,23 @@ export default async function ConsultantProjectDetailPage({
               required={project.clients?.revision_notes_required ?? false}
             />
           </PbdbQaUploadForm>
+        </div>
+      </FocusCard>
+    );
+  } else if (pbdbCardState === "ready_to_redispatch") {
+    focusCard = (
+      <FocusCard tone="green" title="Ready to redispatch" subtitle="Revised PBDB uploaded — resend it to every stakeholder, including anyone who already approved.">
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+            <ProjectDeliveryDelayPresetSelect
+              projectId={id}
+              initialValue={project.pbdb_delivery_delay_preset}
+              durations={deliveryDurations}
+              docType="pbdb"
+            />
+          </div>
+          <DispatchButton projectId={id} />
         </div>
       </FocusCard>
     );

@@ -58,7 +58,14 @@ export async function submitApproval(
   if ((projectForGuard.review_cycle as number) !== review.review_cycle) {
     return { error: "This approval link is no longer valid — the project has moved to a new review cycle." };
   }
-  if ((projectForGuard.status as string) !== "dispatched") {
+  // "revision_required" is allowed alongside "dispatched" — that status only
+  // means *some other* stakeholder in this same cycle already rejected, not
+  // that this stakeholder's own still-pending review is closed. The
+  // review_cycle check above (plus the per-row pending/conditional-update
+  // guard below) is what actually prevents stale or duplicate submissions;
+  // this just blocks genuinely closed states (converting/delivered/etc.).
+  const openStatuses = new Set(["dispatched", "revision_required"]);
+  if (!openStatuses.has(projectForGuard.status as string)) {
     return { error: "This approval link is no longer valid — the project is no longer awaiting review." };
   }
 

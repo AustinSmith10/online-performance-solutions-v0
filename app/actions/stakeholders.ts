@@ -451,10 +451,11 @@ export interface DispatchState {
 
 // Deliberate, admin/consultant-triggered PBDB dispatch — mirrors
 // triggerPbdrConversion's "pick the delivery timing preset, then click"
-// pattern. uploadQaPbdb no longer auto-dispatches on QA upload; this is now
-// the only trigger, so the consultant's project page can show a clear
-// "ready to dispatch" state instead of the dispatch silently already being
-// staged as a side effect of the upload.
+// pattern. uploadQaPbdb no longer auto-dispatches on QA upload (initial or
+// revision reupload); this is now the only trigger, so the consultant's
+// project page can show a clear "ready to dispatch"/"ready to redispatch"
+// state instead of the dispatch silently already being staged as a side
+// effect of the upload.
 export async function dispatchToStakeholders(
   projectId: string,
   _prevState: DispatchState,
@@ -465,15 +466,33 @@ export async function dispatchToStakeholders(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("status, qa_completed_by, assigned_consultant_id")
+    .select("status, qa_completed_by, assigned_consultant_id, review_cycle")
     .eq("id", projectId)
     .maybeSingle();
 
-  if (!project || project.status !== "in_progress" || !project.qa_completed_by) {
-    return { error: "Project is not ready for dispatch." };
-  }
+  if (!project) return { error: "Project not found." };
   if (actor.role === "consultant" && project.assigned_consultant_id !== actor.id) {
     return { error: "You are not assigned to this project." };
+  }
+
+  const readyForInitialDispatch = project.status === "in_progress" && !!project.qa_completed_by;
+
+  let readyForRedispatch = false;
+  if (project.status === "revision_required") {
+    // A revised PBDB was uploaded (bumping review_cycle) but no
+    // stakeholder_reviews rows exist for that cycle yet — i.e. redispatch
+    // hasn't happened. If rows already exist, this cycle was already sent
+    // and the project is genuinely mid-review, not ready to redispatch.
+    const { count } = await supabase
+      .from("stakeholder_reviews")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId)
+      .eq("review_cycle", project.review_cycle as number);
+    readyForRedispatch = (count ?? 0) === 0;
+  }
+
+  if (!readyForInitialDispatch && !readyForRedispatch) {
+    return { error: "Project is not ready for dispatch." };
   }
 
   try {
@@ -953,7 +972,12 @@ export async function logStakeholderResponseOnBehalf(
   if ((review.review_cycle as number) !== (project.review_cycle as number)) {
     return { error: "This review is no longer valid — the project has moved to a new review cycle." };
   }
-  if ((project.status as string) !== "dispatched") {
+  // "revision_required" is allowed alongside "dispatched" — see the matching
+  // comment in app/actions/approval.ts. It only means another stakeholder in
+  // this cycle already rejected, not that this stakeholder's own pending
+  // review is closed.
+  const openProjectStatuses = new Set(["dispatched", "revision_required"]);
+  if (!openProjectStatuses.has(project.status as string)) {
     return { error: "This project is no longer awaiting review." };
   }
 
