@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
-import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
+import { scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { inviteLateStakeholder } from "@/lib/stakeholders/late-add";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
@@ -21,6 +21,7 @@ import {
 import { sendStakeholderBufferUpdate } from "@/lib/stakeholders/buffer-update";
 import { attachEvidence } from "@/app/actions/evidence";
 import { parseEmlBody } from "@/lib/email/parseEml";
+import { recordRevisionEvent } from "@/lib/documents/revision-history";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -466,7 +467,7 @@ export async function dispatchToStakeholders(
   }
 
   try {
-    await dispatchPbdb(projectId, actor.id);
+    await scheduleOrDeliverPbdb(projectId, actor.id, actor.email as string);
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Dispatch failed." };
   }
@@ -633,6 +634,8 @@ export async function resendFreshToken(
           client_id: project.client_id as string,
           review_cycle: project.review_cycle as number,
           strip_token_color: project.strip_token_color as boolean | null,
+          project_number: project.project_number as string | null,
+          extracted_fields: project.extracted_fields as Record<string, string> | null,
         },
         actor.id
       )
@@ -791,7 +794,7 @@ export async function updateStakeholderEmail(
   // Resend the token to the new email address
   const { data: project } = await supabase
     .from("projects")
-    .select("client_id, review_cycle, strip_token_color, clients(state_territory)")
+    .select("client_id, review_cycle, strip_token_color, project_number, extracted_fields, clients(state_territory)")
     .eq("id", projectId)
     .single();
 
@@ -826,6 +829,8 @@ export async function updateStakeholderEmail(
           client_id: project.client_id as string,
           review_cycle: project.review_cycle as number,
           strip_token_color: project.strip_token_color as boolean | null,
+          project_number: project.project_number as string | null,
+          extracted_fields: project.extracted_fields as Record<string, string> | null,
         },
         actor.id
       )
@@ -876,13 +881,17 @@ export interface LogResponseState {
   success?: boolean;
 }
 
+export type ResponseMode = "email" | "teams" | "call" | "sms";
+
 export async function logStakeholderResponseOnBehalf(
   reviewId: string,
   projectId: string,
   response: "approved" | "rejected",
   comments: string | null,
-  storagePath: string,
-  filename: string
+  evidence: { storagePath: string; filename: string } | null,
+  mode: ResponseMode,
+  respondentName: string,
+  respondedAt: string
 ): Promise<LogResponseState> {
   const actor = await requireRole("consultant", "admin", "super_admin");
   const supabase = createAdminClient();
@@ -907,6 +916,18 @@ export async function logStakeholderResponseOnBehalf(
     return { error: "Comments are required — describe what the stakeholder said." };
   }
 
+  if (!["email", "teams", "call", "sms"].includes(mode)) {
+    return { error: "Select how the stakeholder responded." };
+  }
+  const trimmedRespondent = respondentName.trim();
+  if (!trimmedRespondent) {
+    return { error: "Select or enter who responded." };
+  }
+  const respondedAtDate = new Date(respondedAt);
+  if (Number.isNaN(respondedAtDate.getTime())) {
+    return { error: "Enter a valid date and time for the response." };
+  }
+
   const { data: review } = await supabase
     .from("stakeholder_reviews")
     .select("id, project_id, stakeholder_name, stakeholder_email, status, review_cycle")
@@ -925,22 +946,27 @@ export async function logStakeholderResponseOnBehalf(
     return { error: "This project is no longer awaiting review." };
   }
 
-  // Mandatory evidence attachment, linked to this specific review event
-  // (not just a generic project attachment) via the `reference` string.
-  const evidenceResult = await attachEvidence(
-    projectId,
-    storagePath,
-    filename,
-    `stakeholder_review:${reviewId}`
-  );
-  if (evidenceResult.error) return { error: evidenceResult.error };
+  // Evidence is optional (#111) — when provided, attach it linked to this
+  // specific review event (not just a generic project attachment) via the
+  // `reference` string.
+  let evidenceFileId: string | null = null;
+  if (evidence) {
+    const evidenceResult = await attachEvidence(
+      projectId,
+      evidence.storagePath,
+      evidence.filename,
+      `stakeholder_review:${reviewId}`
+    );
+    if (evidenceResult.error) return { error: evidenceResult.error };
 
-  const { data: evidenceFile } = await supabase
-    .from("project_files")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("storage_path", storagePath)
-    .maybeSingle();
+    const { data: evidenceFile } = await supabase
+      .from("project_files")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("storage_path", evidence.storagePath)
+      .maybeSingle();
+    evidenceFileId = (evidenceFile?.id as string | undefined) ?? null;
+  }
 
   const now = new Date().toISOString();
   const newStatus =
@@ -952,7 +978,16 @@ export async function logStakeholderResponseOnBehalf(
 
   const { error: updateErr, count } = await supabase
     .from("stakeholder_reviews")
-    .update({ status: newStatus, comments: trimmedComments, responded_at: now }, { count: "exact" })
+    .update(
+      {
+        status: newStatus,
+        comments: trimmedComments,
+        responded_at: respondedAtDate.toISOString(),
+        response_mode: mode,
+        respondent_name: trimmedRespondent,
+      },
+      { count: "exact" }
+    )
     .eq("id", reviewId)
     .eq("status", "pending");
 
@@ -966,7 +1001,10 @@ export async function logStakeholderResponseOnBehalf(
       response: newStatus,
       stakeholder_email: review.stakeholder_email,
       stakeholder_name: review.stakeholder_name,
-      evidence_file_id: evidenceFile?.id ?? null,
+      evidence_file_id: evidenceFileId,
+      response_mode: mode,
+      respondent_name: trimmedRespondent,
+      responded_at: respondedAtDate.toISOString(),
       reference: `stakeholder_review:${reviewId}`,
     },
   });
@@ -992,6 +1030,10 @@ export async function logStakeholderResponseOnBehalf(
         .from("projects")
         .update({ status: "revision_required", updated_at: now })
         .eq("id", projectId);
+
+      // Bumps the PBDB revision_history counter (#108) — the corrected reupload
+      // later derives its Rev{n} filename from this row, not review_cycle.
+      await recordRevisionEvent(supabase, projectId, "pbdb", "rejected");
 
       await notifyModificationsRequested({
         supabase,

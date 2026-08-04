@@ -22,7 +22,7 @@ export async function inviteLateStakeholder(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, client_id, review_cycle, status, strip_token_color, clients(state_territory)")
+    .select("id, client_id, review_cycle, status, strip_token_color, project_number, extracted_fields, clients(state_territory)")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -87,6 +87,8 @@ export async function inviteLateStakeholder(
       client_id: project.client_id as string,
       review_cycle: reviewCycle,
       strip_token_color: project.strip_token_color as boolean | null,
+      project_number: project.project_number as string | null,
+      extracted_fields: project.extracted_fields as Record<string, string> | null,
     },
     actorId
   );

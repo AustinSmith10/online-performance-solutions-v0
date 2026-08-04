@@ -89,6 +89,7 @@ function buildMock(pbdbRows: Record<string, unknown>[], reviewCycle: number) {
         eq: vi.fn().mockReturnThis(),
         is: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: project, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: project, error: null }),
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ error: null, count: 1 }),

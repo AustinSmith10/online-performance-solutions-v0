@@ -10,9 +10,10 @@ import { generatePbdb } from "@/lib/documents/generator";
 import { formatAddress } from "@/lib/documents/formatters";
 import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
-import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
-import { expediteDelivery } from "@/lib/documents/pending-delivery";
+import { expediteDelivery, scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
+import { getCurrentRevNumber } from "@/lib/documents/revision-history";
+import { buildPbdbFilename } from "@/lib/documents/naming";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function notifyAdminsQaComplete(
@@ -989,21 +990,32 @@ export async function uploadQaPbdb(
   const rawAddress = ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? "").trim();
   const address = formatAddress(rawAddress);
   const uploadDate = new Date();
-  const yyyy = uploadDate.getFullYear();
-  const mm = String(uploadDate.getMonth() + 1).padStart(2, "0");
-  const dd = String(uploadDate.getDate()).padStart(2, "0");
 
-  // R[n] only increments when a reupload cycle completes (revision or forced resend).
-  // QA corrections stay on the same R[n] as the generated file (review_cycle - 1).
-  // Reuploads advance to the next R[n] (review_cycle), matching the cycle just superseded.
-  const rIndex = isReupload ? cycle : cycle - 1;
-  const storedFilename = [
-    `${projectNum}-S PBDB R${rIndex}`,
-    address,
-    `${yyyy} ${mm} ${dd}`,
-  ].filter(Boolean).join(" ") + ".docx";
+  // Rev{n} derives from revision_history's PBDB counter (#108/#109), not
+  // review_cycle. A genuine post-rejection reupload already has its new
+  // "rejected" row recorded at rejection time (see submitApproval /
+  // logStakeholderResponseOnBehalf), so the counter here is already current;
+  // a forced resend (isReupload with no rejection) or a plain QA correction
+  // leaves the counter untouched, matching the file it's replacing.
+  const expectedRev = await getCurrentRevNumber(supabase, projectId, "pbdb");
+  const storedFilename = buildPbdbFilename(projectNum, expectedRev, address, uploadDate, {
+    forQa: true,
+  });
 
-  // Reupload filenames are unique per cycle (different R[n]); QA correction filenames may
+  // Soft mismatch check (#109) — never blocks the upload, just flags the
+  // reason to the consultant so they can double-check they uploaded the
+  // right file.
+  const filenameMismatchReason = (() => {
+    const m = /PBDB\s*Rev\s*(\d+)/i.exec(file.name);
+    if (!m) return `Expected a PBDB filename (e.g. "...PBDB Rev${expectedRev}..."), got "${file.name}".`;
+    const gotRev = Number(m[1]);
+    if (gotRev !== expectedRev) {
+      return `Filename says Rev${gotRev}, but the project's current PBDB revision is Rev${expectedRev}.`;
+    }
+    return null;
+  })();
+
+  // Reupload filenames are unique per cycle (different Rev{n}); QA correction filenames may
   // collide with the previously generated file, so prefix the storage object with the version
   // counter to guarantee a unique path while keeping original_filename canonical.
   const storageFilename = isReupload ? storedFilename : `v${nextVersion}_${storedFilename}`;
@@ -1026,9 +1038,9 @@ export async function uploadQaPbdb(
     uploaded_by: actor.id,
     version: nextVersion,
     // A reupload's docx is the corrected version for the *next* cycle (about to be
-    // redispatched); an initial QA correction stays on the current cycle — mirrors
-    // the rIndex logic above.
+    // redispatched); an initial QA correction stays on the current cycle.
     review_cycle: isReupload ? cycle + 1 : cycle,
+    filename_mismatch_reason: filenameMismatchReason,
   });
 
   if (insertError) {
@@ -1070,10 +1082,11 @@ export async function uploadQaPbdb(
     );
 
     try {
-      await dispatchPbdb(projectId, actor.id);
+      await scheduleOrDeliverPbdb(projectId, actor.id, actor.email as string);
     } catch (err) {
-      // dispatchPbdb can throw before it writes any stakeholder_reviews rows for the
-      // bumped cycle (payment gate, roster resolution, PDF generation). Revert the
+      // scheduleOrDeliverPbdb (via dispatchPbdb) can throw before it writes any
+      // stakeholder_reviews rows for the bumped cycle (payment gate, roster
+      // resolution, PDF generation). Revert the
       // cycle bump above so project.review_cycle doesn't point at a cycle with no
       // review rows — that desync makes every status badge lie ("Awaiting your
       // review") while the portal correctly finds nothing to review.
@@ -1110,7 +1123,7 @@ export async function uploadQaPbdb(
     });
 
     try {
-      await dispatchPbdb(projectId, actor.id);
+      await scheduleOrDeliverPbdb(projectId, actor.id, actor.email as string);
     } catch (err) {
       return { error: `File uploaded but dispatch failed: ${err instanceof Error ? err.message : "Unknown error"}` };
     }
@@ -1185,7 +1198,7 @@ export async function markQaComplete(
   });
 
   try {
-    await dispatchPbdb(projectId, actor.id);
+    await scheduleOrDeliverPbdb(projectId, actor.id, actor.email as string);
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Dispatch failed. An admin can retry from the project page." };
   }
@@ -1385,6 +1398,7 @@ export async function expediteProjectDelivery(projectId: string): Promise<Expedi
     .from("pending_deliveries")
     .select("scheduled_for")
     .eq("project_id", projectId)
+    .eq("delivery_type", "pbdr")
     .maybeSingle();
 
   if (!pending) {
@@ -1423,6 +1437,31 @@ export async function setProjectDeliveryDelayPreset(
   let query = supabase
     .from("projects")
     .update({ delivery_delay_preset: preset })
+    .eq("id", projectId);
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { error } = await query;
+  if (error) return { error: error.message };
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return {};
+}
+
+// Independent PBDB dispatch delay control (#110) — separate column/preset
+// from the PBDR-only setProjectDeliveryDelayPreset above.
+export async function setProjectPbdbDeliveryDelayPreset(
+  projectId: string,
+  preset: DeliveryDelayPreset
+): Promise<SetDeliveryDelayPresetState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .update({ pbdb_delivery_delay_preset: preset })
     .eq("id", projectId);
   if (actor.role === "consultant") {
     query = query.eq("assigned_consultant_id", actor.id);

@@ -2,6 +2,8 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatAddress } from "@/lib/documents/formatters";
+import { recordRevisionEvent, getRevisionHistory } from "@/lib/documents/revision-history";
+import { buildPbdbFilename } from "@/lib/documents/naming";
 
 /**
  * Runs docxtemplater find-and-replace on the project's active template .docx,
@@ -75,6 +77,52 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
       ? (existingPbdbs[0].version as number) + 1
       : 1;
 
+  // The revision_history row is only created on the true first-ever
+  // generation — a regenerate (version > 1, still pre-dispatch) does not
+  // create a new row. Post-dispatch revisions are recorded separately, at
+  // rejection time (see app/actions/approval.ts / app/actions/stakeholders.ts).
+  if (version === 1) {
+    await recordRevisionEvent(supabase, projectId, "pbdb", "initial");
+  }
+
+  const [revisionHistory, preparedByUsers] = await (async () => {
+    const history = await getRevisionHistory(supabase, projectId);
+    const ids = [...new Set(history.map((h) => h.prepared_by).filter((x): x is string => !!x))];
+    const { data: users } = ids.length
+      ? await supabase.from("users").select("id, first_name, last_name").in("id", ids)
+      : { data: [] as { id: string; first_name: string | null; last_name: string | null }[] };
+    return [history, users ?? []] as const;
+  })();
+
+  const preparedByNameById = new Map(
+    preparedByUsers.map((u) => [
+      u.id as string,
+      [u.first_name as string | null, u.last_name as string | null].filter(Boolean).join(" "),
+    ])
+  );
+
+  const EVENT_LABELS: Record<string, string> = {
+    initial: "Initial",
+    rejected: "Revision",
+    approved_conversion: "Approved — Converted",
+  };
+
+  const revisionHistoryForDoc = revisionHistory.map((row) => ({
+    DOC_TYPE: row.doc_type.toUpperCase(),
+    REV_NUMBER: String(row.rev_number),
+    EVENT: EVENT_LABELS[row.event] ?? row.event,
+    PREPARED_BY: row.prepared_by ? (preparedByNameById.get(row.prepared_by) ?? "") : "",
+    DATE: new Date(row.created_at).toLocaleDateString("en-AU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }),
+  }));
+
+  const pbdbRevision = revisionHistory
+    .filter((h) => h.doc_type === "pbdb")
+    .reduce((max, h) => Math.max(max, h.rev_number), 0);
+
   // Build substitution context
   const extractedFields = (project.extracted_fields as Record<string, string>) ?? {};
 
@@ -115,16 +163,16 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     return `${dd}/${mm}/${d.getFullYear()}`;
   };
 
-  // R[n] counts completed stakeholder revision cycles, not file uploads.
-  // review_cycle starts at 1 (initial dispatch), so R0 on first generation, R1 after one revision, etc.
-  const revision = (project.review_cycle as number) - 1;
+  // R[n] now derives from revision_history's PBDB counter (#108/#109),
+  // replacing the old review_cycle-based calculation.
+  const revision = pbdbRevision;
 
   const submitterName = [
     (submitter?.first_name as string | null) ?? "",
     (submitter?.last_name as string | null) ?? "",
   ].filter(Boolean).join(" ");
 
-  const context: Record<string, string> = {
+  const context: Record<string, unknown> = {
     ...orgValues,
     ...extractedFields,
     // PROJECT_NO includes the -S suffix per naming convention
@@ -133,6 +181,9 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     SYS_SUB_DATE: fmtDate(subDate),
     SYS_REV_NO: String(revision),
     SYS_USER_NAME: submitterName,
+    // Full growing revision-history table, for a docxtemplater loop
+    // ({#REVISION_HISTORY}...{/REVISION_HISTORY}) instead of a single token.
+    REVISION_HISTORY: revisionHistoryForDoc,
   };
 
   // Run docxtemplater — nullGetter returns "" for any token missing from context
@@ -154,19 +205,16 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
 
   const outputBuffer = doc.getZip().generate({ type: "nodebuffer" }) as Buffer;
 
-  // Filename: {projectNumber}-S PBDB R{n} {address} {yyyy mm dd}.docx
+  // Filename: {projectNumber}-S PBDB Rev{n} {address} {date} For QA.docx
   const rawAddress = (extractedFields["EXTRACT_ADDRESS"] ?? "").trim();
   const address = formatAddress(rawAddress);
-  const genYyyy = genDate.getFullYear();
-  const genMm = String(genDate.getMonth() + 1).padStart(2, "0");
-  const genDd = String(genDate.getDate()).padStart(2, "0");
-  const filename = [
-    `${project.project_number as string}-S PBDB R${revision}`,
+  const filename = buildPbdbFilename(
+    (project.project_number as string) ?? projectId.slice(0, 8),
+    revision,
     address,
-    `${genYyyy} ${genMm} ${genDd}`,
-  ]
-    .filter(Boolean)
-    .join(" ") + ".docx";
+    genDate,
+    { forQa: true }
+  );
 
   // Regenerating on the same day with an unchanged revision produces an identical
   // filename — prefix the storage object with the version counter to guarantee a

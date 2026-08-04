@@ -287,7 +287,7 @@ async function main() {
 
     const { data: due, error } = await supabase
       .from("pending_deliveries")
-      .select("project_id")
+      .select("project_id, delivery_type")
       .lte("scheduled_for", new Date().toISOString());
 
     if (error) {
@@ -297,14 +297,36 @@ async function main() {
 
     for (const row of due ?? []) {
       const projectId = row.project_id as string;
-      await supabase.from("pending_deliveries").delete().eq("project_id", projectId);
+      const deliveryType = (row.delivery_type as string | null) ?? "pbdr";
+      await supabase
+        .from("pending_deliveries")
+        .delete()
+        .eq("project_id", projectId)
+        .eq("delivery_type", deliveryType);
+
+      if (deliveryType === "pbdb") {
+        try {
+          const { data: admins } = await supabase
+            .from("users")
+            .select("id")
+            .in("role", ["super_admin", "admin"])
+            .limit(1);
+          const systemActorId = admins?.[0]?.id as string | undefined;
+          if (!systemActorId) throw new Error("No admin user found for system dispatch.");
+          await dispatchPbdb(projectId, systemActorId);
+          console.log(`[release-pending-deliveries] released PBDB dispatch for ${projectId}`);
+        } catch (err) {
+          console.error(`[release-pending-deliveries] PBDB dispatch failed for ${projectId}:`, err);
+        }
+        continue;
+      }
 
       const result = await deliverPbdr(projectId, null, null);
       if (!result.success) {
         console.error(`[release-pending-deliveries] delivery failed for ${projectId}: ${result.reason}`);
         continue;
       }
-      console.log(`[release-pending-deliveries] released delivery for ${projectId}`);
+      console.log(`[release-pending-deliveries] released PBDR delivery for ${projectId}`);
     }
   });
 

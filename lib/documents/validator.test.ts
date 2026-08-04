@@ -107,6 +107,48 @@ describe("extractPlaceholderTokens", () => {
     });
   });
 
+  describe("loop/section markers", () => {
+    it("does not extract field names used inside a {#TAG}...{/TAG} loop", async () => {
+      const buf = makeDocxBuffer(
+        `<root>${p("{#REVISION_HISTORY}{DOC_TYPE} {REV_NUMBER} {EVENT} {PREPARED_BY} {DATE}{/REVISION_HISTORY}")}</root>`
+      );
+      const tokens = await extractPlaceholderTokens(buf);
+      expect(tokens).toEqual([]);
+    });
+
+    it("does not extract the loop tag name itself", async () => {
+      const buf = makeDocxBuffer(
+        `<root>${p("{#REVISION_HISTORY}")}${p("{DOC_TYPE}")}${p("{/REVISION_HISTORY}")}</root>`
+      );
+      const tokens = await extractPlaceholderTokens(buf);
+      expect(tokens).not.toContain("REVISION_HISTORY");
+    });
+
+    it("tracks loop depth across separate paragraphs (e.g. open/close tags in different table cells)", async () => {
+      const buf = makeDocxBuffer(
+        `<root>${p("{#REVISION_HISTORY}{DOC_TYPE}")}${p("{REV_NUMBER}")}${p("{DATE}{/REVISION_HISTORY}")}</root>`
+      );
+      const tokens = await extractPlaceholderTokens(buf);
+      expect(tokens).toEqual([]);
+    });
+
+    it("still extracts scalar tokens that appear outside the loop", async () => {
+      const buf = makeDocxBuffer(
+        `<root>${p("{PROJECT_NO}")}${p("{#REVISION_HISTORY}{DATE}{/REVISION_HISTORY}")}${p("{SITE_ADDRESS}")}</root>`
+      );
+      const tokens = await extractPlaceholderTokens(buf);
+      expect(tokens).toEqual(["PROJECT_NO", "SITE_ADDRESS"]);
+    });
+
+    it("resumes normal extraction after the loop closes", async () => {
+      const buf = makeDocxBuffer(
+        `<root>${p("{#REVISION_HISTORY}{DATE}{/REVISION_HISTORY}")}${p("{AFTER_LOOP_TOKEN}")}</root>`
+      );
+      const tokens = await extractPlaceholderTokens(buf);
+      expect(tokens).toEqual(["AFTER_LOOP_TOKEN"]);
+    });
+  });
+
   describe("extraction from header and footer files", () => {
     it("extracts tokens from word/header1.xml", async () => {
       const buf = makeDocxBuffer(`<root>${p("body")}</root>`, {

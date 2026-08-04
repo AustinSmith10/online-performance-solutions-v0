@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setProjectDeliveryDelayPreset } from "@/app/actions/projects";
+import {
+  setProjectDeliveryDelayPreset,
+  setProjectPbdbDeliveryDelayPreset,
+} from "@/app/actions/projects";
 import {
   formatDelayDuration,
   type DeliveryDelayDurations,
@@ -18,12 +21,16 @@ export function ProjectDeliveryDelayPresetSelect({
   projectId,
   initialValue,
   durations,
+  docType = "pbdr",
 }: {
   projectId: string;
   initialValue: DeliveryDelayPreset;
   /** When provided, each option shows its actual configured duration inline
    *  (e.g. "Normal — 1 working day") instead of just the bare preset name. */
   durations?: DeliveryDelayDurations;
+  /** Which doc type's independent delay preset this controls (#110). Defaults
+   *  to "pbdr" for existing callers (the final-report delivery-delay setting). */
+  docType?: "pbdb" | "pbdr";
 }) {
   const [saved, setSaved] = useState<DeliveryDelayPreset>(initialValue);
   const [draft, setDraft] = useState<DeliveryDelayPreset>(initialValue);
@@ -34,13 +41,15 @@ export function ProjectDeliveryDelayPresetSelect({
   function optionLabel(value: DeliveryDelayPreset): string {
     if (!durations) return LABELS[value];
     if (value === "expedited") return "Expedited — sent immediately";
-    return `${LABELS[value]} — ${formatDelayDuration(durations[value])} after approval`;
+    const trigger = docType === "pbdb" ? "after QA complete" : "after approval";
+    return `${LABELS[value]} — ${formatDelayDuration(durations[value])} ${trigger}`;
   }
 
   function handleSave() {
     setJustSaved(false);
     startTransition(async () => {
-      const result = await setProjectDeliveryDelayPreset(projectId, draft);
+      const setPreset = docType === "pbdb" ? setProjectPbdbDeliveryDelayPreset : setProjectDeliveryDelayPreset;
+      const result = await setPreset(projectId, draft);
       if (result.error) {
         setError(result.error);
       } else {

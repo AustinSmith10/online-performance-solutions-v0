@@ -902,16 +902,19 @@ export type Database = {
       pending_deliveries: {
         Row: {
           created_at: string
+          delivery_type: string
           project_id: string
           scheduled_for: string
         }
         Insert: {
           created_at?: string
+          delivery_type?: string
           project_id: string
           scheduled_for: string
         }
         Update: {
           created_at?: string
+          delivery_type?: string
           project_id?: string
           scheduled_for?: string
         }
@@ -919,7 +922,7 @@ export type Database = {
           {
             foreignKeyName: "pending_deliveries_project_id_fkey"
             columns: ["project_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
@@ -930,6 +933,7 @@ export type Database = {
           created_at: string
           file_type: string
           file_type_confirmed: boolean
+          filename_mismatch_reason: string | null
           id: string
           original_filename: string
           project_id: string
@@ -943,6 +947,7 @@ export type Database = {
           created_at?: string
           file_type: string
           file_type_confirmed?: boolean
+          filename_mismatch_reason?: string | null
           id?: string
           original_filename: string
           project_id: string
@@ -956,6 +961,7 @@ export type Database = {
           created_at?: string
           file_type?: string
           file_type_confirmed?: boolean
+          filename_mismatch_reason?: string | null
           id?: string
           original_filename?: string
           project_id?: string
@@ -1005,6 +1011,7 @@ export type Database = {
           payment_override_at: string | null
           payment_override_by: string | null
           payment_override_reason: string | null
+          pbdb_delivery_delay_preset: string
           pbdb_downloaded_at: string | null
           po_number: string | null
           project_number: string | null
@@ -1041,6 +1048,7 @@ export type Database = {
           payment_override_at?: string | null
           payment_override_by?: string | null
           payment_override_reason?: string | null
+          pbdb_delivery_delay_preset?: string
           pbdb_downloaded_at?: string | null
           po_number?: string | null
           project_number?: string | null
@@ -1077,6 +1085,7 @@ export type Database = {
           payment_override_at?: string | null
           payment_override_by?: string | null
           payment_override_reason?: string | null
+          pbdb_delivery_delay_preset?: string
           pbdb_downloaded_at?: string | null
           po_number?: string | null
           project_number?: string | null
@@ -1183,6 +1192,51 @@ export type Database = {
           },
         ]
       }
+      revision_history: {
+        Row: {
+          created_at: string
+          doc_type: string
+          event: string
+          id: string
+          prepared_by: string | null
+          project_id: string
+          rev_number: number
+        }
+        Insert: {
+          created_at?: string
+          doc_type: string
+          event: string
+          id?: string
+          prepared_by?: string | null
+          project_id: string
+          rev_number: number
+        }
+        Update: {
+          created_at?: string
+          doc_type?: string
+          event?: string
+          id?: string
+          prepared_by?: string | null
+          project_id?: string
+          rev_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revision_history_prepared_by_fkey"
+            columns: ["prepared_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revision_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revision_notes: {
         Row: {
           created_at: string
@@ -1238,6 +1292,8 @@ export type Database = {
           id: string
           project_id: string
           responded_at: string | null
+          respondent_name: string | null
+          response_mode: string | null
           review_cycle: number
           stakeholder_email: string
           stakeholder_name: string
@@ -1259,6 +1315,8 @@ export type Database = {
           id?: string
           project_id: string
           responded_at?: string | null
+          respondent_name?: string | null
+          response_mode?: string | null
           review_cycle?: number
           stakeholder_email: string
           stakeholder_name: string
@@ -1280,6 +1338,8 @@ export type Database = {
           id?: string
           project_id?: string
           responded_at?: string | null
+          respondent_name?: string | null
+          response_mode?: string | null
           review_cycle?: number
           stakeholder_email?: string
           stakeholder_name?: string

@@ -10,6 +10,7 @@ import {
   notifyModificationsRequested,
   notifyIfFullyApproved,
 } from "@/lib/stakeholders/review-outcome";
+import { recordRevisionEvent } from "@/lib/documents/revision-history";
 
 export interface ApprovalState {
   error?: string;
@@ -109,6 +110,10 @@ export async function submitApproval(
       .from("projects")
       .update({ status: "revision_required", updated_at: now })
       .eq("id", review.project_id);
+
+    // Bumps the PBDB revision_history counter (#108) — the corrected reupload
+    // later derives its Rev{n} filename from this row, not review_cycle.
+    await recordRevisionEvent(supabase, review.project_id, "pbdb", "rejected");
 
     await notifyModificationsRequested({
       supabase,

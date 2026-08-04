@@ -5,20 +5,41 @@ import {
   logStakeholderResponseOnBehalf,
   extractStakeholderCommentsFromEmail,
   type LogResponseState,
+  type ResponseMode,
 } from "@/app/actions/stakeholders";
 import { requestEvidenceUploadUrl } from "@/app/actions/evidence";
 import { createClient } from "@/lib/supabase/client";
 import { withResolvedType } from "@/lib/supabase/withResolvedType";
 import { UploadDropzone } from "@/components/UploadDropzone";
 
+const MODE_OPTIONS: { value: ResponseMode; label: string }[] = [
+  { value: "email", label: "Email" },
+  { value: "teams", label: "Teams" },
+  { value: "call", label: "Call" },
+  { value: "sms", label: "SMS" },
+];
+
+const OTHER_RESPONDENT = "__other__";
+
+function toDatetimeLocalValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 interface Props {
   reviewId: string;
   projectId: string;
   stakeholderName: string;
   stakeholderEmail: string;
+  // The project's known stakeholder roster — populates the Respondent
+  // dropdown (the person who told the consultant the response, which may
+  // differ from the stakeholder this review row is for, e.g. an assistant
+  // relaying on their behalf).
+  roster: { name: string; email: string }[];
   // Set when the stakeholder already replied by email (#68) and the webhook
   // auto-attached that reply as evidence — lets the consultant reuse it
-  // instead of being forced through a fresh upload.
+  // instead of being forced through a fresh upload. Evidence is optional
+  // either way (#111).
   prefilledEvidence?: { storagePath: string; filename: string };
   prefilledComments?: string;
 }
@@ -28,6 +49,7 @@ export function LogStakeholderResponseForm({
   projectId,
   stakeholderName,
   stakeholderEmail,
+  roster,
   prefilledEvidence,
   prefilledComments,
 }: Props) {
@@ -38,6 +60,17 @@ export function LogStakeholderResponseForm({
   const [useEmailEvidence, setUseEmailEvidence] = useState(!!prefilledEvidence);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [mode, setMode] = useState<ResponseMode | "">("");
+  const [respondentChoice, setRespondentChoice] = useState<string>(
+    roster.some((r) => r.name === stakeholderName) ? stakeholderName : OTHER_RESPONDENT
+  );
+  const [respondentOther, setRespondentOther] = useState(
+    roster.some((r) => r.name === stakeholderName) ? "" : stakeholderName
+  );
+  const [respondedAt, setRespondedAt] = useState(() => toDatetimeLocalValue(new Date()));
+
+  const respondentFinal =
+    respondentChoice === OTHER_RESPONDENT ? respondentOther.trim() : respondentChoice;
 
   async function orchestrate(
     _prev: LogResponseState,
@@ -53,6 +86,11 @@ export function LogStakeholderResponseForm({
     if (selectedResponse === "rejected" && !enteredComments) {
       return { error: "Comments are required for a rejection." };
     }
+    if (!mode) return { error: "Select how the stakeholder responded." };
+    if (!respondentFinal) return { error: "Select or enter who responded." };
+    if (!respondedAt) return { error: "Enter when the stakeholder responded." };
+
+    const respondedAtIso = new Date(respondedAt).toISOString();
 
     if (useEmailEvidence && prefilledEvidence) {
       return logStakeholderResponseOnBehalf(
@@ -60,13 +98,25 @@ export function LogStakeholderResponseForm({
         projectId,
         selectedResponse,
         enteredComments,
-        prefilledEvidence.storagePath,
-        prefilledEvidence.filename
+        prefilledEvidence,
+        mode,
+        respondentFinal,
+        respondedAtIso
       );
     }
 
     if (!selectedFile || selectedFile.size === 0) {
-      return { error: "Attach evidence — the form can't be submitted without it." };
+      // Evidence is optional (#111) — proceed with no attachment.
+      return logStakeholderResponseOnBehalf(
+        reviewId,
+        projectId,
+        selectedResponse,
+        enteredComments,
+        null,
+        mode,
+        respondentFinal,
+        respondedAtIso
+      );
     }
 
     const requested = await requestEvidenceUploadUrl(projectId, selectedFile.name, selectedFile.size);
@@ -87,8 +137,10 @@ export function LogStakeholderResponseForm({
       projectId,
       selectedResponse,
       enteredComments,
-      requested.path,
-      selectedFile.name
+      { storagePath: requested.path, filename: selectedFile.name },
+      mode,
+      respondentFinal,
+      respondedAtIso
     );
   }
 
@@ -125,7 +177,9 @@ export function LogStakeholderResponseForm({
   const canSubmit =
     !!response &&
     (response !== "rejected" || comments.trim().length > 0) &&
-    ((useEmailEvidence && !!prefilledEvidence) || !!file);
+    !!mode &&
+    !!respondentFinal &&
+    !!respondedAt;
 
   return (
     <>
@@ -138,7 +192,7 @@ export function LogStakeholderResponseForm({
             <p className="mt-0.5 text-xs text-zinc-400">{stakeholderEmail}</p>
             <p className="mt-2 text-sm text-zinc-500">
               For stakeholders who replied by phone or email instead of using the portal.
-              Evidence is required, and you always confirm the response before submitting.
+              Attaching evidence is optional — you always confirm the response before submitting.
             </p>
 
             <form action={formAction} className="mt-4 space-y-4">
@@ -168,6 +222,82 @@ export function LogStakeholderResponseForm({
                     Reject
                   </label>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor={`log-response-mode-${reviewId}`}
+                    className="mb-1.5 block text-xs font-medium text-zinc-700"
+                  >
+                    Mode
+                  </label>
+                  <select
+                    id={`log-response-mode-${reviewId}`}
+                    required
+                    value={mode}
+                    onChange={(e) => setMode(e.target.value as ResponseMode)}
+                    className="w-full rounded-md border border-zinc-200 px-2.5 py-2 text-sm text-zinc-900 focus:border-zinc-400 focus:outline-none"
+                  >
+                    <option value="" disabled>
+                      Select…
+                    </option>
+                    {MODE_OPTIONS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor={`log-response-when-${reviewId}`}
+                    className="mb-1.5 block text-xs font-medium text-zinc-700"
+                  >
+                    Date &amp; time
+                  </label>
+                  <input
+                    id={`log-response-when-${reviewId}`}
+                    type="datetime-local"
+                    required
+                    value={respondedAt}
+                    onChange={(e) => setRespondedAt(e.target.value)}
+                    className="w-full rounded-md border border-zinc-200 px-2.5 py-2 text-sm text-zinc-900 focus:border-zinc-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor={`log-response-respondent-${reviewId}`}
+                  className="mb-1.5 block text-xs font-medium text-zinc-700"
+                >
+                  Respondent
+                </label>
+                <select
+                  id={`log-response-respondent-${reviewId}`}
+                  value={respondentChoice}
+                  onChange={(e) => setRespondentChoice(e.target.value)}
+                  className="w-full rounded-md border border-zinc-200 px-2.5 py-2 text-sm text-zinc-900 focus:border-zinc-400 focus:outline-none"
+                >
+                  {roster.map((r) => (
+                    <option key={r.email} value={r.name}>
+                      {r.name}
+                    </option>
+                  ))}
+                  <option value={OTHER_RESPONDENT}>Other…</option>
+                </select>
+                {respondentChoice === OTHER_RESPONDENT && (
+                  <input
+                    type="text"
+                    required
+                    placeholder="Who responded?"
+                    value={respondentOther}
+                    onChange={(e) => setRespondentOther(e.target.value)}
+                    className="mt-1.5 w-full rounded-md border border-zinc-200 px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                  />
+                )}
               </div>
 
               <div>
@@ -203,7 +333,7 @@ export function LogStakeholderResponseForm({
 
               <div>
                 <span className="mb-1.5 block text-xs font-medium text-zinc-700">
-                  Evidence <span className="font-normal text-zinc-400">(required)</span>
+                  Evidence <span className="font-normal text-zinc-400">(optional)</span>
                 </span>
                 {prefilledEvidence && (
                   <label className="mb-2 flex items-center gap-1.5 text-xs text-zinc-700">
@@ -222,7 +352,7 @@ export function LogStakeholderResponseForm({
                     pending={pending}
                     success={state.success}
                     error={state.error}
-                    required={!prefilledEvidence}
+                    required={false}
                     onFile={setFile}
                   />
                 )}

@@ -8,11 +8,12 @@ vi.mock("@/lib/auth/session");
 vi.mock("@/lib/audit/log");
 vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/stakeholders/dispatch");
+vi.mock("@/lib/documents/pending-delivery");
 
 import { uploadQaPbdb, adminDeleteProject, confirmProjectFileType } from "./projects";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
-import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
+import { scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { auditLog } from "@/lib/audit/log";
 
 const PROJECT_ID = "proj-1";
@@ -77,6 +78,15 @@ function buildMock({
     if (table === "users") {
       return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), then: (fn: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(fn) };
     }
+    if (table === "revision_history") {
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+    }
     return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
   });
 
@@ -86,7 +96,7 @@ function buildMock({
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireRole).mockResolvedValue({ id: ACTOR_ID, role: "consultant", email: "c@ddeg.com.au" } as never);
-  vi.mocked(dispatchPbdb).mockResolvedValue(undefined);
+  vi.mocked(scheduleOrDeliverPbdb).mockResolvedValue({ delivered: true, scheduledFor: null });
 });
 
 describe("uploadQaPbdb — review_cycle tagging across a multi-round rejection scenario", () => {

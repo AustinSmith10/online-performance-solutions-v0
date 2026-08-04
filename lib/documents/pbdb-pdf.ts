@@ -1,12 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
+import { buildPbdbFilename } from "@/lib/documents/naming";
+import { formatAddress } from "@/lib/documents/formatters";
+import { getCurrentRevNumber } from "@/lib/documents/revision-history";
 
 export interface DispatchPdfProject {
   id: string;
   client_id: string;
   review_cycle: number;
   strip_token_color: boolean | null;
+  project_number: string | null;
+  extracted_fields: Record<string, string> | null;
 }
 
 export interface DispatchPdf {
@@ -77,7 +82,19 @@ export async function getOrCreateDispatchPdf(
 
   const docxPath = sourceDocx.storage_path as string;
   const storagePath = docxPath.replace(/\.docx$/i, ".pdf");
-  const originalFilename = (sourceDocx.original_filename as string).replace(/\.docx$/i, ".pdf");
+
+  // Dispatch-time filename regenerates: drops the "For QA" suffix and uses
+  // today's date instead of the original generation/QA-upload date (#109).
+  const revision = await getCurrentRevNumber(supabase, project.id, "pbdb");
+  const rawAddress = (project.extracted_fields?.["EXTRACT_ADDRESS"] ?? "").trim();
+  const address = formatAddress(rawAddress);
+  const originalFilename = buildPbdbFilename(
+    project.project_number ?? project.id.slice(0, 8),
+    revision,
+    address,
+    new Date(),
+    { forQa: false }
+  ).replace(/\.docx$/i, ".pdf");
 
   const { error: uploadErr } = await supabase.storage
     .from("documents")

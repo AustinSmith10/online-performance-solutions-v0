@@ -1,7 +1,38 @@
 import { describe, it, expect } from "vitest";
-import { buildPbdrFilename } from "./naming";
+import { buildPbdrFilename, buildPbdbFilename } from "./naming";
 
 const DATE_MAR_15 = new Date(2024, 2, 15);
+
+describe("buildPbdbFilename", () => {
+  it("follows the <<ProjectNo>>-S PBDB Rev<<n>> <<address>> <<YYYY MM DD>>.docx pattern", () => {
+    expect(buildPbdbFilename("OPS-001", 0, "123 Main St", DATE_MAR_15)).toBe(
+      "OPS-001-S PBDB Rev0 123 Main St 2024 03 15.docx"
+    );
+  });
+
+  it("appends ' For QA' at the end when forQa is set", () => {
+    expect(buildPbdbFilename("OPS-001", 2, "123 Main St", DATE_MAR_15, { forQa: true })).toBe(
+      "OPS-001-S PBDB Rev2 123 Main St 2024 03 15 For QA.docx"
+    );
+  });
+
+  it("omits the For QA suffix by default", () => {
+    const result = buildPbdbFilename("OPS-001", 0, "addr", DATE_MAR_15);
+    expect(result).not.toContain("For QA");
+  });
+
+  it("ends with .docx", () => {
+    expect(buildPbdbFilename("OPS-001", 0, "addr", DATE_MAR_15)).toMatch(/\.docx$/);
+  });
+
+  it("embeds the revision index as Rev<n>", () => {
+    expect(buildPbdbFilename("OPS-001", 3, "addr", DATE_MAR_15)).toContain("Rev3");
+  });
+
+  it("zero-pads single-digit month and day", () => {
+    expect(buildPbdbFilename("OPS-001", 0, "addr", new Date(2024, 0, 5))).toContain("2024 01 05");
+  });
+});
 
 describe("buildPbdrFilename", () => {
   describe("output structure", () => {

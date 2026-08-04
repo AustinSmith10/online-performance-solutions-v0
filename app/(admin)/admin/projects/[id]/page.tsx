@@ -195,6 +195,7 @@ export default async function ProjectDetailPage({
         review_cycle,
         strip_token_color,
         delivery_delay_preset,
+        pbdb_delivery_delay_preset,
         qa_completed_by,
         clients(id, name, client_config, revision_notes_required),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability),
@@ -208,7 +209,7 @@ export default async function ProjectDetailPage({
       .eq("role", "consultant")
       .eq("is_locked", false)
       .order("first_name"),
-    supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).maybeSingle(),
+    supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).eq("delivery_type", "pbdr").maybeSingle(),
   ]);
 
   if (projectResult.error) console.error(`[admin/projects/${id}] project query failed:`, projectResult.error);
@@ -236,6 +237,7 @@ export default async function ProjectDetailPage({
     source: "portal" | "email";
     strip_token_color: boolean;
     delivery_delay_preset: DeliveryDelayPreset;
+    pbdb_delivery_delay_preset: DeliveryDelayPreset;
     clients: {
       id: string;
       name: string;
@@ -405,6 +407,12 @@ export default async function ProjectDetailPage({
   const pbdbFiles = rawPbdbFiles ?? [];
 
   const reviews = (rawReviews ?? []) as StakeholderReview[];
+  // Known stakeholder roster for the Respondent dropdown (#111).
+  const stakeholderRoster = [
+    ...new Map(
+      reviews.map((r) => [r.stakeholder_email.toLowerCase(), { name: r.stakeholder_name, email: r.stakeholder_email }])
+    ).values(),
+  ];
 
   // Auto-attached evidence from an email reply (#68) — see the ops project page
   // for the matching logic.
@@ -699,6 +707,7 @@ export default async function ProjectDetailPage({
                       projectId={id}
                       stakeholderName={r.stakeholder_name}
                       stakeholderEmail={r.stakeholder_email}
+                      roster={stakeholderRoster}
                       prefilledEvidence={
                         emailReplyEvidence
                           ? {
@@ -1157,6 +1166,19 @@ export default async function ProjectDetailPage({
       </div>
 
       <div className="border-t border-zinc-100 pt-4">
+        <h3 className="text-sm font-semibold text-zinc-900">PBDB delivery timing</h3>
+        <p className="mt-1 mb-3 text-xs leading-relaxed text-zinc-500">
+          Delay before the PBDB dispatches to stakeholders after QA is complete.
+        </p>
+        <ProjectDeliveryDelayPresetSelect
+          projectId={id}
+          initialValue={project.pbdb_delivery_delay_preset}
+          durations={deliveryDurations}
+          docType="pbdb"
+        />
+      </div>
+
+      <div className="border-t border-zinc-100 pt-4">
         <h3 className="text-sm font-semibold text-zinc-900">Delivery timing</h3>
         <p className="mt-1 mb-3 text-xs leading-relaxed text-zinc-500">
           Delay before the PBDR goes out after final approval.
@@ -1165,6 +1187,7 @@ export default async function ProjectDetailPage({
           projectId={id}
           initialValue={project.delivery_delay_preset}
           durations={deliveryDurations}
+          docType="pbdr"
         />
         {deliveryLocked ? (
           <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-500">

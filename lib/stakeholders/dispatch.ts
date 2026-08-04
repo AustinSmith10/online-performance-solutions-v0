@@ -119,6 +119,8 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
         client_id: orgId,
         review_cycle: reviewCycle,
         strip_token_color: project.strip_token_color as boolean | null,
+        project_number: project.project_number as string | null,
+        extracted_fields: project.extracted_fields as Record<string, string> | null,
       },
       actorId
     ),

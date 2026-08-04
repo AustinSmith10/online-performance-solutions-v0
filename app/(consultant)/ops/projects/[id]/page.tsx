@@ -112,7 +112,7 @@ export default async function ConsultantProjectDetailPage({
   const { data, error } = await supabase
     .from("projects")
     .select(
-      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, delivery_recipient_email, qa_completed_by, accepted_at, pbdb_downloaded_at, credit_deducted, payment_override, clients(name, state_territory, client_config, revision_notes_required), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
+      "id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, pbdb_delivery_delay_preset, delivery_recipient_email, qa_completed_by, accepted_at, pbdb_downloaded_at, credit_deducted, payment_override, clients(name, state_territory, client_config, revision_notes_required), submitter:users!projects_submitted_by_fkey(first_name, last_name, email, phone, company_role)"
     )
     .eq("id", id)
     .eq("assigned_consultant_id", user.id)
@@ -134,6 +134,7 @@ export default async function ConsultantProjectDetailPage({
     source: "portal" | "email";
     strip_token_color: boolean;
     delivery_delay_preset: DeliveryDelayPreset;
+    pbdb_delivery_delay_preset: DeliveryDelayPreset;
     delivery_recipient_email: string | null;
     qa_completed_by: string | null;
     accepted_at: string | null;
@@ -238,7 +239,7 @@ export default async function ConsultantProjectDetailPage({
       .from("revision_notes")
       .select("review_cycle, note")
       .eq("project_id", id),
-    supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).maybeSingle(),
+    supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).eq("delivery_type", "pbdr").maybeSingle(),
     supabase
       .from("field_flags")
       .select("id, field_key, candidate_values, type")
@@ -308,6 +309,13 @@ export default async function ConsultantProjectDetailPage({
     email_reply_sender_verified: boolean | null;
   };
   const allReviews = (rawReviews ?? []) as ReviewRow[];
+  // Known stakeholder roster for the Respondent dropdown (#111) — everyone
+  // who has ever had a review row on this project, deduped by email.
+  const stakeholderRoster = [
+    ...new Map(
+      allReviews.map((r) => [r.stakeholder_email.toLowerCase(), { name: r.stakeholder_name, email: r.stakeholder_email }])
+    ).values(),
+  ];
   const reviewsByCycle = new Map<number, ReviewRow[]>();
   for (const r of allReviews) {
     if (!reviewsByCycle.has(r.review_cycle)) reviewsByCycle.set(r.review_cycle, []);
@@ -594,6 +602,7 @@ export default async function ConsultantProjectDetailPage({
                       projectId={id}
                       stakeholderName={r.stakeholder_name}
                       stakeholderEmail={r.stakeholder_email}
+                      roster={stakeholderRoster}
                       prefilledEvidence={
                         emailReplyEvidence
                           ? {
@@ -977,6 +986,7 @@ export default async function ConsultantProjectDetailPage({
                               projectId={id}
                               stakeholderName={r.stakeholder_name}
                               stakeholderEmail={r.stakeholder_email}
+                              roster={stakeholderRoster}
                               prefilledEvidence={
                                 emailReplyEvidence
                                   ? {
@@ -1025,6 +1035,19 @@ export default async function ConsultantProjectDetailPage({
   const settingsContent = (
     <>
       <div>
+        <h3 className="text-sm font-semibold text-zinc-900">PBDB delivery timing</h3>
+        <p className="mt-1 mb-3 text-xs leading-relaxed text-zinc-500">
+          Sets how long to wait after QA is complete before the PBDB dispatches to stakeholders
+          for review — independent of the PBDR delivery timing below.
+        </p>
+        <ProjectDeliveryDelayPresetSelect
+          projectId={id}
+          initialValue={project.pbdb_delivery_delay_preset}
+          durations={deliveryDurations}
+          docType="pbdb"
+        />
+      </div>
+      <div className="border-t border-zinc-100 pt-3">
         <h3 className="text-sm font-semibold text-zinc-900">Delivery timing</h3>
         <p className="mt-1 mb-3 text-xs leading-relaxed text-zinc-500">
           Sets how long to wait after every stakeholder approves before the final report (PBDR)
@@ -1034,6 +1057,7 @@ export default async function ConsultantProjectDetailPage({
           projectId={id}
           initialValue={project.delivery_delay_preset}
           durations={deliveryDurations}
+          docType="pbdr"
         />
         {deliveryLocked ? (
           <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-500">

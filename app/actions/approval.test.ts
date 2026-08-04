@@ -34,6 +34,7 @@ function chain(data: unknown, error: unknown = null) {
   obj.select = self; obj.eq = self; obj.is = self; obj.in = self;
   obj.order = self; obj.limit = self; obj.not = self;
   obj.single = resolve; obj.maybeSingle = resolve;
+  obj.insert = resolve;
   obj.then = (fn: (v: unknown) => unknown) => resolve().then(fn);
   obj.catch = () => obj;
   return obj;
@@ -101,11 +102,13 @@ function buildMock({
 
       if (table === "projects") {
         // Call order in submitApproval: 1) replay guard select, 2) first_response_at
-        // update, 3) select for downstream fields, 4) rejected-path status update.
+        // update, 3) select for downstream fields, 4) rejected-path status update,
+        // 5) recordRevisionEvent's assigned_consultant_id lookup (rejected path only).
         if (n === 1) return { select: selectGuard };
         if (n === 2) return { update: updateProject };
         if (n === 3) return { select: selectProject };
-        return { update: updateProject };
+        if (n === 4) return { update: updateProject };
+        return chain(BASE_PROJECT);
       }
 
       if (table === "users") {

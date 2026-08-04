@@ -4,6 +4,7 @@ import { convertPbdbToPbdr } from "@/lib/documents/converter";
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { buildPbdrFilename } from "@/lib/documents/naming";
+import { peekNextRevNumber, recordRevisionEvent } from "@/lib/documents/revision-history";
 import { formatAddress } from "@/lib/documents/formatters";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
@@ -155,10 +156,11 @@ export async function deliverPbdr(
       (project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? "";
     const address = formatAddress(rawAddress);
 
-    // R[n] on the PBDR mirrors the PBDB: counts completed stakeholder revision cycles.
-    // review_cycle starts at 1 and increments only when a revision is submitted, so
-    // review_cycle - 1 gives the correct R[n] at the point of approval.
-    const revisionIndex = (project.review_cycle as number) - 1;
+    // R[n] on the PBDR derives from revision_history's independent PBDR counter
+    // (#108/#109) — peeked here (not yet recorded) so the filename can be built
+    // before the conversion has actually succeeded; recorded for real just
+    // below once the file is safely stored.
+    const revisionIndex = await peekNextRevNumber(supabase, projectId, "pbdr");
     pbdrVersion = revisionIndex + 1;
 
     const pbdrFilename = buildPbdrFilename(
@@ -190,6 +192,11 @@ export async function deliverPbdr(
       pdfStoragePath = null;
       throw new Error(`Failed to record PBDR: ${insertErr.message}`);
     }
+
+    // The PBDR file is safely stored — commit the revision_history row now.
+    // prepared_by snapshots the assigned consultant even when an admin
+    // manually triggered this as a failsafe (see revision-history.ts).
+    await recordRevisionEvent(supabase, projectId, "pbdr", "approved_conversion");
 
     // Signed URL valid for 30 days — embedded in delivery emails
     const { data: signed } = await supabase.storage
