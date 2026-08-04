@@ -445,34 +445,45 @@ export async function restoreProjectStakeholder(
 
 export interface DispatchState {
   error?: string;
-  dispatched?: boolean;
+  success?: boolean;
+  scheduledFor?: string | null;
 }
 
+// Deliberate, admin/consultant-triggered PBDB dispatch — mirrors
+// triggerPbdrConversion's "pick the delivery timing preset, then click"
+// pattern. uploadQaPbdb no longer auto-dispatches on QA upload; this is now
+// the only trigger, so the consultant's project page can show a clear
+// "ready to dispatch" state instead of the dispatch silently already being
+// staged as a side effect of the upload.
 export async function dispatchToStakeholders(
   projectId: string,
   _prevState: DispatchState,
   _formData: FormData
 ): Promise<DispatchState> {
-  const actor = await requireRole("super_admin", "admin");
+  const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: project } = await supabase
     .from("projects")
-    .select("status, qa_completed_by")
+    .select("status, qa_completed_by, assigned_consultant_id")
     .eq("id", projectId)
     .maybeSingle();
 
   if (!project || project.status !== "in_progress" || !project.qa_completed_by) {
     return { error: "Project is not ready for dispatch." };
   }
+  if (actor.role === "consultant" && project.assigned_consultant_id !== actor.id) {
+    return { error: "You are not assigned to this project." };
+  }
 
   try {
-    await scheduleOrDeliverPbdb(projectId, actor.id, actor.email as string);
+    const result = await scheduleOrDeliverPbdb(projectId, actor.id, actor.email as string);
+    revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath(`/ops/projects/${projectId}`);
+    return { success: true, scheduledFor: result.scheduledFor };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Dispatch failed." };
   }
-
-  redirect(`/admin/projects/${projectId}?dispatched=1`);
 }
 
 // ─── Waive stakeholder ────────────────────────────────────────────────────────

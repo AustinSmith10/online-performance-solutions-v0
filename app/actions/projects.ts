@@ -1102,7 +1102,10 @@ export async function uploadQaPbdb(
       return { error: `File uploaded but dispatch failed: ${err instanceof Error ? err.message : "Unknown error"}` };
     }
   } else {
-    // Initial QA upload (in_progress) — mark complete, notify admins, dispatch to stakeholders
+    // Initial QA upload (in_progress) — mark complete, notify admins. Dispatch
+    // is a deliberate separate step now (dispatchToStakeholders / DispatchButton),
+    // mirroring the PBDR "pick delivery timing, then click" pattern — this no
+    // longer auto-schedules a dispatch as a side effect of the upload.
     await supabase
       .from("projects")
       .update({ qa_completed_by: actor.id, updated_at: now })
@@ -1121,12 +1124,6 @@ export async function uploadQaPbdb(
       orgId: project.client_id as string,
       metadata: { version: nextVersion, filename: file.name, project_ref: projectRef },
     });
-
-    try {
-      await scheduleOrDeliverPbdb(projectId, actor.id, actor.email as string);
-    } catch (err) {
-      return { error: `File uploaded but dispatch failed: ${err instanceof Error ? err.message : "Unknown error"}` };
-    }
   }
 
   revalidatePath(`/admin/projects/${projectId}`);

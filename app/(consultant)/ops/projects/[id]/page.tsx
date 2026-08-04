@@ -39,6 +39,7 @@ import { ResendTokenButton } from "@/app/(admin)/admin/projects/[id]/_components
 import { UpdateEmailReveal } from "@/app/(admin)/admin/projects/[id]/_components/UpdateEmailReveal";
 import { WaiveForm } from "@/app/(admin)/admin/projects/[id]/_components/WaiveForm";
 import { ConvertButton } from "@/app/(admin)/admin/projects/[id]/_components/ConvertButton";
+import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/DispatchButton";
 import { HighlightRing } from "@/components/HighlightRing";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { Stage } from "@/components/workspace/StageRail";
@@ -394,7 +395,7 @@ export default async function ConsultantProjectDetailPage({
   // this page recomputing its own version of the same check.
   const effectiveStatus = resolveEffectiveStatus(project.status, currentCycleReviews);
 
-  const pbdbCardState: "locked" | "upload" | "pending" | "revision" | "approved" = !latestPbdb
+  const pbdbCardState: "locked" | "upload" | "ready_to_dispatch" | "pending" | "revision" | "approved" = !latestPbdb
     ? "locked"
     : effectiveStatus === "dispatched"
     ? "pending"
@@ -402,6 +403,8 @@ export default async function ConsultantProjectDetailPage({
     ? "revision"
     : isTerminal || effectiveStatus === "converting"
     ? "approved"
+    : project.status === "in_progress" && project.qa_completed_by
+    ? "ready_to_dispatch"
     : "upload";
 
   const UPLOAD_NEW_VERSION_COPY =
@@ -560,8 +563,25 @@ export default async function ConsultantProjectDetailPage({
     );
   } else if (pbdbCardState === "upload") {
     focusCard = (
-      <FocusCard tone="neutral" title="Upload QA'd PBDB" subtitle="Dispatches to stakeholders for review once uploaded.">
+      <FocusCard tone="neutral" title="Upload QA'd PBDB" subtitle="Once uploaded, you'll pick the delivery timing and dispatch it yourself.">
         <PbdbQaUploadForm projectId={id} />
+      </FocusCard>
+    );
+  } else if (pbdbCardState === "ready_to_dispatch") {
+    focusCard = (
+      <FocusCard tone="green" title="Ready to dispatch" subtitle="QA'd PBDB uploaded — send it out for stakeholder review.">
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+            <ProjectDeliveryDelayPresetSelect
+              projectId={id}
+              initialValue={project.pbdb_delivery_delay_preset}
+              durations={deliveryDurations}
+              docType="pbdb"
+            />
+          </div>
+          <DispatchButton projectId={id} />
+        </div>
       </FocusCard>
     );
   } else if (pbdbCardState === "pending") {

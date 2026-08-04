@@ -159,7 +159,6 @@ export default async function ProjectDetailPage({
   const sp = await searchParams;
   const justSavedNumber = sp.number_saved === "1";
   const justAssigned = sp.assigned === "1";
-  const justDispatched = sp.dispatched === "1";
   const justPaused = sp.paused === "1";
   const justResumed = sp.resumed === "1";
   const justPbdrResent = sp.pbdr_resent === "1";
@@ -664,8 +663,19 @@ export default async function ProjectDetailPage({
     );
   } else if (project.status === "in_progress" && !!project.qa_completed_by) {
     focusCard = (
-      <FocusCard tone="neutral" title="Dispatch to stakeholders" subtitle="QA complete — send it out for approval.">
-        <DispatchButton projectId={id} />
+      <FocusCard tone="green" title="Ready to dispatch" subtitle="QA complete — send it out for stakeholder review.">
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+            <ProjectDeliveryDelayPresetSelect
+              projectId={id}
+              initialValue={project.pbdb_delivery_delay_preset}
+              durations={deliveryDurations}
+              docType="pbdb"
+            />
+          </div>
+          <DispatchButton projectId={id} />
+        </div>
       </FocusCard>
     );
   } else if (project.status === "dispatched" && pendingReviews.length > 0) {
@@ -1282,13 +1292,6 @@ export default async function ProjectDetailPage({
           cleanUrl={`/admin/projects/${id}`}
           title="Consultant assigned"
           body="The consultant has been notified and the project is now in progress."
-        />
-      )}
-      {justDispatched && (
-        <AdminSuccessBanner
-          cleanUrl={`/admin/projects/${id}`}
-          title="Dispatched to stakeholders"
-          body="Approval requests have been sent. Stakeholders will receive emails shortly."
         />
       )}
       {justPaused && (

@@ -101,16 +101,23 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     ])
   );
 
-  const EVENT_LABELS: Record<string, string> = {
-    initial: "Initial",
-    rejected: "Revision",
-    approved_conversion: "Approved — Converted",
+  // Purpose is constant per doc type, not per event — "Stakeholder Review"
+  // for every PBDB row, "For Construction" for every PBDR row. This mirrors
+  // lib/documents/converter.ts's PBDB→PBDR text swap (#4 — Revision History
+  // PURPOSE column), which does a literal "Stakeholder Review" → "For
+  // Construction" replacement, not anything event-aware.
+  const PURPOSE_LABELS: Record<string, string> = {
+    pbdb: "Stakeholder Review",
+    pbdr: "For Construction",
   };
 
   const revisionHistoryForDoc = revisionHistory.map((row) => ({
     DOC_TYPE: row.doc_type.toUpperCase(),
     REV_NUMBER: String(row.rev_number),
-    EVENT: EVENT_LABELS[row.event] ?? row.event,
+    // Context key stays EVENT (matches the template's existing {EVENT}
+    // token in the Purpose column) even though its content is now a
+    // doc-type-derived purpose string, not the row's event.
+    EVENT: PURPOSE_LABELS[row.doc_type] ?? row.doc_type,
     PREPARED_BY: row.prepared_by ? (preparedByNameById.get(row.prepared_by) ?? "") : "",
     DATE: new Date(row.created_at).toLocaleDateString("en-AU", {
       day: "2-digit",
