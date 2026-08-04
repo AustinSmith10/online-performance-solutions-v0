@@ -12,6 +12,7 @@ import { ReExtractButton } from "@/components/ReExtractButton";
 import { SubmissionSuccessBanner } from "./_components/SubmissionSuccessBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { DownloadCard } from "@/components/DownloadCard";
+import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
 import { resolveStepperState, type StepperStage, type StepperStageKey } from "@/lib/delivery/stepper";
 import { resolveEffectiveStatus, OUTSTANDING_STATUSES } from "@/lib/delivery/effective-status";
 import { SUPPORT_MAILTO } from "@/lib/config/support";
@@ -237,11 +238,15 @@ export default async function ClientProjectDetailPage({
     ])
   );
 
-  // Submission files — signed URLs from `submissions` bucket
+  // Submission files — signed URLs from `submissions` bucket, except
+  // evidence files which live in their own `evidence` bucket (see
+  // app/actions/evidence.ts). Signing evidence against `submissions` fails
+  // silently and drops both Download and Preview for those rows.
   const files = await Promise.all(
     (rawFiles ?? []).map(async (f) => {
+      const bucket = f.file_type === "evidence" ? "evidence" : "submissions";
       const { data: signed } = await supabase.storage
-        .from("submissions")
+        .from(bucket)
         .createSignedUrl(f.storage_path as string, 3600);
       return { ...f, signedUrl: signed?.signedUrl ?? null };
     })
@@ -510,19 +515,26 @@ export default async function ClientProjectDetailPage({
           <div className="space-y-1.5">
             {files.map((f) => (
               <div key={f.id as string} className="space-y-1">
-                <DownloadCard
-                  href={f.signedUrl}
-                  originalFilename={f.original_filename as string}
-                  wrapperClassName="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-2"
-                  buttonClassName="shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
-                >
-                  <p className="truncate text-xs font-medium text-zinc-900">
-                    {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-zinc-400">
-                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                  </p>
-                </DownloadCard>
+                <div className="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium text-zinc-900">
+                      {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-zinc-400">
+                      {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                    </p>
+                  </div>
+                  <DocumentPreviewModal
+                    href={f.signedUrl}
+                    filename={f.original_filename as string}
+                    buttonClassName="shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                  />
+                  <DownloadCard
+                    href={f.signedUrl}
+                    wrapperClassName="flex items-center gap-2 p-0"
+                    buttonClassName="shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                  />
+                </div>
                 {!isDeleted && !isLocked && (
                   <ReplaceDocumentControl projectId={id} fileId={f.id as string} />
                 )}

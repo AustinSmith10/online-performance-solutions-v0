@@ -13,6 +13,7 @@ import { PendingDeliveryPanel } from "@/components/PendingDeliveryPanel";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { DownloadCard } from "@/components/DownloadCard";
+import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
 import { ConfirmFileTypeControl } from "@/components/ConfirmFileTypeControl";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
@@ -832,26 +833,26 @@ export default async function ConsultantProjectDetailPage({
         ) : (
           <div className="divide-y divide-zinc-100">
             {submissionFiles.map((f) => (
-              <DownloadCard
-                key={f.id as string}
-                href={f.signedUrl}
-                originalFilename={f.original_filename as string}
-                external
-              >
-                <p className="text-sm font-medium text-zinc-900">
-                  {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? (f.file_type as string)}
-                </p>
-                <p className="mt-0.5 text-xs text-zinc-500">
-                  {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                </p>
-                {!f.file_type_confirmed && (
-                  <ConfirmFileTypeControl
-                    projectId={id}
-                    fileId={f.id as string}
-                    currentFileType={f.file_type as string}
-                  />
-                )}
-              </DownloadCard>
+              <div key={f.id as string} className="flex items-center gap-2 px-5 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-zinc-900">
+                    {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? (f.file_type as string)}
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                  </p>
+                  <p className="mt-0.5 truncate text-[11px] text-zinc-400">{f.original_filename as string}</p>
+                  {!f.file_type_confirmed && (
+                    <ConfirmFileTypeControl
+                      projectId={id}
+                      fileId={f.id as string}
+                      currentFileType={f.file_type as string}
+                    />
+                  )}
+                </div>
+                <DocumentPreviewModal href={f.signedUrl} filename={f.original_filename as string} />
+                <DownloadCard href={f.signedUrl} wrapperClassName="flex items-center gap-2 p-0" external />
+              </div>
             ))}
           </div>
         )}

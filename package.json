@@ -25,6 +25,7 @@
     "next": "16.2.7",
     "openai": "^6.42.0",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^4.10.38",
     "pg-boss": "^12.18.2",
     "pizzip": "^3.2.0",
     "postmark": "^5.0.0",
