@@ -182,8 +182,15 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     SYS_REV_NO: String(revision),
     SYS_USER_NAME: submitterName,
     // Full growing revision-history table, for a docxtemplater loop
-    // ({#REVISION_HISTORY}...{/REVISION_HISTORY}) instead of a single token.
-    REVISION_HISTORY: revisionHistoryForDoc,
+    // ({#SYS_REVISION_HISTORY}...{/SYS_REVISION_HISTORY}) instead of a single
+    // token. Named with the SYS_ prefix (like SYS_REV_NO etc.) so the
+    // template-upload token scanner (lib/documents/validator.ts) classifies
+    // and tracks the loop itself via the normal token-registry pipeline —
+    // it just needs a display label, no extraction hint, same as any other
+    // system-auto-filled token. Its five per-row fields (DOC_TYPE,
+    // REV_NUMBER, EVENT, PREPARED_BY, DATE) are loop-scoped and deliberately
+    // excluded from that registry — see validator.ts's loop-depth tracking.
+    SYS_REVISION_HISTORY: revisionHistoryForDoc,
   };
 
   // Run docxtemplater — nullGetter returns "" for any token missing from context

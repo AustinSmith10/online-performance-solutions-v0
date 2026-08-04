@@ -108,44 +108,52 @@ describe("extractPlaceholderTokens", () => {
   });
 
   describe("loop/section markers", () => {
-    it("does not extract field names used inside a {#TAG}...{/TAG} loop", async () => {
+    it("tracks the loop's own tag name, but not field names used inside it", async () => {
       const buf = makeDocxBuffer(
-        `<root>${p("{#REVISION_HISTORY}{DOC_TYPE} {REV_NUMBER} {EVENT} {PREPARED_BY} {DATE}{/REVISION_HISTORY}")}</root>`
+        `<root>${p("{#SYS_REVISION_HISTORY}{DOC_TYPE} {REV_NUMBER} {EVENT} {PREPARED_BY} {DATE}{/SYS_REVISION_HISTORY}")}</root>`
       );
       const tokens = await extractPlaceholderTokens(buf);
-      expect(tokens).toEqual([]);
+      expect(tokens).toEqual(["SYS_REVISION_HISTORY"]);
     });
 
-    it("does not extract the loop tag name itself", async () => {
+    it("adds the loop tag name only once even though it appears at both open and close", async () => {
       const buf = makeDocxBuffer(
-        `<root>${p("{#REVISION_HISTORY}")}${p("{DOC_TYPE}")}${p("{/REVISION_HISTORY}")}</root>`
+        `<root>${p("{#SYS_REVISION_HISTORY}")}${p("{DOC_TYPE}")}${p("{/SYS_REVISION_HISTORY}")}</root>`
       );
       const tokens = await extractPlaceholderTokens(buf);
-      expect(tokens).not.toContain("REVISION_HISTORY");
+      expect(tokens).toEqual(["SYS_REVISION_HISTORY"]);
     });
 
     it("tracks loop depth across separate paragraphs (e.g. open/close tags in different table cells)", async () => {
       const buf = makeDocxBuffer(
-        `<root>${p("{#REVISION_HISTORY}{DOC_TYPE}")}${p("{REV_NUMBER}")}${p("{DATE}{/REVISION_HISTORY}")}</root>`
+        `<root>${p("{#SYS_REVISION_HISTORY}{DOC_TYPE}")}${p("{REV_NUMBER}")}${p("{DATE}{/SYS_REVISION_HISTORY}")}</root>`
       );
       const tokens = await extractPlaceholderTokens(buf);
-      expect(tokens).toEqual([]);
+      expect(tokens).toEqual(["SYS_REVISION_HISTORY"]);
     });
 
     it("still extracts scalar tokens that appear outside the loop", async () => {
       const buf = makeDocxBuffer(
-        `<root>${p("{PROJECT_NO}")}${p("{#REVISION_HISTORY}{DATE}{/REVISION_HISTORY}")}${p("{SITE_ADDRESS}")}</root>`
+        `<root>${p("{PROJECT_NO}")}${p("{#SYS_REVISION_HISTORY}{DATE}{/SYS_REVISION_HISTORY}")}${p("{SITE_ADDRESS}")}</root>`
       );
       const tokens = await extractPlaceholderTokens(buf);
-      expect(tokens).toEqual(["PROJECT_NO", "SITE_ADDRESS"]);
+      expect(tokens).toEqual(["PROJECT_NO", "SITE_ADDRESS", "SYS_REVISION_HISTORY"]);
     });
 
     it("resumes normal extraction after the loop closes", async () => {
       const buf = makeDocxBuffer(
-        `<root>${p("{#REVISION_HISTORY}{DATE}{/REVISION_HISTORY}")}${p("{AFTER_LOOP_TOKEN}")}</root>`
+        `<root>${p("{#SYS_REVISION_HISTORY}{DATE}{/SYS_REVISION_HISTORY}")}${p("{AFTER_LOOP_TOKEN}")}</root>`
       );
       const tokens = await extractPlaceholderTokens(buf);
-      expect(tokens).toEqual(["AFTER_LOOP_TOKEN"]);
+      expect(tokens).toEqual(["AFTER_LOOP_TOKEN", "SYS_REVISION_HISTORY"]);
+    });
+
+    it("does not track a nested loop's own tag name (it's scoped to the parent loop's items, not independently addressable)", async () => {
+      const buf = makeDocxBuffer(
+        `<root>${p("{#SYS_REVISION_HISTORY}{#NESTED_TAG}{INNER_FIELD}{/NESTED_TAG}{/SYS_REVISION_HISTORY}")}</root>`
+      );
+      const tokens = await extractPlaceholderTokens(buf);
+      expect(tokens).toEqual(["SYS_REVISION_HISTORY"]);
     });
   });
 

@@ -375,10 +375,9 @@ export default async function TemplatePage({
                 </div>
                 <div className="px-5 py-4 space-y-4">
                   <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-                    <span className="font-semibold">This action reverts the template to draft.</span>{" "}
-                    Tokens that still exist in the new file keep their display labels, extraction hints, and sort
-                    order. Tokens that were removed lose their mapping, and any genuinely new tokens will need a
-                    label and hint before the template can be reactivated.
+                    <span className="font-semibold">Reverts the template to draft.</span>{" "}
+                    Existing tokens keep their labels and settings — only new or removed ones need attention
+                    before reactivating.
                   </div>
                   <ReuploadForm templateId={id} />
                 </div>

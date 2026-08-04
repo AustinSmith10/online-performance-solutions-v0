@@ -119,6 +119,18 @@ const SHARED_TOKENS: TokenDef[] = [
     sort_order: 110,
     in_template: true,
   },
+  {
+    // Loop token ({#SYS_REVISION_HISTORY}...{/SYS_REVISION_HISTORY}) — the
+    // growing revision-history table, not a scalar value. Its per-row fields
+    // (DOC_TYPE, REV_NUMBER, EVENT, PREPARED_BY, DATE) are loop-scoped and
+    // never appear as their own mapping rows — see lib/documents/validator.ts.
+    placeholder_token: "SYS_REVISION_HISTORY",
+    field_key: "sys",
+    display_label: "Revision history table",
+    is_required: true,
+    sort_order: 115,
+    in_template: true,
+  },
   // ── Consultant-entered ────────────────────────────────────────────────────
   {
     placeholder_token: "PROJECT_NO",

@@ -20,6 +20,15 @@ const TOKEN_PATTERN = /\{([#/]?)([A-Za-z][A-Za-z0-9_]*)\}/g;
  * label. Loop depth is tracked across paragraphs within a document part
  * (open and close markers commonly land in different table cells/paragraphs)
  * and any scalar token found while depth > 0 is skipped.
+ *
+ * The loop's own tag name IS tracked, though — a top-level {#TAG} is added
+ * to the result just like a scalar token (so e.g. SYS_REVISION_HISTORY shows
+ * up in the admin mapping table needing a display label, the same as any
+ * other SYS_ token), which is how an admin can confirm a given template
+ * actually includes that table rather than silently omitting it. Only
+ * top-level loop opens are tracked this way — a loop nested inside another
+ * loop is scoped to its parent's array items, not independently addressable,
+ * so it's excluded the same as a plain inner field would be.
  */
 export async function extractPlaceholderTokens(docxBuffer: ArrayBuffer): Promise<string[]> {
   const zip = new PizZip(docxBuffer);
@@ -44,6 +53,7 @@ export async function extractPlaceholderTokens(docxBuffer: ArrayBuffer): Promise
       for (const match of text.matchAll(TOKEN_PATTERN)) {
         const [, marker, name] = match;
         if (marker === "#") {
+          if (loopDepth === 0) tokens.add(name);
           loopDepth++;
           continue;
         }
