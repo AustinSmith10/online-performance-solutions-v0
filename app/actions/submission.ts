@@ -571,6 +571,8 @@ export async function submitProject(
     duplicateResult,
     { data: orgData },
     { data: draftBefore },
+    { data: openFlags },
+    { data: flagLabelMappings },
   ] = await Promise.all([
     supabase
       .from("template_field_mappings")
@@ -598,6 +600,15 @@ export async function submitProject(
       .select("extracted_fields")
       .eq("id", projectId)
       .maybeSingle(),
+    supabase
+      .from("field_flags")
+      .select("field_key")
+      .eq("project_id", projectId)
+      .eq("status", "open"),
+    supabase
+      .from("template_field_mappings")
+      .select("placeholder_token, display_label")
+      .eq("template_id", templateId),
   ]);
 
   const draftFieldsBefore = (draftBefore?.extracted_fields as Record<string, string> | null) ?? {};
@@ -613,6 +624,23 @@ export async function submitProject(
       .map((m) => m.display_label ?? m.placeholder_token)
       .join(", ");
     return { error: `Please fill in all required fields before submitting: ${labels}.` };
+  }
+
+  // #105: a flagged field doesn't need to be actively resolved to submit —
+  // the pre-filled default candidate counts as a valid selection on its own
+  // — but it can't be blank. A stakeholder clearing a flagged field out
+  // entirely is the one case that still blocks.
+  const flagLabelByToken = new Map(
+    (flagLabelMappings ?? []).map((m) => [m.placeholder_token as string, m.display_label as string | null])
+  );
+  const blankFlaggedFields = (openFlags ?? []).filter(
+    (f) => !extractedFields[f.field_key as string]?.trim()
+  );
+  if (blankFlaggedFields.length > 0) {
+    const labels = blankFlaggedFields
+      .map((f) => flagLabelByToken.get(f.field_key as string) ?? f.field_key)
+      .join(", ");
+    return { error: `Please provide a value for the flagged field(s) before submitting: ${labels}.` };
   }
 
   if (duplicateResult.data) {
@@ -690,36 +718,10 @@ export async function submitProject(
   if (updateError) return { error: `Failed to submit project: ${updateError.message}` };
   if (!count) return { error: "This project has already been submitted or is no longer a draft." };
 
-  // Every extract token on the step-2 review form was shown to the person
-  // submitting — including any flagged candidates — and covered by the
-  // "I confirm I have reviewed the details" checkbox above. So resolve
-  // every open flag for a token on this form, not just ones whose value
-  // changed: leaving an untouched-but-reviewed flag open would just force
-  // the same review to happen again immediately after, on the project
-  // details page.
-  const reviewedTokens = Object.keys(extractedFields);
-  if (reviewedTokens.length > 0) {
-    try {
-      await Promise.all(
-        reviewedTokens.map((token) =>
-          supabase
-            .from("field_flags")
-            .update({
-              status: "resolved",
-              current_value: extractedFields[token] ?? "",
-              resolved_by: actor.id,
-              resolved_at: new Date().toISOString(),
-              resolution_reason: actsOnBehalf ? "resolved_for_stakeholder" : "self_resolved",
-            })
-            .eq("project_id", projectId)
-            .eq("field_key", token)
-            .eq("status", "open")
-        )
-      );
-    } catch (err) {
-      console.error("[submitProject] flag auto-resolve failed:", err);
-    }
-  }
+  // #105: submission no longer force-resolves every open flag on the form.
+  // A flag the stakeholder actively picked/corrected was already resolved
+  // via resolveFieldFlag at that point; one left untouched rides through at
+  // its default value and stays open for the consultant to acknowledge.
 
   // Defer all post-success side effects so they don't block the redirect
   after(async () => {

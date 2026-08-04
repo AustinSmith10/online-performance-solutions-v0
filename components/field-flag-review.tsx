@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { resolveFieldFlag, type ResolutionReason } from "@/app/actions/field-flags";
+import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
 import type { Confidence } from "@/lib/documents/extractor";
 import type { FlagType } from "@/lib/documents/field-flags";
 
@@ -20,11 +21,22 @@ interface Props {
   label: string;
   currentValue: string;
   candidates: FieldFlagCandidate[];
+  // #105: a flag renders inline in Submitted details for its whole
+  // lifetime, not just while open — "resolved" starts read-only (current
+  // value + full candidate list, each previewable) with an Edit button that
+  // reveals the same picker used for "open" below.
+  status: "open" | "resolved";
+  resolvedByEmail?: string | null;
+  resolvedAt?: string | null;
+  // original_filename -> signed URL, so each candidate can open its own
+  // source document in the shared viewer (#104) regardless of which one
+  // ended up as the accepted value.
+  sourceUrlsByFilename?: Record<string, string | null>;
   onResolved?: (value: string) => void;
   // Re-extract conflict flow: this component *is* the "you're about to
-  // override an already-resolved value" warning, so it starts expanded and
-  // pre-loaded with the conflict banner already showing (no discovery step
-  // via a failed submit) — see reExtractProject / ReExtractButton.
+  // override an already-resolved value" warning, so it starts in edit mode
+  // and pre-loaded with the conflict banner already showing (no discovery
+  // step via a failed submit) — see reExtractProject / ReExtractButton.
   initiallyExpanded?: boolean;
   initialConflict?: { resolvedByEmail: string; resolvedValue: string };
   // Stakeholders resolving their own flag already attest to reviewing it via
@@ -46,11 +58,34 @@ const REASON_OPTIONS: { value: ResolutionReason; label: string }[] = [
   { value: "resolved_independently", label: "Resolved independently" },
 ];
 
+function CandidatePreviewButton({
+  filename,
+  sourceUrlsByFilename,
+}: {
+  filename: string;
+  sourceUrlsByFilename?: Record<string, string | null>;
+}) {
+  const href = sourceUrlsByFilename?.[filename] ?? null;
+  if (!href) return null;
+  return (
+    <DocumentPreviewModal
+      href={href}
+      filename={filename}
+      buttonLabel="Preview"
+      buttonClassName="ml-1 rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50"
+    />
+  );
+}
+
 export function FieldFlagReview({
   flagId,
   label,
   currentValue,
   candidates,
+  status,
+  resolvedByEmail,
+  resolvedAt,
+  sourceUrlsByFilename,
   onResolved,
   initiallyExpanded,
   initialConflict,
@@ -58,7 +93,9 @@ export function FieldFlagReview({
   flagType = "confidence",
 }: Props) {
   const isConflict = flagType === "inconsistency" || flagType === "both";
-  const [expanded, setExpanded] = useState(!!initiallyExpanded || !!initialConflict);
+  const [editing, setEditing] = useState(
+    !!initiallyExpanded || !!initialConflict || status === "open"
+  );
   const [value, setValue] = useState(currentValue);
   const [reason, setReason] = useState<ResolutionReason>("self_resolved");
   const [note, setNote] = useState("");
@@ -79,11 +116,16 @@ export function FieldFlagReview({
     }
     setPending(true);
     setError(null);
-    const result = await resolveFieldFlag(flagId, { value: value.trim(), reason, note, force: sawConflict });
+    const result = await resolveFieldFlag(flagId, {
+      value: value.trim(),
+      reason,
+      note,
+      force: sawConflict || status === "resolved",
+    });
     setPending(false);
     if (result.ok) {
       onResolved?.(value.trim());
-      setExpanded(false);
+      setEditing(false);
       return;
     }
     if (result.conflict) {
@@ -94,19 +136,55 @@ export function FieldFlagReview({
     setError(result.error);
   }
 
-  if (!expanded) {
+  if (!editing) {
     return (
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
+      <div
         className={
           isConflict
-            ? "rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-200"
-            : "rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 hover:bg-orange-200"
+            ? "mt-2 space-y-1.5 rounded-md border border-red-200 bg-red-50/60 p-3"
+            : "mt-2 space-y-1.5 rounded-md border border-zinc-200 bg-zinc-50/60 p-3"
         }
       >
-        {isConflict ? "Conflicting values" : "Needs review"}
-      </button>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-medium text-zinc-700">
+            {label} — {candidates.length} candidate{candidates.length === 1 ? "" : "s"} found
+          </p>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50"
+          >
+            Edit
+          </button>
+        </div>
+        <div className="space-y-1">
+          {candidates.map((c, i) => (
+            <p key={`${c.value}-${i}`} className="text-xs text-zinc-600">
+              <span className={c.value === currentValue ? "font-semibold text-zinc-900" : "text-zinc-700"}>
+                {c.value || "(empty)"}
+              </span>{" "}
+              <span className="text-zinc-400">
+                ({c.confidence} confidence — {c.source_document})
+              </span>
+              {c.value === currentValue && (
+                <span className="ml-1 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                  accepted
+                </span>
+              )}
+              <CandidatePreviewButton
+                filename={c.source_document}
+                sourceUrlsByFilename={sourceUrlsByFilename}
+              />
+            </p>
+          ))}
+        </div>
+        {resolvedByEmail && (
+          <p className="text-[11px] text-zinc-400">
+            Resolved by {resolvedByEmail}
+            {resolvedAt && ` on ${new Date(resolvedAt).toLocaleDateString("en-AU")}`}
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -154,6 +232,18 @@ export function FieldFlagReview({
                 <span className="text-zinc-400">
                   ({c.confidence} confidence — {c.source_document})
                 </span>
+                {/* #105: submitting without touching this flag now accepts the
+                    default outright, so it needs to read as a deliberate,
+                    already-selected option rather than just "the first radio". */}
+                {c.value === currentValue && (
+                  <span className="ml-1 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
+                    default
+                  </span>
+                )}
+                <CandidatePreviewButton
+                  filename={c.source_document}
+                  sourceUrlsByFilename={sourceUrlsByFilename}
+                />
                 {c.reason && <span className="block text-[11px] italic text-orange-700">{c.reason}</span>}
               </span>
             </label>
@@ -214,14 +304,16 @@ export function FieldFlagReview({
         >
           {pending ? "Resolving…" : "Resolve"}
         </button>
-        <button
-          type="button"
-          onClick={() => setExpanded(false)}
-          disabled={pending}
-          className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700 disabled:opacity-50"
-        >
-          Cancel
-        </button>
+        {status === "resolved" && (
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            disabled={pending}
+            className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        )}
       </div>
     </div>
   );

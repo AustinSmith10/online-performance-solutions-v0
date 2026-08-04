@@ -61,6 +61,7 @@ export function ReExtractButton({
                 label={c.label}
                 currentValue={c.resolvedValue}
                 candidates={c.newCandidates}
+                status="resolved"
                 initiallyExpanded
                 initialConflict={{ resolvedByEmail: c.resolvedByEmail, resolvedValue: c.resolvedValue }}
                 flagType="inconsistency"

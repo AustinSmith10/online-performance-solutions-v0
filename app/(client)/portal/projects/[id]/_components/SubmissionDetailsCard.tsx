@@ -18,6 +18,9 @@ export interface OpenFieldFlag {
   id: string;
   candidates: FieldFlagCandidate[];
   type: FlagType;
+  status: "open" | "resolved";
+  resolvedByEmail?: string | null;
+  resolvedAt?: string | null;
 }
 
 interface Props {
@@ -26,9 +29,17 @@ interface Props {
   fieldEntries: FieldEntry[];
   locked: boolean;
   flagsByToken?: Record<string, OpenFieldFlag>;
+  sourceUrlsByFilename?: Record<string, string | null>;
 }
 
-export function SubmissionDetailsCard({ projectId, poNumber, fieldEntries, locked, flagsByToken = {} }: Props) {
+export function SubmissionDetailsCard({
+  projectId,
+  poNumber,
+  fieldEntries,
+  locked,
+  flagsByToken = {},
+  sourceUrlsByFilename,
+}: Props) {
   const router = useRouter();
   const boundAction = updateStakeholderSubmission.bind(null, projectId);
   const [state, formAction, pending] = useActionState<UpdateSubmissionState, FormData>(
@@ -118,7 +129,13 @@ export function SubmissionDetailsCard({ projectId, poNumber, fieldEntries, locke
         <div className="divide-y divide-zinc-100">
           <Row label="PO number" value={poNumber ?? "—"} />
           {fieldEntries.map(({ token, label, value }) => (
-            <Row key={token} label={label} value={value || "—"} flag={flagsByToken[token]} />
+            <Row
+              key={token}
+              label={label}
+              value={value || "—"}
+              flag={flagsByToken[token]}
+              sourceUrlsByFilename={sourceUrlsByFilename}
+            />
           ))}
         </div>
       )}
@@ -130,31 +147,38 @@ function Row({
   label,
   value,
   flag,
+  sourceUrlsByFilename,
 }: {
   label: string;
   value: React.ReactNode;
   flag?: OpenFieldFlag;
+  sourceUrlsByFilename?: Record<string, string | null>;
 }) {
-  const [resolvedValue, setResolvedValue] = useState<string | null>(null);
+  const router = useRouter();
   return (
     <div className="px-5 py-3">
       <div className="flex items-baseline gap-4">
         <span className="w-40 shrink-0 text-sm text-zinc-500">{label}</span>
-        <span className="min-w-0 flex-1 text-sm text-zinc-900">{resolvedValue ?? value}</span>
+        <span className="min-w-0 flex-1 text-sm text-zinc-900">{value}</span>
       </div>
       {/* Rendered on its own line, not trailing inline with the value —
           the expanded form needs the full row width, not just the leftover
-          space next to the value column. */}
-      {flag && !resolvedValue && (
-        <div className="mt-1 flex justify-end">
+          space next to the value column. Stays visible for the flag's whole
+          lifetime (#105) — resolved flags show read-only, not hidden. */}
+      {flag && (
+        <div className="mt-1">
           <FieldFlagReview
             flagId={flag.id}
             label={label}
             currentValue={typeof value === "string" ? value : ""}
             candidates={flag.candidates}
             flagType={flag.type}
+            status={flag.status}
+            resolvedByEmail={flag.resolvedByEmail}
+            resolvedAt={flag.resolvedAt}
+            sourceUrlsByFilename={sourceUrlsByFilename}
             stakeholderView
-            onResolved={(v) => setResolvedValue(v)}
+            onResolved={() => router.refresh()}
           />
         </div>
       )}

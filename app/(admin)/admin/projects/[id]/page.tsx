@@ -33,6 +33,7 @@ import { HighlightRing } from "@/components/HighlightRing";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
 import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
 import { ProjectDetailsEditor, type OpenFieldFlag } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectDetailsEditor";
+import { FlagAcknowledgmentSection, type FlagRow } from "@/app/(consultant)/ops/projects/[id]/_components/FlagAcknowledgmentSection";
 import { ReExtractButton } from "@/components/ReExtractButton";
 import { ProjectAuditTrail, type ProjectAuditRow } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectAuditTrail";
 import { PbdbVersionsCard } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbVersionsCard";
@@ -290,6 +291,7 @@ export default async function ProjectDetailPage({
     { data: openFieldFlags },
     { data: rawTemplateRequired },
     { data: rawOrgRoster },
+    { data: rawFileRequirements },
   ] = await Promise.all([
     project.template_id
       ? supabase
@@ -351,9 +353,10 @@ export default async function ProjectDetailPage({
       .order("created_at", { ascending: true }),
     supabase
       .from("field_flags")
-      .select("id, field_key, candidate_values, type")
-      .eq("project_id", id)
-      .eq("status", "open"),
+      .select(
+        "id, field_key, candidate_values, type, status, current_value, resolved_by, resolved_at, consultant_acknowledged_by, consultant_acknowledged_at"
+      )
+      .eq("project_id", id),
     project.template_id
       ? supabase
           .from("template_stakeholders")
@@ -369,17 +372,45 @@ export default async function ProjectDetailPage({
           .is("deleted_at", null)
           .order("sort_order", { ascending: true })
       : Promise.resolve({ data: [] }),
+    project.template_id
+      ? supabase.from("file_requirements").select("slug, name").eq("template_id", project.template_id)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const auditEntries = (rawFullAuditEntries ?? []) as ProjectAuditRow[];
 
+  const fileReqLabelMap = new Map<string, string>(
+    (rawFileRequirements ?? []).map((r) => [r.slug as string, r.name as string])
+  );
+
+  const allFieldFlags = openFieldFlags ?? [];
+
+  const flagActorIds = [
+    ...new Set(
+      allFieldFlags
+        .flatMap((f) => [f.resolved_by as string | null, f.consultant_acknowledged_by as string | null])
+        .filter((v): v is string => !!v)
+    ),
+  ];
+  const { data: flagActors } = flagActorIds.length
+    ? await supabase.from("users").select("id, email").in("id", flagActorIds)
+    : { data: [] };
+  const flagActorEmailById = new Map(
+    (flagActors ?? []).map((u) => [u.id as string, u.email as string])
+  );
+
+  // Every flag regardless of status (#105) — a resolved flag still renders
+  // inline in Submitted details, read-only with its full candidate list.
   const flagsByToken: Record<string, OpenFieldFlag> = Object.fromEntries(
-    (openFieldFlags ?? []).map((f) => [
+    allFieldFlags.map((f) => [
       f.field_key as string,
       {
         id: f.id as string,
         candidates: (f.candidate_values ?? []) as OpenFieldFlag["candidates"],
         type: f.type as OpenFieldFlag["type"],
+        status: f.status as OpenFieldFlag["status"],
+        resolvedByEmail: f.resolved_by ? flagActorEmailById.get(f.resolved_by as string) ?? null : null,
+        resolvedAt: f.resolved_at as string | null,
       },
     ])
   );
@@ -486,6 +517,33 @@ export default async function ProjectDetailPage({
       (m.display_label as string | null) ?? prettifyToken(m.placeholder_token as string),
     ])
   );
+
+  // Extraction candidates key `source_document` by the file's requirement
+  // label (e.g. "Purchase Order"), not its original filename — match on that
+  // same label so a candidate's source resolves to the right uploaded
+  // file's signed URL (see app/actions/submission.ts's extraction labeling).
+  const sourceUrlsByFilename: Record<string, string | null> = Object.fromEntries([
+    ...files.map((f) => [
+      fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? (f.file_type as string),
+      f.signedUrl,
+    ]),
+    ...evidenceFiles.map((f) => ["Evidence", f.signedUrl]),
+  ]);
+
+  const allFlags: FlagRow[] = allFieldFlags.map((f) => ({
+    id: f.id as string,
+    label: labelMap.get(f.field_key as string) ?? prettifyToken(f.field_key as string),
+    status: f.status as "open" | "resolved",
+    type: f.type as FlagRow["type"],
+    currentValue: (f.current_value as string) ?? "",
+    candidates: (f.candidate_values ?? []) as FlagRow["candidates"],
+    resolvedByEmail: f.resolved_by ? flagActorEmailById.get(f.resolved_by as string) ?? null : null,
+    resolvedAt: f.resolved_at as string | null,
+    acknowledgedByEmail: f.consultant_acknowledged_by
+      ? flagActorEmailById.get(f.consultant_acknowledged_by as string) ?? null
+      : null,
+    acknowledgedAt: f.consultant_acknowledged_at as string | null,
+  }));
 
   const extractedFields = project.extracted_fields ?? {};
   const clientFieldEntries = Object.entries(extractedFields)
@@ -943,10 +1001,12 @@ export default async function ProjectDetailPage({
         fieldEntries={clientFieldEntries}
         orgEntries={orgTokenEntries}
         flagsByToken={flagsByToken}
+        sourceUrlsByFilename={sourceUrlsByFilename}
       />
       <div className="px-1">
         <ReExtractButton projectId={id} />
       </div>
+      <FlagAcknowledgmentSection flags={allFlags} sourceUrlsByFilename={sourceUrlsByFilename} />
     </>
   );
 

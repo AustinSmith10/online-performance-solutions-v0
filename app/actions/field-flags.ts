@@ -114,6 +114,33 @@ export async function resolveFieldFlag(
   return { ok: true };
 }
 
+export type AcknowledgeFieldFlagResult = { ok: true } | { ok: false; error: string };
+
+// Consultant/admin confirmation that they've reviewed a flagged field against
+// its source document — tracked independently of the stakeholder's
+// resolution status, since a flag can still be sitting at its default value
+// (#105). Acknowledging never changes current_value/status.
+export async function acknowledgeFieldFlag(flagId: string): Promise<AcknowledgeFieldFlagResult> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: flag, error } = await supabase
+    .from("field_flags")
+    .update({
+      consultant_acknowledged_at: new Date().toISOString(),
+      consultant_acknowledged_by: actor.id,
+    })
+    .eq("id", flagId)
+    .select("project_id")
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!flag) return { ok: false, error: "Flag not found." };
+
+  revalidateProjectPaths(flag.project_id as string);
+  return { ok: true };
+}
+
 async function conflictResponse(
   supabase: ReturnType<typeof createAdminClient>,
   flag: { resolved_by: string | null; resolved_at: string | null; current_value: string }
@@ -177,7 +204,7 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
       .eq("is_mapped", true),
     supabase
       .from("field_flags")
-      .select("id, field_key, status, current_value, resolved_by")
+      .select("id, field_key, status, current_value, resolved_by, candidate_values")
       .eq("project_id", projectId),
   ]);
 
@@ -283,12 +310,21 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
     if (!plan.needsFlag) continue;
 
     if (existing?.status === "open") {
+      // A genuine change to the candidate list invalidates any existing
+      // consultant acknowledgment — they signed off on the old evidence, not
+      // this one (#105). An update that lands on the same candidates
+      // (e.g. re-extracting with nothing new found) leaves it untouched.
+      const candidatesChanged =
+        JSON.stringify(existing.candidate_values ?? []) !== JSON.stringify(plan.candidateRecords);
       await supabase
         .from("field_flags")
         .update({
           type: plan.flagType,
           current_value: plan.finalValue,
           candidate_values: plan.candidateRecords,
+          ...(candidatesChanged
+            ? { consultant_acknowledged_at: null, consultant_acknowledged_by: null }
+            : {}),
         })
         .eq("id", existing.id);
       updatedFlags++;

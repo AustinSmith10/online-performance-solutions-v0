@@ -584,6 +584,8 @@ export type Database = {
       field_flags: {
         Row: {
           candidate_values: Json
+          consultant_acknowledged_at: string | null
+          consultant_acknowledged_by: string | null
           created_at: string
           current_value: string
           field_key: string
@@ -600,6 +602,8 @@ export type Database = {
         }
         Insert: {
           candidate_values?: Json
+          consultant_acknowledged_at?: string | null
+          consultant_acknowledged_by?: string | null
           created_at?: string
           current_value?: string
           field_key: string
@@ -616,6 +620,8 @@ export type Database = {
         }
         Update: {
           candidate_values?: Json
+          consultant_acknowledged_at?: string | null
+          consultant_acknowledged_by?: string | null
           created_at?: string
           current_value?: string
           field_key?: string
@@ -631,6 +637,13 @@ export type Database = {
           type?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "field_flags_consultant_acknowledged_by_fkey"
+            columns: ["consultant_acknowledged_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "field_flags_project_id_fkey"
             columns: ["project_id"]

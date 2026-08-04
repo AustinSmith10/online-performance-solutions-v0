@@ -19,6 +19,9 @@ export interface OpenFieldFlag {
   id: string;
   candidates: FieldFlagCandidate[];
   type: FlagType;
+  status: "open" | "resolved";
+  resolvedByEmail?: string | null;
+  resolvedAt?: string | null;
 }
 
 interface Props {
@@ -27,6 +30,7 @@ interface Props {
   fieldEntries: FieldEntry[];
   orgEntries: FieldEntry[];
   flagsByToken?: Record<string, OpenFieldFlag>;
+  sourceUrlsByFilename?: Record<string, string | null>;
 }
 
 export function ProjectDetailsEditor({
@@ -35,6 +39,7 @@ export function ProjectDetailsEditor({
   fieldEntries,
   orgEntries,
   flagsByToken = {},
+  sourceUrlsByFilename,
 }: Props) {
   return (
     <>
@@ -51,6 +56,7 @@ export function ProjectDetailsEditor({
               label={label}
               value={value}
               flag={flagsByToken[token]}
+              sourceUrlsByFilename={sourceUrlsByFilename}
             />
           ))}
         </div>
@@ -79,12 +85,14 @@ function EditableRow({
   label,
   value,
   flag,
+  sourceUrlsByFilename,
 }: {
   projectId: string;
   id: string;
   label: string;
   value: string;
   flag?: OpenFieldFlag;
+  sourceUrlsByFilename?: Record<string, string | null>;
 }) {
   const router = useRouter();
   const boundAction = updateProjectDetails.bind(null, projectId);
@@ -93,7 +101,6 @@ function EditableRow({
     {}
   );
   const [editing, setEditing] = useState(false);
-  const [resolvedValue, setResolvedValue] = useState<string | null>(null);
   useUnsavedChanges(`project-detail-${id}`, editing);
 
   useEffect(() => {
@@ -108,7 +115,7 @@ function EditableRow({
       <div className="px-5 py-3">
         <div className="group flex items-center gap-4">
           <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
-          <span className="min-w-0 flex-1 text-sm text-zinc-900">{resolvedValue ?? (value || "—")}</span>
+          <span className="min-w-0 flex-1 text-sm text-zinc-900">{value || "—"}</span>
           <EditIconButton
             onClick={() => setEditing(true)}
             label={`Edit ${label}`}
@@ -117,16 +124,23 @@ function EditableRow({
         </div>
         {/* Rendered on its own line, not trailing inline with the value —
             the expanded form needs the full row width, not just the
-            leftover space next to the value column. */}
-        {flag && !resolvedValue && (
-          <div className="mt-1 flex justify-end">
+            leftover space next to the value column. Stays visible for the
+            flag's whole lifetime (#105) — resolved flags show read-only,
+            not hidden, since the consultant still needs to see/acknowledge
+            every candidate and its source regardless of resolution status. */}
+        {flag && (
+          <div className="mt-1">
             <FieldFlagReview
               flagId={flag.id}
               label={label}
               currentValue={value}
               candidates={flag.candidates}
               flagType={flag.type}
-              onResolved={(v) => setResolvedValue(v)}
+              status={flag.status}
+              resolvedByEmail={flag.resolvedByEmail}
+              resolvedAt={flag.resolvedAt}
+              sourceUrlsByFilename={sourceUrlsByFilename}
+              onResolved={() => router.refresh()}
             />
           </div>
         )}

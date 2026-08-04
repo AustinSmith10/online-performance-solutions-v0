@@ -222,18 +222,34 @@ export default async function ClientProjectDetailPage({
         .limit(1),
       supabase
         .from("field_flags")
-        .select("id, field_key, candidate_values, type")
-        .eq("project_id", id)
-        .eq("status", "open"),
+        .select("id, field_key, candidate_values, type, status, current_value, resolved_by, resolved_at")
+        .eq("project_id", id),
     ]);
 
+  const allFieldFlags = openFieldFlags ?? [];
+
+  const flagResolverIds = [
+    ...new Set(allFieldFlags.map((f) => f.resolved_by as string | null).filter((v): v is string => !!v)),
+  ];
+  const { data: flagResolvers } = flagResolverIds.length
+    ? await supabase.from("users").select("id, email").in("id", flagResolverIds)
+    : { data: [] };
+  const flagResolverEmailById = new Map(
+    (flagResolvers ?? []).map((u) => [u.id as string, u.email as string])
+  );
+
+  // Every flag regardless of status (#105) — a resolved flag still renders
+  // inline in Submitted details, read-only with its full candidate list.
   const flagsByToken: Record<string, OpenFieldFlag> = Object.fromEntries(
-    (openFieldFlags ?? []).map((f) => [
+    allFieldFlags.map((f) => [
       f.field_key as string,
       {
         id: f.id as string,
         candidates: (f.candidate_values ?? []) as OpenFieldFlag["candidates"],
         type: f.type as OpenFieldFlag["type"],
+        status: f.status as OpenFieldFlag["status"],
+        resolvedByEmail: f.resolved_by ? flagResolverEmailById.get(f.resolved_by as string) ?? null : null,
+        resolvedAt: f.resolved_at as string | null,
       },
     ])
   );
@@ -250,6 +266,21 @@ export default async function ClientProjectDetailPage({
         .createSignedUrl(f.storage_path as string, 3600);
       return { ...f, signedUrl: signed?.signedUrl ?? null };
     })
+  );
+
+  const fileReqLabelMap = new Map<string, string>(
+    (rawFileRequirements ?? []).map((r) => [r.slug as string, r.name as string])
+  );
+
+  // Extraction candidates key `source_document` by the file's requirement
+  // label (e.g. "Purchase Order"), not its original filename — match on that
+  // same label so a candidate's source resolves to the right uploaded
+  // file's signed URL (see app/actions/submission.ts's extraction labeling).
+  const sourceUrlsByFilename: Record<string, string | null> = Object.fromEntries(
+    files.map((f) => [
+      fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? (f.file_type as string),
+      f.signedUrl,
+    ])
   );
 
   // PBDB — served via the client download route (applies colour stripping if enabled)
@@ -277,10 +308,6 @@ export default async function ClientProjectDetailPage({
   };
 
   const mappingEntries = (mappings ?? []) as MappingEntry[];
-
-  const fileReqLabelMap = new Map<string, string>(
-    (rawFileRequirements ?? []).map((r) => [r.slug as string, r.name as string])
-  );
 
   const labelMap = new Map<string, string>(
     mappingEntries.map((m) => [
@@ -489,6 +516,7 @@ export default async function ClientProjectDetailPage({
           fieldEntries={fieldEntries}
           locked={isLocked}
           flagsByToken={flagsByToken}
+          sourceUrlsByFilename={sourceUrlsByFilename}
         />
       )}
       {/* Draft projects already get a fresh extraction via the resume/step-2
