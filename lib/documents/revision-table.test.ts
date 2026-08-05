@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import PizZip from "pizzip";
-import { appendRevisionHistoryRow } from "./revision-table";
+import { appendRevisionHistoryRow, setRevisionHistoryRows } from "./revision-table";
 
 function tc(text: string): string {
   return `<w:tc><w:tcPr><w:tcW w:w="1000" w:type="pct"/></w:tcPr><w:p><w:pPr><w:pStyle w:val="P1TableText"/></w:pPr><w:r><w:rPr><w:color w:val="EE0000"/></w:rPr><w:t>${text}</w:t></w:r></w:p></w:tc>`;
@@ -130,5 +130,82 @@ describe("appendRevisionHistoryRow", () => {
     expect(() => appendRevisionHistoryRow(bogus, NEW_ROW)).not.toThrow();
     const out = appendRevisionHistoryRow(bogus, NEW_ROW);
     expect(out.equals(bogus)).toBe(true);
+  });
+});
+
+describe("setRevisionHistoryRows", () => {
+  it("replaces a single carried-over row with the full PBDR-only history", () => {
+    // Simulates what convertPbdbToPbdr() hands off: the PBDB's own row,
+    // text-swapped but not yet a real PBDR revision.
+    const table = makeTable([["PBDR", "1", "04/08/2026", "For Construction", "John Snow", "Kieran Doherty"]]);
+    const buf = makeDocxBuffer(table);
+
+    const out = setRevisionHistoryRows(buf, [
+      { docType: "PBDR", revNumber: "0", date: "21/07/2026", purpose: "For Construction", preparedBy: "John Snow" },
+      { docType: "PBDR", revNumber: "1", date: "05/08/2026", purpose: "For Construction", preparedBy: "John Snow" },
+    ]);
+    const rows = tableRowTexts(extractDocumentXml(out));
+
+    expect(rows).toHaveLength(3); // header + 2 rebuilt rows
+    expect(rows[1]).toEqual(["PBDR", "0", "21/07/2026", "For Construction", "John Snow", ""]);
+    expect(rows[2]).toEqual(["PBDR", "1", "05/08/2026", "For Construction", "John Snow", ""]);
+  });
+
+  it("blanks REVIEWED BY on every rebuilt row rather than copying the source row's value", () => {
+    const table = makeTable([["PBDR", "0", "04/08/2026", "For Construction", "John Snow", "Someone Else"]]);
+    const buf = makeDocxBuffer(table);
+
+    const out = setRevisionHistoryRows(buf, [
+      { docType: "PBDR", revNumber: "0", date: "04/08/2026", purpose: "For Construction", preparedBy: "John Snow" },
+    ]);
+    const rows = tableRowTexts(extractDocumentXml(out));
+
+    expect(rows[1][5]).toBe("");
+  });
+
+  it("replaces multiple existing rows (a re-conversion after a revert) with a freshly built set", () => {
+    const table = makeTable([
+      ["PBDR", "0", "04/08/2026", "For Construction", "John Snow", "Kieran Doherty"],
+      ["PBDR", "1", "05/08/2026", "For Construction", "John Snow", "Kieran Doherty"],
+    ]);
+    const buf = makeDocxBuffer(table);
+
+    const out = setRevisionHistoryRows(buf, [
+      { docType: "PBDR", revNumber: "0", date: "04/08/2026", purpose: "For Construction", preparedBy: "John Snow" },
+    ]);
+    const rows = tableRowTexts(extractDocumentXml(out));
+
+    expect(rows).toHaveLength(2); // header + the single row from the fresh set, old second row gone
+  });
+
+  it("only touches cells within the identified revision-history table, not other tables", () => {
+    const unrelatedTable = `<w:tbl><w:tblPr/><w:tr>${headerTc("Name")}${headerTc("Value")}</w:tr><w:tr>${tc("Foo")}${tc("Bar")}</w:tr></w:tbl>`;
+    const table = makeTable([["PBDR", "0", "04/08/2026", "For Construction", "John Snow", "Kieran Doherty"]]);
+    const buf = makeDocxBuffer(unrelatedTable + table);
+
+    const out = setRevisionHistoryRows(buf, [
+      { docType: "PBDR", revNumber: "0", date: "04/08/2026", purpose: "For Construction", preparedBy: "John Snow" },
+    ]);
+    const xml = extractDocumentXml(out);
+
+    expect(xml).toContain("<w:t>Foo</w:t>");
+    expect(xml).toContain("<w:t>Bar</w:t>");
+  });
+
+  it("returns the buffer unchanged when no revision-history table is found", () => {
+    const buf = makeDocxBuffer(`<w:p><w:r><w:t>No tables here.</w:t></w:r></w:p>`);
+    const out = setRevisionHistoryRows(buf, [
+      { docType: "PBDR", revNumber: "0", date: "04/08/2026", purpose: "For Construction", preparedBy: "John Snow" },
+    ]);
+    expect(out.equals(buf)).toBe(true);
+  });
+
+  it("returns the buffer unchanged (never throws) on a malformed/non-docx buffer", () => {
+    const bogus = Buffer.from("not a zip file at all");
+    const rows = [
+      { docType: "PBDR", revNumber: "0", date: "04/08/2026", purpose: "For Construction", preparedBy: "John Snow" },
+    ];
+    expect(() => setRevisionHistoryRows(bogus, rows)).not.toThrow();
+    expect(setRevisionHistoryRows(bogus, rows).equals(bogus)).toBe(true);
   });
 });

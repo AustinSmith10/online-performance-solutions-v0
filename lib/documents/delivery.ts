@@ -1,10 +1,16 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkPbdrGate } from "@/lib/payments/gate";
 import { convertPbdbToPbdr } from "@/lib/documents/converter";
+import { setRevisionHistoryRows } from "@/lib/documents/revision-table";
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { buildPbdrFilename } from "@/lib/documents/naming";
-import { peekNextRevNumber, recordRevisionEvent } from "@/lib/documents/revision-history";
+import {
+  peekNextRevNumber,
+  recordRevisionEvent,
+  getRevisionHistory,
+  formatRevisionHistoryRows,
+} from "@/lib/documents/revision-history";
 import { formatAddress } from "@/lib/documents/formatters";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
@@ -143,6 +149,44 @@ export async function deliverPbdr(
     // Apply 8 text transformations + strip watermarks from headers
     let transformedDocx = convertPbdbToPbdr(pbdbBuffer);
 
+    // R[n] on the PBDR derives from revision_history's independent PBDR counter
+    // (#108/#109) — peeked here (not yet recorded) so the filename (and the
+    // table rebuild below) can use it before the conversion has actually
+    // succeeded; recorded for real just below once the file is safely stored.
+    const revisionIndex = await peekNextRevNumber(supabase, projectId, "pbdr");
+    pbdrVersion = revisionIndex + 1;
+
+    // The table convertPbdbToPbdr() carried over is still the PBDB's own
+    // rows (just with "Stakeholder Review" text-swapped to "For
+    // Construction") — those aren't real PBDR revisions. Rebuild the table
+    // from the project's actual PBDR-only history, plus this about-to-be-
+    // recorded row (not yet in the DB, so it's appended manually — mirrors
+    // the peek-then-record pattern above). Must happen before the PDF
+    // render below, since a PDF can't be edited afterwards.
+    const existingPbdrHistory = (await getRevisionHistory(supabase, projectId)).filter(
+      (row) => row.doc_type === "pbdr"
+    );
+    const pbdrHistoryForDoc = await formatRevisionHistoryRows(supabase, [
+      ...existingPbdrHistory,
+      {
+        doc_type: "pbdr",
+        rev_number: revisionIndex,
+        prepared_by: (project.assigned_consultant_id as string | null) ?? null,
+        event: "approved_conversion",
+        created_at: conversionStart.toISOString(),
+      },
+    ]);
+    transformedDocx = setRevisionHistoryRows(
+      transformedDocx,
+      pbdrHistoryForDoc.map((row) => ({
+        docType: row.DOC_TYPE,
+        revNumber: row.REV_NUMBER,
+        date: row.DATE,
+        purpose: row.EVENT,
+        preparedBy: row.PREPARED_BY,
+      }))
+    );
+
     // Strip red token colour if enabled (default on)
     if (project.strip_token_color as boolean) {
       transformedDocx = stripRedTokenColor(transformedDocx);
@@ -155,13 +199,6 @@ export async function deliverPbdr(
     const rawAddress =
       (project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? "";
     const address = formatAddress(rawAddress);
-
-    // R[n] on the PBDR derives from revision_history's independent PBDR counter
-    // (#108/#109) — peeked here (not yet recorded) so the filename can be built
-    // before the conversion has actually succeeded; recorded for real just
-    // below once the file is safely stored.
-    const revisionIndex = await peekNextRevNumber(supabase, projectId, "pbdr");
-    pbdrVersion = revisionIndex + 1;
 
     const pbdrFilename = buildPbdrFilename(
       (project.project_number as string | null) ?? projectId.slice(0, 8),

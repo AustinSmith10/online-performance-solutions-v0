@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 import { auditLog } from "@/lib/audit/log";
 import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
+import { recordRevisionEvent } from "@/lib/documents/revision-history";
 
 export type ConvertState = { error?: string; success?: boolean; scheduledFor?: string | null };
 
@@ -45,6 +46,68 @@ export async function triggerPbdrConversion(
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Conversion failed. Please try again." };
   }
+}
+
+// ─── Revert a delivered PBDR back to the PBDB QA cycle ────────────────────────
+
+export type RevertState = { error?: string; success?: boolean };
+
+/**
+ * A stakeholder finds an issue after the PBDR has already been delivered —
+ * this sends the project back to the same revision_required cycle a
+ * stakeholder rejection produces: the consultant downloads the PBDB that was
+ * actually converted (still the latest pbdb project_files row, since
+ * nothing has replaced it since conversion), corrects it, and re-uploads
+ * through the existing QA cycle. That reupload naturally re-dispatches for
+ * approval and can convert to PBDR again — recordRevisionEvent's
+ * peekNextRevNumber means the resulting PBDR gets its own new row (Rev1,
+ * Rev2, ...) rather than overwriting the original, so both conversions stay
+ * in the audit trail. See lib/documents/revision-history.ts.
+ */
+export async function revertPbdrToPbdb(
+  projectId: string,
+  _prev: RevertState,
+  formData: FormData
+): Promise<RevertState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const reason = (formData.get("reason") as string | null)?.trim() ?? "";
+  if (!reason) return { error: "A reason is required to revert to PBDB." };
+
+  const supabase = createAdminClient();
+
+  let projectQuery = supabase
+    .from("projects")
+    .select("id, client_id, status, assigned_consultant_id")
+    .eq("id", projectId)
+    .in("status", ["delivered", "complete"])
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    projectQuery = projectQuery.eq("assigned_consultant_id", actor.id);
+  }
+  const { data: project } = await projectQuery.maybeSingle();
+  if (!project) return { error: "Project not found or not yet delivered." };
+
+  const now = new Date().toISOString();
+
+  const { error: updateErr } = await supabase
+    .from("projects")
+    .update({ status: "revision_required", updated_at: now })
+    .eq("id", projectId);
+  if (updateErr) return { error: updateErr.message };
+
+  // Bumps the PBDB revision_history counter (#108) — the corrected reupload
+  // later derives its Rev{n} filename from this row, same as a rejection.
+  await recordRevisionEvent(supabase, projectId, "pbdb", "reverted");
+
+  await auditLog("project.reverted_to_pbdb", actor.id, actor.email as string, {
+    projectId,
+    orgId: project.client_id as string,
+    metadata: { reason, triggered_by: actor.role },
+  });
+
+  revalidatePath(`/admin/projects/${projectId}`);
+  revalidatePath(`/ops/projects/${projectId}`);
+  return { success: true };
 }
 
 // ─── Resend PBDR delivery email ───────────────────────────────────────────────

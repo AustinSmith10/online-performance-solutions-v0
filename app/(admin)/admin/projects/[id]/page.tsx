@@ -9,6 +9,7 @@ import { ResendTokenButton } from "./_components/ResendTokenButton";
 import { UpdateEmailReveal } from "./_components/UpdateEmailReveal";
 import { ProjectStakeholderSection } from "./_components/ProjectStakeholderSection";
 import { ConvertButton } from "./_components/ConvertButton";
+import { RevertButton } from "./_components/RevertButton";
 import { DispatchButton } from "./_components/DispatchButton";
 import { ResendPbdrButton } from "./_components/ResendPbdrButton";
 import { PauseForm } from "./_components/PauseForm";
@@ -929,7 +930,10 @@ export default async function ProjectDetailPage({
             Resends a fresh 30-day download link to the submitter
             {project.delivery_recipient_email ? " and the delivery recipient" : ""}.
           </p>
-          <ResendPbdrButton projectId={id} />
+          <div className="flex flex-wrap items-center gap-2">
+            <ResendPbdrButton projectId={id} />
+            <RevertButton projectId={id} />
+          </div>
         </div>
       </FocusCard>
     );

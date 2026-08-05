@@ -2,7 +2,7 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatAddress } from "@/lib/documents/formatters";
-import { recordRevisionEvent, getRevisionHistory } from "@/lib/documents/revision-history";
+import { recordRevisionEvent, getRevisionHistory, formatRevisionHistoryRows } from "@/lib/documents/revision-history";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 
 /**
@@ -85,50 +85,14 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     await recordRevisionEvent(supabase, projectId, "pbdb", "initial");
   }
 
-  const [revisionHistory, preparedByUsers] = await (async () => {
-    const history = await getRevisionHistory(supabase, projectId);
-    const ids = [...new Set(history.map((h) => h.prepared_by).filter((x): x is string => !!x))];
-    const { data: users } = ids.length
-      ? await supabase.from("users").select("id, first_name, last_name").in("id", ids)
-      : { data: [] as { id: string; first_name: string | null; last_name: string | null }[] };
-    return [history, users ?? []] as const;
-  })();
+  const fullHistory = await getRevisionHistory(supabase, projectId);
+  const pbdbHistory = fullHistory.filter((row) => row.doc_type === "pbdb");
 
-  const preparedByNameById = new Map(
-    preparedByUsers.map((u) => [
-      u.id as string,
-      [u.first_name as string | null, u.last_name as string | null].filter(Boolean).join(" "),
-    ])
-  );
+  // This is the PBDB document, so its table shows only PBDB rows — PBDR
+  // gets its own independently-scoped table (see lib/documents/delivery.ts).
+  const revisionHistoryForDoc = await formatRevisionHistoryRows(supabase, pbdbHistory);
 
-  // Purpose is constant per doc type, not per event — "Stakeholder Review"
-  // for every PBDB row, "For Construction" for every PBDR row. This mirrors
-  // lib/documents/converter.ts's PBDB→PBDR text swap (#4 — Revision History
-  // PURPOSE column), which does a literal "Stakeholder Review" → "For
-  // Construction" replacement, not anything event-aware.
-  const PURPOSE_LABELS: Record<string, string> = {
-    pbdb: "Stakeholder Review",
-    pbdr: "For Construction",
-  };
-
-  const revisionHistoryForDoc = revisionHistory.map((row) => ({
-    DOC_TYPE: row.doc_type.toUpperCase(),
-    REV_NUMBER: String(row.rev_number),
-    // Context key stays EVENT (matches the template's existing {EVENT}
-    // token in the Purpose column) even though its content is now a
-    // doc-type-derived purpose string, not the row's event.
-    EVENT: PURPOSE_LABELS[row.doc_type] ?? row.doc_type,
-    PREPARED_BY: row.prepared_by ? (preparedByNameById.get(row.prepared_by) ?? "") : "",
-    DATE: new Date(row.created_at).toLocaleDateString("en-AU", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }),
-  }));
-
-  const pbdbRevision = revisionHistory
-    .filter((h) => h.doc_type === "pbdb")
-    .reduce((max, h) => Math.max(max, h.rev_number), 0);
+  const pbdbRevision = pbdbHistory.reduce((max, h) => Math.max(max, h.rev_number), 0);
 
   // Build substitution context
   const extractedFields = (project.extracted_fields as Record<string, string>) ?? {};

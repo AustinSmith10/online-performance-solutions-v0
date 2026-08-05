@@ -36,6 +36,7 @@ import { ProjectNumberCard } from "./_components/ProjectNumberCard";
 import { PbdbVersionsCard } from "./_components/PbdbVersionsCard";
 import { ResendBufferUpdateButton } from "./_components/ResendBufferUpdateButton";
 import { ResendPbdrButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendPbdrButton";
+import { RevertButton } from "@/app/(admin)/admin/projects/[id]/_components/RevertButton";
 import { ResendTokenButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendTokenButton";
 import { UpdateEmailReveal } from "@/app/(admin)/admin/projects/[id]/_components/UpdateEmailReveal";
 import { WaiveForm } from "@/app/(admin)/admin/projects/[id]/_components/WaiveForm";
@@ -542,7 +543,10 @@ export default async function ConsultantProjectDetailPage({
 
   // --- Stage rail: whole workflow at a glance instead of 3 stacked step cards ---
   const reviewDone = pbdbCardState === "approved";
-  const convertingDone = pbdrFiles.length > 0 || project.status === "complete";
+  // Status-driven, not "a PBDR file exists" — a reverted project (#108) can
+  // have an old PBDR file on record while its current cycle hasn't
+  // reconverted yet, which would otherwise show this step as done.
+  const convertingDone = TERMINAL_STATUSES.has(project.status);
   const deliveredDone = project.status === "delivered" || project.status === "complete";
   const stageList: Stage[] = [
     {
@@ -777,7 +781,7 @@ export default async function ConsultantProjectDetailPage({
         <p className="text-sm text-green-700">No action needed right now.</p>
       </FocusCard>
     );
-  } else if (pbdrFiles.length > 0) {
+  } else if (TERMINAL_STATUSES.has(project.status)) {
     focusCard = (
       <FocusCard tone="green" title="Delivery ready" subtitle="Approved and converted — download or hand off below.">
         <div className="space-y-3">
@@ -800,7 +804,10 @@ export default async function ConsultantProjectDetailPage({
             Resends a fresh 30-day download link to the submitter
             {project.delivery_recipient_email ? " and the delivery recipient" : ""}.
           </p>
-          <ResendPbdrButton projectId={id} />
+          <div className="flex flex-wrap items-center gap-2">
+            <ResendPbdrButton projectId={id} />
+            <RevertButton projectId={id} />
+          </div>
         </div>
       </FocusCard>
     );

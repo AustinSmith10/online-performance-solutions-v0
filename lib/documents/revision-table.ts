@@ -54,6 +54,105 @@ export function appendRevisionHistoryRow(
   }
 }
 
+/**
+ * Rebuilds the Revision History table's data rows from scratch, replacing
+ * whatever is currently there with exactly the given rows.
+ *
+ * Used for PBDR conversion, not PBDB reuploads: a PBDR is produced by
+ * literal text-swap of an already-rendered PBDB .docx (see converter.ts),
+ * not a fresh docxtemplater render, so the table it inherits still holds the
+ * PBDB's own rows (just with "Stakeholder Review" text-swapped to "For
+ * Construction"). Those aren't real PBDR revision rows, so appending to them
+ * would be wrong — the whole data-row set needs replacing with the
+ * project's actual PBDR-only history instead. See lib/documents/delivery.ts.
+ *
+ * Clones the table's last existing row purely for cell formatting, so the
+ * table's original styling carries into however many rows `rows` produces.
+ * REVIEWED BY is left blank on every row — it's a fixed manual field per the
+ * template, and the source row's value (if any) belongs to a PBDB row, not
+ * a PBDR one. Never throws — a malformed or unrecognized table just leaves
+ * the document unchanged.
+ */
+export function setRevisionHistoryRows(
+  docxBuffer: Buffer,
+  rows: {
+    docType: string;
+    revNumber: string;
+    date: string;
+    purpose: string;
+    preparedBy: string;
+  }[]
+): Buffer {
+  try {
+    const zip = new PizZip(docxBuffer);
+    const docFile = zip.files["word/document.xml"];
+    if (!docFile) return docxBuffer;
+
+    const xml = docFile.asText();
+    const patched = replaceRevisionRows(xml, rows);
+    if (patched === null) {
+      console.warn(
+        "[revision-table] Could not locate the Revision History table (or a row to use as a formatting template) — leaving the document unchanged."
+      );
+      return docxBuffer;
+    }
+
+    zip.file("word/document.xml", patched);
+    return zip.generate({ type: "nodebuffer" }) as Buffer;
+  } catch (err) {
+    console.warn("[revision-table] Failed to rebuild the revision history table — leaving the document unchanged.", err);
+    return docxBuffer;
+  }
+}
+
+function replaceRevisionRows(
+  xml: string,
+  rows: { docType: string; revNumber: string; date: string; purpose: string; preparedBy: string }[]
+): string | null {
+  const tableRe = /<w:tbl>[\s\S]*?<\/w:tbl>/g;
+  let tableMatch: RegExpExecArray | null;
+
+  while ((tableMatch = tableRe.exec(xml)) !== null) {
+    const tableXml = tableMatch[0];
+    const allRows = matchTopLevel(tableXml, "w:tr");
+    if (allRows.length < 2) continue; // need at least a header + one data row to use as a template
+
+    const headerText = cellTexts(allRows[0]).map((t) => t.trim().toUpperCase());
+    const isRevisionTable =
+      headerText.some((t) => t === "DOC") &&
+      headerText.some((t) => t === "REV") &&
+      headerText.some((t) => t === "PURPOSE");
+    if (!isRevisionTable) continue;
+
+    const templateRow = allRows[allRows.length - 1];
+    const templateCells = matchTopLevel(templateRow, "w:tc");
+    if (templateCells.length < 6) return null;
+
+    const trOpenMatch = /^<w:tr\b[^>]*>/.exec(templateRow);
+    const trOpen = trOpenMatch
+      ? trOpenMatch[0].replace(/w14:paraId="[^"]*"/, "").replace(/w14:textId="[^"]*"/, "")
+      : "<w:tr>";
+
+    const newRowsXml = rows
+      .map((row) => {
+        const values = [row.docType, row.revNumber, row.date, row.purpose, row.preparedBy, ""];
+        const newCells = templateCells.map((cell, i) => rebuildCell(cell, values[i] ?? ""));
+        return `${trOpen}${newCells.join("")}</w:tr>`;
+      })
+      .join("");
+
+    const headerRow = allRows[0];
+    const headerEnd = tableXml.indexOf(headerRow) + headerRow.length;
+    const lastDataRowEnd = tableXml.lastIndexOf(templateRow) + templateRow.length;
+
+    const newTableXml = tableXml.slice(0, headerEnd) + newRowsXml + tableXml.slice(lastDataRowEnd);
+
+    return xml.slice(0, tableMatch.index) + newTableXml + xml.slice(tableMatch.index + tableXml.length);
+  }
+
+  return null;
+}
+
 function insertRevisionRow(
   xml: string,
   row: { docType: string; revNumber: string; date: string; purpose: string; preparedBy: string }
