@@ -220,13 +220,13 @@ describe("dispatchPbdb — stakeholder-facing artifact is a PDF, never the docx"
         }
         if (table === "project_files") {
           pfCalls++;
-          // 1st call: pbdb_pdf cache lookup — nothing cached yet.
+          // 1st call: source pbdb docx lookup — found.
           if (pfCalls === 1) {
-            return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) };
-          }
-          // 2nd call: source pbdb docx lookup — found.
-          if (pfCalls === 2) {
             return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: docxRow, error: null }) };
+          }
+          // 2nd call: pbdb_pdf cache lookup (scoped to the source docx's version) — nothing cached yet.
+          if (pfCalls === 2) {
+            return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) };
           }
           // 3rd call: insert the newly-created pbdb_pdf row.
           return { insert: insertFn };

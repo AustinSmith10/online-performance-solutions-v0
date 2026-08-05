@@ -14,9 +14,14 @@ import { scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 
 const PROJECT_ID = "proj-1";
 
-/** Builds a supabase mock: the "projects" select and, when the redispatch
- * path needs it, a "stakeholder_reviews" count query. */
-function buildMock(project: Record<string, unknown> | null, reviewCount = 0) {
+/** Builds a supabase mock: the "projects" select, the redispatch path's
+ * "stakeholder_reviews" count query, and the #112 findings-gate lookup on
+ * "project_files" (defaults to a clean file with nothing to acknowledge). */
+function buildMock(
+  project: Record<string, unknown> | null,
+  reviewCount = 0,
+  latestPbdbFile: Record<string, unknown> | null = null
+) {
   const from = vi.fn((table: string) => {
     if (table === "projects") {
       return {
@@ -31,6 +36,15 @@ function buildMock(project: Record<string, unknown> | null, reviewCount = 0) {
         eq: vi.fn().mockReturnThis(),
         then: (fn: (v: unknown) => unknown) =>
           Promise.resolve({ count: reviewCount, error: null }).then(fn),
+      };
+    }
+    if (table === "project_files") {
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: latestPbdbFile, error: null }),
       };
     }
     throw new Error(`unexpected table: ${table}`);
@@ -112,5 +126,51 @@ describe("dispatchToStakeholders — readiness gate", () => {
     const result = await dispatchToStakeholders(PROJECT_ID, {}, new FormData());
 
     expect(result.error).toBe("Project not found.");
+  });
+});
+
+describe("dispatchToStakeholders — QA flags gate (#112)", () => {
+  it("blocks dispatch when the latest PBDB has an unacknowledged filename mismatch", async () => {
+    const project = { status: "in_progress", qa_completed_by: "consultant-1", assigned_consultant_id: "consultant-1", review_cycle: 1 };
+    const latestPbdbFile = { filename_mismatch_reason: "Filename says Rev1, expected Rev2.", structure_scan_findings: null, qa_flags_acknowledged_at: null };
+    vi.mocked(createAdminClient).mockReturnValue(buildMock(project, 0, latestPbdbFile) as never);
+
+    const result = await dispatchToStakeholders(PROJECT_ID, {}, new FormData());
+
+    expect(result.error).toBe("Please review and acknowledge the flagged issues before sending.");
+    expect(scheduleOrDeliverPbdb).not.toHaveBeenCalled();
+  });
+
+  it("blocks dispatch when the latest PBDB has unacknowledged structure-scan findings", async () => {
+    const project = { status: "in_progress", qa_completed_by: "consultant-1", assigned_consultant_id: "consultant-1", review_cycle: 1 };
+    const latestPbdbFile = { filename_mismatch_reason: null, structure_scan_findings: [{ kind: "tracked_changes", count: 1, message: "1 tracked change found" }], qa_flags_acknowledged_at: null };
+    vi.mocked(createAdminClient).mockReturnValue(buildMock(project, 0, latestPbdbFile) as never);
+
+    const result = await dispatchToStakeholders(PROJECT_ID, {}, new FormData());
+
+    expect(result.error).toBe("Please review and acknowledge the flagged issues before sending.");
+    expect(scheduleOrDeliverPbdb).not.toHaveBeenCalled();
+  });
+
+  it("dispatches once flags are acknowledged even though findings are present", async () => {
+    const project = { status: "in_progress", qa_completed_by: "consultant-1", assigned_consultant_id: "consultant-1", review_cycle: 1 };
+    const latestPbdbFile = { filename_mismatch_reason: "mismatch", structure_scan_findings: null, qa_flags_acknowledged_at: "2026-08-05T00:00:00Z" };
+    vi.mocked(createAdminClient).mockReturnValue(buildMock(project, 0, latestPbdbFile) as never);
+
+    const result = await dispatchToStakeholders(PROJECT_ID, {}, new FormData());
+
+    expect(result.success).toBe(true);
+    expect(scheduleOrDeliverPbdb).toHaveBeenCalled();
+  });
+
+  it("dispatches when the latest PBDB has no findings at all", async () => {
+    const project = { status: "in_progress", qa_completed_by: "consultant-1", assigned_consultant_id: "consultant-1", review_cycle: 1 };
+    const latestPbdbFile = { filename_mismatch_reason: null, structure_scan_findings: null, qa_flags_acknowledged_at: null };
+    vi.mocked(createAdminClient).mockReturnValue(buildMock(project, 0, latestPbdbFile) as never);
+
+    const result = await dispatchToStakeholders(PROJECT_ID, {}, new FormData());
+
+    expect(result.success).toBe(true);
+    expect(scheduleOrDeliverPbdb).toHaveBeenCalled();
   });
 });

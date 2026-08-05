@@ -495,6 +495,30 @@ export async function dispatchToStakeholders(
     return { error: "Project is not ready for dispatch." };
   }
 
+  // Soft-block gate (#112): any filename mismatch or structure-scan finding
+  // on the current cycle's PBDB must be acknowledged before Send unlocks.
+  // Server-side enforcement backs the UI gate — the UI hides Send until
+  // acknowledged, but this is the actual guarantee.
+  const { data: latestPbdb } = await supabase
+    .from("project_files")
+    .select("filename_mismatch_reason, structure_scan_findings, qa_flags_acknowledged_at")
+    .eq("project_id", projectId)
+    .eq("file_type", "pbdb")
+    .eq("review_cycle", project.review_cycle as number)
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const hasUnacknowledgedFlags =
+    !!latestPbdb &&
+    !latestPbdb.qa_flags_acknowledged_at &&
+    (!!latestPbdb.filename_mismatch_reason ||
+      ((latestPbdb.structure_scan_findings as unknown[] | null)?.length ?? 0) > 0);
+
+  if (hasUnacknowledgedFlags) {
+    return { error: "Please review and acknowledge the flagged issues before sending." };
+  }
+
   try {
     const result = await scheduleOrDeliverPbdb(projectId, actor.id, actor.email as string);
     revalidatePath(`/admin/projects/${projectId}`);

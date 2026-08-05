@@ -8,6 +8,7 @@ import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { extractDocumentFields, type ExtractedField, type Confidence, type ExtractedCandidate } from "@/lib/documents/extractor";
+import { verifyUploadAgainstRequirement } from "@/lib/documents/file-requirement-verification";
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import { buildFieldFlagPlan, type FieldFlagPlan } from "@/lib/documents/field-flags";
 import type { ComparisonMode } from "@/lib/documents/compare-candidates";
@@ -70,6 +71,12 @@ export type ExtractState =
       pickRows: MetricsPickRow[];
       projectId: string;
       templateId: string;
+      // #113: uploads whose deterministic/AI-judge check flagged a possible
+      // mismatch for their slot — each must be confirmed (see submitProject's
+      // gate) before final submission proceeds.
+      fileVerificationWarnings: {
+        fileId: string; slug: string; name: string; previewUrl: string | null; reasons: string[];
+      }[];
     };
 
 // ─── Step 1a: derive an org id from actor role + on-behalf-of fields (shared) ─
@@ -87,6 +94,11 @@ function resolveOrgId(
 type FileReq = {
   id: string; name: string; slug: string;
   max_count: number; required: boolean; no_duplicates: boolean; extraction: boolean;
+  marker_text_patterns: string[] | null;
+  marker_page_count_min: number | null;
+  marker_page_count_max: number | null;
+  marker_regex: string | null;
+  ai_judge_hint: string | null;
 };
 
 async function loadFileRequirements(
@@ -95,7 +107,9 @@ async function loadFileRequirements(
 ): Promise<FileReq[]> {
   const { data } = await supabase
     .from("file_requirements")
-    .select("id, name, slug, max_count, required, no_duplicates, extraction")
+    .select(
+      "id, name, slug, max_count, required, no_duplicates, extraction, marker_text_patterns, marker_page_count_min, marker_page_count_max, marker_regex, ai_judge_hint"
+    )
     .eq("template_id", templateId)
     .order("sort_order");
   return (data ?? []) as FileReq[];
@@ -273,13 +287,15 @@ export async function finalizeSubmission(
     }
   }
 
-  // Download only the files needed for extraction (slots with extraction = true)
-  const extractionUploads = uploads.filter((u) => reqBySlug.get(u.slug)?.extraction);
+  // Download every uploaded file once — extraction only needs the slots
+  // flagged extraction=true, but the #113 verification layer below checks
+  // every upload against its slot's file_requirements row, so both draw
+  // from this single pass rather than downloading twice.
   const downloaded = await Promise.all(
-    extractionUploads.map(async (u) => {
+    uploads.map(async (u) => {
       const { data, error } = await supabase.storage.from("submissions").download(u.path);
-      if (error || !data) throw new Error(`Failed to read "${u.name}" for extraction.`);
-      return { label: reqBySlug.get(u.slug)!.name, buffer: Buffer.from(await data.arrayBuffer()) };
+      if (error || !data) throw new Error(`Failed to read "${u.name}".`);
+      return { ...u, buffer: Buffer.from(await data.arrayBuffer()) };
     })
   ).catch((err: Error) => err);
 
@@ -287,7 +303,40 @@ export async function finalizeSubmission(
     await cleanup();
     return { step: 1, error: downloaded.message };
   }
-  const extractionDocs = downloaded;
+  const downloadedUploads = downloaded;
+  const extractionDocs = downloadedUploads
+    .filter((u) => reqBySlug.get(u.slug)?.extraction)
+    .map((u) => ({ label: reqBySlug.get(u.slug)!.name, buffer: u.buffer }));
+
+  // Verification layer (#113): deterministic markers + AI judge, both run
+  // per upload against its slot's file_requirements row. Soft findings only
+  // — never blocks the draft from being created; the stakeholder confirms
+  // them before final submission (see submitProject's gate).
+  const verificationReasonsByPath = new Map<string, string[]>();
+  await Promise.all(
+    downloadedUploads.map(async (u) => {
+      const req = reqBySlug.get(u.slug);
+      if (!req) return;
+      const isPdf = u.name.toLowerCase().endsWith(".pdf");
+      try {
+        const reasons = await verifyUploadAgainstRequirement(
+          {
+            name: req.name,
+            markerTextPatterns: req.marker_text_patterns,
+            markerPageCountMin: req.marker_page_count_min,
+            markerPageCountMax: req.marker_page_count_max,
+            markerRegex: req.marker_regex,
+            aiJudgeHint: req.ai_judge_hint,
+          },
+          u.buffer,
+          isPdf
+        );
+        if (reasons.length > 0) verificationReasonsByPath.set(u.path, reasons);
+      } catch (err) {
+        console.error(`[finalizeSubmission] verification failed for "${u.name}", failing open:`, err);
+      }
+    })
+  );
 
   // Load template mappings, section labels, and org config in parallel
   const [mappingsResult, orgResult, templateResult] = await Promise.all([
@@ -439,15 +488,44 @@ export async function finalizeSubmission(
     await supabase.from("field_flags").insert(flagRows);
   }
 
+  let fileVerificationWarnings: {
+    fileId: string; slug: string; name: string; previewUrl: string | null; reasons: string[];
+  }[] = [];
+
   if (uploads.length > 0) {
-    const fileRecords = uploads.map(({ slug, name, path }) => ({
-      project_id: projectId,
-      file_type: slug,
-      storage_path: path,
-      original_filename: name,
-      uploaded_by: actor.id,
-    }));
-    await supabase.from("project_files").insert(fileRecords);
+    const fileRecords = uploads.map(({ slug, name, path }) => {
+      const reasons = verificationReasonsByPath.get(path) ?? null;
+      return {
+        project_id: projectId,
+        file_type: slug,
+        storage_path: path,
+        original_filename: name,
+        uploaded_by: actor.id,
+        verification_mismatch_reasons: reasons,
+      };
+    });
+    const { data: insertedFiles } = await supabase
+      .from("project_files")
+      .insert(fileRecords)
+      .select("id, storage_path, file_type, original_filename, verification_mismatch_reasons");
+
+    const flagged = (insertedFiles ?? []).filter((f) => f.verification_mismatch_reasons);
+    if (flagged.length > 0) {
+      fileVerificationWarnings = await Promise.all(
+        flagged.map(async (f) => {
+          const { data: signed } = await supabase.storage
+            .from("submissions")
+            .createSignedUrl(f.storage_path as string, 3600);
+          return {
+            fileId: f.id as string,
+            slug: f.file_type as string,
+            name: f.original_filename as string,
+            previewUrl: signed?.signedUrl ?? null,
+            reasons: f.verification_mismatch_reasons as string[],
+          };
+        })
+      );
+    }
   }
 
   await auditLog("project.draft_created", actor.id, actor.email as string, {
@@ -508,6 +586,7 @@ export async function finalizeSubmission(
     pickRows: trusteePick?.rows ?? [],
     projectId,
     templateId,
+    fileVerificationWarnings,
   };
 }
 
@@ -543,6 +622,28 @@ export async function submitProject(
 
   if (formData.get("reviewed_confirmed") !== "true") {
     return { error: "Please confirm that you have reviewed the details above before submitting." };
+  }
+
+  // #113: any upload flagged by the verification layer must be confirmed
+  // before submission proceeds — soft block, not a hard block on upload
+  // itself. The client only sends ids the stakeholder actually checked;
+  // this re-derives the flagged set server-side rather than trusting count.
+  const { data: flaggedFiles } = await supabase
+    .from("project_files")
+    .select("id, verification_mismatch_reasons")
+    .eq("project_id", projectId)
+    .not("verification_mismatch_reasons", "is", null);
+
+  if (flaggedFiles && flaggedFiles.length > 0) {
+    const confirmedIds = new Set(formData.getAll("confirmed_file_ids").map(String));
+    const unconfirmed = flaggedFiles.filter((f) => !confirmedIds.has(f.id as string));
+    if (unconfirmed.length > 0) {
+      return { error: "Please review and confirm the flagged file(s) before submitting." };
+    }
+    await supabase
+      .from("project_files")
+      .update({ verification_confirmed_at: new Date().toISOString(), verification_confirmed_by: actor.id })
+      .in("id", flaggedFiles.map((f) => f.id));
   }
 
   const poNumber = (formData.get("extracted_po_number") as string | null)?.trim() || null;

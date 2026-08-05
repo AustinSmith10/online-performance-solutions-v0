@@ -50,23 +50,23 @@ function buildSupabaseMock(opts: {
     if (table !== "project_files") throw new Error(`unexpected table ${table}`);
     projectFilesCall++;
     if (projectFilesCall === 1) {
-      // pbdb_pdf cache lookup
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: opts.cachedPdf ?? null, error: null }),
-      };
-    }
-    if (projectFilesCall === 2) {
-      // source docx lookup
+      // source docx lookup (looked up first now — its version scopes the cache lookup)
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: opts.sourceDocx ?? null, error: null }),
+      };
+    }
+    if (projectFilesCall === 2) {
+      // pbdb_pdf cache lookup, scoped to the source docx's version
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: opts.cachedPdf ?? null, error: null }),
       };
     }
     // insert of newly generated pbdb_pdf row
@@ -114,7 +114,8 @@ describe("getOrCreateDispatchPdf", () => {
 
   it("reuses a cached PDF for the cycle instead of converting again", async () => {
     const cached = { storage_path: "org-1/proj-1/pbdb/v2_file.pdf", original_filename: "file.pdf" };
-    const mock = buildSupabaseMock({ cachedPdf: cached });
+    const sourceDocx = { storage_path: "org-1/proj-1/pbdb/v2_file.docx", original_filename: "file.docx", version: 2 };
+    const mock = buildSupabaseMock({ cachedPdf: cached, sourceDocx });
 
     const result = await getOrCreateDispatchPdf(
       mock as never,
@@ -125,6 +126,25 @@ describe("getOrCreateDispatchPdf", () => {
     expect(result).toEqual({ storagePath: cached.storage_path, originalFilename: cached.original_filename });
     expect(vi.mocked(convertDocxToPdf)).not.toHaveBeenCalled();
     expect(mock.uploadFn).not.toHaveBeenCalled();
+  });
+
+  it("scopes the cache lookup to the source docx's version, not just review_cycle (#112)", async () => {
+    // A same-cycle QA re-upload bumps project_files.version without bumping
+    // review_cycle. The cache query now filters on that version, so a
+    // version mismatch (simulated here as the query simply finding nothing)
+    // must fall through to reconversion rather than serving a stale PDF.
+    const newerDocx = { storage_path: "org-1/proj-1/pbdb/v3_file.docx", original_filename: "file.docx", version: 3 };
+    const mock = buildSupabaseMock({ cachedPdf: null, sourceDocx: newerDocx, pbdbRevision: 0 });
+
+    const result = await getOrCreateDispatchPdf(
+      mock as never,
+      { ...BASE_PROJECT, review_cycle: 2 },
+      ACTOR_ID
+    );
+
+    expect(vi.mocked(convertDocxToPdf)).toHaveBeenCalledTimes(1);
+    expect(mock.uploadFn).toHaveBeenCalled();
+    expect(result?.storagePath).toBe("org-1/proj-1/pbdb/v3_file.pdf");
   });
 
   it("converts the cycle's source docx to PDF and caches it when none exists yet", async () => {

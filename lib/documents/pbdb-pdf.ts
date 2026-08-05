@@ -36,23 +36,6 @@ export async function getOrCreateDispatchPdf(
   project: DispatchPdfProject,
   actorId: string
 ): Promise<DispatchPdf | null> {
-  const { data: existingPdf } = await supabase
-    .from("project_files")
-    .select("storage_path, original_filename")
-    .eq("project_id", project.id)
-    .eq("file_type", "pbdb_pdf")
-    .eq("review_cycle", project.review_cycle)
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (existingPdf) {
-    return {
-      storagePath: existingPdf.storage_path as string,
-      originalFilename: existingPdf.original_filename as string,
-    };
-  }
-
   const { data: sourceDocx } = await supabase
     .from("project_files")
     .select("storage_path, original_filename, version")
@@ -64,6 +47,27 @@ export async function getOrCreateDispatchPdf(
     .maybeSingle();
 
   if (!sourceDocx) return null;
+
+  // Only reuse a cached PDF generated from this exact source docx version —
+  // a same-cycle QA re-upload (which doesn't bump review_cycle) must not be
+  // served a stale PDF from the previous version (#112).
+  const { data: existingPdf } = await supabase
+    .from("project_files")
+    .select("storage_path, original_filename")
+    .eq("project_id", project.id)
+    .eq("file_type", "pbdb_pdf")
+    .eq("review_cycle", project.review_cycle)
+    .eq("version", sourceDocx.version as number)
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingPdf) {
+    return {
+      storagePath: existingPdf.storage_path as string,
+      originalFilename: existingPdf.original_filename as string,
+    };
+  }
 
   const { data: docxBlob, error: dlErr } = await supabase.storage
     .from("documents")

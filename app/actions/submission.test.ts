@@ -52,7 +52,7 @@ function chain(data: unknown, error: unknown = null) {
   return obj;
 }
 
-function buildMock() {
+function buildMock(opts: { flaggedFiles?: unknown[] } = {}) {
   const draftBefore = { extracted_fields: {}, po_number: null };
   const clientRow = { name: "Acme", delivery_working_days: 5, state_territory: "NSW" };
 
@@ -61,6 +61,8 @@ function buildMock() {
   updateResultChain.then = (fn: (v: unknown) => unknown) =>
     Promise.resolve({ error: null, count: 1 }).then(fn);
   const updateFn = vi.fn().mockReturnValue(updateResultChain);
+
+  const projectFilesUpdateFn = vi.fn().mockReturnValue(chain(null));
 
   const calls: Record<string, number> = {};
   const from = vi.fn((table: string) => {
@@ -74,10 +76,16 @@ function buildMock() {
       return { update: updateFn }; // the submit update
     }
     if (table === "users") return chain([]);
+    if (table === "project_files") {
+      if (opts.flaggedFiles !== undefined && n === 1) {
+        return chain(opts.flaggedFiles);
+      }
+      return { ...chain(null), update: projectFilesUpdateFn };
+    }
     return chain(null);
   });
 
-  return { from };
+  return { from, projectFilesUpdateFn };
 }
 
 beforeEach(() => {
@@ -109,6 +117,54 @@ describe("submitProject — reviewed acknowledgement gate", () => {
 
   it("allows submission when the reviewed confirmation is present, and logs it as its own audit event", async () => {
     vi.mocked(createAdminClient).mockReturnValue(buildMock() as never);
+
+    await submitProject({}, makeSubmitFormData());
+    await afterPromise;
+
+    expect(vi.mocked(auditLog)).toHaveBeenCalledWith(
+      "project.review_confirmed",
+      ACTOR_ID,
+      "client@example.com",
+      expect.objectContaining({ orgId: CLIENT_ID, projectId: PROJECT_ID })
+    );
+  });
+});
+
+describe("submitProject — verification mismatch gate (#113)", () => {
+  it("blocks submission when a flagged file hasn't been confirmed", async () => {
+    const mock = buildMock({ flaggedFiles: [{ id: "file-1", verification_mismatch_reasons: ["mismatch"] }] });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await submitProject({}, makeSubmitFormData());
+
+    expect(result.error).toMatch(/confirm the flagged file/i);
+    expect(mock.projectFilesUpdateFn).not.toHaveBeenCalled();
+  });
+
+  it("allows submission once the flagged file's id is included in confirmed_file_ids", async () => {
+    const mock = buildMock({ flaggedFiles: [{ id: "file-1", verification_mismatch_reasons: ["mismatch"] }] });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const fd = makeSubmitFormData();
+    fd.append("confirmed_file_ids", "file-1");
+
+    await submitProject({}, fd);
+    await afterPromise;
+
+    expect(mock.projectFilesUpdateFn).toHaveBeenCalledWith(
+      expect.objectContaining({ verification_confirmed_at: expect.any(String), verification_confirmed_by: ACTOR_ID })
+    );
+    expect(vi.mocked(auditLog)).toHaveBeenCalledWith(
+      "project.review_confirmed",
+      ACTOR_ID,
+      "client@example.com",
+      expect.objectContaining({ orgId: CLIENT_ID, projectId: PROJECT_ID })
+    );
+  });
+
+  it("does not require any confirmation when no files are flagged", async () => {
+    const mock = buildMock({ flaggedFiles: [] });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
 
     await submitProject({}, makeSubmitFormData());
     await afterPromise;

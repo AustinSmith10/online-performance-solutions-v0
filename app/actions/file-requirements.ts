@@ -11,8 +11,38 @@ export type FileRequirementState = {
     name?: string[];
     slug?: string[];
     max_count?: string[];
+    marker_page_count?: string[];
+    marker_regex?: string[];
   };
 };
+
+// A blank line -> no markers configured (deterministic layer optional, #113).
+function parseTextPatterns(raw: string): string[] | null {
+  const lines = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return lines.length > 0 ? lines : null;
+}
+
+function validatePageCountRange(minRaw: string, maxRaw: string): string[] {
+  const min = minRaw.trim() ? parseInt(minRaw, 10) : null;
+  const max = maxRaw.trim() ? parseInt(maxRaw, 10) : null;
+  if (min != null && (isNaN(min) || min < 1)) return ["Min pages must be a positive number."];
+  if (max != null && (isNaN(max) || max < 1)) return ["Max pages must be a positive number."];
+  if (min != null && max != null && min > max) return ["Min pages cannot exceed max pages."];
+  return [];
+}
+
+function validateRegex(raw: string): string[] {
+  if (!raw.trim()) return [];
+  try {
+    new RegExp(raw);
+    return [];
+  } catch {
+    return ["Not a valid regular expression."];
+  }
+}
 
 function validateName(name: string): string[] {
   if (!name) return ["Name is required."];
@@ -48,17 +78,26 @@ export async function createFileRequirement(
   const required = formData.get("required") === "on";
   const no_duplicates = formData.get("no_duplicates") === "on";
   const extraction = formData.get("extraction") === "on";
+  const markerTextRaw = (formData.get("marker_text_patterns") as string | null) ?? "";
+  const pageMinRaw = (formData.get("marker_page_count_min") as string | null) ?? "";
+  const pageMaxRaw = (formData.get("marker_page_count_max") as string | null) ?? "";
+  const markerRegexRaw = ((formData.get("marker_regex") as string | null) ?? "").trim();
+  const aiJudgeHint = ((formData.get("ai_judge_hint") as string | null) ?? "").trim() || null;
 
   const nameErrors = validateName(name);
   const slugErrors = validateSlug(slug);
   const maxErrors = validateMaxCount(maxRaw);
+  const pageCountErrors = validatePageCountRange(pageMinRaw, pageMaxRaw);
+  const regexErrors = validateRegex(markerRegexRaw);
 
-  if (nameErrors.length || slugErrors.length || maxErrors.length) {
+  if (nameErrors.length || slugErrors.length || maxErrors.length || pageCountErrors.length || regexErrors.length) {
     return {
       fieldErrors: {
         ...(nameErrors.length && { name: nameErrors }),
         ...(slugErrors.length && { slug: slugErrors }),
         ...(maxErrors.length && { max_count: maxErrors }),
+        ...(pageCountErrors.length && { marker_page_count: pageCountErrors }),
+        ...(regexErrors.length && { marker_regex: regexErrors }),
       },
     };
   }
@@ -85,6 +124,11 @@ export async function createFileRequirement(
     no_duplicates,
     extraction,
     sort_order,
+    marker_text_patterns: parseTextPatterns(markerTextRaw),
+    marker_page_count_min: pageMinRaw.trim() ? parseInt(pageMinRaw, 10) : null,
+    marker_page_count_max: pageMaxRaw.trim() ? parseInt(pageMaxRaw, 10) : null,
+    marker_regex: markerRegexRaw || null,
+    ai_judge_hint: aiJudgeHint,
   });
 
   if (error) {
@@ -111,15 +155,24 @@ export async function updateFileRequirement(
   const required = formData.get("required") === "on";
   const no_duplicates = formData.get("no_duplicates") === "on";
   const extraction = formData.get("extraction") === "on";
+  const markerTextRaw = (formData.get("marker_text_patterns") as string | null) ?? "";
+  const pageMinRaw = (formData.get("marker_page_count_min") as string | null) ?? "";
+  const pageMaxRaw = (formData.get("marker_page_count_max") as string | null) ?? "";
+  const markerRegexRaw = ((formData.get("marker_regex") as string | null) ?? "").trim();
+  const aiJudgeHint = ((formData.get("ai_judge_hint") as string | null) ?? "").trim() || null;
 
   const nameErrors = validateName(name);
   const maxErrors = validateMaxCount(maxRaw);
+  const pageCountErrors = validatePageCountRange(pageMinRaw, pageMaxRaw);
+  const regexErrors = validateRegex(markerRegexRaw);
 
-  if (nameErrors.length || maxErrors.length) {
+  if (nameErrors.length || maxErrors.length || pageCountErrors.length || regexErrors.length) {
     return {
       fieldErrors: {
         ...(nameErrors.length && { name: nameErrors }),
         ...(maxErrors.length && { max_count: maxErrors }),
+        ...(pageCountErrors.length && { marker_page_count: pageCountErrors }),
+        ...(regexErrors.length && { marker_regex: regexErrors }),
       },
     };
   }
@@ -129,7 +182,18 @@ export async function updateFileRequirement(
 
   const { error } = await supabase
     .from("file_requirements")
-    .update({ name, max_count, required, no_duplicates, extraction })
+    .update({
+      name,
+      max_count,
+      required,
+      no_duplicates,
+      extraction,
+      marker_text_patterns: parseTextPatterns(markerTextRaw),
+      marker_page_count_min: pageMinRaw.trim() ? parseInt(pageMinRaw, 10) : null,
+      marker_page_count_max: pageMaxRaw.trim() ? parseInt(pageMaxRaw, 10) : null,
+      marker_regex: markerRegexRaw || null,
+      ai_judge_hint: aiJudgeHint,
+    })
     .eq("id", id);
 
   if (error) return { error: error.message };

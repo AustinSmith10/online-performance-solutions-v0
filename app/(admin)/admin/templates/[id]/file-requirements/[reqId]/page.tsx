@@ -22,7 +22,9 @@ export default async function EditFileRequirementPage({
       .maybeSingle(),
     supabase
       .from("file_requirements")
-      .select("id, name, slug, max_count, required, no_duplicates, extraction, template_id")
+      .select(
+        "id, name, slug, max_count, required, no_duplicates, extraction, template_id, marker_text_patterns, marker_page_count_min, marker_page_count_max, marker_regex, ai_judge_hint"
+      )
       .eq("id", reqId)
       .eq("template_id", templateId)
       .maybeSingle(),

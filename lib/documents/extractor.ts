@@ -360,8 +360,21 @@ function renderPageByLayout(pageData: PdfPageProxy): Promise<string> {
 }
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
+  const { text } = await extractPdfTextAndPageCount(buffer);
+  return text;
+}
+
+/**
+ * Shared PDF text + page count extraction, reused by both the field
+ * extractor above and the file-requirement verification layer (#113) — the
+ * same layout-aware rendering matters for either use, and page count is
+ * pdf-parse's own count of pages it walked, at zero extra cost.
+ */
+export async function extractPdfTextAndPageCount(
+  buffer: Buffer
+): Promise<{ text: string; pageCount: number }> {
   const data = await pdfParse(buffer, { pagerender: renderPageByLayout });
-  return (data.text as string).trim();
+  return { text: (data.text as string).trim(), pageCount: (data as unknown as { numpages: number }).numpages };
 }
 
 async function extractWithOpenAI(

@@ -117,10 +117,6 @@ export function FieldFlagReview({
   const forcedOpen = !!initiallyExpanded || !!initialConflict;
   const [editing, setEditing] = useState(forcedOpen || status === "open");
 
-  const acceptedCandidate = candidates.find((c) => c.value === currentValue) ?? candidates[0];
-  const ackSourceUrl = acceptedCandidate
-    ? sourceUrlsByFilename?.[acceptedCandidate.source_document] ?? null
-    : null;
   const ackBlock = showAcknowledgment ? (
     acknowledgedAt ? (
       <p className="text-[11px] text-green-700">
@@ -130,8 +126,10 @@ export function FieldFlagReview({
     ) : (
       <FlagAcknowledgeControl
         flagId={flagId}
-        sourceUrl={ackSourceUrl}
-        sourceFilename={acceptedCandidate?.source_document}
+        label={label}
+        currentValue={currentValue}
+        candidates={candidates}
+        sourceUrlsByFilename={sourceUrlsByFilename}
       />
     )
   ) : null;

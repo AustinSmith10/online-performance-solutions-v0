@@ -15,6 +15,8 @@ import { expediteDelivery, scheduleOrDeliverPbdb } from "@/lib/documents/pending
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { appendRevisionHistoryRow, setCoverRevisionNumber } from "@/lib/documents/revision-table";
+import { scanDocxStructure } from "@/lib/documents/docx-structure-scan";
+import { getOrCreateDispatchPdf, type DispatchPdfProject } from "@/lib/documents/pbdb-pdf";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function notifyAdminsQaComplete(
@@ -814,6 +816,19 @@ export async function generatePbdbForProject(
   if (!project) return { error: "Project not found or access denied." };
   if (!project.project_number) return { error: "Project number must be set before generating the PBDB." };
 
+  // #114: server-side backstop for the Focus Card's flag-review gate — a
+  // consultant may accept a job with open flags, but progressing it into
+  // PBDB work requires every flag acknowledged first, regardless of what
+  // the UI currently shows.
+  const { count: unacknowledgedCount } = await supabase
+    .from("field_flags")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .is("consultant_acknowledged_at", null);
+  if ((unacknowledgedCount ?? 0) > 0) {
+    return { error: "Please review and acknowledge all flagged fields before generating the PBDB." };
+  }
+
   const { data: existingPbdbs } = await supabase
     .from("project_files")
     .select("id")
@@ -1065,6 +1080,12 @@ export async function uploadQaPbdb(
     return null;
   })();
 
+  // Deterministic structural scan (#112) — no AI call, pure XML parsing.
+  // Findings are reported to the consultant as a plain list; nothing is
+  // auto-stripped, and the consultant is expected to go clean up the source
+  // Word doc and re-upload if any of these are real issues.
+  const structureScanFindings = scanDocxStructure(fileBuffer);
+
   // Reupload filenames are unique per cycle (different Rev{n}); QA correction filenames may
   // collide with the previously generated file, so prefix the storage object with the version
   // counter to guarantee a unique path while keeping original_filename canonical.
@@ -1091,6 +1112,7 @@ export async function uploadQaPbdb(
     // redispatched); an initial QA correction stays on the current cycle.
     review_cycle: isReupload ? cycle + 1 : cycle,
     filename_mismatch_reason: filenameMismatchReason,
+    structure_scan_findings: structureScanFindings.length > 0 ? structureScanFindings : null,
   });
 
   if (insertError) {
@@ -1164,6 +1186,95 @@ export async function uploadQaPbdb(
 
   revalidatePath(`/admin/projects/${projectId}`);
   redirect(`/ops/projects/${projectId}?qa_uploaded=1`);
+}
+
+// ─── Consultant: acknowledge PBDB QA flags before send (#112) ───────────────
+
+export type AcknowledgePbdbQaFlagsState = { error?: string; ok?: boolean };
+
+/**
+ * Soft-block gate between upload and send: a consultant must acknowledge a
+ * pbdb file's filename-mismatch reason and/or structure-scan findings
+ * before Send unlocks. Scoped to the specific project_files row (one per
+ * upload/version) so a fresh re-upload's findings are never covered by a
+ * prior version's acknowledgment.
+ */
+export async function acknowledgePbdbQaFlags(
+  projectId: string,
+  fileId: string
+): Promise<AcknowledgePbdbQaFlagsState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  let query = supabase.from("projects").select("id").eq("id", projectId).is("deleted_at", null);
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
+
+  const { data: file } = await supabase
+    .from("project_files")
+    .select("id")
+    .eq("id", fileId)
+    .eq("project_id", projectId)
+    .eq("file_type", "pbdb")
+    .maybeSingle();
+  if (!file) return { error: "PBDB file not found." };
+
+  await supabase
+    .from("project_files")
+    .update({ qa_flags_acknowledged_at: new Date().toISOString(), qa_flags_acknowledged_by: actor.id })
+    .eq("id", fileId);
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  return { ok: true };
+}
+
+// ─── Consultant: preview the converted PBDB PDF before send (#112) ─────────
+
+export type PbdbPreviewResult = { error: string } | { url: string; filename: string };
+
+/**
+ * Lazily generates (or reuses the cached) dispatch PDF for the project's
+ * current review cycle and returns a signed URL for the shared viewer
+ * (#104). Deliberately not computed eagerly at page-render time — the
+ * consultant may replace an uploaded file before ever previewing it, and
+ * conversion has a real cost.
+ */
+export async function getPbdbPreviewUrl(projectId: string): Promise<PbdbPreviewResult> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select("id, client_id, review_cycle, strip_token_color, project_number, extracted_fields")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
+
+  let pdf;
+  try {
+    pdf = await getOrCreateDispatchPdf(
+      supabase,
+      project as unknown as DispatchPdfProject,
+      actor.id
+    );
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to generate preview." };
+  }
+  if (!pdf) return { error: "No PBDB uploaded yet for this cycle." };
+
+  const { data: signed, error: signErr } = await supabase.storage
+    .from("documents")
+    .createSignedUrl(pdf.storagePath, 3600);
+  if (signErr || !signed) return { error: "Failed to sign preview URL." };
+
+  return { url: signed.signedUrl, filename: pdf.originalFilename };
 }
 
 // ─── Consultant: mark QA complete ────────────────────────────────────────────

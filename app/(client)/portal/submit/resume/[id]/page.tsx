@@ -20,7 +20,7 @@ export default async function ResumeDraftPage({
   const supabase = createAdminClient();
   const orgId = user.client_id as string;
 
-  const [{ data: project }, { data: templates }, { data: openFlags }] = await Promise.all([
+  const [{ data: project }, { data: templates }, { data: openFlags }, { data: flaggedFiles }] = await Promise.all([
     supabase
       .from("projects")
       .select("id, status, template_id, extracted_fields, po_number")
@@ -41,9 +41,32 @@ export default async function ResumeDraftPage({
       .select("field_key, type, candidate_values")
       .eq("project_id", id)
       .eq("status", "open"),
+    // #113: any upload still carrying an unconfirmed verification mismatch
+    // from the original submission attempt must be re-surfaced here too.
+    supabase
+      .from("project_files")
+      .select("id, file_type, original_filename, storage_path, verification_mismatch_reasons")
+      .eq("project_id", id)
+      .not("verification_mismatch_reasons", "is", null)
+      .is("verification_confirmed_at", null),
   ]);
 
   if (!project) notFound();
+
+  const fileVerificationWarnings = await Promise.all(
+    (flaggedFiles ?? []).map(async (f) => {
+      const { data: signed } = await supabase.storage
+        .from("submissions")
+        .createSignedUrl(f.storage_path as string, 3600);
+      return {
+        fileId: f.id as string,
+        slug: f.file_type as string,
+        name: f.original_filename as string,
+        previewUrl: signed?.signedUrl ?? null,
+        reasons: f.verification_mismatch_reasons as string[],
+      };
+    })
+  );
 
   const flagsByToken = new Map(
     (openFlags ?? []).map((f) => [
@@ -191,6 +214,7 @@ export default async function ResumeDraftPage({
     pickRows: trusteePick?.rows ?? [],
     projectId: id,
     templateId,
+    fileVerificationWarnings,
   };
 
   return (

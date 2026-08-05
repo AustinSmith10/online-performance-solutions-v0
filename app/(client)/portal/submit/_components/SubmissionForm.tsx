@@ -17,6 +17,7 @@ import { ClientWorkspace } from "../../_components/ClientWorkspace";
 import { ClientHeaderCard } from "../../_components/ClientHeaderCard";
 import { FocusCard } from "@/components/workspace/FocusCard";
 import { REQUEST_STAGES } from "../../_components/requestStages";
+import { DocumentViewer, isPreviewable } from "@/components/DocumentViewer";
 
 interface Template {
   id: string;
@@ -243,12 +244,17 @@ interface ReviewStepProps {
 }
 
 function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgId, adminClientId, projectBasePath, startOverHref, showBanner }: ReviewStepProps) {
-  const { poNumber, tokenGroups, sectionLabels, hasTrustee, rainfallToken, matchToken, pickRows, projectId, templateId } = state;
+  const { poNumber, tokenGroups, sectionLabels, hasTrustee, rainfallToken, matchToken, pickRows, projectId, templateId, fileVerificationWarnings } = state;
 
   const [modified, setModified] = useState<Set<string>>(new Set());
   const mark = (key: string) => setModified((prev) => new Set(prev).add(key));
 
   const [reviewedConfirmed, setReviewedConfirmed] = useState(false);
+
+  // #113: every flagged upload must be individually confirmed before the
+  // final Submit unlocks — mirrors the reviewed_confirmed checkbox pattern.
+  const [confirmedMismatches, setConfirmedMismatches] = useState<Set<string>>(new Set());
+  const allMismatchesConfirmed = fileVerificationWarnings.every((w) => confirmedMismatches.has(w.fileId));
 
   const [bannerVisible, setBannerVisible] = useState(showBanner ?? false);
   useEffect(() => {
@@ -336,6 +342,9 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
         {rainfallToken && rainfallField && (
           <input type="hidden" name={rainfallToken} value={rainfallField.value} />
         )}
+        {[...confirmedMismatches].map((fileId) => (
+          <input key={fileId} type="hidden" name="confirmed_file_ids" value={fileId} />
+        ))}
 
         <ClientWorkspace
           header={
@@ -360,6 +369,17 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                     className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
+
+                {fileVerificationWarnings.length > 0 && (
+                  <FileVerificationWarnings
+                    warnings={fileVerificationWarnings}
+                    confirmed={confirmedMismatches}
+                    onConfirm={(fileId) =>
+                      setConfirmedMismatches((prev) => new Set(prev).add(fileId))
+                    }
+                    disabled={submitPending}
+                  />
+                )}
 
                 <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-3 has-[:checked]:border-blue-400">
                   <input
@@ -393,7 +413,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
 
                 <button
                   type="submit"
-                  disabled={submitPending || !reviewedConfirmed}
+                  disabled={submitPending || !reviewedConfirmed || !allMismatchesConfirmed}
                   className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                 >
                   {submitPending && <Spinner className="h-4 w-4" />}
@@ -887,6 +907,99 @@ export function SubmissionForm({
         </div>
       }
     />
+  );
+}
+
+/**
+ * Per-upload soft warning from the #113 verification layer (deterministic
+ * markers + AI judge). Each flagged file must be individually previewed and
+ * confirmed by the stakeholder before the final Submit unlocks — this is
+ * the "mandatory confirm checkbox" step from the issue, not a document
+ * viewer used for browsing (#104's shared viewer, reused here since these
+ * uploads are always PDF/image, never docx).
+ */
+function FileVerificationWarnings({
+  warnings,
+  confirmed,
+  onConfirm,
+  disabled,
+}: {
+  warnings: { fileId: string; slug: string; name: string; previewUrl: string | null; reasons: string[] }[];
+  confirmed: Set<string>;
+  onConfirm: (fileId: string) => void;
+  disabled: boolean;
+}) {
+  const [openFileId, setOpenFileId] = useState<string | null>(null);
+  const openWarning = warnings.find((w) => w.fileId === openFileId) ?? null;
+
+  return (
+    <div className="space-y-2">
+      {warnings.map((w) => {
+        const isConfirmed = confirmed.has(w.fileId);
+        return (
+          <div
+            key={w.fileId}
+            className={`rounded-lg border px-3 py-3 ${isConfirmed ? "border-zinc-200 bg-zinc-50" : "border-amber-200 bg-amber-50"}`}
+          >
+            <p className="text-sm font-medium text-zinc-900">{w.name}</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-amber-800">
+              {w.reasons.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+            {isConfirmed ? (
+              <p className="mt-2 text-xs font-medium text-green-700">Confirmed</p>
+            ) : (
+              <div className="mt-2 flex items-center gap-2">
+                {w.previewUrl && isPreviewable(w.name, w.previewUrl) && (
+                  <button
+                    type="button"
+                    onClick={() => setOpenFileId(w.fileId)}
+                    className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Preview
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onConfirm(w.fileId)}
+                  className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  Yes, this is the right file
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {openWarning && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setOpenFileId(null)}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
+              <p className="truncate text-sm font-medium text-zinc-900">{openWarning.name}</p>
+              <button
+                type="button"
+                onClick={() => setOpenFileId(null)}
+                className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+              >
+                Close
+              </button>
+            </div>
+            <div className="overflow-auto">
+              <DocumentViewer src={openWarning.previewUrl!} filename={openWarning.name} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

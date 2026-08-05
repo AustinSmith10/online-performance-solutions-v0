@@ -662,36 +662,54 @@ export type Database = {
       }
       file_requirements: {
         Row: {
+          ai_judge_hint: string | null
           created_at: string
           extraction: boolean
           id: string
+          marker_page_count_max: number | null
+          marker_page_count_min: number | null
+          marker_regex: string | null
+          marker_text_patterns: string[] | null
           max_count: number
           name: string
           no_duplicates: boolean
+          reference_sample_storage_path: string | null
           required: boolean
           slug: string
           sort_order: number
           template_id: string
         }
         Insert: {
+          ai_judge_hint?: string | null
           created_at?: string
           extraction?: boolean
           id?: string
+          marker_page_count_max?: number | null
+          marker_page_count_min?: number | null
+          marker_regex?: string | null
+          marker_text_patterns?: string[] | null
           max_count?: number
           name: string
           no_duplicates?: boolean
+          reference_sample_storage_path?: string | null
           required?: boolean
           slug: string
           sort_order?: number
           template_id: string
         }
         Update: {
+          ai_judge_hint?: string | null
           created_at?: string
           extraction?: boolean
           id?: string
+          marker_page_count_max?: number | null
+          marker_page_count_min?: number | null
+          marker_regex?: string | null
+          marker_text_patterns?: string[] | null
           max_count?: number
           name?: string
           no_duplicates?: boolean
+          reference_sample_storage_path?: string | null
           required?: boolean
           slug?: string
           sort_order?: number
@@ -950,10 +968,16 @@ export type Database = {
           id: string
           original_filename: string
           project_id: string
+          qa_flags_acknowledged_at: string | null
+          qa_flags_acknowledged_by: string | null
           reference: string | null
           review_cycle: number
           storage_path: string
+          structure_scan_findings: Json | null
           uploaded_by: string
+          verification_confirmed_at: string | null
+          verification_confirmed_by: string | null
+          verification_mismatch_reasons: Json | null
           version: number
         }
         Insert: {
@@ -964,10 +988,16 @@ export type Database = {
           id?: string
           original_filename: string
           project_id: string
+          qa_flags_acknowledged_at?: string | null
+          qa_flags_acknowledged_by?: string | null
           reference?: string | null
           review_cycle?: number
           storage_path: string
+          structure_scan_findings?: Json | null
           uploaded_by: string
+          verification_confirmed_at?: string | null
+          verification_confirmed_by?: string | null
+          verification_mismatch_reasons?: Json | null
           version?: number
         }
         Update: {
@@ -978,10 +1008,16 @@ export type Database = {
           id?: string
           original_filename?: string
           project_id?: string
+          qa_flags_acknowledged_at?: string | null
+          qa_flags_acknowledged_by?: string | null
           reference?: string | null
           review_cycle?: number
           storage_path?: string
+          structure_scan_findings?: Json | null
           uploaded_by?: string
+          verification_confirmed_at?: string | null
+          verification_confirmed_by?: string | null
+          verification_mismatch_reasons?: Json | null
           version?: number
         }
         Relationships: [
@@ -993,8 +1029,22 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_files_qa_flags_acknowledged_by_fkey"
+            columns: ["qa_flags_acknowledged_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_files_uploaded_by_fkey"
             columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_files_verification_confirmed_by_fkey"
+            columns: ["verification_confirmed_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]

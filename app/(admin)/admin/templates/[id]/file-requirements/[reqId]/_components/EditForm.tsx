@@ -14,6 +14,11 @@ type FileRequirement = {
   required: boolean;
   no_duplicates: boolean;
   extraction: boolean;
+  marker_text_patterns: string[] | null;
+  marker_page_count_min: number | null;
+  marker_page_count_max: number | null;
+  marker_regex: string | null;
+  ai_judge_hint: string | null;
 };
 
 export function EditForm({
@@ -97,6 +102,75 @@ export function EditForm({
           />
           Extraction — send to AI for field extraction
         </label>
+      </div>
+
+      <div className="space-y-3 rounded-md border border-zinc-100 bg-zinc-50/60 p-4">
+        <p className="text-sm font-medium text-zinc-700">Upload verification (optional)</p>
+        <p className="text-xs text-zinc-500">
+          Checked on every stakeholder upload into this slot. A soft warning only — never blocks the upload.
+        </p>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">
+            AI judge hint
+          </label>
+          <input
+            name="ai_judge_hint"
+            type="text"
+            defaultValue={requirement.ai_judge_hint ?? ""}
+            placeholder="e.g. A Stockland Purchase Order — letterhead, PO number, cost table"
+            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">
+            Required text markers (one per line)
+          </label>
+          <textarea
+            name="marker_text_patterns"
+            rows={3}
+            defaultValue={(requirement.marker_text_patterns ?? []).join("\n")}
+            placeholder={"Purchase Order\nPO Number"}
+            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+          />
+        </div>
+        <div className="flex items-end gap-4">
+          <div className="w-28">
+            <label className="mb-1 block text-sm font-medium text-zinc-700">Min pages</label>
+            <input
+              name="marker_page_count_min"
+              type="number"
+              min={1}
+              defaultValue={requirement.marker_page_count_min ?? ""}
+              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+            />
+          </div>
+          <div className="w-28">
+            <label className="mb-1 block text-sm font-medium text-zinc-700">Max pages</label>
+            <input
+              name="marker_page_count_max"
+              type="number"
+              min={1}
+              defaultValue={requirement.marker_page_count_max ?? ""}
+              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+            />
+          </div>
+          {state.fieldErrors?.marker_page_count?.map((e) => (
+            <p key={e} className="text-xs text-red-600">{e}</p>
+          ))}
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">Regex</label>
+          <input
+            name="marker_regex"
+            type="text"
+            defaultValue={requirement.marker_regex ?? ""}
+            placeholder="PO-\d+"
+            className="w-full rounded-md border border-zinc-300 px-3 py-2 font-mono text-sm focus:border-zinc-500 focus:outline-none"
+          />
+          {state.fieldErrors?.marker_regex?.map((e) => (
+            <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+          ))}
+        </div>
       </div>
 
       {state.error && (

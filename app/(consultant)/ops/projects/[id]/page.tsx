@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { ProjectNumberForm } from "./_components/ProjectNumberForm";
 import { PbdbQaUploadForm } from "./_components/PbdbQaUploadForm";
+import { PbdbSendPreview } from "./_components/PbdbSendPreview";
 import { QaUploadedBanner } from "./_components/QaUploadedBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
@@ -22,6 +23,7 @@ import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanne
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { CollapsibleSection } from "./_components/CollapsibleSection";
 import { ProjectDetailsEditor, type OpenFieldFlag } from "./_components/ProjectDetailsEditor";
+import { FlagAcknowledgeControl } from "./_components/FlagAcknowledgeControl";
 import { ReExtractButton } from "@/components/ReExtractButton";
 import { ProjectAuditTrail, type ProjectAuditRow } from "./_components/ProjectAuditTrail";
 import { LogStakeholderResponseForm } from "./_components/LogStakeholderResponseForm";
@@ -210,7 +212,9 @@ export default async function ConsultantProjectDetailPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("project_files")
-      .select("id, original_filename, storage_path, version, review_cycle, created_at")
+      .select(
+        "id, original_filename, storage_path, version, review_cycle, created_at, filename_mismatch_reason, structure_scan_findings, qa_flags_acknowledged_at"
+      )
       .eq("project_id", id)
       .eq("file_type", "pbdb")
       .order("version", { ascending: true }),
@@ -320,6 +324,18 @@ export default async function ConsultantProjectDetailPage({
   const pbdbFiles = rawPbdbFiles ?? [];
   const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
 
+  // Findings gate before Send (#112): filename mismatch (#109) + deterministic
+  // structure scan, both surfaced on the latest pbdb file row. Acknowledgment
+  // is scoped to that exact row/version, never carried over from a prior upload.
+  const pbdbSendFindings: string[] = latestPbdb
+    ? [
+        ...(latestPbdb.filename_mismatch_reason ? [latestPbdb.filename_mismatch_reason as string] : []),
+        ...((latestPbdb.structure_scan_findings as { message: string }[] | null)?.map((f) => f.message) ?? []),
+      ]
+    : [];
+  const pbdbFlagsAcknowledged = !!latestPbdb?.qa_flags_acknowledged_at;
+  const pbdbReadyToSend = pbdbSendFindings.length === 0 || pbdbFlagsAcknowledged;
+
   // Auto-attached evidence from an email reply (#68) is stored with reference
   // `stakeholder_review:{reviewId}` — key it here so LogStakeholderResponseForm
   // can offer it instead of forcing a fresh upload.
@@ -358,6 +374,13 @@ export default async function ConsultantProjectDetailPage({
       (m.display_label as string | null) ?? prettifyToken(m.placeholder_token as string),
     ])
   );
+
+  // #114: flags surfaced at job pickup — acknowledgment is independent of
+  // resolution status (#105), so this includes both open and already-
+  // resolved flags, same set the "Submitted details" section tracks.
+  const unacknowledgedFlags = Object.entries(flagsByToken)
+    .filter(([, flag]) => !flag.acknowledgedAt)
+    .map(([token, flag]) => ({ token, label: labelMap.get(token) ?? prettifyToken(token), flag }));
 
   // Extraction candidates key `source_document` by the file's requirement
   // label (e.g. "Purchase Order"), not its original filename — extraction
@@ -590,6 +613,42 @@ export default async function ConsultantProjectDetailPage({
         <ProjectNumberForm projectId={id} projectNumber={project.project_number} bare />
       </FocusCard>
     );
+  } else if (unacknowledgedFlags.length > 0) {
+    // #114: surfaced at job pickup, gating progress to the next stage of
+    // work (PBDB generation) — but never gating acceptance of the job
+    // itself, which happens upstream of this page entirely.
+    focusCard = (
+      <FocusCard
+        tone="amber"
+        title={`Review ${unacknowledgedFlags.length} flagged field${unacknowledgedFlags.length === 1 ? "" : "s"}`}
+        subtitle="Acknowledge each flagged field before continuing to PBDB work."
+      >
+        <div className="space-y-2">
+          {unacknowledgedFlags.map(({ token, label, flag }) => (
+            <div
+              key={token}
+              className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-3 py-2.5"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-zinc-900">{label}</p>
+                <p className="truncate text-xs text-zinc-500">
+                  {flag.candidates.length} candidate{flag.candidates.length === 1 ? "" : "s"}
+                  {flag.status === "resolved" ? " · resolved" : " · open"}
+                </p>
+              </div>
+              <FlagAcknowledgeControl
+                flagId={flag.id}
+                label={label}
+                currentValue={extractedFields[token] ?? flag.candidates[0]?.value ?? ""}
+                candidates={flag.candidates}
+                sourceUrlsByFilename={sourceUrlsByFilename}
+                triggerLabel="Review"
+              />
+            </div>
+          ))}
+        </div>
+      </FocusCard>
+    );
   } else if (pbdbFiles.length === 0) {
     focusCard = (
       <FocusCard id="pbdb-section" tone="neutral" title="Generate the PBDB" subtitle="Ready when you are.">
@@ -624,16 +683,28 @@ export default async function ConsultantProjectDetailPage({
     focusCard = (
       <FocusCard tone="green" title="Ready to dispatch" subtitle="QA'd PBDB uploaded — send it out for stakeholder review.">
         <div className="space-y-4">
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
-            <ProjectDeliveryDelayPresetSelect
+          {latestPbdb && (
+            <PbdbSendPreview
               projectId={id}
-              initialValue={project.pbdb_delivery_delay_preset}
-              durations={deliveryDurations}
-              docType="pbdb"
+              fileId={latestPbdb.id as string}
+              findings={pbdbSendFindings}
+              acknowledged={pbdbFlagsAcknowledged}
             />
-          </div>
-          <DispatchButton projectId={id} />
+          )}
+          {pbdbReadyToSend && (
+            <>
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+                <ProjectDeliveryDelayPresetSelect
+                  projectId={id}
+                  initialValue={project.pbdb_delivery_delay_preset}
+                  durations={deliveryDurations}
+                  docType="pbdb"
+                />
+              </div>
+              <DispatchButton projectId={id} />
+            </>
+          )}
         </div>
       </FocusCard>
     );
@@ -750,16 +821,28 @@ export default async function ConsultantProjectDetailPage({
     focusCard = (
       <FocusCard tone="green" title="Ready to redispatch" subtitle="Revised PBDB uploaded — resend it to every stakeholder, including anyone who already approved.">
         <div className="space-y-4">
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
-            <ProjectDeliveryDelayPresetSelect
+          {latestPbdb && (
+            <PbdbSendPreview
               projectId={id}
-              initialValue={project.pbdb_delivery_delay_preset}
-              durations={deliveryDurations}
-              docType="pbdb"
+              fileId={latestPbdb.id as string}
+              findings={pbdbSendFindings}
+              acknowledged={pbdbFlagsAcknowledged}
             />
-          </div>
-          <DispatchButton projectId={id} />
+          )}
+          {pbdbReadyToSend && (
+            <>
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+                <ProjectDeliveryDelayPresetSelect
+                  projectId={id}
+                  initialValue={project.pbdb_delivery_delay_preset}
+                  durations={deliveryDurations}
+                  docType="pbdb"
+                />
+              </div>
+              <DispatchButton projectId={id} />
+            </>
+          )}
         </div>
       </FocusCard>
     );

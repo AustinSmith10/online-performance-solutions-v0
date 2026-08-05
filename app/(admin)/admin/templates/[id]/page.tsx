@@ -73,7 +73,9 @@ export default async function TemplatePage({
       .order("placeholder_token", { ascending: true }),
     supabase
       .from("file_requirements")
-      .select("id, name, slug, max_count, required, no_duplicates, extraction")
+      .select(
+        "id, name, slug, max_count, required, no_duplicates, extraction, marker_text_patterns, marker_page_count_min, marker_page_count_max, marker_regex, ai_judge_hint"
+      )
       .eq("template_id", id)
       .order("sort_order", { ascending: true }),
   ]);
@@ -109,6 +111,11 @@ export default async function TemplatePage({
   const requirements = (fileReqs ?? []) as {
     id: string; name: string; slug: string;
     max_count: number; required: boolean; no_duplicates: boolean; extraction: boolean;
+    marker_text_patterns: string[] | null;
+    marker_page_count_min: number | null;
+    marker_page_count_max: number | null;
+    marker_regex: string | null;
+    ai_judge_hint: string | null;
   }[];
   const templateRows = rows.filter((r) => r.in_template);
   const extractionOnlyRows = rows.filter((r) => !r.in_template);

@@ -13,6 +13,11 @@ type FileRequirement = {
   required: boolean;
   no_duplicates: boolean;
   extraction: boolean;
+  marker_text_patterns: string[] | null;
+  marker_page_count_min: number | null;
+  marker_page_count_max: number | null;
+  marker_regex: string | null;
+  ai_judge_hint: string | null;
 };
 
 interface Props {
@@ -130,6 +135,67 @@ function RequirementCard({
             </label>
           </div>
 
+          {/* Verification (#113): deterministic markers optional, AI-judge hint recommended */}
+          <div className="space-y-2 rounded-md border border-zinc-100 bg-zinc-50/60 p-3">
+            <p className="text-xs font-medium text-zinc-600">Upload verification (optional)</p>
+            <div>
+              <label className="mb-1 block text-xs text-zinc-500">
+                AI judge hint — plain description of what this file should look like
+              </label>
+              <input
+                name="ai_judge_hint"
+                type="text"
+                defaultValue={requirement.ai_judge_hint ?? ""}
+                placeholder="e.g. A Stockland Purchase Order — letterhead, PO number, cost table"
+                className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-zinc-500">
+                Required text markers — one per line (optional)
+              </label>
+              <textarea
+                name="marker_text_patterns"
+                rows={2}
+                defaultValue={(requirement.marker_text_patterns ?? []).join("\n")}
+                placeholder={"Purchase Order\nPO Number"}
+                className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              />
+            </div>
+            <div className="flex items-end gap-3">
+              <div className="w-20">
+                <label className="mb-1 block text-xs text-zinc-500">Min pages</label>
+                <input
+                  name="marker_page_count_min"
+                  type="number"
+                  min={1}
+                  defaultValue={requirement.marker_page_count_min ?? ""}
+                  className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                />
+              </div>
+              <div className="w-20">
+                <label className="mb-1 block text-xs text-zinc-500">Max pages</label>
+                <input
+                  name="marker_page_count_max"
+                  type="number"
+                  min={1}
+                  defaultValue={requirement.marker_page_count_max ?? ""}
+                  className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="mb-1 block text-xs text-zinc-500">Regex (optional)</label>
+                <input
+                  name="marker_regex"
+                  type="text"
+                  defaultValue={requirement.marker_regex ?? ""}
+                  placeholder="PO-\d+"
+                  className="w-full rounded border border-zinc-200 px-2 py-1.5 font-mono text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                />
+              </div>
+            </div>
+          </div>
+
           {saveError && (
             <p className="text-xs text-red-600">{saveError}</p>
           )}
@@ -190,6 +256,15 @@ function RequirementCard({
         {requirement.extraction && (
           <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
             Extraction
+          </span>
+        )}
+        {(requirement.ai_judge_hint ||
+          (requirement.marker_text_patterns?.length ?? 0) > 0 ||
+          requirement.marker_page_count_min != null ||
+          requirement.marker_page_count_max != null ||
+          requirement.marker_regex) && (
+          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+            Verified on upload
           </span>
         )}
         <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-500">
