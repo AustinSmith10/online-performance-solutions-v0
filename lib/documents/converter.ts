@@ -47,8 +47,23 @@ function escapeXml(s: string): string {
  * are handled correctly; places the full replaced text in the first run and
  * removes the now-redundant subsequent runs.
  */
-function replaceParagraph(para: string): string {
-  const tPattern = /<w:t([^>]*)>([\s\S]*?)<\/w:t>/g;
+function replaceParagraph(rawPara: string): string {
+  // Word sometimes emits an empty run as a self-closing <w:t/> (e.g. a
+  // formatting-mark artifact next to a merge field Word split across
+  // several runs). tPattern below requires an explicit </w:t> closing tag,
+  // so a self-closing <w:t/> gets misread as an *opening* tag whose
+  // "content" runs all the way to the *next* real </w:t> — swallowing the
+  // next run's own opening tag as literal text and corrupting the
+  // paragraph. Normalizing to the equivalent empty open/close form first
+  // keeps every subsequent run's boundaries where they actually are.
+  //
+  // Both patterns require a delimiter (space, "/", or ">") right after
+  // "w:t" — bare "<w:t" alone would also match unrelated elements that
+  // merely start with the same three characters, like <w:tab/>, <w:tc>,
+  // or <w:tbl>, corrupting any paragraph that contains a tab stop (e.g.
+  // TOC entries) or sits inside a table cell.
+  const para = rawPara.replace(/<w:t(?=[\s/>])([^>]*)\/>/g, "<w:t$1></w:t>");
+  const tPattern = /<w:t(?=[\s/>])([^>]*)>([\s\S]*?)<\/w:t>/g;
   type Match = { index: number; length: number; attrs: string; text: string };
   const matches: Match[] = [];
   let m: RegExpExecArray | null;

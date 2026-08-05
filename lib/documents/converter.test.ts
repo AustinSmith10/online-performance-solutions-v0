@@ -118,6 +118,45 @@ describe("convertPbdbToPbdr — text replacements in document body", () => {
     expect(output).toContain("Design Report");
     expect(output).not.toContain("Design Brief");
   });
+
+  it("handles a self-closing <w:t/> run sitting before the real text run (Word formatting-mark artifact)", () => {
+    // A self-closing <w:t/> has no explicit </w:t>, so a naive regex reads
+    // it as an *opening* tag and swallows everything up to the next real
+    // </w:t> — including the next run's own opening tag — as literal text,
+    // corrupting the paragraph and producing an invalid document.
+    const splitPara = `<w:p><w:r><w:t/></w:r><w:r><w:t>PBDB</w:t></w:r></w:p>`;
+    const output = convertPbdbToPbdr(makeDocxBuffer(`<root>${splitPara}</root>`));
+    const xml = readXml(output, "word/document.xml");
+    expect(xml).toContain("PBDR");
+    expect(xml).not.toContain("PBDB");
+    // The run that was corrupted showed up as literal escaped markup
+    // (e.g. "&lt;/w:r&gt;") inside a <w:t> — assert that never happens.
+    expect(xml).not.toContain("&lt;/w:r&gt;");
+  });
+
+  it("does not misparse <w:tab/>, <w:tc>, or other elements that merely start with 'w:t'", () => {
+    // <w:t([^>]*)> without a boundary check also matches <w:tab>, <w:tc>,
+    // <w:tbl> etc. — anything beginning with the same three characters —
+    // which is exactly as corrupting as the self-closing-<w:t/> case.
+    const para = `<w:p><w:r><w:tab/><w:t>PBDB</w:t></w:r></w:p>`;
+    const output = convertPbdbToPbdr(makeDocxBuffer(`<root>${para}</root>`));
+    const xml = readXml(output, "word/document.xml");
+    expect(xml).toContain("<w:tab/>");
+    expect(xml).toContain("PBDR");
+    expect(xml).not.toContain("PBDB");
+  });
+
+  it("produces well-formed XML for a paragraph combining a self-closing <w:t/> and a <w:tab/>", () => {
+    const para = `<w:p><w:r><w:t/></w:r><w:r><w:tab/></w:r><w:r><w:t>PBDB</w:t></w:r></w:p>`;
+    const output = convertPbdbToPbdr(makeDocxBuffer(`<root>${para}</root>`));
+    const xml = readXml(output, "word/document.xml");
+    // A structural sanity check in place of a full XML parse: every open
+    // <w:r> must have a matching close, and the run count must be stable.
+    const openRuns = (xml.match(/<w:r(?:\s[^>]*)?>/g) ?? []).length;
+    const closeRuns = (xml.match(/<\/w:r>/g) ?? []).length;
+    expect(openRuns).toBe(closeRuns);
+    expect(xml).toContain("PBDR");
+  });
 });
 
 describe("convertPbdbToPbdr — replacements applied to headers", () => {
