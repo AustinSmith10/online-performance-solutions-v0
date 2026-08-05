@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkPbdrGate } from "@/lib/payments/gate";
 import { convertPbdbToPbdr } from "@/lib/documents/converter";
-import { setRevisionHistoryRows } from "@/lib/documents/revision-table";
+import { setRevisionHistoryRows, setCoverRevisionNumber } from "@/lib/documents/revision-table";
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { buildPbdrFilename } from "@/lib/documents/naming";
@@ -186,6 +186,11 @@ export async function deliverPbdr(
         preparedBy: row.PREPARED_BY,
       }))
     );
+
+    // Same for the cover page's scalar Revision value — it still shows
+    // whatever the source PBDB's own cover said (its own PBDB rev number),
+    // not the PBDR's independent counter. Patch it to the PBDR's own rev.
+    transformedDocx = setCoverRevisionNumber(transformedDocx, String(revisionIndex));
 
     // Strip red token colour if enabled (default on)
     if (project.strip_token_color as boolean) {

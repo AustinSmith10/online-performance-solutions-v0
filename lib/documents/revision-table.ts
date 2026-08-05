@@ -55,6 +55,68 @@ export function appendRevisionHistoryRow(
 }
 
 /**
+ * Patches the cover page's scalar "Revision" value (SYS_REV_NO — rendered
+ * once via docxtemplater at initial generation and never touched again) to
+ * the given number. Without this, the cover keeps showing "0" forever no
+ * matter how many revisions the document has actually been through, even
+ * after the Revision History table below it has correctly grown.
+ *
+ * The cover renders this as a two-cell table row: a label cell ("Revision")
+ * and a value cell next to it. Identifies the row by that exact label text
+ * rather than any fixed position, and only touches the first match — never
+ * throws, a missing/unrecognized row just leaves the document unchanged.
+ */
+export function setCoverRevisionNumber(docxBuffer: Buffer, revNumber: string): Buffer {
+  try {
+    const zip = new PizZip(docxBuffer);
+    const docFile = zip.files["word/document.xml"];
+    if (!docFile) return docxBuffer;
+
+    const xml = docFile.asText();
+    const patched = patchCoverRevisionRow(xml, revNumber);
+    if (patched === null) {
+      console.warn(
+        "[revision-table] Could not locate the cover page's Revision field — leaving the document unchanged."
+      );
+      return docxBuffer;
+    }
+
+    zip.file("word/document.xml", patched);
+    return zip.generate({ type: "nodebuffer" }) as Buffer;
+  } catch (err) {
+    console.warn(
+      "[revision-table] Failed to patch the cover page's Revision field — leaving the document unchanged.",
+      err
+    );
+    return docxBuffer;
+  }
+}
+
+function patchCoverRevisionRow(xml: string, revNumber: string): string | null {
+  const rows = matchTopLevel(xml, "w:tr");
+
+  for (const row of rows) {
+    const cells = matchTopLevel(row, "w:tc");
+    if (cells.length < 2) continue;
+
+    const label = cellTexts(row)[0]?.trim().toLowerCase();
+    if (label !== "revision") continue;
+
+    const valueCell = cells[1];
+    const newCell = rebuildCell(valueCell, revNumber);
+    const cellStart = row.indexOf(valueCell);
+    if (cellStart === -1) continue;
+    const newRow = row.slice(0, cellStart) + newCell + row.slice(cellStart + valueCell.length);
+
+    const rowStart = xml.indexOf(row);
+    if (rowStart === -1) continue;
+    return xml.slice(0, rowStart) + newRow + xml.slice(rowStart + row.length);
+  }
+
+  return null;
+}
+
+/**
  * Rebuilds the Revision History table's data rows from scratch, replacing
  * whatever is currently there with exactly the given rows.
  *

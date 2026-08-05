@@ -14,7 +14,7 @@ import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { expediteDelivery, scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
 import { buildPbdbFilename } from "@/lib/documents/naming";
-import { appendRevisionHistoryRow } from "@/lib/documents/revision-table";
+import { appendRevisionHistoryRow, setCoverRevisionNumber } from "@/lib/documents/revision-table";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function notifyAdminsQaComplete(
@@ -1039,6 +1039,13 @@ export async function uploadQaPbdb(
         preparedBy: preparedByName,
       })
     );
+
+    // The cover page's scalar Revision value (SYS_REV_NO) is subject to the
+    // same frozen-at-initial-generation problem as the table above — patch
+    // it to match. Always safe to re-run: it unconditionally sets the cell
+    // to expectedRev rather than appending, so a forced resend with an
+    // unchanged rev just writes the same value again.
+    fileBuffer = Buffer.from(setCoverRevisionNumber(fileBuffer, String(expectedRev)));
   }
 
   const storedFilename = buildPbdbFilename(projectNum, expectedRev, address, uploadDate, {

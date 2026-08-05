@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import PizZip from "pizzip";
-import { appendRevisionHistoryRow, setRevisionHistoryRows } from "./revision-table";
+import { appendRevisionHistoryRow, setRevisionHistoryRows, setCoverRevisionNumber } from "./revision-table";
 
 function tc(text: string): string {
   return `<w:tc><w:tcPr><w:tcW w:w="1000" w:type="pct"/></w:tcPr><w:p><w:pPr><w:pStyle w:val="P1TableText"/></w:pPr><w:r><w:rPr><w:color w:val="EE0000"/></w:rPr><w:t>${text}</w:t></w:r></w:p></w:tc>`;
@@ -207,5 +207,50 @@ describe("setRevisionHistoryRows", () => {
     ];
     expect(() => setRevisionHistoryRows(bogus, rows)).not.toThrow();
     expect(setRevisionHistoryRows(bogus, rows).equals(bogus)).toBe(true);
+  });
+});
+
+function coverLabelRow(label: string, value: string): string {
+  return `<w:tr><w:tc><w:tcPr><w:tcW w:w="822" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:pStyle w:val="CoverTableHeading"/></w:pPr><w:r><w:t>${label}</w:t></w:r></w:p></w:tc><w:tc><w:tcPr><w:tcW w:w="2835" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:pStyle w:val="CoverPageText"/></w:pPr><w:r><w:rPr><w:color w:val="EE0000"/></w:rPr><w:t xml:space="preserve">${value}</w:t></w:r></w:p></w:tc></w:tr>`;
+}
+
+describe("setCoverRevisionNumber", () => {
+  it("patches the value cell of the row labeled 'Revision'", () => {
+    const table = `<w:tbl>${coverLabelRow("Address", "123 Main St")}${coverLabelRow("Project no.", "789-S")}${coverLabelRow("Date", "04/08/2026")}${coverLabelRow("Revision", "0")}</w:tbl>`;
+    const buf = makeDocxBuffer(table);
+
+    const out = setCoverRevisionNumber(buf, "2");
+    const xml = extractDocumentXml(out);
+
+    expect(xml).toContain("<w:t xml:space=\"preserve\">2</w:t>");
+    // Unrelated rows are untouched
+    expect(xml).toContain("123 Main St");
+    expect(xml).toContain("789-S");
+    expect(xml).toContain("04/08/2026");
+  });
+
+  it("does not touch a 'Revision history' heading row, only an exact 'Revision' label", () => {
+    const table = `<w:tbl>${coverLabelRow("Revision history", "n/a")}${coverLabelRow("Revision", "0")}</w:tbl>`;
+    const buf = makeDocxBuffer(table);
+
+    const out = setCoverRevisionNumber(buf, "3");
+    const xml = extractDocumentXml(out);
+
+    expect(xml).toContain("n/a"); // "Revision history" row's value cell untouched
+    expect(xml).toContain("<w:t xml:space=\"preserve\">3</w:t>");
+    expect(xml).not.toContain("<w:t xml:space=\"preserve\">0</w:t>");
+  });
+
+  it("returns the buffer unchanged when no 'Revision' row is found", () => {
+    const table = `<w:tbl>${coverLabelRow("Address", "123 Main St")}</w:tbl>`;
+    const buf = makeDocxBuffer(table);
+    const out = setCoverRevisionNumber(buf, "1");
+    expect(out.equals(buf)).toBe(true);
+  });
+
+  it("returns the buffer unchanged (never throws) on a malformed/non-docx buffer", () => {
+    const bogus = Buffer.from("not a zip file at all");
+    expect(() => setCoverRevisionNumber(bogus, "1")).not.toThrow();
+    expect(setCoverRevisionNumber(bogus, "1").equals(bogus)).toBe(true);
   });
 });
