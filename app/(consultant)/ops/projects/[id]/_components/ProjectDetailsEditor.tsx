@@ -22,6 +22,8 @@ export interface OpenFieldFlag {
   status: "open" | "resolved";
   resolvedByEmail?: string | null;
   resolvedAt?: string | null;
+  acknowledgedByEmail?: string | null;
+  acknowledgedAt?: string | null;
 }
 
 interface Props {
@@ -127,7 +129,9 @@ function EditableRow({
             leftover space next to the value column. Stays visible for the
             flag's whole lifetime (#105) — resolved flags show read-only,
             not hidden, since the consultant still needs to see/acknowledge
-            every candidate and its source regardless of resolution status. */}
+            every candidate and its source regardless of resolution status.
+            Acknowledgment lives here too (not a separate card) — this is
+            the one place that already shows candidates/sources per field. */}
         {flag && (
           <div className="mt-1">
             <FieldFlagReview
@@ -140,6 +144,9 @@ function EditableRow({
               resolvedByEmail={flag.resolvedByEmail}
               resolvedAt={flag.resolvedAt}
               sourceUrlsByFilename={sourceUrlsByFilename}
+              acknowledgedByEmail={flag.acknowledgedByEmail}
+              acknowledgedAt={flag.acknowledgedAt}
+              showAcknowledgment
               onResolved={() => router.refresh()}
             />
           </div>

@@ -34,7 +34,6 @@ import { HighlightRing } from "@/components/HighlightRing";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
 import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
 import { ProjectDetailsEditor, type OpenFieldFlag } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectDetailsEditor";
-import { FlagAcknowledgmentSection, type FlagRow } from "@/app/(consultant)/ops/projects/[id]/_components/FlagAcknowledgmentSection";
 import { ReExtractButton } from "@/components/ReExtractButton";
 import { ProjectAuditTrail, type ProjectAuditRow } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectAuditTrail";
 import { PbdbVersionsCard } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbVersionsCard";
@@ -412,6 +411,10 @@ export default async function ProjectDetailPage({
         status: f.status as OpenFieldFlag["status"],
         resolvedByEmail: f.resolved_by ? flagActorEmailById.get(f.resolved_by as string) ?? null : null,
         resolvedAt: f.resolved_at as string | null,
+        acknowledgedByEmail: f.consultant_acknowledged_by
+          ? flagActorEmailById.get(f.consultant_acknowledged_by as string) ?? null
+          : null,
+        acknowledgedAt: f.consultant_acknowledged_at as string | null,
       },
     ])
   );
@@ -530,21 +533,6 @@ export default async function ProjectDetailPage({
     ]),
     ...evidenceFiles.map((f) => ["Evidence", f.signedUrl]),
   ]);
-
-  const allFlags: FlagRow[] = allFieldFlags.map((f) => ({
-    id: f.id as string,
-    label: labelMap.get(f.field_key as string) ?? prettifyToken(f.field_key as string),
-    status: f.status as "open" | "resolved",
-    type: f.type as FlagRow["type"],
-    currentValue: (f.current_value as string) ?? "",
-    candidates: (f.candidate_values ?? []) as FlagRow["candidates"],
-    resolvedByEmail: f.resolved_by ? flagActorEmailById.get(f.resolved_by as string) ?? null : null,
-    resolvedAt: f.resolved_at as string | null,
-    acknowledgedByEmail: f.consultant_acknowledged_by
-      ? flagActorEmailById.get(f.consultant_acknowledged_by as string) ?? null
-      : null,
-    acknowledgedAt: f.consultant_acknowledged_at as string | null,
-  }));
 
   const extractedFields = project.extracted_fields ?? {};
   const clientFieldEntries = Object.entries(extractedFields)
@@ -1010,7 +998,6 @@ export default async function ProjectDetailPage({
       <div className="px-1">
         <ReExtractButton projectId={id} />
       </div>
-      <FlagAcknowledgmentSection flags={allFlags} sourceUrlsByFilename={sourceUrlsByFilename} />
     </>
   );
 

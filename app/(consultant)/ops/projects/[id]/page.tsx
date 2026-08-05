@@ -22,7 +22,6 @@ import { PickedUpBanner } from "@/app/(consultant)/ops/_components/PickedUpBanne
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { CollapsibleSection } from "./_components/CollapsibleSection";
 import { ProjectDetailsEditor, type OpenFieldFlag } from "./_components/ProjectDetailsEditor";
-import { FlagAcknowledgmentSection, type FlagRow } from "./_components/FlagAcknowledgmentSection";
 import { ReExtractButton } from "@/components/ReExtractButton";
 import { ProjectAuditTrail, type ProjectAuditRow } from "./_components/ProjectAuditTrail";
 import { LogStakeholderResponseForm } from "./_components/LogStakeholderResponseForm";
@@ -280,6 +279,10 @@ export default async function ConsultantProjectDetailPage({
         status: f.status as OpenFieldFlag["status"],
         resolvedByEmail: f.resolved_by ? flagActorEmailById.get(f.resolved_by as string) ?? null : null,
         resolvedAt: f.resolved_at as string | null,
+        acknowledgedByEmail: f.consultant_acknowledged_by
+          ? flagActorEmailById.get(f.consultant_acknowledged_by as string) ?? null
+          : null,
+        acknowledgedAt: f.consultant_acknowledged_at as string | null,
       },
     ])
   );
@@ -369,21 +372,6 @@ export default async function ConsultantProjectDetailPage({
     ]),
     ...evidenceFiles.map((f) => ["Evidence", f.signedUrl]),
   ]);
-
-  const allFlags: FlagRow[] = allFieldFlags.map((f) => ({
-    id: f.id as string,
-    label: labelMap.get(f.field_key as string) ?? prettifyToken(f.field_key as string),
-    status: f.status as "open" | "resolved",
-    type: f.type as FlagRow["type"],
-    currentValue: (f.current_value as string) ?? "",
-    candidates: (f.candidate_values ?? []) as FlagRow["candidates"],
-    resolvedByEmail: f.resolved_by ? flagActorEmailById.get(f.resolved_by as string) ?? null : null,
-    resolvedAt: f.resolved_at as string | null,
-    acknowledgedByEmail: f.consultant_acknowledged_by
-      ? flagActorEmailById.get(f.consultant_acknowledged_by as string) ?? null
-      : null,
-    acknowledgedAt: f.consultant_acknowledged_at as string | null,
-  }));
 
   const extractedFields = project.extracted_fields ?? {};
 
@@ -878,7 +866,6 @@ export default async function ConsultantProjectDetailPage({
       <div className="px-1">
         <ReExtractButton projectId={id} />
       </div>
-      <FlagAcknowledgmentSection flags={allFlags} sourceUrlsByFilename={sourceUrlsByFilename} />
       <CollapsibleSection title="Client contact" defaultOpen>
         <div className="divide-y divide-zinc-100">
           {project.submitter ? (

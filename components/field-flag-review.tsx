@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { resolveFieldFlag, type ResolutionReason } from "@/app/actions/field-flags";
 import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
+import { FlagAcknowledgeControl } from "@/app/(consultant)/ops/projects/[id]/_components/FlagAcknowledgeControl";
 import type { Confidence } from "@/lib/documents/extractor";
 import type { FlagType } from "@/lib/documents/field-flags";
 
@@ -22,9 +23,11 @@ interface Props {
   currentValue: string;
   candidates: FieldFlagCandidate[];
   // #105: a flag renders inline in Submitted details for its whole
-  // lifetime, not just while open — "resolved" starts read-only (current
-  // value + full candidate list, each previewable) with an Edit button that
-  // reveals the same picker used for "open" below.
+  // lifetime, not just while open — "resolved" is a compact read-only
+  // reference (accepted value + full candidate list, each previewable).
+  // Further edits go through the row's own pencil/free-text edit, not this
+  // component — this never reopens the picker once resolved (outside the
+  // forced re-extract-conflict flow via initiallyExpanded/initialConflict).
   status: "open" | "resolved";
   resolvedByEmail?: string | null;
   resolvedAt?: string | null;
@@ -32,6 +35,18 @@ interface Props {
   // source document in the shared viewer (#104) regardless of which one
   // ended up as the accepted value.
   sourceUrlsByFilename?: Record<string, string | null>;
+  // Consultant acknowledgment (#105) — independent of resolution status, so
+  // it renders here regardless of whether the flag is open or resolved.
+  // Undefined (not just null) means "don't show acknowledgment at all" —
+  // used by stakeholderView, which never gets this data.
+  acknowledgedByEmail?: string | null;
+  acknowledgedAt?: string | null;
+  // Opt-in: only the consultant/admin "Submitted details" row wants the
+  // acknowledgment control rendered here. The re-extract conflict flow
+  // (ReExtractButton) and the stakeholder portal reuse this same component
+  // without it — acknowledging is a distinct action from resolving a
+  // conflict, and stakeholders can't acknowledge at all.
+  showAcknowledgment?: boolean;
   onResolved?: (value: string) => void;
   // Re-extract conflict flow: this component *is* the "you're about to
   // override an already-resolved value" warning, so it starts in edit mode
@@ -86,6 +101,9 @@ export function FieldFlagReview({
   resolvedByEmail,
   resolvedAt,
   sourceUrlsByFilename,
+  acknowledgedByEmail,
+  acknowledgedAt,
+  showAcknowledgment,
   onResolved,
   initiallyExpanded,
   initialConflict,
@@ -93,9 +111,30 @@ export function FieldFlagReview({
   flagType = "confidence",
 }: Props) {
   const isConflict = flagType === "inconsistency" || flagType === "both";
-  const [editing, setEditing] = useState(
-    !!initiallyExpanded || !!initialConflict || status === "open"
-  );
+  // The conflict flow forces the full picker open even for an already-
+  // "resolved" flag — that's the one case where a resolved flag still needs
+  // this component's editor rather than the plain pencil edit.
+  const forcedOpen = !!initiallyExpanded || !!initialConflict;
+  const [editing, setEditing] = useState(forcedOpen || status === "open");
+
+  const acceptedCandidate = candidates.find((c) => c.value === currentValue) ?? candidates[0];
+  const ackSourceUrl = acceptedCandidate
+    ? sourceUrlsByFilename?.[acceptedCandidate.source_document] ?? null
+    : null;
+  const ackBlock = showAcknowledgment ? (
+    acknowledgedAt ? (
+      <p className="text-[11px] text-green-700">
+        ✓ Acknowledged by {acknowledgedByEmail ?? "a consultant"} on{" "}
+        {new Date(acknowledgedAt).toLocaleDateString("en-AU")}
+      </p>
+    ) : (
+      <FlagAcknowledgeControl
+        flagId={flagId}
+        sourceUrl={ackSourceUrl}
+        sourceFilename={acceptedCandidate?.source_document}
+      />
+    )
+  ) : null;
   const [value, setValue] = useState(currentValue);
   const [reason, setReason] = useState<ResolutionReason>("self_resolved");
   const [note, setNote] = useState("");
@@ -136,7 +175,54 @@ export function FieldFlagReview({
     setError(result.error);
   }
 
+  if (!editing && status === "resolved") {
+    // #105 tweak: once resolved, this field is done with the picker for
+    // good — the row's own pencil icon now handles further edits as a plain
+    // free-text field, same as any other submitted detail. This stays only
+    // as a compact, read-only reference: the accepted value in a disabled
+    // dropdown (so the other candidates remain visible for context) plus a
+    // preview trigger per candidate, and the acknowledgment control.
+    return (
+      <div className="mt-2 space-y-1.5 rounded-md border border-zinc-200 bg-zinc-50/60 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <select
+            disabled
+            value={currentValue}
+            aria-label={`${label} — accepted value (read-only)`}
+            className="min-w-0 max-w-full flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 disabled:opacity-100"
+          >
+            {candidates.map((c, i) => (
+              <option key={`${c.value}-${i}`} value={c.value}>
+                {c.value || "(empty)"} · {c.confidence} · {c.source_document}
+              </option>
+            ))}
+          </select>
+          {ackBlock}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {candidates.map((c, i) => (
+            <span key={`${c.value}-${i}`} className="text-xs text-zinc-500">
+              {c.value || "(empty)"}
+              <CandidatePreviewButton
+                filename={c.source_document}
+                sourceUrlsByFilename={sourceUrlsByFilename}
+              />
+            </span>
+          ))}
+        </div>
+        {resolvedByEmail && (
+          <p className="text-[11px] text-zinc-400">
+            Resolved by {resolvedByEmail}
+            {resolvedAt && ` on ${new Date(resolvedAt).toLocaleDateString("en-AU")}`}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   if (!editing) {
+    // Transient: an "open" flag momentarily between a successful resolve
+    // and the parent's router.refresh() picking up status="resolved".
     return (
       <div
         className={
@@ -149,13 +235,7 @@ export function FieldFlagReview({
           <p className="text-xs font-medium text-zinc-700">
             {label} — {candidates.length} candidate{candidates.length === 1 ? "" : "s"} found
           </p>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50"
-          >
-            Edit
-          </button>
+          {ackBlock}
         </div>
         <div className="space-y-1">
           {candidates.map((c, i) => (
@@ -213,42 +293,44 @@ export function FieldFlagReview({
         </div>
       )}
 
-      <div>
-        <p className="mb-1 text-xs font-medium text-zinc-700">{label} — candidates found:</p>
-        <div className="space-y-1">
-          {candidates.map((c, i) => (
-            <label
-              key={`${c.value}-${i}`}
-              className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
-            >
-              <input
-                type="radio"
-                checked={value === c.value}
-                onChange={() => setValue(c.value)}
-                className="mt-0.5"
-              />
-              <span>
-                <span className="font-medium text-zinc-900">{c.value || "(empty)"}</span>{" "}
-                <span className="text-zinc-400">
-                  ({c.confidence} confidence — {c.source_document})
-                </span>
-                {/* #105: submitting without touching this flag now accepts the
-                    default outright, so it needs to read as a deliberate,
-                    already-selected option rather than just "the first radio". */}
-                {c.value === currentValue && (
-                  <span className="ml-1 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
-                    default
-                  </span>
-                )}
-                <CandidatePreviewButton
-                  filename={c.source_document}
-                  sourceUrlsByFilename={sourceUrlsByFilename}
-                />
-                {c.reason && <span className="block text-[11px] italic text-orange-700">{c.reason}</span>}
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-zinc-700">{label} — candidates found:</p>
+        {ackBlock}
+      </div>
+
+      <div className="space-y-1">
+        {candidates.map((c, i) => (
+          <label
+            key={`${c.value}-${i}`}
+            className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
+          >
+            <input
+              type="radio"
+              checked={value === c.value}
+              onChange={() => setValue(c.value)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium text-zinc-900">{c.value || "(empty)"}</span>{" "}
+              <span className="text-zinc-400">
+                ({c.confidence} confidence — {c.source_document})
               </span>
-            </label>
-          ))}
-        </div>
+              {/* #105: submitting without touching this flag now accepts the
+                  default outright, so it needs to read as a deliberate,
+                  already-selected option rather than just "the first radio". */}
+              {c.value === currentValue && (
+                <span className="ml-1 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
+                  default
+                </span>
+              )}
+              <CandidatePreviewButton
+                filename={c.source_document}
+                sourceUrlsByFilename={sourceUrlsByFilename}
+              />
+              {c.reason && <span className="block text-[11px] italic text-orange-700">{c.reason}</span>}
+            </span>
+          </label>
+        ))}
       </div>
 
       <div>
