@@ -130,10 +130,11 @@ function patchCoverRevisionRow(xml: string, revNumber: string): string | null {
  *
  * Clones the table's last existing row purely for cell formatting, so the
  * table's original styling carries into however many rows `rows` produces.
- * REVIEWED BY is left blank on every row — it's a fixed manual field per the
- * template, and the source row's value (if any) belongs to a PBDB row, not
- * a PBDR one. Never throws — a malformed or unrecognized table just leaves
- * the document unchanged.
+ * REVIEWED BY is left untouched on every generated row — it's a fixed manual
+ * field baked into the template (not data-driven per row), so its value is
+ * carried over from the template row rather than being overwritten. Never
+ * throws — a malformed or unrecognized table just leaves the document
+ * unchanged.
  */
 export function setRevisionHistoryRows(
   docxBuffer: Buffer,
@@ -197,8 +198,8 @@ function replaceRevisionRows(
 
     const newRowsXml = rows
       .map((row) => {
-        const values = [row.docType, row.revNumber, row.date, row.purpose, row.preparedBy, ""];
-        const newCells = templateCells.map((cell, i) => rebuildCell(cell, values[i] ?? ""));
+        const values = [row.docType, row.revNumber, row.date, row.purpose, row.preparedBy];
+        const newCells = templateCells.map((cell, i) => (i < values.length ? rebuildCell(cell, values[i]) : cell));
         return `${trOpen}${newCells.join("")}</w:tr>`;
       })
       .join("");

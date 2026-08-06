@@ -904,6 +904,7 @@ export default async function ConsultantProjectDetailPage({
     focusCard = paymentReady ? (
       <FocusCard tone="green" title="Ready to convert" subtitle="All stakeholders approved and payment is clear.">
         <div className="space-y-4">
+          <PbdrPreviewButton projectId={id} />
           <div>
             <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
             <ProjectDeliveryDelayPresetSelect
@@ -912,10 +913,7 @@ export default async function ConsultantProjectDetailPage({
               durations={deliveryDurations}
             />
           </div>
-          <div className="flex items-center gap-3">
-            <ConvertButton projectId={id} />
-            <PbdrPreviewButton projectId={id} />
-          </div>
+          <ConvertButton projectId={id} />
         </div>
       </FocusCard>
     ) : (
