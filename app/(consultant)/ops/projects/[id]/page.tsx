@@ -41,10 +41,12 @@ import { ResendBufferUpdateButton } from "./_components/ResendBufferUpdateButton
 import { ResendPbdrButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendPbdrButton";
 import { RevertButton } from "@/app/(admin)/admin/projects/[id]/_components/RevertButton";
 import { ConvertButton } from "@/app/(admin)/admin/projects/[id]/_components/ConvertButton";
+import { PbdrPreviewButton } from "@/app/(admin)/admin/projects/[id]/_components/PbdrPreviewButton";
 import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/DispatchButton";
 import { VerificationMismatchNote } from "@/components/VerificationMismatchNote";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { Stage } from "@/components/workspace/StageRail";
+import { RealtimeSubscriptionRefresher } from "@/components/RealtimeSubscriptionRefresher";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -910,7 +912,10 @@ export default async function ConsultantProjectDetailPage({
               durations={deliveryDurations}
             />
           </div>
-          <ConvertButton projectId={id} />
+          <div className="flex items-center gap-3">
+            <ConvertButton projectId={id} />
+            <PbdrPreviewButton projectId={id} />
+          </div>
         </div>
       </FocusCard>
     ) : (
@@ -1286,6 +1291,15 @@ export default async function ConsultantProjectDetailPage({
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
+      <RealtimeSubscriptionRefresher
+        channelName={`ops-project-${id}`}
+        subscriptions={[
+          { table: "projects", filter: `id=eq.${id}` },
+          { table: "project_files", filter: `project_id=eq.${id}` },
+          { table: "field_flags", filter: `project_id=eq.${id}` },
+          { table: "stakeholder_reviews", filter: `project_id=eq.${id}` },
+        ]}
+      />
       {justPickedUp && (
         <PickedUpBanner projectId={id} isTerminal={isTerminal} hasProjectNumber={!!project.project_number} />
       )}

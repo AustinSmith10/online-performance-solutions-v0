@@ -22,6 +22,7 @@ import { DocGroupCard } from "../../_components/DocGroupCard";
 import { FocusCard } from "@/components/workspace/FocusCard";
 import type { Stage } from "@/components/workspace/StageRail";
 import type { ProjectStatus } from "@/types";
+import { RealtimeSubscriptionRefresher } from "@/components/RealtimeSubscriptionRefresher";
 
 const STAGE_ICON: Record<StepperStageKey, Stage["icon"]> = {
   submitted: "document",
@@ -694,6 +695,10 @@ export default async function ClientProjectDetailPage({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 space-y-6">
+      <RealtimeSubscriptionRefresher
+        channelName={`portal-project-${id}`}
+        subscriptions={[{ table: "projects", filter: `id=eq.${id}` }]}
+      />
       <Link
         href={isDeleted ? "/portal/recovery" : "/portal"}
         className="text-sm text-zinc-500 hover:text-zinc-700"

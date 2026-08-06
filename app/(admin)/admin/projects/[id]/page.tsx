@@ -9,6 +9,7 @@ import { ResendTokenButton } from "./_components/ResendTokenButton";
 import { UpdateEmailReveal } from "./_components/UpdateEmailReveal";
 import { ProjectStakeholderSection } from "./_components/ProjectStakeholderSection";
 import { ConvertButton } from "./_components/ConvertButton";
+import { PbdrPreviewButton } from "./_components/PbdrPreviewButton";
 import { RevertButton } from "./_components/RevertButton";
 import { DispatchButton } from "./_components/DispatchButton";
 import { ResendPbdrButton } from "./_components/ResendPbdrButton";
@@ -33,8 +34,11 @@ import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { HighlightRing } from "@/components/HighlightRing";
 import { VerificationMismatchNote } from "@/components/VerificationMismatchNote";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
+import { PbdbReuploadToggle } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbReuploadToggle";
+import { PbdbSendPreview } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbSendPreview";
 import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
 import { ProjectDetailsEditor, type OpenFieldFlag } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectDetailsEditor";
+import { FlagAcknowledgeControl } from "@/app/(consultant)/ops/projects/[id]/_components/FlagAcknowledgeControl";
 import { ReExtractButton } from "@/components/ReExtractButton";
 import { ProjectAuditTrail, type ProjectAuditRow } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectAuditTrail";
 import { PbdbVersionsCard } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbVersionsCard";
@@ -48,6 +52,7 @@ import type { Stage } from "@/components/workspace/StageRail";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { ProjectStatus, ConsultantAvailability, StakeholderReview } from "@/types";
+import { RealtimeSubscriptionRefresher } from "@/components/RealtimeSubscriptionRefresher";
 
 // Adopts the same StageRail + FocusCard + pill-tab + SettingsPill shell
 // already used by the client (ClientWorkspace) and consultant (AltWorkspace)
@@ -293,6 +298,7 @@ export default async function ProjectDetailPage({
     { data: rawTemplateRequired },
     { data: rawOrgRoster },
     { data: rawFileRequirements },
+    { data: rawRevisionNotes },
   ] = await Promise.all([
     project.template_id
       ? supabase
@@ -317,7 +323,9 @@ export default async function ProjectDetailPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("project_files")
-      .select("id, original_filename, storage_path, version, review_cycle, created_at")
+      .select(
+        "id, original_filename, storage_path, version, review_cycle, created_at, filename_mismatch_reason, structure_scan_findings, qa_flags_acknowledged_at"
+      )
       .eq("project_id", id)
       .eq("file_type", "pbdb")
       .order("version", { ascending: true }),
@@ -378,7 +386,12 @@ export default async function ProjectDetailPage({
     project.template_id
       ? supabase.from("file_requirements").select("slug, name").eq("template_id", project.template_id)
       : Promise.resolve({ data: [] }),
+    supabase.from("revision_notes").select("review_cycle, note").eq("project_id", id),
   ]);
+
+  const revisionNotesByCycle = new Map<number, string>(
+    (rawRevisionNotes ?? []).map((r) => [r.review_cycle as number, r.note as string])
+  );
 
   const auditEntries = (rawFullAuditEntries ?? []) as ProjectAuditRow[];
 
@@ -442,6 +455,20 @@ export default async function ProjectDetailPage({
     Promise.resolve(rawPbdrFiles ?? []),
   ]);
   const pbdbFiles = rawPbdbFiles ?? [];
+  const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
+
+  // Findings gate before Send (#112) — matches the consultant page exactly.
+  // Deterministic structure scan, surfaced on the latest pbdb file row.
+  // Acknowledgment is scoped to that exact row/version, never carried over
+  // from a prior upload. The filename mismatch (#109) is shown separately as
+  // an editable, non-blocking field (see PbdbSendPreview) since the
+  // dispatched filename is always system-generated regardless of what was
+  // uploaded.
+  const pbdbSendFindings: string[] = latestPbdb
+    ? ((latestPbdb.structure_scan_findings as { message: string }[] | null)?.map((f) => f.message) ?? [])
+    : [];
+  const pbdbFlagsAcknowledged = !!latestPbdb?.qa_flags_acknowledged_at;
+  const pbdbReadyToSend = pbdbSendFindings.length === 0 || pbdbFlagsAcknowledged;
 
   const reviews = (rawReviews ?? []) as StakeholderReview[];
   // Known stakeholder roster for the Respondent dropdown (#111).
@@ -536,6 +563,17 @@ export default async function ProjectDetailPage({
     ]),
     ...evidenceFiles.map((f) => ["Evidence", f.signedUrl]),
   ]);
+
+  // #114: flags surfaced at job pickup — acknowledgment is independent of
+  // resolution status (#105), matching the consultant page exactly. A flag
+  // whose value came from the stakeholder typing it in directly (no
+  // extraction evidence to check it against) never needed a consultant's
+  // acknowledgment in the first place — submission.ts's auto-resolve sets
+  // consultant_acknowledged_at for exactly that case, so it's already
+  // excluded here without this list needing to know why.
+  const unacknowledgedFlags = Object.entries(flagsByToken)
+    .filter(([, flag]) => !flag.acknowledgedAt)
+    .map(([token, flag]) => ({ token, label: labelMap.get(token) ?? prettifyToken(token), flag }));
 
   const extractedFields = project.extracted_fields ?? {};
   const clientFieldEntries = Object.entries(extractedFields)
@@ -695,6 +733,41 @@ export default async function ProjectDetailPage({
         )}
       </FocusCard>
     );
+  } else if (unacknowledgedFlags.length > 0) {
+    // #114: surfaced at job pickup, gating progress to the next stage of
+    // work (PBDB generation) — matches the consultant page exactly.
+    focusCard = (
+      <FocusCard
+        tone="amber"
+        title={`Review ${unacknowledgedFlags.length} flagged field${unacknowledgedFlags.length === 1 ? "" : "s"}`}
+        subtitle="Acknowledge each flagged field before continuing to PBDB work."
+      >
+        <div className="space-y-2">
+          {unacknowledgedFlags.map(({ token, label, flag }) => (
+            <div
+              key={token}
+              className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-3 py-2.5"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-zinc-900">{label}</p>
+                <p className="truncate text-xs text-zinc-500">
+                  {flag.candidates.length} candidate{flag.candidates.length === 1 ? "" : "s"}
+                  {flag.status === "resolved" ? " · resolved" : " · open"}
+                </p>
+              </div>
+              <FlagAcknowledgeControl
+                flagId={flag.id}
+                label={label}
+                currentValue={extractedFields[token] ?? flag.candidates[0]?.value ?? ""}
+                candidates={flag.candidates}
+                sourceUrlsByFilename={sourceUrlsByFilename}
+                triggerLabel="Review"
+              />
+            </div>
+          ))}
+        </div>
+      </FocusCard>
+    );
   } else if (pbdbFiles.length === 0) {
     focusCard = (
       <FocusCard id="pbdb-section" tone="neutral" title="Generate the PBDB" subtitle="Ready when you are.">
@@ -715,16 +788,29 @@ export default async function ProjectDetailPage({
     focusCard = (
       <FocusCard tone="green" title="Ready to dispatch" subtitle="QA complete — send it out for stakeholder review.">
         <div className="space-y-4">
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
-            <ProjectDeliveryDelayPresetSelect
+          {latestPbdb && (
+            <PbdbSendPreview
               projectId={id}
-              initialValue={project.pbdb_delivery_delay_preset}
-              durations={deliveryDurations}
-              docType="pbdb"
+              fileId={latestPbdb.id as string}
+              findings={pbdbSendFindings}
+              acknowledged={pbdbFlagsAcknowledged}
             />
-          </div>
-          <DispatchButton projectId={id} />
+          )}
+          {pbdbReadyToSend && (
+            <>
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+                <ProjectDeliveryDelayPresetSelect
+                  projectId={id}
+                  initialValue={project.pbdb_delivery_delay_preset}
+                  durations={deliveryDurations}
+                  docType="pbdb"
+                />
+              </div>
+              <DispatchButton projectId={id} />
+            </>
+          )}
+          <PbdbReuploadToggle projectId={id} />
         </div>
       </FocusCard>
     );
@@ -742,16 +828,28 @@ export default async function ProjectDetailPage({
     focusCard = (
       <FocusCard tone="green" title="Ready to redispatch" subtitle="Revised PBDB uploaded — resend it to every stakeholder, including anyone who already approved.">
         <div className="space-y-4">
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
-            <ProjectDeliveryDelayPresetSelect
+          {latestPbdb && (
+            <PbdbSendPreview
               projectId={id}
-              initialValue={project.pbdb_delivery_delay_preset}
-              durations={deliveryDurations}
-              docType="pbdb"
+              fileId={latestPbdb.id as string}
+              findings={pbdbSendFindings}
+              acknowledged={pbdbFlagsAcknowledged}
             />
-          </div>
-          <DispatchButton projectId={id} />
+          )}
+          {pbdbReadyToSend && (
+            <>
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+                <ProjectDeliveryDelayPresetSelect
+                  projectId={id}
+                  initialValue={project.pbdb_delivery_delay_preset}
+                  durations={deliveryDurations}
+                  docType="pbdb"
+                />
+              </div>
+              <DispatchButton projectId={id} />
+            </>
+          )}
         </div>
       </FocusCard>
     );
@@ -884,7 +982,10 @@ export default async function ProjectDetailPage({
               durations={deliveryDurations}
             />
           </div>
-          <ConvertButton projectId={id} />
+          <div className="flex items-center gap-3">
+            <ConvertButton projectId={id} />
+            <PbdrPreviewButton projectId={id} />
+          </div>
         </div>
       </FocusCard>
     ) : (
@@ -957,7 +1058,15 @@ export default async function ProjectDetailPage({
         <PbdbVersionsCard
           id="pbdb-section"
           projectId={id}
-          files={pbdbFiles as { id: string; original_filename: string; version: number; created_at: string }[]}
+          files={(
+            pbdbFiles as {
+              id: string;
+              original_filename: string;
+              version: number;
+              review_cycle: number;
+              created_at: string;
+            }[]
+          ).map((f) => ({ ...f, revisionNote: revisionNotesByCycle.get(f.review_cycle) ?? null }))}
           projectStatus={project.status}
           canRegenerate={canRegeneratePbdb}
         />
@@ -1368,6 +1477,15 @@ export default async function ProjectDetailPage({
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto max-w-7xl space-y-6">
+      <RealtimeSubscriptionRefresher
+        channelName={`admin-project-${id}`}
+        subscriptions={[
+          { table: "projects", filter: `id=eq.${id}` },
+          { table: "project_files", filter: `project_id=eq.${id}` },
+          { table: "field_flags", filter: `project_id=eq.${id}` },
+          { table: "stakeholder_reviews", filter: `project_id=eq.${id}` },
+        ]}
+      />
       {/* Success banners */}
       {justSavedNumber && <NumberSavedBanner cleanUrl={`/admin/projects/${id}`} />}
       {justGeneratedPbdb && <PbdbGeneratedBanner cleanUrl={`/admin/projects/${id}`} />}

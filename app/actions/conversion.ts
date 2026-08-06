@@ -8,8 +8,52 @@ import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 import { auditLog } from "@/lib/audit/log";
 import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
+import { buildPbdrPreview, type PbdrPreviewProject } from "@/lib/documents/pbdr-preview";
 
 export type ConvertState = { error?: string; success?: boolean; scheduledFor?: string | null };
+
+// ─── Preview the PBDR before converting ────────────────────────────────────
+
+export type PbdrPreviewResult = { error: string } | { url: string; filename: string };
+
+/**
+ * Lets an admin/consultant see what the PBDR will look like before they
+ * commit to Convert & deliver — renders the same transform deliverPbdr()
+ * uses (lib/documents/pbdr-preview.ts) without any of its side effects.
+ * Computed lazily on click since conversion has a real cost.
+ */
+export async function getPbdrPreviewUrl(projectId: string): Promise<PbdrPreviewResult> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select(
+      "id, client_id, review_cycle, strip_token_color, project_number, extracted_fields, assigned_consultant_id"
+    )
+    .eq("id", projectId)
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
+
+  let preview;
+  try {
+    preview = await buildPbdrPreview(supabase, project as unknown as PbdrPreviewProject);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to generate preview." };
+  }
+  if (!preview) return { error: "No QA'd PBDB found for this project's current cycle." };
+
+  const { data: signed, error: signErr } = await supabase.storage
+    .from("documents")
+    .createSignedUrl(preview.storagePath, 900);
+  if (signErr || !signed) return { error: "Failed to sign preview URL." };
+
+  return { url: signed.signedUrl, filename: preview.originalFilename };
+}
 
 /**
  * Admin/consultant-triggered PBDR conversion — the only trigger. Full

@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ReviewRow } from "./_components/RevisionReviewDrawer";
-import { RealtimeProjectRefresher } from "./_components/RealtimeProjectRefresher";
+import { RealtimeSubscriptionRefresher } from "@/components/RealtimeSubscriptionRefresher";
 import { DeclinedBanner } from "./_components/DeclinedBanner";
 import { OnboardingFlow } from "./_components/OnboardingFlow";
 import { Dashboard } from "./_components/Dashboard";
@@ -265,7 +265,22 @@ export default async function ConsultantOpsPage({
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      <RealtimeProjectRefresher userId={user.id as string} />
+      <RealtimeSubscriptionRefresher
+        channelName={`consultant-workspace-${user.id}`}
+        subscriptions={[
+          // This consultant's own assigned projects — status changes, new assignments, etc.
+          { table: "projects", filter: `assigned_consultant_id=eq.${user.id}` },
+          { table: "notifications", filter: `recipient_id=eq.${user.id}`, event: "INSERT" },
+          // Available/unassigned jobs list below is scoped to status=submitted, and a
+          // project entering or leaving that status is exactly what should refresh it —
+          // postgres_changes filters don't support the compound "and assigned_consultant_id
+          // is null" the list itself uses, so this errs broad rather than missing events.
+          { table: "projects", filter: "status=eq.submitted" },
+          // Stakeholder review responses — not scoped to this consultant's projects since
+          // postgres_changes filters can't join through projects.assigned_consultant_id.
+          { table: "stakeholder_reviews" },
+        ]}
+      />
       <OnboardingFlow
         seenConsultantTour={(user.onboarding_steps_seen ?? []).includes("consultant_tour")}
         seenSteps={user.onboarding_steps_seen ?? []}
