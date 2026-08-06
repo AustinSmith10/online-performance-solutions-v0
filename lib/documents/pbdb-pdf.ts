@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
+import { makeDocxConversionSafe } from "@/lib/documents/converter";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { formatAddress } from "@/lib/documents/formatters";
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
@@ -81,6 +82,10 @@ export async function getOrCreateDispatchPdf(
   if (project.strip_token_color) {
     docxBuffer = stripRedTokenColor(docxBuffer);
   }
+  // Same header-logo/TOC/Bibliography field protections as the PBDR path
+  // (#118) — this PDF is what both the consultant's preview and stakeholders
+  // (since #112) actually see.
+  docxBuffer = makeDocxConversionSafe(docxBuffer);
 
   const pdfBuffer = await convertDocxToPdf(docxBuffer);
 

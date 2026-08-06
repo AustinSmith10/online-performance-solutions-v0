@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
+import { recordRevisionEvent } from "@/lib/documents/revision-history";
 import { renderReviewResponseConfirmationEmail } from "@/lib/email/templates/ReviewResponseConfirmationEmail";
 import {
   resolveProjectRef,
@@ -117,6 +118,10 @@ export async function submitPortalApproval(
       .from("projects")
       .update({ status: "revision_required", updated_at: now })
       .eq("id", review.project_id);
+
+    // Bumps the PBDB revision_history counter (#108) — matches the equivalent
+    // call in approval.ts and stakeholders.ts for the other two rejection paths.
+    await recordRevisionEvent(supabase, review.project_id as string, "pbdb", "rejected");
 
     await notifyModificationsRequested({
       supabase,

@@ -11,6 +11,7 @@ vi.mock("@/lib/audit/log");
 vi.mock("@/lib/email/sender");
 vi.mock("@/lib/email/templates/ApprovalRequestEmail");
 vi.mock("@/lib/documents/pdf");
+vi.mock("@/lib/documents/converter");
 
 import { dispatchPbdb } from "./dispatch";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,6 +22,7 @@ import { logUpfront } from "@/lib/payments/ledger";
 import { sendEmail } from "@/lib/email/sender";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
+import { makeDocxConversionSafe } from "@/lib/documents/converter";
 import { auditLog } from "@/lib/audit/log";
 
 const PROJECT_ID = "proj-abc";
@@ -111,6 +113,7 @@ beforeEach(() => {
   vi.mocked(renderApprovalRequestEmail).mockReturnValue("<html>approval</html>");
   vi.mocked(sendEmail).mockResolvedValue(true);
   vi.mocked(resolveStakeholders).mockResolvedValue(ORG_STAKEHOLDERS);
+  vi.mocked(makeDocxConversionSafe).mockImplementation((buf: Buffer) => buf);
 });
 
 describe("dispatchPbdb — submitting client inclusion", () => {

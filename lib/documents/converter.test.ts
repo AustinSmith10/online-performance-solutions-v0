@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import PizZip from "pizzip";
-import { convertPbdbToPbdr } from "./converter";
+import { convertPbdbToPbdr, makeDocxConversionSafe } from "./converter";
 
 function makeDocxBuffer(documentXml: string, extras: Record<string, string> = {}): Buffer {
   const zip = new PizZip();
@@ -213,6 +213,60 @@ describe("convertPbdbToPbdr — watermark removal", () => {
     const output = readXml(convertPbdbToPbdr(input), "word/header1.xml");
     expect(output).toContain("v:image");
     expect(output).toContain("w:pict");
+  });
+});
+
+function fieldXml(instr: string, entryBody: string): string {
+  return (
+    `<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+    `<w:r><w:instrText>${instr}</w:instrText></w:r>` +
+    `<w:r><w:fldChar w:fldCharType="separate"/></w:r></w:p>` +
+    `<w:p>${entryBody}</w:p>` +
+    `<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`
+  );
+}
+
+describe("makeDocxConversionSafe — shared pre-conversion protections (#118)", () => {
+  it("freezes a TOC field, unwrapping hyperlinks but keeping the entry text", () => {
+    const entry = `<w:hyperlink><w:r><w:t>Heading 1</w:t></w:r></w:hyperlink>`;
+    const input = makeDocxBuffer(`<root>${fieldXml(' TOC \\o "1-3" \\h \\z \\u ', entry)}</root>`);
+    const xml = readXml(makeDocxConversionSafe(input), "word/document.xml");
+    expect(xml).toContain("Heading 1");
+    expect(xml).not.toContain("w:instrText");
+    expect(xml).not.toContain("w:hyperlink");
+  });
+
+  it("freezes a BIBLIOGRAPHY field the same way", () => {
+    const entry = `<w:r><w:t>Smith, J. (2024). Some Reference.</w:t></w:r>`;
+    const input = makeDocxBuffer(`<root>${fieldXml(" BIBLIOGRAPHY ", entry)}</root>`);
+    const xml = readXml(makeDocxConversionSafe(input), "word/document.xml");
+    expect(xml).toContain("Some Reference");
+    expect(xml).not.toContain("w:instrText");
+  });
+
+  it("strips header watermarks", () => {
+    const watermark = `<w:pict><v:textpath string="DRAFT"/></w:pict>`;
+    const input = makeDocxBuffer(`<root>${p("body")}</root>`, {
+      "word/header1.xml": `<root><w:p>${watermark}</w:p></root>`,
+    });
+    const output = readXml(makeDocxConversionSafe(input), "word/header1.xml");
+    expect(output).not.toContain("v:textpath");
+  });
+
+  it("patches the Header style's w:lineRule from auto to atLeast", () => {
+    const input = makeDocxBuffer(`<root>${p("body")}</root>`, {
+      "word/styles.xml": `<w:styles><w:style w:styleId="Header"><w:pPr><w:spacing w:line="204" w:lineRule="auto"/></w:pPr></w:style></w:styles>`,
+    });
+    const output = readXml(makeDocxConversionSafe(input), "word/styles.xml");
+    expect(output).toContain('w:lineRule="atLeast"');
+    expect(output).not.toContain('w:lineRule="auto"');
+  });
+
+  it("does not apply PBDB→PBDR text replacements", () => {
+    const input = makeDocxBuffer(`<root>${p("Design Brief")}</root>`);
+    const xml = readXml(makeDocxConversionSafe(input), "word/document.xml");
+    expect(xml).toContain("Design Brief");
+    expect(xml).not.toContain("Design Report");
   });
 });
 

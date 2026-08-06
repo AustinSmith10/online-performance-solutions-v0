@@ -4,12 +4,20 @@ import { useEffect, useRef, useState } from "react";
 
 type PreviewKind = "pdf" | "image" | "unsupported";
 
-function detectKind(filename?: string | null, src?: string | null): PreviewKind {
-  const name = filename || src || "";
+function extKind(name: string): PreviewKind | null {
   const ext = name.split("?")[0].split(".").pop()?.toLowerCase();
   if (ext === "pdf") return "pdf";
   if (ext === "png" || ext === "jpg" || ext === "jpeg") return "image";
-  return "unsupported";
+  return null;
+}
+
+function detectKind(filename?: string | null, src?: string | null): PreviewKind {
+  // Prefer whichever of the two actually carries a recognizable extension.
+  // `src` is checked first since `filename` is sometimes a display label
+  // (e.g. a file-requirement name) rather than a real filename — but `src`
+  // is sometimes an extensionless blob: URL for a not-yet-uploaded local
+  // file, in which case the real filename is the only one worth trusting.
+  return extKind(src ?? "") ?? extKind(filename ?? "") ?? "unsupported";
 }
 
 /** Whether DocumentViewer can render this file inline (vs. a download-only fallback). */

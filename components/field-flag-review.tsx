@@ -1,8 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { resolveFieldFlag, type ResolutionReason } from "@/app/actions/field-flags";
+import {
+  resolveFieldFlag,
+  resolveAndAcknowledgeFieldFlag,
+  type ResolutionReason,
+} from "@/app/actions/field-flags";
 import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
+import { isPreviewable } from "@/components/DocumentViewer";
 import { FlagAcknowledgeControl } from "@/app/(consultant)/ops/projects/[id]/_components/FlagAcknowledgeControl";
 import type { Confidence } from "@/lib/documents/extractor";
 import type { FlagType } from "@/lib/documents/field-flags";
@@ -67,6 +72,19 @@ interface Props {
   flagType?: FlagType;
 }
 
+// Intl.DateTimeFormat("en-AU") pads differently depending on the runtime's
+// ICU data (e.g. Node's bundled ICU vs. the browser's) — this component
+// renders both during SSR and again on hydration, so a mismatch there
+// throws a hydration error. Format manually (fixed DD/MM/YYYY, UTC so the
+// server and browser can't land in different local timezones) instead of
+// relying on toLocaleDateString here.
+function formatAuDate(iso: string): string {
+  const d = new Date(iso);
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${day}/${month}/${d.getUTCFullYear()}`;
+}
+
 const REASON_OPTIONS: { value: ResolutionReason; label: string }[] = [
   { value: "self_resolved", label: "Self-resolved" },
   { value: "resolved_for_stakeholder", label: "Resolved on stakeholder's behalf" },
@@ -117,11 +135,29 @@ export function FieldFlagReview({
   const forcedOpen = !!initiallyExpanded || !!initialConflict;
   const [editing, setEditing] = useState(forcedOpen || status === "open");
 
-  const ackBlock = showAcknowledgment ? (
+  // buildFieldFlagPlan (lib/documents/field-flags.ts) synthesizes exactly
+  // this one candidate — value "", confidence "low", source_document "none"
+  // — when extraction found nothing in any document for this field. In that
+  // case the value on screen came from the stakeholder typing it in
+  // directly at submission (required before they could submit at all, see
+  // submission.ts's blankFlaggedFields check), not from anything extracted.
+  // There's no source document to check it against, so asking a consultant
+  // to "acknowledge" it is meaningless — never require that step here,
+  // regardless of showAcknowledgment.
+  const hasNoExtractionEvidence =
+    candidates.length === 1 && candidates[0].source_document === "none";
+  const requiresAcknowledgment = !!showAcknowledgment && !hasNoExtractionEvidence;
+
+  // The open-flag editing form below merges "Resolve" and "Review &
+  // acknowledge" into one action when requiresAcknowledgment is set (#116) —
+  // the standalone FlagAcknowledgeControl button is only needed in the two
+  // read-only render paths, where there's no active resolve form to fold it
+  // into.
+  const ackBlock = requiresAcknowledgment ? (
     acknowledgedAt ? (
       <p className="text-[11px] text-green-700">
         ✓ Acknowledged by {acknowledgedByEmail ?? "a consultant"} on{" "}
-        {new Date(acknowledgedAt).toLocaleDateString("en-AU")}
+        {formatAuDate(acknowledgedAt)}
       </p>
     ) : (
       <FlagAcknowledgeControl
@@ -145,6 +181,9 @@ export function FieldFlagReview({
   // this instance opened already knowing about one via initialConflict),
   // the next resolve attempt is a conscious override — force it through.
   const [sawConflict, setSawConflict] = useState(!!initialConflict);
+  // Only relevant when requiresAcknowledgment merges resolve+acknowledge
+  // into one action — mirrors FlagAcknowledgeControl's own confirm checkbox.
+  const [confirmed, setConfirmed] = useState(false);
 
   async function handleResolve() {
     if (!value.trim()) {
@@ -153,7 +192,8 @@ export function FieldFlagReview({
     }
     setPending(true);
     setError(null);
-    const result = await resolveFieldFlag(flagId, {
+    const action = requiresAcknowledgment ? resolveAndAcknowledgeFieldFlag : resolveFieldFlag;
+    const result = await action(flagId, {
       value: value.trim(),
       reason,
       note,
@@ -172,6 +212,14 @@ export function FieldFlagReview({
     }
     setError(result.error);
   }
+
+  const selectedCandidate =
+    candidates.find((c) => c.value === value) ?? candidates.find((c) => c.value === currentValue);
+  const selectedSourceUrl = selectedCandidate
+    ? sourceUrlsByFilename?.[selectedCandidate.source_document] ?? null
+    : null;
+  const selectedPreviewAvailable =
+    !!selectedSourceUrl && isPreviewable(selectedCandidate?.source_document, selectedSourceUrl);
 
   if (!editing && status === "resolved") {
     // #105 tweak: once resolved, this field is done with the picker for
@@ -211,7 +259,7 @@ export function FieldFlagReview({
         {resolvedByEmail && (
           <p className="text-[11px] text-zinc-400">
             Resolved by {resolvedByEmail}
-            {resolvedAt && ` on ${new Date(resolvedAt).toLocaleDateString("en-AU")}`}
+            {resolvedAt && ` on ${formatAuDate(resolvedAt)}`}
           </p>
         )}
       </div>
@@ -259,7 +307,7 @@ export function FieldFlagReview({
         {resolvedByEmail && (
           <p className="text-[11px] text-zinc-400">
             Resolved by {resolvedByEmail}
-            {resolvedAt && ` on ${new Date(resolvedAt).toLocaleDateString("en-AU")}`}
+            {resolvedAt && ` on ${formatAuDate(resolvedAt)}`}
           </p>
         )}
       </div>
@@ -293,7 +341,7 @@ export function FieldFlagReview({
 
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-medium text-zinc-700">{label} — candidates found:</p>
-        {ackBlock}
+        {!requiresAcknowledgment && ackBlock}
       </div>
 
       <div className="space-y-1">
@@ -342,6 +390,21 @@ export function FieldFlagReview({
         />
       </div>
 
+      {requiresAcknowledgment && (
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-zinc-700">Source document</label>
+          {selectedPreviewAvailable ? (
+            <DocumentPreviewModal
+              href={selectedSourceUrl}
+              filename={selectedCandidate?.source_document}
+              buttonClassName="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+            />
+          ) : (
+            <span className="text-xs text-zinc-500">No previewable source document found for this candidate.</span>
+          )}
+        </div>
+      )}
+
       {!stakeholderView && (
         <div className="flex gap-2">
           <div className="flex-1">
@@ -373,16 +436,28 @@ export function FieldFlagReview({
         />
       </div>
 
+      {requiresAcknowledgment && (
+        <label className="flex cursor-pointer items-start gap-2 text-xs text-zinc-700">
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.target.checked)}
+            className="mt-0.5"
+          />
+          I&apos;ve reviewed this field and its source document.
+        </label>
+      )}
+
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <div className="flex gap-2">
         <button
           type="button"
           onClick={handleResolve}
-          disabled={pending}
+          disabled={pending || (requiresAcknowledgment && !confirmed)}
           className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
-          {pending ? "Resolving…" : "Resolve"}
+          {pending ? "Resolving…" : requiresAcknowledgment ? "Resolve & acknowledge" : "Resolve"}
         </button>
         {status === "resolved" && (
           <button

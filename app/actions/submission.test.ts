@@ -52,7 +52,7 @@ function chain(data: unknown, error: unknown = null) {
   return obj;
 }
 
-function buildMock(opts: { flaggedFiles?: unknown[] } = {}) {
+function buildMock(opts: { flaggedFiles?: unknown[]; openFlags?: unknown[] } = {}) {
   const draftBefore = { extracted_fields: {}, po_number: null };
   const clientRow = { name: "Acme", delivery_working_days: 5, state_territory: "NSW" };
 
@@ -63,6 +63,7 @@ function buildMock(opts: { flaggedFiles?: unknown[] } = {}) {
   const updateFn = vi.fn().mockReturnValue(updateResultChain);
 
   const projectFilesUpdateFn = vi.fn().mockReturnValue(chain(null));
+  const fieldFlagsUpdateFn = vi.fn().mockReturnValue(chain(null));
 
   const calls: Record<string, number> = {};
   const from = vi.fn((table: string) => {
@@ -82,10 +83,14 @@ function buildMock(opts: { flaggedFiles?: unknown[] } = {}) {
       }
       return { ...chain(null), update: projectFilesUpdateFn };
     }
+    if (table === "field_flags") {
+      if (n === 1) return chain(opts.openFlags ?? []); // the openFlags select
+      return { update: fieldFlagsUpdateFn }; // auto-resolve of no-extraction-evidence flags
+    }
     return chain(null);
   });
 
-  return { from, projectFilesUpdateFn };
+  return { from, projectFilesUpdateFn, fieldFlagsUpdateFn };
 }
 
 beforeEach(() => {
@@ -175,6 +180,84 @@ describe("submitProject — verification mismatch gate (#113)", () => {
       ACTOR_ID,
       "client@example.com",
       expect.objectContaining({ orgId: CLIENT_ID, projectId: PROJECT_ID })
+    );
+  });
+});
+
+describe("submitProject — auto-resolving no-extraction-evidence flags", () => {
+  const NO_EXTRACTION_FLAG = {
+    id: "flag-1",
+    field_key: "EXTRACT_DRAWING_DATE",
+    candidate_values: [
+      { value: "", confidence: "low", source_document: "none", reason: "Not found in any submitted document — please fill in." },
+    ],
+  };
+  const REAL_EXTRACTION_FLAG = {
+    id: "flag-2",
+    field_key: "EXTRACT_PO_DATE",
+    candidate_values: [
+      { value: "1/1/2026", confidence: "low", source_document: "Purchase Order.pdf" },
+    ],
+  };
+
+  it("auto-resolves a flag whose only candidate is the synthetic not-found placeholder", async () => {
+    const mock = buildMock({ openFlags: [NO_EXTRACTION_FLAG] });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await submitProject({}, makeSubmitFormData({ EXTRACT_DRAWING_DATE: "9/7/2026" }));
+    await afterPromise;
+
+    expect(mock.fieldFlagsUpdateFn).toHaveBeenCalledTimes(1);
+    expect(mock.fieldFlagsUpdateFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "resolved",
+        current_value: "9/7/2026",
+        resolved_by: ACTOR_ID,
+        resolution_reason: "self_resolved",
+      })
+    );
+    // Also sets consultant_acknowledged_at — the single source of truth every
+    // "does this flag still need review" gate reads (the pickup-time Right
+    // Now card and generatePbdbForProject's server-side gate both key off
+    // this column, not off re-deriving "no extraction evidence" themselves).
+    const call = mock.fieldFlagsUpdateFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(call.consultant_acknowledged_at).toBeTruthy();
+    expect(call.consultant_acknowledged_by).toBeUndefined();
+  });
+
+  it("does not touch a flag that has real extraction candidates", async () => {
+    const mock = buildMock({ openFlags: [REAL_EXTRACTION_FLAG] });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await submitProject({}, makeSubmitFormData({ EXTRACT_PO_DATE: "1/1/2026" }));
+    await afterPromise;
+
+    expect(mock.fieldFlagsUpdateFn).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when there are no open flags", async () => {
+    const mock = buildMock({ openFlags: [] });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await submitProject({}, makeSubmitFormData());
+    await afterPromise;
+
+    expect(mock.fieldFlagsUpdateFn).not.toHaveBeenCalled();
+  });
+
+  it("auto-resolves only the no-extraction-evidence flag when both kinds are open together", async () => {
+    const mock = buildMock({ openFlags: [NO_EXTRACTION_FLAG, REAL_EXTRACTION_FLAG] });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await submitProject(
+      {},
+      makeSubmitFormData({ EXTRACT_DRAWING_DATE: "9/7/2026", EXTRACT_PO_DATE: "1/1/2026" })
+    );
+    await afterPromise;
+
+    expect(mock.fieldFlagsUpdateFn).toHaveBeenCalledTimes(1);
+    expect(mock.fieldFlagsUpdateFn).toHaveBeenCalledWith(
+      expect.objectContaining({ current_value: "9/7/2026" })
     );
   });
 });

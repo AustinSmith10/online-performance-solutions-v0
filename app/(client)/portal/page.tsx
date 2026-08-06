@@ -62,10 +62,12 @@ type OrgRow = {
   show_consultant_name: boolean;
 };
 
-function projectLabel(p: Pick<ProjectRow, "extracted_fields" | "po_number" | "id">): string {
+function projectLabel(
+  p: Pick<ProjectRow, "extracted_fields" | "po_number" | "id" | "created_at">
+): string {
   return (
     (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ??
-    (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8))
+    (p.po_number ? `PO ${p.po_number}` : `Draft — started ${formatAuDate(p.created_at)}`)
   );
 }
 

@@ -3,10 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/documents/pdf");
 vi.mock("@/lib/documents/color-strip");
+vi.mock("@/lib/documents/converter");
 
 import { getOrCreateDispatchPdf } from "./pbdb-pdf";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
+import { makeDocxConversionSafe } from "@/lib/documents/converter";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { formatAddress } from "@/lib/documents/formatters";
 
@@ -94,6 +96,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date(2024, 2, 15));
   vi.mocked(convertDocxToPdf).mockResolvedValue(Buffer.from("pdf-bytes"));
   vi.mocked(stripRedTokenColor).mockImplementation((buf: Buffer) => buf);
+  vi.mocked(makeDocxConversionSafe).mockImplementation((buf: Buffer) => buf);
 });
 
 afterEach(() => {
@@ -189,6 +192,18 @@ describe("getOrCreateDispatchPdf", () => {
     );
     expect(result?.storagePath).toBe(expectedStoragePath);
     expect(result?.originalFilename).toBe(expectedFilename);
+  });
+
+  it("applies the shared conversion-safety pass before converting to PDF (#118)", async () => {
+    const docx = { storage_path: "org-1/proj-1/pbdb/v1_file.docx", original_filename: "file.docx", version: 1 };
+    const mock = buildSupabaseMock({ sourceDocx: docx, pbdbRevision: 0 });
+
+    await getOrCreateDispatchPdf(mock as never, { ...BASE_PROJECT, review_cycle: 1 }, ACTOR_ID);
+
+    expect(vi.mocked(makeDocxConversionSafe)).toHaveBeenCalledTimes(1);
+    const safeCallOrder = vi.mocked(makeDocxConversionSafe).mock.invocationCallOrder[0];
+    const convertCallOrder = vi.mocked(convertDocxToPdf).mock.invocationCallOrder[0];
+    expect(safeCallOrder).toBeLessThan(convertCallOrder);
   });
 
   it("strips the red token colour before conversion when the toggle is on", async () => {

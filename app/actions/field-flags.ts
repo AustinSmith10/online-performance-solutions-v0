@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { auditLog } from "@/lib/audit/log";
 import { extractDocumentFields, type ExtractedCandidate } from "@/lib/documents/extractor";
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import { buildFieldFlagPlan } from "@/lib/documents/field-flags";
@@ -33,7 +34,37 @@ export async function resolveFieldFlag(
 ): Promise<ResolveFieldFlagResult> {
   const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
+  return resolveFieldFlagCore(supabase, actor, flagId, input);
+}
 
+// Merges resolving a flag with the consultant's acknowledgment (#105) into
+// one server call / one field_flags update — used by the consultant-facing
+// flag card (field-flag-review.tsx, showAcknowledgment=true) so "Resolve"
+// and "Review & acknowledge" no longer double-confirm the same thing (#116).
+export async function resolveAndAcknowledgeFieldFlag(
+  flagId: string,
+  input: { value: string; reason: ResolutionReason; note?: string; force?: boolean }
+): Promise<ResolveFieldFlagResult> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+  return resolveFieldFlagCore(supabase, actor, flagId, input, {
+    consultant_acknowledged_at: new Date().toISOString(),
+    consultant_acknowledged_by: actor.id,
+  });
+}
+
+// Shared core for both resolveFieldFlag and resolveAndAcknowledgeFieldFlag —
+// `extraUpdateFields` lets the latter fold the acknowledgment columns into
+// the same update() call so resolving and acknowledging land as a single
+// database write, not two sequential ones.
+async function resolveFieldFlagCore(
+  supabase: ReturnType<typeof createAdminClient>,
+  actor: { id: string; email: string },
+  flagId: string,
+  input: { value: string; reason: ResolutionReason; note?: string; force?: boolean },
+  extraUpdateFields: Record<string, unknown> = {}
+): Promise<ResolveFieldFlagResult> {
+  const alsoAcknowledging = "consultant_acknowledged_at" in extraUpdateFields;
   const { data: flag } = await supabase
     .from("field_flags")
     .select("id, project_id, field_key, status, resolved_by, resolved_at, current_value")
@@ -41,6 +72,20 @@ export async function resolveFieldFlag(
     .maybeSingle();
 
   if (!flag) return { ok: false, error: "Flag not found." };
+
+  // Snapshot for a force-override's audit trail — captured before the update
+  // below overwrites it, so the log can show both what changed and what it
+  // changed from.
+  const isConflictOverride = flag.status === "resolved" && input.force === true;
+  let priorResolverEmail: string | null = null;
+  if (isConflictOverride && flag.resolved_by) {
+    const { data: resolver } = await supabase
+      .from("users")
+      .select("email")
+      .eq("id", flag.resolved_by as string)
+      .maybeSingle();
+    priorResolverEmail = (resolver?.email as string | undefined) ?? null;
+  }
 
   const { data: projectForStage } = await supabase
     .from("projects")
@@ -72,6 +117,7 @@ export async function resolveFieldFlag(
         resolved_stage: (projectForStage?.status as string | undefined) ?? null,
         resolution_reason: input.reason,
         resolution_note: input.note?.trim() || null,
+        ...extraUpdateFields,
       },
       { count: "exact" }
     )
@@ -110,6 +156,37 @@ export async function resolveFieldFlag(
     })
     .eq("id", flag.project_id);
 
+  await auditLog("field_flag.resolved", actor.id as string, actor.email as string, {
+    projectId: flag.project_id as string,
+    metadata: {
+      flagId,
+      fieldKey: flag.field_key,
+      value,
+      reason: input.reason,
+      note: input.note?.trim() || null,
+      ...(isConflictOverride
+        ? {
+            priorValue: flag.current_value,
+            priorResolvedBy: flag.resolved_by,
+            priorResolvedByEmail: priorResolverEmail,
+            priorResolvedAt: flag.resolved_at,
+          }
+        : {}),
+    },
+  });
+
+  if (alsoAcknowledging) {
+    await auditLog("field_flag.acknowledged", actor.id as string, actor.email as string, {
+      projectId: flag.project_id as string,
+      metadata: {
+        flagId,
+        fieldKey: flag.field_key,
+        projectId: flag.project_id,
+        acknowledgedValue: value,
+      },
+    });
+  }
+
   revalidateProjectPaths(flag.project_id as string);
   return { ok: true };
 }
@@ -131,11 +208,21 @@ export async function acknowledgeFieldFlag(flagId: string): Promise<AcknowledgeF
       consultant_acknowledged_by: actor.id,
     })
     .eq("id", flagId)
-    .select("project_id")
+    .select("project_id, field_key, current_value")
     .maybeSingle();
 
   if (error) return { ok: false, error: error.message };
   if (!flag) return { ok: false, error: "Flag not found." };
+
+  await auditLog("field_flag.acknowledged", actor.id as string, actor.email as string, {
+    projectId: flag.project_id as string,
+    metadata: {
+      flagId,
+      fieldKey: flag.field_key,
+      projectId: flag.project_id,
+      acknowledgedValue: flag.current_value,
+    },
+  });
 
   revalidateProjectPaths(flag.project_id as string);
   return { ok: true };

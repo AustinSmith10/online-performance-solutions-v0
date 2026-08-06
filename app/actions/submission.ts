@@ -507,7 +507,7 @@ export async function submitProject(
       .maybeSingle(),
     supabase
       .from("field_flags")
-      .select("field_key")
+      .select("id, field_key, candidate_values")
       .eq("project_id", projectId)
       .eq("status", "open"),
     supabase
@@ -627,8 +627,59 @@ export async function submitProject(
   // A flag the stakeholder actively picked/corrected was already resolved
   // via resolveFieldFlag at that point; one left untouched rides through at
   // its default value and stays open for the consultant to acknowledge.
+  //
+  // The one exception: a flag whose only "candidate" is buildFieldFlagPlan's
+  // synthetic not-found-in-any-document placeholder (field-flags.ts) never
+  // had real extraction evidence behind it in the first place — the
+  // blankFlaggedFields check above already forced the stakeholder to type
+  // this value themselves before they could submit at all, so it's already
+  // self-attested. Auto-resolving it here (unlike genuinely-flagged fields,
+  // which stay open) keeps field_flags in sync with the extracted_fields
+  // value that was just saved, instead of leaving a stale, permanently-open
+  // flag with no source document for a consultant to meaningfully review.
+  const noExtractionFlags = (openFlags ?? []).filter((f) => {
+    const candidates = (f.candidate_values as ExtractedCandidate[] | null) ?? [];
+    return candidates.length === 1 && candidates[0].source_document === "none";
+  });
+  // Runs before the redirect below, not deferred into after() — the very
+  // next page the stakeholder lands on (their own submitted-details view)
+  // reads these same flags, so this has to be committed before that request
+  // arrives, not racing it in the background. try/catch keeps a failure here
+  // from ever blocking the submission that already succeeded above.
+  if (noExtractionFlags.length > 0) {
+    try {
+      const resolvedAt = new Date().toISOString();
+      await Promise.all(
+        noExtractionFlags.map((f) =>
+          supabase
+            .from("field_flags")
+            .update({
+              status: "resolved",
+              current_value: extractedFields[f.field_key as string] ?? "",
+              resolved_by: actor.id,
+              resolved_at: resolvedAt,
+              resolved_stage: "submitted",
+              resolution_reason: "self_resolved",
+              // No consultant reviewed this (consultant_acknowledged_by
+              // stays null — nobody did), but every gate that checks
+              // consultant_acknowledged_at IS NULL to mean "still needs
+              // review" (generatePbdbForProject's server-side gate, the
+              // Right Now pickup card, etc.) needs a single source of truth
+              // that this flag doesn't need one, rather than each consumer
+              // re-deriving "no extraction evidence" from candidate_values
+              // itself. Setting it here, once, at the point the flag stops
+              // needing review, is that source of truth.
+              consultant_acknowledged_at: resolvedAt,
+            })
+            .eq("id", f.id)
+        )
+      );
+    } catch (err) {
+      console.error("[submitProject] auto-resolving no-extraction-evidence flags failed:", err);
+    }
+  }
 
-  // Defer all post-success side effects so they don't block the redirect
+  // Defer all remaining post-success side effects so they don't block the redirect
   after(async () => {
     let recipientName = (actor.first_name as string | null) ?? "there";
     if (actsOnBehalf) {

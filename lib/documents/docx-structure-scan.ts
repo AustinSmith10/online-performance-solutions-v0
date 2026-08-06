@@ -44,7 +44,22 @@ export function scanDocxStructure(docxBuffer: Buffer): StructureScanFinding[] {
       });
     }
 
-    const highlightedRuns = countMatches(documentXml, /<w:highlight w:val="(?!none")[^"]*"/g);
+    // Two sources of highlight false-positives, both stripped before counting:
+    //  1. <w:rPrChange> — a run's pre-tracked-change formatting snapshot, not
+    //     what's currently rendered (a pending tracked change that removed a
+    //     highlight still leaves the old <w:highlight> sitting in here).
+    //  2. <w:pPr><w:rPr> — the paragraph MARK's own run properties (the
+    //     invisible end-of-paragraph pilcrow), not the paragraph's visible
+    //     text. Word never renders a highlight set only here against any
+    //     actual content — it's copy-paste/template residue, not something a
+    //     consultant would see as a highlighted run in the document.
+    const documentXmlForHighlightScan = documentXml
+      .replace(/<w:rPrChange\b[^>]*>[\s\S]*?<\/w:rPrChange>/g, "")
+      .replace(/<w:pPr\b[^>]*>[\s\S]*?<\/w:pPr>/g, "");
+    const highlightedRuns = countMatches(
+      documentXmlForHighlightScan,
+      /<w:highlight w:val="(?!none")[^"]*"/g
+    );
     if (highlightedRuns > 0) {
       findings.push({
         kind: "highlighted_runs",

@@ -257,23 +257,29 @@ function freezeOneTocField(xml: string): string {
 }
 
 /**
- * Transforms a QA'd PBDB .docx buffer into a PBDR .docx buffer by:
- *   1. Applying 8 text replacements to the document body.
- *   2. Stripping watermarks from all header XML files.
- *   3. Freezing the live TOC field so Gotenberg renders the existing styled
- *      entries rather than regenerating with dot-leader defaults.
+ * Pre-conversion field-safety pass, shared by every docx→PDF path (#118):
+ *   1. Freezes the live TOC and Bibliography fields (freezeTocField already
+ *      matches both — see its instrText regex) so Gotenberg/LibreOffice
+ *      renders the existing styled/cached entries rather than regenerating
+ *      them (dot-leader defaults for TOC, near-empty output for Bibliography,
+ *      since LibreOffice can't recompute Word's Citations & Bibliography data).
+ *   2. Strips watermark shapes from header XML.
+ *   3. Patches the Header paragraph style's w:lineRule so LibreOffice doesn't
+ *      clip the inline header logo to an ~8pt computed line height.
  *
- * The returned buffer is a valid .docx ready to be sent to Gotenberg for PDF
- * rendering. No storage I/O happens here — callers handle that.
+ * Deliberately excludes any PBDB→PBDR-specific transform (the text
+ * replacements below) — those must never run against a plain PBDB, since
+ * they reword PBDB language into PBDR language. Every call site (PBDR
+ * generation via convertPbdbToPbdr, and the plain PBDB PDF preview via
+ * pbdb-pdf.ts) gets these three protections; only convertPbdbToPbdr also
+ * applies the PBDR text swap on top.
  */
-export function convertPbdbToPbdr(docxBuffer: Buffer): Buffer {
+export function makeDocxConversionSafe(docxBuffer: Buffer): Buffer {
   const zip = new PizZip(docxBuffer);
 
   const docXml = zip.files["word/document.xml"];
   if (docXml) {
-    let xml = applyTextReplacements(docXml.asText());
-    xml = freezeTocField(xml);
-    zip.file("word/document.xml", xml);
+    zip.file("word/document.xml", freezeTocField(docXml.asText()));
   }
 
   const headerKeys = Object.keys(zip.files).filter((key) =>
@@ -282,10 +288,7 @@ export function convertPbdbToPbdr(docxBuffer: Buffer): Buffer {
   for (const key of headerKeys) {
     const file = zip.files[key];
     if (!file) continue;
-    let xml = file.asText();
-    xml = applyTextReplacements(xml);
-    xml = removeWatermarks(xml);
-    zip.file(key, xml);
+    zip.file(key, removeWatermarks(file.asText()));
   }
 
   // The Header paragraph style uses w:lineRule="auto" at 85% (204/240), which
@@ -314,6 +317,34 @@ export function convertPbdbToPbdr(docxBuffer: Buffer): Buffer {
         )
     );
     zip.file("word/styles.xml", fixed);
+  }
+
+  return zip.generate({ type: "nodebuffer" }) as Buffer;
+}
+
+/**
+ * Transforms a QA'd PBDB .docx buffer into a PBDR .docx buffer: applies the
+ * shared conversion-safety pass above, then 8 PBDR-specific text
+ * replacements to the document body and headers.
+ *
+ * The returned buffer is a valid .docx ready to be sent to Gotenberg for PDF
+ * rendering. No storage I/O happens here — callers handle that.
+ */
+export function convertPbdbToPbdr(docxBuffer: Buffer): Buffer {
+  const zip = new PizZip(makeDocxConversionSafe(docxBuffer));
+
+  const docXml = zip.files["word/document.xml"];
+  if (docXml) {
+    zip.file("word/document.xml", applyTextReplacements(docXml.asText()));
+  }
+
+  const headerKeys = Object.keys(zip.files).filter((key) =>
+    /^word\/header\d+\.xml$/.test(key)
+  );
+  for (const key of headerKeys) {
+    const file = zip.files[key];
+    if (!file) continue;
+    zip.file(key, applyTextReplacements(file.asText()));
   }
 
   return zip.generate({ type: "nodebuffer" }) as Buffer;

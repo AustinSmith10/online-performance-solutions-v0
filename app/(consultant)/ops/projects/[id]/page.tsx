@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { ProjectNumberForm } from "./_components/ProjectNumberForm";
 import { PbdbQaUploadForm } from "./_components/PbdbQaUploadForm";
+import { PbdbReuploadToggle } from "./_components/PbdbReuploadToggle";
 import { PbdbSendPreview } from "./_components/PbdbSendPreview";
 import { QaUploadedBanner } from "./_components/QaUploadedBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
@@ -27,6 +28,7 @@ import { FlagAcknowledgeControl } from "./_components/FlagAcknowledgeControl";
 import { ReExtractButton } from "@/components/ReExtractButton";
 import { ProjectAuditTrail, type ProjectAuditRow } from "./_components/ProjectAuditTrail";
 import { LogStakeholderResponseForm } from "./_components/LogStakeholderResponseForm";
+import { PendingReviewCard } from "./_components/PendingReviewCard";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
 import type { ProjectStatus } from "@/types";
 import { HeaderStatInline } from "./_components/HeaderStatInline";
@@ -38,12 +40,8 @@ import { PbdbVersionsCard } from "./_components/PbdbVersionsCard";
 import { ResendBufferUpdateButton } from "./_components/ResendBufferUpdateButton";
 import { ResendPbdrButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendPbdrButton";
 import { RevertButton } from "@/app/(admin)/admin/projects/[id]/_components/RevertButton";
-import { ResendTokenButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendTokenButton";
-import { UpdateEmailReveal } from "@/app/(admin)/admin/projects/[id]/_components/UpdateEmailReveal";
-import { WaiveForm } from "@/app/(admin)/admin/projects/[id]/_components/WaiveForm";
 import { ConvertButton } from "@/app/(admin)/admin/projects/[id]/_components/ConvertButton";
 import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/DispatchButton";
-import { HighlightRing } from "@/components/HighlightRing";
 import { VerificationMismatchNote } from "@/components/VerificationMismatchNote";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { Stage } from "@/components/workspace/StageRail";
@@ -380,7 +378,12 @@ export default async function ConsultantProjectDetailPage({
 
   // #114: flags surfaced at job pickup — acknowledgment is independent of
   // resolution status (#105), so this includes both open and already-
-  // resolved flags, same set the "Submitted details" section tracks.
+  // resolved flags, same set the "Submitted details" section tracks. A flag
+  // whose value came from the stakeholder typing it in directly (no
+  // extraction evidence to check it against) never needed a consultant's
+  // acknowledgment in the first place — submission.ts's auto-resolve sets
+  // consultant_acknowledged_at for exactly that case, so it's already
+  // excluded here without this list needing to know why.
   const unacknowledgedFlags = Object.entries(flagsByToken)
     .filter(([, flag]) => !flag.acknowledgedAt)
     .map(([token, flag]) => ({ token, label: labelMap.get(token) ?? prettifyToken(token), flag }));
@@ -708,6 +711,7 @@ export default async function ConsultantProjectDetailPage({
               <DispatchButton projectId={id} />
             </>
           )}
+          <PbdbReuploadToggle projectId={id} />
         </div>
       </FocusCard>
     );
@@ -722,51 +726,23 @@ export default async function ConsultantProjectDetailPage({
           <div className="space-y-2">
             {pendingReviews.map((r) => {
               const emailReplyEvidence = evidenceByReviewId.get(r.id);
-              const inner = (
-                <div className="space-y-2 rounded-md border border-amber-200 bg-white px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
-                    <p className="truncate text-xs text-zinc-500">{r.stakeholder_email}</p>
-                  </div>
-                  {r.email_reply_text && (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-semibold text-amber-800">Replied by email — needs action</p>
-                        {r.email_reply_sender_verified === false && (
-                          <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
-                            Unverified sender
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-amber-900">
-                        {r.email_reply_text}
-                      </p>
-                    </div>
-                  )}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <ResendTokenButton reviewId={r.id} projectId={id} />
-                    <LogStakeholderResponseForm
-                      reviewId={r.id}
-                      projectId={id}
-                      stakeholderName={r.stakeholder_name}
-                      stakeholderEmail={r.stakeholder_email}
-                      roster={stakeholderRoster}
-                      prefilledEvidence={
-                        emailReplyEvidence
-                          ? {
-                              storagePath: emailReplyEvidence.storage_path as string,
-                              filename: emailReplyEvidence.original_filename as string,
-                            }
-                          : undefined
-                      }
-                      prefilledComments={r.email_reply_text ?? undefined}
-                    />
-                    <UpdateEmailReveal reviewId={r.id} projectId={id} currentEmail={r.stakeholder_email} />
-                    <WaiveForm reviewId={r.id} projectId={id} stakeholderName={r.stakeholder_name} requireEvidence />
-                  </div>
-                </div>
+              return (
+                <PendingReviewCard
+                  key={r.id}
+                  review={r}
+                  projectId={id}
+                  stakeholderRoster={stakeholderRoster}
+                  evidence={
+                    emailReplyEvidence
+                      ? {
+                          storagePath: emailReplyEvidence.storage_path as string,
+                          filename: emailReplyEvidence.original_filename as string,
+                        }
+                      : null
+                  }
+                  highlighted={justEmailUpdated === r.id}
+                />
               );
-              return <div key={r.id}>{justEmailUpdated === r.id ? <HighlightRing>{inner}</HighlightRing> : inner}</div>;
             })}
           </div>
           <div className="border-t border-amber-200/60 pt-4">
@@ -796,6 +772,42 @@ export default async function ConsultantProjectDetailPage({
     focusCard = (
       <FocusCard tone="red" title="Revision requested" subtitle="A stakeholder asked for changes.">
         <div className="space-y-4">
+          {pendingReviews.length > 0 && (
+            // #120: status flips to revision_required on the first rejection
+            // regardless of how many stakeholders are still pending, and none
+            // of this gates the revise/re-upload action below — it's so the
+            // consultant can chase down (log a response for, fix a bad email
+            // for, resend to, or waive) whoever hasn't responded yet without
+            // leaving this card, same actions available from the "Awaiting
+            // stakeholder review" card.
+            <div className="space-y-2">
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                {currentCycleReviews.length - pendingReviews.length} of {currentCycleReviews.length} stakeholders
+                responded — {pendingReviews.map((r) => r.stakeholder_name).join(", ")}{" "}
+                {pendingReviews.length === 1 ? "hasn't" : "haven't"} responded yet.
+              </div>
+              {pendingReviews.map((r) => {
+                const emailReplyEvidence = evidenceByReviewId.get(r.id);
+                return (
+                  <PendingReviewCard
+                    key={r.id}
+                    review={r}
+                    projectId={id}
+                    stakeholderRoster={stakeholderRoster}
+                    evidence={
+                      emailReplyEvidence
+                        ? {
+                            storagePath: emailReplyEvidence.storage_path as string,
+                            filename: emailReplyEvidence.original_filename as string,
+                          }
+                        : null
+                    }
+                    highlighted={justEmailUpdated === r.id}
+                  />
+                );
+              })}
+            </div>
+          )}
           {currentCycleComments.length > 0 && (
             <div className="space-y-3">
               {currentCycleComments.map((r) => (
