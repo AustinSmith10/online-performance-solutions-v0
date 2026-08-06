@@ -2,6 +2,7 @@ import "server-only";
 import { createRequire } from "module";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
+import { classifyProviderError, reportProviderFailure } from "@/lib/ai/provider-failure";
 
 const require = createRequire(import.meta.url);
 type PdfPageProxy = {
@@ -294,7 +295,7 @@ async function verifyDocumentFields(
   if (entries.length === 0) return;
 
   try {
-    const raw = await runTextCompletion(buildVerificationPrompt(docText, entries));
+    const raw = await runTextCompletion(buildVerificationPrompt(docText, entries), "extraction verification pass");
     const results = parseVerificationResponse(raw, entries.length);
     applyVerificationResults(fields, entries, results);
   } catch (err) {
@@ -419,6 +420,8 @@ async function runSingleExtraction(
       return await extractWithOpenAI(prompt, tokenNames);
     } catch (err) {
       console.error("[extractor] OpenAI failed, falling back to Anthropic:", err);
+      const status = classifyProviderError(err);
+      if (status) void reportProviderFailure({ provider: "openai", status, context: "document extraction", error: err });
     }
   }
 
@@ -427,19 +430,42 @@ async function runSingleExtraction(
       return await extractWithAnthropic(prompt, tokenNames);
     } catch (err) {
       console.error("[extractor] Anthropic also failed:", err);
+      const status = classifyProviderError(err);
+      if (status) void reportProviderFailure({ provider: "anthropic", status, context: "document extraction", error: err });
     }
   }
 
   return empty;
 }
 
-// One LLM call per document (#58) — required so each candidate can carry its
-// own source_document for the correction UI, rather than one joint call
-// producing a single unattributed value per field.
-export async function extractDocumentFields(
-  documents: ExtractionDocument[],
+// One document's extraction call, standalone — callable independently the
+// instant a single file is uploaded (#115's per-file pipeline), rather than
+// only as part of a full-batch extractDocumentFields() call.
+export interface SingleDocExtraction {
+  label: string;
+  result: SingleDocResult;
+}
+
+export async function extractSingleDocument(
+  doc: ExtractionDocument,
   extractTokens: ExtractToken[]
-): Promise<DynamicExtractionResult> {
+): Promise<SingleDocExtraction> {
+  const tokenNames = extractTokens.map((t) => t.token);
+  const text = await extractPdfText(doc.buffer);
+  const prompt = buildPrompt([{ label: doc.label, text }], extractTokens);
+  const result = await runSingleExtraction(prompt, tokenNames);
+  await verifyDocumentFields(text, result.fields, extractTokens);
+  return { label: doc.label, result };
+}
+
+// Cross-document merge — pure, no I/O. Separated from the per-document LLM
+// call (#115) so it can run once at Continue-time over already-computed
+// per-file results (cached on project_files) with zero further LLM calls,
+// and so it's unit-testable with canned inputs.
+export function mergeExtractionResults(
+  perDocResults: SingleDocExtraction[],
+  extractTokens: ExtractToken[]
+): DynamicExtractionResult {
   const tokenNames = extractTokens.map((t) => t.token);
 
   const emptyResult: DynamicExtractionResult = {
@@ -449,17 +475,7 @@ export async function extractDocumentFields(
     poCandidates: [],
   };
 
-  if (documents.length === 0) return emptyResult;
-
-  const perDocResults = await Promise.all(
-    documents.map(async (doc) => {
-      const text = await extractPdfText(doc.buffer);
-      const prompt = buildPrompt([{ label: doc.label, text }], extractTokens);
-      const result = await runSingleExtraction(prompt, tokenNames);
-      await verifyDocumentFields(text, result.fields, extractTokens);
-      return { label: doc.label, result };
-    })
-  );
+  if (perDocResults.length === 0) return emptyResult;
 
   const candidates: Record<string, ExtractedCandidate[]> = Object.fromEntries(
     tokenNames.map((t) => [t, []])
@@ -487,10 +503,30 @@ export async function extractDocumentFields(
   return { po_number, fields, candidates, poCandidates };
 }
 
+// One LLM call per document (#58) — required so each candidate can carry its
+// own source_document for the correction UI, rather than one joint call
+// producing a single unattributed value per field. Kept as a thin wrapper
+// around extractSingleDocument + mergeExtractionResults (#115) for callers
+// that still want the full batch-and-merge behavior in one call.
+export async function extractDocumentFields(
+  documents: ExtractionDocument[],
+  extractTokens: ExtractToken[]
+): Promise<DynamicExtractionResult> {
+  if (documents.length === 0) return mergeExtractionResults([], extractTokens);
+
+  const perDocResults = await Promise.all(
+    documents.map((doc) => extractSingleDocument(doc, extractTokens))
+  );
+
+  return mergeExtractionResults(perDocResults, extractTokens);
+}
+
 // Shared text-completion helper (same provider fallback as extraction) for
 // non-extraction AI calls that live alongside this pipeline — e.g. semantic
 // candidate-equivalence checks in lib/documents/compare-candidates.ts.
-export async function runTextCompletion(prompt: string): Promise<string> {
+// `context` labels the calling feature (e.g. "verification pass", "file
+// requirement AI judge") for anything reported via reportProviderFailure.
+export async function runTextCompletion(prompt: string, context = "AI text completion"): Promise<string> {
   if (process.env.OPENAI_API_KEY) {
     try {
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -503,6 +539,8 @@ export async function runTextCompletion(prompt: string): Promise<string> {
       return response.choices[0]?.message?.content ?? "";
     } catch (err) {
       console.error("[extractor] runTextCompletion OpenAI failed, falling back to Anthropic:", err);
+      const status = classifyProviderError(err);
+      if (status) void reportProviderFailure({ provider: "openai", status, context, error: err });
     }
   }
 
@@ -517,6 +555,8 @@ export async function runTextCompletion(prompt: string): Promise<string> {
       return response.content[0]?.type === "text" ? response.content[0].text : "";
     } catch (err) {
       console.error("[extractor] runTextCompletion Anthropic also failed:", err);
+      const status = classifyProviderError(err);
+      if (status) void reportProviderFailure({ provider: "anthropic", status, context, error: err });
     }
   }
 

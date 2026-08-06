@@ -74,7 +74,7 @@ export default async function TemplatePage({
     supabase
       .from("file_requirements")
       .select(
-        "id, name, slug, max_count, required, no_duplicates, extraction, marker_text_patterns, marker_page_count_min, marker_page_count_max, marker_regex, ai_judge_hint"
+        "id, name, slug, max_count, required, no_duplicates, extraction, marker_text_patterns, marker_page_count_min, marker_page_count_max, marker_regex, ai_judge_hint, reference_sample_storage_path"
       )
       .eq("template_id", id)
       .order("sort_order", { ascending: true }),
@@ -108,7 +108,7 @@ export default async function TemplatePage({
 
   const template = tmpl as unknown as TemplateDetail;
   const rows = (mappings ?? []) as MappingRow[];
-  const requirements = (fileReqs ?? []) as {
+  const rawRequirements = (fileReqs ?? []) as {
     id: string; name: string; slug: string;
     max_count: number; required: boolean; no_duplicates: boolean; extraction: boolean;
     marker_text_patterns: string[] | null;
@@ -116,7 +116,22 @@ export default async function TemplatePage({
     marker_page_count_max: number | null;
     marker_regex: string | null;
     ai_judge_hint: string | null;
+    reference_sample_storage_path: string | null;
   }[];
+
+  // Reference sample previews (#115) need a fresh signed URL per render —
+  // the storage path alone isn't fetchable from the browser (private bucket).
+  const requirements = await Promise.all(
+    rawRequirements.map(async (r) => {
+      if (!r.reference_sample_storage_path) {
+        return { ...r, reference_sample_signed_url: null as string | null };
+      }
+      const { data } = await supabase.storage
+        .from("templates")
+        .createSignedUrl(r.reference_sample_storage_path, 3600);
+      return { ...r, reference_sample_signed_url: data?.signedUrl ?? null };
+    })
+  );
   const templateRows = rows.filter((r) => r.in_template);
   const extractionOnlyRows = rows.filter((r) => !r.in_template);
 

@@ -114,6 +114,16 @@ export interface EmailSendFailure {
   error: string | null;
 }
 
+export interface AiProviderFailure {
+  id: string;
+  provider: "openai" | "anthropic";
+  status: "quota_exceeded" | "rate_limited";
+  context: string;
+  error: string | null;
+  project_id: string | null;
+  created_at: string;
+}
+
 export type CreditRaceEventType = "deduct_credit" | "debit_deferred" | "log_upfront" | "log_override";
 
 export interface CreditRaceEvent {

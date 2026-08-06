@@ -20,7 +20,16 @@ export default async function ResumeDraftPage({
   const supabase = createAdminClient();
   const orgId = user.client_id as string;
 
-  const [{ data: project }, { data: templates }, { data: openFlags }, { data: flaggedFiles }] = await Promise.all([
+  // #115: per-file verification confirmation now happens inline during the
+  // upload pipeline itself (before Continue is even enabled — see
+  // continueGate.ts), so resuming a draft no longer needs to re-surface
+  // unconfirmed mismatches here; ReviewStep no longer renders them either.
+  // Known limitation: a draft can now exist mid-upload-pipeline (created on
+  // first file drop, #115) rather than only after a full finalizeSubmission
+  // — this page still reconstructs straight to the step-2 review, so
+  // resuming before ever clicking Continue shows an under-filled review
+  // step rather than rehydrating the in-progress per-file pipeline.
+  const [{ data: project }, { data: templates }, { data: openFlags }] = await Promise.all([
     supabase
       .from("projects")
       .select("id, status, template_id, extracted_fields, po_number")
@@ -41,32 +50,13 @@ export default async function ResumeDraftPage({
       .select("field_key, type, candidate_values")
       .eq("project_id", id)
       .eq("status", "open"),
-    // #113: any upload still carrying an unconfirmed verification mismatch
-    // from the original submission attempt must be re-surfaced here too.
-    supabase
-      .from("project_files")
-      .select("id, file_type, original_filename, storage_path, verification_mismatch_reasons")
-      .eq("project_id", id)
-      .not("verification_mismatch_reasons", "is", null)
-      .is("verification_confirmed_at", null),
   ]);
 
   if (!project) notFound();
 
-  const fileVerificationWarnings = await Promise.all(
-    (flaggedFiles ?? []).map(async (f) => {
-      const { data: signed } = await supabase.storage
-        .from("submissions")
-        .createSignedUrl(f.storage_path as string, 3600);
-      return {
-        fileId: f.id as string,
-        slug: f.file_type as string,
-        name: f.original_filename as string,
-        previewUrl: signed?.signedUrl ?? null,
-        reasons: f.verification_mismatch_reasons as string[],
-      };
-    })
-  );
+  const fileVerificationWarnings: {
+    fileId: string; slug: string; name: string; previewUrl: string | null; reasons: string[];
+  }[] = [];
 
   const flagsByToken = new Map(
     (openFlags ?? []).map((f) => [
@@ -135,6 +125,7 @@ export default async function ResumeDraftPage({
   }
 
   const trusteePick = hasTrustee ? buildMetricsPickRows(metricsAutofillConfigs, TRUSTEE_TOKEN) : null;
+  const rainfallPick = rainfallToken ? buildMetricsPickRows(metricsAutofillConfigs, RAINFALL_TOKEN) : null;
 
   function makeField(
     m: { placeholder_token: string; display_label: string | null; field_key: string | null; is_required: boolean },
@@ -212,6 +203,8 @@ export default async function ResumeDraftPage({
     rainfallToken,
     matchToken: trusteePick?.matchToken ?? null,
     pickRows: trusteePick?.rows ?? [],
+    rainfallMatchToken: rainfallPick?.matchToken ?? null,
+    rainfallPickRows: rainfallPick?.rows ?? [],
     projectId: id,
     templateId,
     fileVerificationWarnings,

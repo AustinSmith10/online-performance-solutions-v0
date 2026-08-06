@@ -74,7 +74,7 @@ Group the indices that refer to the SAME real-world value (e.g. differing only i
 
   let raw: string;
   try {
-    raw = await runTextCompletion(prompt);
+    raw = await runTextCompletion(prompt, "semantic candidate comparison");
   } catch (err) {
     console.error("[compare-candidates] semantic equivalence call failed:", err);
     return groups;

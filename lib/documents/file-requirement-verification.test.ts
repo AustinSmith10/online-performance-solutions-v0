@@ -86,6 +86,38 @@ describe("runAiJudgeCheck", () => {
   });
 });
 
+describe("runAiJudgeCheck — sample-aware prompt construction (#115)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("omits any sample grounding from the prompt when no sample text is passed", async () => {
+    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "reason": ""}');
+    await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "doc text");
+    const prompt = vi.mocked(runTextCompletion).mock.calls[0][0];
+    expect(prompt).not.toContain("reference sample");
+  });
+
+  it("omits any sample grounding from the prompt when sample text is explicitly null", async () => {
+    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "reason": ""}');
+    await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "doc text", null);
+    const prompt = vi.mocked(runTextCompletion).mock.calls[0][0];
+    expect(prompt).not.toContain("reference sample");
+  });
+
+  it("includes the sample text as grounding when present", async () => {
+    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "reason": ""}');
+    await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "doc text", "SAMPLE PO CONTENT");
+    const prompt = vi.mocked(runTextCompletion).mock.calls[0][0];
+    expect(prompt).toContain("reference sample");
+    expect(prompt).toContain("SAMPLE PO CONTENT");
+  });
+
+  it("still fails open on error with a sample present", async () => {
+    vi.mocked(runTextCompletion).mockRejectedValue(new Error("API down"));
+    const result = await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "doc text", "SAMPLE PO CONTENT");
+    expect(result).toEqual({ ok: true });
+  });
+});
+
 describe("verifyUploadAgainstRequirement", () => {
   beforeEach(() => vi.clearAllMocks());
 

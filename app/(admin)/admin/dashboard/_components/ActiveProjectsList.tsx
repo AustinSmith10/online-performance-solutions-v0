@@ -69,6 +69,7 @@ export type ActiveProjectItem = {
   overdue: boolean;
   awaitingStakeholder: boolean;
   overridePending: boolean;
+  hasVerificationMismatch: boolean;
 };
 
 type Filters = {
@@ -157,6 +158,14 @@ function ProjectRow({ p }: { p: ActiveProjectItem }) {
         {p.overdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">Overdue</span>}
         {p.overridePending && (
           <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700">Override</span>
+        )}
+        {p.hasVerificationMismatch && (
+          <span
+            className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+            title="A stakeholder confirmed a file despite a flagged verification mismatch"
+          >
+            Flagged doc
+          </span>
         )}
         <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_CLASSES[p.status]}`}>
           {STATUS_LABELS[p.status]}

@@ -7,9 +7,12 @@ import {
   collectHighConfidenceEntries,
   parseVerificationResponse,
   applyVerificationResults,
+  mergeExtractionResults,
   type ExtractedField,
   type VerificationEntry,
   type VerificationResult,
+  type SingleDocExtraction,
+  type ExtractToken,
 } from "./extractor";
 
 describe("parseJson — same-document multi-candidate parsing (#64)", () => {
@@ -200,5 +203,109 @@ describe("applyVerificationResults — most-skeptical-voice-wins, never raises c
     const results = new Map<number, VerificationResult>([[0, { confidence: "medium", reason: "" }]]);
     applyVerificationResults(fields, entries, results);
     expect(fields.EXTRACT_HOUSE_TYPE[0]).toEqual({ value: "MORETONG5", confidence: "medium" });
+  });
+});
+
+describe("mergeExtractionResults — pure cross-document merge (#115)", () => {
+  const TOKENS: ExtractToken[] = [
+    { token: "EXTRACT_ADDRESS", label: "Address", hint: "full street address" },
+  ];
+
+  function docResult(overrides: Partial<SingleDocExtraction> = {}): SingleDocExtraction {
+    return {
+      label: "doc.pdf",
+      result: {
+        po_number: { value: "", confidence: "low" },
+        fields: { EXTRACT_ADDRESS: [{ value: "", confidence: "low" }] },
+      },
+      ...overrides,
+    };
+  }
+
+  it("returns empty results for an empty document list", () => {
+    const merged = mergeExtractionResults([], TOKENS);
+    expect(merged).toEqual({
+      po_number: { value: "", confidence: "low" },
+      fields: { EXTRACT_ADDRESS: { value: "", confidence: "low" } },
+      candidates: { EXTRACT_ADDRESS: [] },
+      poCandidates: [],
+    });
+  });
+
+  it("merges a single document's candidates straight through", () => {
+    const doc = docResult({
+      label: "po.pdf",
+      result: {
+        po_number: { value: "PO123", confidence: "high" },
+        fields: { EXTRACT_ADDRESS: [{ value: "12 Smith St", confidence: "high" }] },
+      },
+    });
+    const merged = mergeExtractionResults([doc], TOKENS);
+    expect(merged.fields.EXTRACT_ADDRESS).toEqual({
+      value: "12 Smith St",
+      confidence: "high",
+      source_document: "po.pdf",
+    });
+    expect(merged.candidates.EXTRACT_ADDRESS).toEqual([
+      { value: "12 Smith St", confidence: "high", source_document: "po.pdf" },
+    ]);
+    expect(merged.po_number).toEqual({ value: "PO123", confidence: "high", source_document: "po.pdf" });
+  });
+
+  it("picks the highest-confidence candidate across multiple documents for a field", () => {
+    const docA = docResult({
+      label: "a.pdf",
+      result: {
+        po_number: { value: "", confidence: "low" },
+        fields: { EXTRACT_ADDRESS: [{ value: "12 Smith St", confidence: "medium" }] },
+      },
+    });
+    const docB = docResult({
+      label: "b.pdf",
+      result: {
+        po_number: { value: "", confidence: "low" },
+        fields: { EXTRACT_ADDRESS: [{ value: "14 Smith St", confidence: "high" }] },
+      },
+    });
+    const merged = mergeExtractionResults([docA, docB], TOKENS);
+    expect(merged.fields.EXTRACT_ADDRESS).toEqual({
+      value: "14 Smith St",
+      confidence: "high",
+      source_document: "b.pdf",
+    });
+    expect(merged.candidates.EXTRACT_ADDRESS).toHaveLength(2);
+  });
+
+  it("breaks a po_number tie in favor of the higher-confidence document", () => {
+    const docA = docResult({
+      label: "a.pdf",
+      result: {
+        po_number: { value: "PO111", confidence: "medium" },
+        fields: { EXTRACT_ADDRESS: [{ value: "", confidence: "low" }] },
+      },
+    });
+    const docB = docResult({
+      label: "b.pdf",
+      result: {
+        po_number: { value: "PO222", confidence: "high" },
+        fields: { EXTRACT_ADDRESS: [{ value: "", confidence: "low" }] },
+      },
+    });
+    const merged = mergeExtractionResults([docA, docB], TOKENS);
+    expect(merged.po_number).toEqual({ value: "PO222", confidence: "high", source_document: "b.pdf" });
+    expect(merged.poCandidates.map((c) => c.value)).toEqual(["PO111", "PO222"]);
+  });
+
+  it("excludes empty values from candidates and falls back to the empty field", () => {
+    const doc = docResult({
+      result: {
+        po_number: { value: "", confidence: "low" },
+        fields: { EXTRACT_ADDRESS: [{ value: "", confidence: "low" }] },
+      },
+    });
+    const merged = mergeExtractionResults([doc], TOKENS);
+    expect(merged.candidates.EXTRACT_ADDRESS).toEqual([]);
+    expect(merged.fields.EXTRACT_ADDRESS).toEqual({ value: "", confidence: "low" });
+    expect(merged.poCandidates).toEqual([]);
   });
 });

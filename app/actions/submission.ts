@@ -7,22 +7,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
-import { extractDocumentFields, type ExtractedField, type Confidence, type ExtractedCandidate } from "@/lib/documents/extractor";
-import { verifyUploadAgainstRequirement } from "@/lib/documents/file-requirement-verification";
+import type { ExtractedField, Confidence, ExtractedCandidate, SingleDocExtraction } from "@/lib/documents/extractor";
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
-import { buildFieldFlagPlan, type FieldFlagPlan } from "@/lib/documents/field-flags";
+import { assembleAndPersistDraftFields } from "@/lib/documents/draft-assembly";
+import { resolveOrgId, loadFileRequirements, loadExtractTokens } from "@/lib/documents/submission-shared";
 import type { ComparisonMode } from "@/lib/documents/compare-candidates";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { addWorkingDays } from "@/lib/delivery/working-days";
 import { performAssignment } from "@/lib/projects/assign";
 import { AcknowledgementEmail } from "@/lib/email/templates/AcknowledgementEmail";
-import {
-  getMetricsAutofillConfigs,
-  getAutofillExclusionTokens,
-  resolveMetricsAutofill,
-  buildMetricsPickRows,
-  type MetricsPickRow,
-} from "@/lib/documents/metrics-autofill";
+import { buildMetricsPickRows, type MetricsPickRow } from "@/lib/documents/metrics-autofill";
 
 // A client's metrics-table autofill config may resolve these — the review UI
 // shows the trustee as a correctable dropdown and rainfall intensity as a
@@ -69,6 +63,11 @@ export type ExtractState =
       rainfallToken: string | null;
       matchToken: string | null;
       pickRows: MetricsPickRow[];
+      // Lets the review UI re-resolve rainfall intensity live if the
+      // stakeholder edits the field that drives its lookup, instead of
+      // freezing it at whatever the initial extraction pass produced.
+      rainfallMatchToken: string | null;
+      rainfallPickRows: MetricsPickRow[];
       projectId: string;
       templateId: string;
       // #113: uploads whose deterministic/AI-judge check flagged a possible
@@ -78,42 +77,6 @@ export type ExtractState =
         fileId: string; slug: string; name: string; previewUrl: string | null; reasons: string[];
       }[];
     };
-
-// ─── Step 1a: derive an org id from actor role + on-behalf-of fields (shared) ─
-// Admins and consultants both submit "on behalf of" a stakeholder they pick,
-// so they share the same org-id resolution and `submitted_by` pinning below.
-
-function resolveOrgId(
-  actor: { role: string; client_id?: unknown },
-  actsOnBehalf: boolean,
-  onBehalfOrgId: string | null
-): string {
-  return actsOnBehalf ? (onBehalfOrgId?.trim() ?? "") : (actor.client_id as string);
-}
-
-type FileReq = {
-  id: string; name: string; slug: string;
-  max_count: number; required: boolean; no_duplicates: boolean; extraction: boolean;
-  marker_text_patterns: string[] | null;
-  marker_page_count_min: number | null;
-  marker_page_count_max: number | null;
-  marker_regex: string | null;
-  ai_judge_hint: string | null;
-};
-
-async function loadFileRequirements(
-  supabase: ReturnType<typeof createAdminClient>,
-  templateId: string
-): Promise<FileReq[]> {
-  const { data } = await supabase
-    .from("file_requirements")
-    .select(
-      "id, name, slug, max_count, required, no_duplicates, extraction, marker_text_patterns, marker_page_count_min, marker_page_count_max, marker_regex, ai_judge_hint"
-    )
-    .eq("template_id", templateId)
-    .order("sort_order");
-  return (data ?? []) as FileReq[];
-}
 
 // ─── Step 1: request signed upload URLs ─────────────────────────────────────
 // The browser uploads file bytes directly to Supabase Storage using these
@@ -231,20 +194,19 @@ export async function requestSubmissionUploadUrls(
   };
 }
 
-// ─── Step 1b: finalize — download uploaded files for extraction, persist ────
-
-export interface FinalizeUploadItem {
-  slug: string;
-  name: string;
-  path: string;
-}
+// ─── Step 1b: finalize — merge already-computed per-file results, persist ───
+// #115: verification and (where applicable) extraction have already run per
+// file, the instant each landed (see app/actions/submission-pipeline.ts).
+// This is now a Continue-time-only merge over cached results — no LLM calls,
+// no downloads, no per-file verification — plus the same duplicate-address
+// check, flag-plan build, and draft persistence as before, now delegated to
+// the separately-testable assembleAndPersistDraftFields.
 
 export async function finalizeSubmission(
   projectId: string,
   templateId: string,
   adminOrgId: string | null,
-  adminClientId: string | null,
-  uploads: FinalizeUploadItem[]
+  adminClientId: string | null
 ): Promise<ExtractState> {
   const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
@@ -258,85 +220,40 @@ export async function finalizeSubmission(
   const fileReqs = await loadFileRequirements(supabase, templateId);
   const reqBySlug = new Map(fileReqs.map((r) => [r.slug, r]));
 
-  const cleanupPaths = uploads.map((u) => u.path);
-  const cleanup = async () => {
-    if (cleanupPaths.length) await supabase.storage.from("submissions").remove(cleanupPaths);
-  };
+  const { data: projectFiles } = await supabase
+    .from("project_files")
+    .select(
+      "id, storage_path, file_type, original_filename, verification_mismatch_reasons, verification_completed_at, verification_confirmed_at, extraction_status, extraction_result"
+    )
+    .eq("project_id", projectId);
+  const files = projectFiles ?? [];
 
-  // Defensive re-validation: confirm each uploaded object actually exists and
-  // is within the size limit (declared sizes were only checked client-side
-  // before the signed-URL request; the browser controls the actual bytes).
-  const byFolder = new Map<string, FinalizeUploadItem[]>();
-  for (const u of uploads) {
-    const folder = u.path.slice(0, u.path.lastIndexOf("/"));
-    byFolder.set(folder, [...(byFolder.get(folder) ?? []), u]);
+  // Defensive re-validation: the client only enables Continue once every
+  // file has settled (see continueGate.ts), but the server re-derives the
+  // same gate rather than trusting that state wasn't stale.
+  for (const req of fileReqs) {
+    if (req.required && !files.some((f) => f.file_type === req.slug)) {
+      return { step: 1, error: `"${req.name}" is required. Please attach a file.` };
+    }
   }
-  for (const [folder, items] of byFolder) {
-    const { data: listing } = await supabase.storage.from("submissions").list(folder);
-    for (const item of items) {
-      const filename = item.path.slice(item.path.lastIndexOf("/") + 1);
-      const entry = listing?.find((f) => f.name === filename);
-      if (!entry) {
-        await cleanup();
-        return { step: 1, error: `Upload for "${item.name}" did not complete. Please try again.` };
-      }
-      if ((entry.metadata?.size ?? 0) > 50 * 1024 * 1024) {
-        await cleanup();
-        return { step: 1, error: `"${item.name}" exceeds the 50 MB limit.` };
-      }
+  for (const f of files) {
+    if (!f.verification_completed_at) {
+      return { step: 1, error: `"${f.original_filename}" is still being checked. Please wait.` };
+    }
+    if (f.verification_mismatch_reasons && !f.verification_confirmed_at) {
+      return { step: 1, error: `Please confirm the flagged file "${f.original_filename}" before continuing.` };
+    }
+    if (f.extraction_status === "pending" || f.extraction_status === "running") {
+      return { step: 1, error: `"${f.original_filename}" is still being processed. Please wait.` };
+    }
+    if (f.extraction_status === "failed") {
+      return { step: 1, error: `Extraction failed for "${f.original_filename}". Please retry or replace it.` };
     }
   }
 
-  // Download every uploaded file once — extraction only needs the slots
-  // flagged extraction=true, but the #113 verification layer below checks
-  // every upload against its slot's file_requirements row, so both draw
-  // from this single pass rather than downloading twice.
-  const downloaded = await Promise.all(
-    uploads.map(async (u) => {
-      const { data, error } = await supabase.storage.from("submissions").download(u.path);
-      if (error || !data) throw new Error(`Failed to read "${u.name}".`);
-      return { ...u, buffer: Buffer.from(await data.arrayBuffer()) };
-    })
-  ).catch((err: Error) => err);
-
-  if (downloaded instanceof Error) {
-    await cleanup();
-    return { step: 1, error: downloaded.message };
-  }
-  const downloadedUploads = downloaded;
-  const extractionDocs = downloadedUploads
-    .filter((u) => reqBySlug.get(u.slug)?.extraction)
-    .map((u) => ({ label: reqBySlug.get(u.slug)!.name, buffer: u.buffer }));
-
-  // Verification layer (#113): deterministic markers + AI judge, both run
-  // per upload against its slot's file_requirements row. Soft findings only
-  // — never blocks the draft from being created; the stakeholder confirms
-  // them before final submission (see submitProject's gate).
-  const verificationReasonsByPath = new Map<string, string[]>();
-  await Promise.all(
-    downloadedUploads.map(async (u) => {
-      const req = reqBySlug.get(u.slug);
-      if (!req) return;
-      const isPdf = u.name.toLowerCase().endsWith(".pdf");
-      try {
-        const reasons = await verifyUploadAgainstRequirement(
-          {
-            name: req.name,
-            markerTextPatterns: req.marker_text_patterns,
-            markerPageCountMin: req.marker_page_count_min,
-            markerPageCountMax: req.marker_page_count_max,
-            markerRegex: req.marker_regex,
-            aiJudgeHint: req.ai_judge_hint,
-          },
-          u.buffer,
-          isPdf
-        );
-        if (reasons.length > 0) verificationReasonsByPath.set(u.path, reasons);
-      } catch (err) {
-        console.error(`[finalizeSubmission] verification failed for "${u.name}", failing open:`, err);
-      }
-    })
-  );
+  const perFileResults = files
+    .filter((f) => reqBySlug.get(f.file_type as string)?.extraction && f.extraction_result)
+    .map((f) => f.extraction_result as unknown as SingleDocExtraction);
 
   // Load template mappings, section labels, and org config in parallel
   const [mappingsResult, orgResult, templateResult] = await Promise.all([
@@ -353,7 +270,6 @@ export async function finalizeSubmission(
 
   const allMappings = mappingsResult.data ?? [];
   const orgConfig = (orgResult.data?.client_config ?? {}) as Record<string, string>;
-  const templateName = (templateResult.data?.name as string | null) ?? null;
   const rawLabels = (templateResult.data?.section_labels ?? {}) as Record<string, string>;
   const sectionLabels: SectionLabels = {
     extract: rawLabels.extract || "Extracted from your documents",
@@ -377,167 +293,55 @@ export async function finalizeSubmission(
   );
   const rainfallToken = rainfallMapping ? RAINFALL_TOKEN : null;
 
-  const metricsAutofillConfigs = await getMetricsAutofillConfigs(supabase, orgId);
-  const metricsExclusionTokens = getAutofillExclusionTokens(metricsAutofillConfigs);
-  const extractTokens = extractMappings
-    .filter((m) => !metricsExclusionTokens.has(m.placeholder_token))
-    .map((m) => ({
-      token: m.placeholder_token,
-      label: m.display_label ?? m.placeholder_token,
-      hint: m.extraction_hint ?? `Extract the value for ${m.placeholder_token} from the documents.`,
-    }));
+  const { extractTokens, metricsAutofillConfigs } = await loadExtractTokens(supabase, orgId, templateId);
 
-  let extraction;
-
-  try {
-    extraction = await extractDocumentFields(extractionDocs, extractTokens);
-    resolveMetricsAutofill(metricsAutofillConfigs, extraction.fields);
-  } catch (err) {
-    await cleanup();
-    console.error("[finalizeSubmission] extraction failed:", err);
-    return {
-      step: 1,
-      error:
-        "Document extraction failed. Please check that your files are valid PDFs and try again.",
-    };
-  }
-
-  // Candidate comparison + flag decision per extract token (#58). Tokens
-  // resolved by metrics-autofill instead of AI extraction have no entry in
-  // `candidates` and are skipped — no AI judgment sits behind those values.
   const comparisonModeByToken = new Map(
-    extractMappings.map((m) => [m.placeholder_token, (m.comparison_mode as ComparisonMode) ?? "exact"])
+    extractMappings.map((m) => [m.placeholder_token as string, (m.comparison_mode as ComparisonMode) ?? "exact"])
   );
-  // Every extract token is checked, including ones with zero candidates — a
-  // field extraction that found nothing anywhere must flag for review too
-  // (extraction-verification-layer-decisions #7), not be silently skipped.
-  const flagPlans = new Map<string, FieldFlagPlan>();
-  for (const [token, rawCandidates] of Object.entries(extraction.candidates)) {
-    const normalizedCandidates = rawCandidates.map((c) => ({
-      ...c,
-      value: normalizeExtractedFields({ [token]: c.value })[token],
-    }));
-    const plan = await buildFieldFlagPlan(normalizedCandidates, comparisonModeByToken.get(token) ?? "exact");
-    flagPlans.set(token, plan);
-  }
 
-  // Duplicate address check — block draft creation if any non-deleted project
-  // for this org already has the same address (submitted or draft).
-  const extractedAddress = extraction.fields["EXTRACT_ADDRESS"]?.value?.trim() ?? "";
-  if (extractedAddress) {
-    const [{ data: byAddress }, { data: byDraft }] = await Promise.all([
-      supabase
-        .from("projects")
-        .select("id")
-        .eq("client_id", orgId)
-        .eq("site_address", extractedAddress)
-        .is("deleted_at", null)
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("projects")
-        .select("id")
-        .eq("client_id", orgId)
-        .filter("extracted_fields->>EXTRACT_ADDRESS", "eq", extractedAddress)
-        .is("deleted_at", null)
-        .limit(1)
-        .maybeSingle(),
-    ]);
-    const existing = byAddress ?? byDraft;
-    if (existing) {
-      await cleanup();
-      return {
-        step: 1,
-        error: `A project for ${extractedAddress} already exists. Please review the existing project instead of creating a new one.`,
-        duplicateProjectId: (existing as { id: string }).id,
-      };
-    }
-  }
-
-  // Persist draft — normalise and save field values as plain strings
-  const draftFields = normalizeExtractedFields(
-    Object.fromEntries(Object.entries(extraction.fields).map(([k, v]) => [k, v.value]))
-  );
-  const { error: projectError } = await supabase.from("projects").insert({
-    id: projectId,
-    client_id: orgId,
-    template_id: templateId,
-    submitted_by: actsOnBehalf ? (adminClientId as string) : actor.id,
-    status: "draft",
-    po_number: extraction.po_number.value || null,
-    extracted_fields: draftFields,
+  const assembly = await assembleAndPersistDraftFields(supabase, {
+    projectId,
+    orgId,
+    perFileResults,
+    extractTokens,
+    comparisonModeByToken,
+    metricsAutofillConfigs,
   });
 
-  if (projectError) {
-    await cleanup();
-    console.error("[finalizeSubmission] draft project insert failed:", projectError);
-    return { step: 1, error: "Failed to save your draft. Please try again." };
+  if (assembly.error) {
+    return { step: 1, error: assembly.error, duplicateProjectId: assembly.duplicateProjectId };
   }
 
-  const flagRows = [...flagPlans.entries()]
-    .filter(([, plan]) => plan.needsFlag)
-    .map(([token, plan]) => ({
-      project_id: projectId,
-      type: plan.flagType,
-      field_key: token,
-      status: "open",
-      current_value: draftFields[token] ?? plan.finalValue,
-      candidate_values: plan.candidateRecords,
-    }));
-  if (flagRows.length > 0) {
-    await supabase.from("field_flags").insert(flagRows);
-  }
+  const { extraction, draftFields, flagPlans } = assembly;
 
-  let fileVerificationWarnings: {
+  const fileVerificationWarnings: {
     fileId: string; slug: string; name: string; previewUrl: string | null; reasons: string[];
-  }[] = [];
-
-  if (uploads.length > 0) {
-    const fileRecords = uploads.map(({ slug, name, path }) => {
-      const reasons = verificationReasonsByPath.get(path) ?? null;
-      return {
-        project_id: projectId,
-        file_type: slug,
-        storage_path: path,
-        original_filename: name,
-        uploaded_by: actor.id,
-        verification_mismatch_reasons: reasons,
-      };
-    });
-    const { data: insertedFiles } = await supabase
-      .from("project_files")
-      .insert(fileRecords)
-      .select("id, storage_path, file_type, original_filename, verification_mismatch_reasons");
-
-    const flagged = (insertedFiles ?? []).filter((f) => f.verification_mismatch_reasons);
-    if (flagged.length > 0) {
-      fileVerificationWarnings = await Promise.all(
-        flagged.map(async (f) => {
-          const { data: signed } = await supabase.storage
-            .from("submissions")
-            .createSignedUrl(f.storage_path as string, 3600);
-          return {
-            fileId: f.id as string,
-            slug: f.file_type as string,
-            name: f.original_filename as string,
-            previewUrl: signed?.signedUrl ?? null,
-            reasons: f.verification_mismatch_reasons as string[],
-          };
-        })
-      );
-    }
-  }
+  }[] = await Promise.all(
+    files
+      .filter((f) => f.verification_mismatch_reasons && !f.verification_confirmed_at)
+      .map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("submissions")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return {
+          fileId: f.id as string,
+          slug: f.file_type as string,
+          name: f.original_filename as string,
+          previewUrl: signed?.signedUrl ?? null,
+          reasons: f.verification_mismatch_reasons as string[],
+        };
+      })
+  );
 
   await auditLog("project.draft_created", actor.id, actor.email as string, {
     orgId,
     projectId,
     metadata: {
       templateId,
-      templateName,
-      files: uploads.map(({ slug, name }) => ({
-        slug,
-        label: reqBySlug.get(slug)?.name ?? slug,
-        filename: name,
+      files: files.map((f) => ({
+        slug: f.file_type,
+        label: reqBySlug.get(f.file_type as string)?.name ?? f.file_type,
+        filename: f.original_filename,
       })),
       extracted_fields: draftFields,
       po_number: extraction.po_number.value || null,
@@ -574,6 +378,7 @@ export async function finalizeSubmission(
   };
 
   const trusteePick = hasTrustee ? buildMetricsPickRows(metricsAutofillConfigs, TRUSTEE_TOKEN) : null;
+  const rainfallPick = rainfallToken ? buildMetricsPickRows(metricsAutofillConfigs, RAINFALL_TOKEN) : null;
 
   return {
     step: 2,
@@ -584,6 +389,8 @@ export async function finalizeSubmission(
     rainfallToken,
     matchToken: trusteePick?.matchToken ?? null,
     pickRows: trusteePick?.rows ?? [],
+    rainfallMatchToken: rainfallPick?.matchToken ?? null,
+    rainfallPickRows: rainfallPick?.rows ?? [],
     projectId,
     templateId,
     fileVerificationWarnings,
@@ -624,26 +431,23 @@ export async function submitProject(
     return { error: "Please confirm that you have reviewed the details above before submitting." };
   }
 
-  // #113: any upload flagged by the verification layer must be confirmed
-  // before submission proceeds — soft block, not a hard block on upload
-  // itself. The client only sends ids the stakeholder actually checked;
-  // this re-derives the flagged set server-side rather than trusting count.
+  // #113/#115: any upload flagged by the verification layer must be
+  // confirmed before submission proceeds — soft block, not a hard block on
+  // upload itself. Confirmation now happens inline during the real-time
+  // per-file pipeline (confirmFileVerification, before Continue is even
+  // enabled — see continueGate.ts), so this re-derives readiness straight
+  // from verification_confirmed_at rather than trusting client-posted ids.
   const { data: flaggedFiles } = await supabase
     .from("project_files")
-    .select("id, verification_mismatch_reasons")
+    .select("id, verification_mismatch_reasons, verification_confirmed_at")
     .eq("project_id", projectId)
     .not("verification_mismatch_reasons", "is", null);
 
   if (flaggedFiles && flaggedFiles.length > 0) {
-    const confirmedIds = new Set(formData.getAll("confirmed_file_ids").map(String));
-    const unconfirmed = flaggedFiles.filter((f) => !confirmedIds.has(f.id as string));
+    const unconfirmed = flaggedFiles.filter((f) => !f.verification_confirmed_at);
     if (unconfirmed.length > 0) {
       return { error: "Please review and confirm the flagged file(s) before submitting." };
     }
-    await supabase
-      .from("project_files")
-      .update({ verification_confirmed_at: new Date().toISOString(), verification_confirmed_by: actor.id })
-      .in("id", flaggedFiles.map((f) => f.id));
   }
 
   const poNumber = (formData.get("extracted_po_number") as string | null)?.trim() || null;

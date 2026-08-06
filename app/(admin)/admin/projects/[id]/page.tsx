@@ -31,6 +31,7 @@ import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { PbdbGeneratedBanner } from "@/components/PbdbGeneratedBanner";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { HighlightRing } from "@/components/HighlightRing";
+import { VerificationMismatchNote } from "@/components/VerificationMismatchNote";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
 import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
 import { ProjectDetailsEditor, type OpenFieldFlag } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectDetailsEditor";
@@ -302,7 +303,9 @@ export default async function ProjectDetailPage({
       : Promise.resolve({ data: [] }),
     supabase
       .from("project_files")
-      .select("id, file_type, file_type_confirmed, original_filename, storage_path, created_at")
+      .select(
+        "id, file_type, file_type_confirmed, original_filename, storage_path, created_at, verification_mismatch_reasons, verification_confirmed_at"
+      )
       .eq("project_id", id)
       .in("file_type", ["po", "purchase_order", "building_plans", "building_drawing_plans", "additional"])
       .order("created_at"),
@@ -1023,6 +1026,9 @@ export default async function ProjectDetailPage({
                     fileId={f.id as string}
                     currentFileType={f.file_type as string}
                   />
+                )}
+                {f.verification_mismatch_reasons && f.verification_confirmed_at && (
+                  <VerificationMismatchNote reasons={f.verification_mismatch_reasons as string[]} />
                 )}
               </DownloadCard>
             ))}

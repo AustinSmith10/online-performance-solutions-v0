@@ -13,6 +13,7 @@ export interface DashboardProject {
   isOverdue: boolean;
   isPending: boolean;
   isRevision: boolean;
+  hasVerificationMismatch: boolean;
   pendingAssignment?: { projectId: string };
   revisionReview?: { project: RevisionProject; reviews: ReviewRow[]; pbdbFile: PbdbFile | null };
 }

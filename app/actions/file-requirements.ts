@@ -218,3 +218,97 @@ export async function deleteFileRequirement(
 
   revalidatePath(`/admin/templates/${templateId}`);
 }
+
+// ─── Reference sample (#115) ────────────────────────────────────────────────
+// Admin-only, human-and-AI-judge reference file per file_requirements row.
+// Stored in the `templates` bucket (already private, admin-RLS-scoped) under
+// its own namespace, mirroring reuploadTemplate's per-entity path convention
+// (app/actions/templates.ts) — same old-object-cleanup-after-successful-swap
+// ordering. PDF-only, matching the AI judge's own PDF-only scope (#113).
+
+export type ReferenceSampleState = { error?: string; success?: boolean };
+
+export async function uploadReferenceSample(
+  templateId: string,
+  requirementId: string,
+  _prev: ReferenceSampleState,
+  formData: FormData
+): Promise<ReferenceSampleState> {
+  await requireRole("super_admin", "admin");
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "A file is required." };
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    return { error: "Only PDF files are supported for reference samples." };
+  }
+  if (file.size > 20 * 1024 * 1024) return { error: "File must be under 20 MB." };
+
+  const supabase = createAdminClient();
+
+  const { data: existing, error: fetchErr } = await supabase
+    .from("file_requirements")
+    .select("reference_sample_storage_path")
+    .eq("id", requirementId)
+    .eq("template_id", templateId)
+    .maybeSingle();
+
+  if (fetchErr || !existing) return { error: "File requirement not found." };
+
+  const storagePath = `file-requirements/${requirementId}/${file.name}`;
+  const fileBuffer = await file.arrayBuffer();
+
+  const { error: uploadError } = await supabase.storage
+    .from("templates")
+    .upload(storagePath, fileBuffer, { contentType: "application/pdf", upsert: true });
+
+  if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
+
+  const { error: updateError } = await supabase
+    .from("file_requirements")
+    .update({ reference_sample_storage_path: storagePath })
+    .eq("id", requirementId);
+
+  if (updateError) {
+    await supabase.storage.from("templates").remove([storagePath]);
+    return { error: updateError.message };
+  }
+
+  const oldPath = existing.reference_sample_storage_path as string | null;
+  if (oldPath && oldPath !== storagePath) {
+    await supabase.storage.from("templates").remove([oldPath]);
+  }
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  revalidatePath(`/admin/templates/${templateId}/file-requirements/${requirementId}`);
+  return { success: true };
+}
+
+export async function removeReferenceSample(
+  templateId: string,
+  requirementId: string
+): Promise<ReferenceSampleState> {
+  await requireRole("super_admin", "admin");
+
+  const supabase = createAdminClient();
+
+  const { data: existing } = await supabase
+    .from("file_requirements")
+    .select("reference_sample_storage_path")
+    .eq("id", requirementId)
+    .eq("template_id", templateId)
+    .maybeSingle();
+
+  const oldPath = existing?.reference_sample_storage_path as string | null;
+  if (oldPath) await supabase.storage.from("templates").remove([oldPath]);
+
+  const { error } = await supabase
+    .from("file_requirements")
+    .update({ reference_sample_storage_path: null })
+    .eq("id", requirementId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  revalidatePath(`/admin/templates/${templateId}/file-requirements/${requirementId}`);
+  return { success: true };
+}

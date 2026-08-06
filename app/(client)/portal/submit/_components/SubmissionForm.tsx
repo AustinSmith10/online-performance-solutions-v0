@@ -2,14 +2,19 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import {
-  requestSubmissionUploadUrls,
   finalizeSubmission,
-  abortSubmissionUploads,
   submitProject,
   type ExtractState,
   type TokenField,
-  type UploadManifestItem,
 } from "@/app/actions/submission";
+import {
+  requestSingleUploadUrl,
+  processUploadedFile,
+  confirmFileVerification,
+  retryFileExtraction,
+  removeUploadedFile,
+  type DraftPipelineStatus,
+} from "@/app/actions/submission-pipeline";
 import { createClient } from "@/lib/supabase/client";
 import type { Confidence } from "@/lib/documents/extractor";
 import type { MetricsPickRow } from "@/lib/documents/metrics-autofill";
@@ -17,21 +22,15 @@ import { ClientWorkspace } from "../../_components/ClientWorkspace";
 import { ClientHeaderCard } from "../../_components/ClientHeaderCard";
 import { FocusCard } from "@/components/workspace/FocusCard";
 import { REQUEST_STAGES } from "../../_components/requestStages";
-import { DocumentViewer, isPreviewable } from "@/components/DocumentViewer";
+import { FileSlot } from "./FileSlot";
+import { canContinue } from "./continueGate";
+import { useDraftPipelinePolling } from "./useDraftPipelinePolling";
+import { Spinner } from "./shared";
+import type { ClientPipelineFile, FileRequirement } from "./pipelineTypes";
 
 interface Template {
   id: string;
   name: string;
-}
-
-interface FileRequirement {
-  id: string;
-  name: string;
-  slug: string;
-  max_count: number;
-  required: boolean;
-  no_duplicates: boolean;
-  extraction: boolean;
 }
 
 interface Props {
@@ -48,29 +47,6 @@ interface Props {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function Spinner({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      className={`animate-spin ${className}`}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.25" />
-      <path
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.568 3 7.291l3-3.291z"
-      />
-    </svg>
-  );
-}
 
 // ── Confidence badge (step 2) ─────────────────────────────────────────────────
 
@@ -145,12 +121,17 @@ function TokenInput({
   onMark,
   disabled,
   isExtractField,
+  onValueChange,
 }: {
   field: TokenField;
   modified: Set<string>;
   onMark: (k: string) => void;
   disabled?: boolean;
   isExtractField?: boolean;
+  // Lets a parent re-derive dependent fields (e.g. a metrics-table autofill
+  // lookup keyed on this token) as the user types, instead of only seeing
+  // the value at submit time via the form's own name-based field.
+  onValueChange?: (token: string, value: string) => void;
 }) {
   const hasCandidates = (field.candidates?.length ?? 0) > 1;
   const [value, setValue] = useState(field.value);
@@ -179,6 +160,7 @@ function TokenInput({
         onChange={(e) => {
           setValue(e.target.value);
           onMark(field.token);
+          onValueChange?.(field.token, e.target.value);
         }}
         className={`w-full rounded-md border px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${fieldClass(modified, field.token, field.confidence, hasCandidates)}`}
       />
@@ -200,6 +182,7 @@ function TokenInput({
                 onChange={() => {
                   setValue(c.value);
                   onMark(field.token);
+                  onValueChange?.(field.token, c.value);
                 }}
                 className="mt-0.5"
               />
@@ -231,6 +214,26 @@ function resolveDefaultMatchValue(extractedValue: string, pickRows: MetricsPickR
   );
 }
 
+// Client-side mirror of resolveMetricsAutofill's exact-then-substring match —
+// lets a metrics-table output (e.g. rainfall intensity) be re-derived live as
+// the stakeholder edits the field it's keyed on, rather than staying frozen
+// at whatever the initial server-side extraction pass produced.
+function resolveAutofillOutput(
+  matchValue: string,
+  pickRows: MetricsPickRow[],
+  outputToken: string
+): string | null {
+  const needle = matchValue.trim().toLowerCase();
+  if (!needle) return null;
+  const row =
+    pickRows.find((r) => r.matchValue.toLowerCase() === needle) ??
+    pickRows.find((r) => {
+      const cell = r.matchValue.toLowerCase();
+      return cell !== "" && (cell.includes(needle) || needle.includes(cell));
+    });
+  return row ? row.outputs[outputToken] ?? null : null;
+}
+
 interface ReviewStepProps {
   state: Extract<ExtractState, { step: 2 }>;
   submitAction: (payload: FormData) => void;
@@ -244,17 +247,34 @@ interface ReviewStepProps {
 }
 
 function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgId, adminClientId, projectBasePath, startOverHref, showBanner }: ReviewStepProps) {
-  const { poNumber, tokenGroups, sectionLabels, hasTrustee, rainfallToken, matchToken, pickRows, projectId, templateId, fileVerificationWarnings } = state;
+  const {
+    poNumber,
+    tokenGroups,
+    sectionLabels,
+    hasTrustee,
+    rainfallToken,
+    matchToken,
+    pickRows,
+    rainfallMatchToken,
+    rainfallPickRows,
+    projectId,
+    templateId,
+  } = state;
 
   const [modified, setModified] = useState<Set<string>>(new Set());
   const mark = (key: string) => setModified((prev) => new Set(prev).add(key));
 
-  const [reviewedConfirmed, setReviewedConfirmed] = useState(false);
+  // Live-tracks every extract-field value as the user types, so a
+  // metrics-table autofill output (rainfall intensity) keyed on one of these
+  // fields (e.g. Development Name) can be re-resolved without waiting for a
+  // form submit round-trip.
+  const [liveExtractValues, setLiveExtractValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(tokenGroups.extract.map((f) => [f.token, f.value]))
+  );
+  const handleExtractValueChange = (token: string, value: string) =>
+    setLiveExtractValues((prev) => ({ ...prev, [token]: value }));
 
-  // #113: every flagged upload must be individually confirmed before the
-  // final Submit unlocks — mirrors the reviewed_confirmed checkbox pattern.
-  const [confirmedMismatches, setConfirmedMismatches] = useState<Set<string>>(new Set());
-  const allMismatchesConfirmed = fileVerificationWarnings.every((w) => confirmedMismatches.has(w.fileId));
+  const [reviewedConfirmed, setReviewedConfirmed] = useState(false);
 
   const [bannerVisible, setBannerVisible] = useState(showBanner ?? false);
   useEffect(() => {
@@ -275,6 +295,18 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
   const rainfallField = rainfallToken
     ? tokenGroups.extract.find((t) => t.token === rainfallToken)
     : null;
+  // Re-run the same match the server used to originally populate rainfall
+  // intensity, but against the field's *current* value — so correcting a
+  // failed Development Name extraction re-derives rainfall intensity instead
+  // of submitting whatever (possibly empty) value the initial pass left.
+  const rainfallMatchValue = rainfallMatchToken ? liveExtractValues[rainfallMatchToken] ?? "" : "";
+  const rainfallResolvedValue =
+    rainfallMatchToken && rainfallToken
+      ? resolveAutofillOutput(rainfallMatchValue, rainfallPickRows, rainfallToken)
+      : null;
+  const rainfallValue = rainfallResolvedValue ?? rainfallField?.value ?? "";
+  const rainfallUnresolved =
+    Boolean(rainfallMatchToken) && rainfallMatchValue.trim() !== "" && rainfallResolvedValue === null;
 
   const halcyonTokens = new Set(["EXTRACT_TRUSTEE", rainfallToken].filter(Boolean));
   const extractFieldsList = tokenGroups.extract.filter((t) => !halcyonTokens.has(t.token));
@@ -340,11 +372,8 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
           <input type="hidden" name="EXTRACT_TRUSTEE" value={selectedTrusteeEntity} />
         )}
         {rainfallToken && rainfallField && (
-          <input type="hidden" name={rainfallToken} value={rainfallField.value} />
+          <input type="hidden" name={rainfallToken} value={rainfallValue} />
         )}
-        {[...confirmedMismatches].map((fileId) => (
-          <input key={fileId} type="hidden" name="confirmed_file_ids" value={fileId} />
-        ))}
 
         <ClientWorkspace
           header={
@@ -369,17 +398,6 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                     className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
-
-                {fileVerificationWarnings.length > 0 && (
-                  <FileVerificationWarnings
-                    warnings={fileVerificationWarnings}
-                    confirmed={confirmedMismatches}
-                    onConfirm={(fileId) =>
-                      setConfirmedMismatches((prev) => new Set(prev).add(fileId))
-                    }
-                    disabled={submitPending}
-                  />
-                )}
 
                 <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-3 has-[:checked]:border-blue-400">
                   <input
@@ -413,7 +431,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
 
                 <button
                   type="submit"
-                  disabled={submitPending || !reviewedConfirmed || !allMismatchesConfirmed}
+                  disabled={submitPending || !reviewedConfirmed}
                   className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                 >
                   {submitPending && <Spinner className="h-4 w-4" />}
@@ -435,14 +453,22 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                   {sectionLabels.extractDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.extractDesc}</p>}
                   <div className="space-y-4">
                     {extractFieldsList.map((field) => (
-                      <TokenInput
-                        key={field.token}
-                        field={field}
-                        modified={modified}
-                        onMark={mark}
-                        disabled={submitPending}
-                        isExtractField
-                      />
+                      <div key={field.token}>
+                        <TokenInput
+                          field={field}
+                          modified={modified}
+                          onMark={mark}
+                          disabled={submitPending}
+                          isExtractField
+                          onValueChange={handleExtractValueChange}
+                        />
+                        {field.token === rainfallMatchToken && rainfallUnresolved && (
+                          <p className="mt-1 text-xs text-red-600">
+                            No rainfall intensity match found for this value — check the spelling
+                            against the lookup table before submitting.
+                          </p>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -516,221 +542,6 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
   );
 }
 
-// ── File slot (step 1) ────────────────────────────────────────────────────────
-
-function FileSlot({
-  requirement,
-  onHasFile,
-  disabled,
-}: {
-  requirement: FileRequirement;
-  onHasFile: (slug: string, has: boolean) => void;
-  disabled?: boolean;
-}) {
-  const [fileInfos, setFileInfos] = useState<{ name: string; size: number }[]>([]);
-  const [slotError, setSlotError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadPct, setLoadPct] = useState(0);
-  const [loadingIn, setLoadingIn] = useState(false);
-  const timerRef = useRef<{ iv: ReturnType<typeof setInterval>; to: ReturnType<typeof setTimeout> } | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function startLoadAnimation() {
-    if (timerRef.current) {
-      clearInterval(timerRef.current.iv);
-      clearTimeout(timerRef.current.to);
-    }
-    const duration = 2000;
-    const start = Date.now();
-    setLoadingIn(true);
-    setLoadPct(0);
-    const iv = setInterval(() => {
-      setLoadPct(Math.min(100, ((Date.now() - start) / duration) * 100));
-    }, 30);
-    const to = setTimeout(() => {
-      clearInterval(iv);
-      setLoadPct(100);
-      setLoadingIn(false);
-      timerRef.current = null;
-    }, duration);
-    timerRef.current = { iv, to };
-  }
-
-  useEffect(() => () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current.iv);
-      clearTimeout(timerRef.current.to);
-    }
-  }, []);
-
-  function applyFiles(list: FileList | null) {
-    if (!list || disabled || isLoading) return;
-    const arr = Array.from(list).slice(0, requirement.max_count);
-    if (arr.length === 0) return;
-
-    // Client-side type check
-    const nonPdf = arr.find(
-      (f) => f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")
-    );
-    if (nonPdf) {
-      setSlotError(`"${nonPdf.name}" is not a PDF. Only PDF files are accepted.`);
-      return;
-    }
-
-    // Client-side size check (50 MB per file)
-    const oversized = arr.find((f) => f.size > 50 * 1024 * 1024);
-    if (oversized) {
-      setSlotError(`"${oversized.name}" exceeds the 50 MB limit (${formatFileSize(oversized.size)}).`);
-      return;
-    }
-
-    setSlotError(null);
-    setIsLoading(true);
-    onHasFile(requirement.slug, false);
-
-    // Read the first 5 bytes of each file to confirm they are loaded and are real PDFs
-    Promise.all(
-      arr.map(
-        (f) =>
-          new Promise<void>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              const bytes = new Uint8Array(e.target?.result as ArrayBuffer);
-              const header = String.fromCharCode(...bytes);
-              if (!header.startsWith("%PDF")) {
-                reject(new Error(`"${f.name}" does not appear to be a valid PDF.`));
-              } else {
-                resolve();
-              }
-            };
-            reader.onerror = () => reject(new Error(`Could not read "${f.name}".`));
-            reader.readAsArrayBuffer(f.slice(0, 5));
-          })
-      )
-    )
-      .then(() => {
-        if (inputRef.current) {
-          const dt = new DataTransfer();
-          arr.forEach((f) => dt.items.add(f));
-          inputRef.current.files = dt.files;
-        }
-        setFileInfos(arr.map((f) => ({ name: f.name, size: f.size })));
-        onHasFile(requirement.slug, true);
-        startLoadAnimation();
-      })
-      .catch((err: Error) => {
-        setSlotError(err.message);
-        if (inputRef.current) inputRef.current.value = "";
-      })
-      .finally(() => setIsLoading(false));
-  }
-
-  const multi = requirement.max_count > 1;
-  const countLabel = multi ? ` (up to ${requirement.max_count})` : "";
-  const hasFiles = fileInfos.length > 0;
-  const isBlocked = disabled || isLoading;
-
-  return (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-zinc-700">
-        {requirement.name}
-        {countLabel}
-        {requirement.required ? (
-          <span className="ml-0.5 text-red-500">*</span>
-        ) : (
-          <span className="ml-1 font-normal text-zinc-400">— optional</span>
-        )}
-      </label>
-
-      <div
-        className={`relative flex min-h-[88px] flex-col items-center justify-center overflow-hidden rounded-md border-2 border-dashed px-4 py-6 text-center transition-colors ${
-          isBlocked && !loadingIn
-            ? "cursor-default border-zinc-100 bg-zinc-50"
-            : isBlocked
-            ? "cursor-default border-zinc-100 bg-zinc-50"
-            : isDragging
-            ? "cursor-pointer border-zinc-500 bg-zinc-100"
-            : hasFiles
-            ? "cursor-pointer border-zinc-300 bg-white hover:border-zinc-400"
-            : "cursor-pointer border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100"
-        }`}
-        onClick={() => !isBlocked && inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); if (!isBlocked) setIsDragging(true); }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragging(false);
-          applyFiles(e.dataTransfer.files);
-        }}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          name={requirement.slug}
-          accept="application/pdf"
-          multiple={multi}
-          disabled={isBlocked}
-          className="sr-only"
-          onChange={(e) => applyFiles(e.target.files)}
-        />
-
-        {isLoading ? (
-          <div className="flex flex-col items-center gap-2">
-            <Spinner className="h-5 w-5 text-zinc-400" />
-            <p className="text-xs text-zinc-400">Checking file…</p>
-          </div>
-        ) : loadingIn ? (
-          <div className="w-full space-y-2 text-center">
-            {fileInfos.map((f) => (
-              <div key={f.name}>
-                <p className="break-all text-sm font-medium text-zinc-800">{f.name}</p>
-                <p className="text-xs text-zinc-400">{formatFileSize(f.size)}</p>
-              </div>
-            ))}
-            <div className="mx-auto mt-1 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
-              <div
-                className="h-full rounded-full bg-green-500 transition-none"
-                style={{ width: `${loadPct}%` }}
-              />
-            </div>
-          </div>
-        ) : hasFiles ? (
-          <div className="w-full space-y-1 text-center">
-            {fileInfos.map((f) => (
-              <div key={f.name}>
-                <p className="break-all text-sm font-medium text-zinc-800">{f.name}</p>
-                <p className="text-xs text-zinc-400">{formatFileSize(f.size)}</p>
-              </div>
-            ))}
-            {multi && (
-              <p className="mt-1 text-xs text-zinc-400">
-                {fileInfos.length} of {requirement.max_count} — click to change
-              </p>
-            )}
-            {!disabled && (
-              <p className="mt-1 text-xs text-zinc-400">Click to change</p>
-            )}
-          </div>
-        ) : (
-          <>
-            <p className="text-sm font-medium text-zinc-600">
-              Click or drag to upload {requirement.name.toLowerCase()}
-            </p>
-            <p className="mt-1 text-xs text-zinc-400">
-              PDF{multi ? `, up to ${requirement.max_count} files` : ""}, 50 MB each
-            </p>
-          </>
-        )}
-      </div>
-
-      {slotError && (
-        <p className="mt-1 text-xs text-red-600">{slotError}</p>
-      )}
-    </div>
-  );
-}
-
 // ── Main form ─────────────────────────────────────────────────────────────────
 
 export function SubmissionForm({
@@ -745,106 +556,242 @@ export function SubmissionForm({
   showExtractionBanner = false,
   beforeTemplateFields,
 }: Props) {
-  // Orchestrates the signed-upload-URL flow (#86): request signed URLs for
-  // every file in the form, upload each straight from the browser to
-  // Supabase Storage, then finalize (extraction + draft creation). File
-  // bytes never pass through a server action body.
-  async function submitStep1(_prev: ExtractState, formData: FormData): Promise<ExtractState> {
-    const templateId = (formData.get("template_id") as string | null)?.trim() ?? "";
-    const submittedAdminOrgId = (formData.get("admin_org_id") as string | null) ?? null;
-    const submittedAdminClientId = (formData.get("admin_client_id") as string | null) ?? null;
-
-    const filesBySlug: Record<string, File[]> = {};
-    for (const [key, value] of formData.entries()) {
-      if (value instanceof File && value.size > 0) {
-        (filesBySlug[key] ??= []).push(value);
-      }
-    }
-
-    const manifestBySlug: Record<string, UploadManifestItem[]> = {};
-    for (const [slug, files] of Object.entries(filesBySlug)) {
-      manifestBySlug[slug] = files.map((f) => ({ name: f.name, size: f.size }));
-    }
-
-    const requested = await requestSubmissionUploadUrls(
-      templateId,
-      submittedAdminOrgId,
-      submittedAdminClientId,
-      manifestBySlug
-    );
-    if ("error" in requested) return { step: 1, error: requested.error };
-
-    const supabase = createClient();
-    const uploadedPaths: string[] = [];
-    for (const u of requested.uploads) {
-      const file = filesBySlug[u.slug]?.[u.index];
-      if (!file) {
-        return { step: 1, error: `Missing file for "${u.name}". Please try again.` };
-      }
-      const { error } = await supabase.storage
-        .from("submissions")
-        .uploadToSignedUrl(u.path, u.token, file, { contentType: file.type || "application/pdf" });
-      if (error) {
-        // best-effort cleanup of files that did upload before this one failed
-        void abortSubmissionUploads(uploadedPaths);
-        return { step: 1, error: `Failed to upload "${u.name}". Please try again.` };
-      }
-      uploadedPaths.push(u.path);
-    }
-
-    return finalizeSubmission(
-      requested.projectId,
-      templateId,
-      submittedAdminOrgId,
-      submittedAdminClientId,
-      requested.uploads.map((u) => ({ slug: u.slug, name: u.name, path: u.path }))
-    );
-  }
-
-  const [extractState, extractAction, extractPending] = useActionState<ExtractState, FormData>(
-    submitStep1,
-    initialState ?? { step: 1 }
-  );
   const [submitState, submitAction, submitPending] = useActionState(submitProject, {});
+
+  // #115: either the live per-file upload pipeline (step 1) or the review
+  // step (step 2, reached via Continue or passed in already-resolved for a
+  // resumed draft).
+  const [reviewState, setReviewState] = useState<Extract<ExtractState, { step: 2 }> | null>(
+    initialState?.step === 2 ? initialState : null
+  );
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     defaultTemplateId ?? (templates.length === 1 ? templates[0].id : "")
   );
-  const [slotTracking, setSlotTracking] = useState<{
-    forTemplate: string;
-    slots: Record<string, boolean>;
-  }>({ forTemplate: selectedTemplateId, slots: {} });
 
-  const hasFileBySlot =
-    slotTracking.forTemplate === selectedTemplateId ? slotTracking.slots : {};
+  // Stable per-session draft id, generated once and reused for every file in
+  // this upload session (#115) — this is what makes createDraftProjectIfAbsent
+  // idempotent-by-construction rather than needing a "who's first" race.
+  const projectIdRef = useRef<string>(crypto.randomUUID());
+
+  const [files, setFiles] = useState<ClientPipelineFile[]>([]);
+  const [continueError, setContinueError] = useState<string | null>(null);
+  const [continueDuplicateId, setContinueDuplicateId] = useState<string | null>(null);
+  const [continuePending, setContinuePending] = useState(false);
 
   const currentRequirements = requirementsByTemplate[selectedTemplateId] ?? [];
-  const requiredUnfilled = currentRequirements.some(
-    (r) => r.required && !hasFileBySlot[r.slug]
+
+  const anyUnsettled = files.some(
+    (f) => !f.uploading && !f.error && (f.extractionStatus === "running" || f.extractionStatus === "pending" || !f.verificationCompleted)
   );
 
-  function handleHasFile(slug: string, has: boolean) {
-    setSlotTracking((prev) => {
-      const base = prev.forTemplate === selectedTemplateId ? prev.slots : {};
-      return { forTemplate: selectedTemplateId, slots: { ...base, [slug]: has } };
-    });
+  // Defensive reconciliation with server state — every direct action call
+  // below already updates local state from its own return value, so this is
+  // a safety net (a lost response, a backgrounded tab) plus what would
+  // rehydrate an in-progress draft on refresh, not the primary state path.
+  useDraftPipelinePolling(
+    files.length > 0 ? projectIdRef.current : null,
+    selectedTemplateId,
+    anyUnsettled,
+    (status: DraftPipelineStatus) => {
+      setFiles((prev) =>
+        prev.map((f) => {
+          if (!f.fileId) return f;
+          const match = status.files.find((s) => s.fileId === f.fileId);
+          if (!match) return f;
+          return {
+            ...f,
+            verificationCompleted: match.verificationCompleted,
+            mismatchReasons: match.mismatchReasons,
+            confirmed: match.confirmed,
+            extractionStatus: match.extractionStatus,
+            extractionError: match.extractionError,
+          };
+        })
+      );
+    }
+  );
+
+  async function handleAddFiles(requirement: FileRequirement, newFiles: File[]) {
+    for (const file of newFiles) {
+      const localId = crypto.randomUUID();
+      const objectUrl = URL.createObjectURL(file);
+      setFiles((prev) => [
+        ...prev,
+        {
+          localId,
+          requirementId: requirement.id,
+          slug: requirement.slug,
+          name: file.name,
+          size: file.size,
+          objectUrl,
+          fileId: null,
+          uploading: true,
+          error: null,
+          verificationCompleted: false,
+          mismatchReasons: null,
+          confirmed: false,
+          extractionStatus: "not_applicable",
+          extractionError: null,
+        },
+      ]);
+
+      try {
+        const uploadResult = await requestSingleUploadUrl(
+          projectIdRef.current,
+          selectedTemplateId,
+          adminOrgId ?? null,
+          adminClientId ?? null,
+          requirement.slug,
+          { name: file.name, size: file.size }
+        );
+        if ("error" in uploadResult) throw new Error(uploadResult.error);
+
+        const supabase = createClient();
+        const { error: uploadErr } = await supabase.storage
+          .from("submissions")
+          .uploadToSignedUrl(uploadResult.path, uploadResult.token, file, {
+            contentType: file.type || "application/pdf",
+          });
+        if (uploadErr) throw new Error(`Failed to upload "${file.name}". Please try again.`);
+
+        const processed = await processUploadedFile(
+          projectIdRef.current,
+          selectedTemplateId,
+          adminOrgId ?? null,
+          adminClientId ?? null,
+          requirement.id,
+          requirement.slug,
+          file.name,
+          uploadResult.path
+        );
+        if (processed.error) throw new Error(processed.error);
+
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.localId === localId
+              ? {
+                  ...f,
+                  uploading: false,
+                  fileId: processed.fileId ?? null,
+                  verificationCompleted: true,
+                  mismatchReasons: processed.mismatchReasons ?? null,
+                  extractionStatus: processed.extractionStatus ?? "not_applicable",
+                  extractionError: processed.extractionError ?? null,
+                }
+              : f
+          )
+        );
+      } catch (err) {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.localId === localId
+              ? { ...f, uploading: false, error: err instanceof Error ? err.message : "Upload failed." }
+              : f
+          )
+        );
+      }
+    }
   }
 
-  // Warn before unload while uploading/processing
+  async function handleRemove(localId: string) {
+    const target = files.find((f) => f.localId === localId);
+    if (!target) return;
+    setFiles((prev) => prev.filter((f) => f.localId !== localId));
+    URL.revokeObjectURL(target.objectUrl);
+    if (target.fileId) await removeUploadedFile(target.fileId);
+  }
+
+  async function handleConfirm(localId: string) {
+    const target = files.find((f) => f.localId === localId);
+    if (!target?.fileId) return;
+    setFiles((prev) => prev.map((f) => (f.localId === localId ? { ...f, confirmed: true } : f)));
+    const result = await confirmFileVerification(target.fileId);
+    setFiles((prev) =>
+      prev.map((f) =>
+        f.localId === localId
+          ? {
+              ...f,
+              extractionStatus: result.extractionStatus ?? f.extractionStatus,
+              extractionError: result.extractionError ?? null,
+            }
+          : f
+      )
+    );
+  }
+
+  async function handleRetry(localId: string) {
+    const target = files.find((f) => f.localId === localId);
+    if (!target?.fileId) return;
+    setFiles((prev) =>
+      prev.map((f) => (f.localId === localId ? { ...f, extractionStatus: "running", extractionError: null } : f))
+    );
+    const result = await retryFileExtraction(target.fileId);
+    setFiles((prev) =>
+      prev.map((f) =>
+        f.localId === localId
+          ? {
+              ...f,
+              extractionStatus: result.extractionStatus ?? "failed",
+              extractionError: result.extractionError ?? result.error ?? null,
+            }
+          : f
+      )
+    );
+  }
+
+  const ready =
+    !files.some((f) => f.uploading || f.error) &&
+    canContinue(
+      files.map((f) => ({
+        slug: f.slug,
+        verificationCompleted: f.verificationCompleted,
+        mismatchReasons: f.mismatchReasons,
+        confirmed: f.confirmed,
+        extractionStatus: f.extractionStatus,
+      })),
+      currentRequirements.map((r) => ({ slug: r.slug, required: r.required }))
+    );
+
+  async function handleContinue() {
+    if (!selectedTemplateId) return;
+    setContinuePending(true);
+    setContinueError(null);
+    setContinueDuplicateId(null);
+    const result = await finalizeSubmission(projectIdRef.current, selectedTemplateId, adminOrgId ?? null, adminClientId ?? null);
+    setContinuePending(false);
+    if (result.step === 2) {
+      setReviewState(result);
+    } else {
+      setContinueError(result.error ?? "Something went wrong. Please try again.");
+      setContinueDuplicateId(result.duplicateProjectId ?? null);
+    }
+  }
+
+  function handleTemplateChange(id: string) {
+    setSelectedTemplateId(id);
+    setFiles([]);
+    setContinueError(null);
+    setContinueDuplicateId(null);
+    projectIdRef.current = crypto.randomUUID();
+  }
+
+  // Warn before unload while anything is in flight
   useEffect(() => {
-    if (!extractPending) return;
+    const inFlight = files.some((f) => f.uploading) || continuePending;
+    if (!inFlight) return;
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [extractPending]);
+  }, [files, continuePending]);
 
-  if (extractState.step === 2) {
+  if (reviewState) {
     return (
       <ReviewStep
-        state={extractState}
+        state={reviewState}
         submitAction={submitAction}
         submitPending={submitPending}
         submitState={submitState}
@@ -870,19 +817,22 @@ export function SubmissionForm({
       focusCard={
         <FocusCard tone="neutral" title="Start your request" subtitle="upload the appropriate pdf files">
           <RequestForm
-            extractAction={extractAction}
-            extractPending={extractPending}
-            extractState={extractState}
-            adminOrgId={adminOrgId}
-            adminClientId={adminClientId}
             projectBasePath={projectBasePath}
             showTemplateDropdown={showTemplateDropdown}
             templates={templates}
             selectedTemplateId={selectedTemplateId}
-            setSelectedTemplateId={setSelectedTemplateId}
+            setSelectedTemplateId={handleTemplateChange}
             currentRequirements={currentRequirements}
-            handleHasFile={handleHasFile}
-            requiredUnfilled={requiredUnfilled}
+            files={files}
+            onAddFiles={handleAddFiles}
+            onRemove={handleRemove}
+            onConfirm={handleConfirm}
+            onRetry={handleRetry}
+            ready={ready}
+            continuePending={continuePending}
+            continueError={continueError}
+            continueDuplicateId={continueDuplicateId}
+            onContinue={handleContinue}
             beforeTemplateFields={beforeTemplateFields}
           />
         </FocusCard>
@@ -891,8 +841,9 @@ export function SubmissionForm({
         <div className="rounded-lg border border-zinc-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-zinc-900">What&apos;s happening</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-            Attach your documents on the left. As soon as you submit the documents, this page
-            becomes your report request record.
+            Attach your documents on the left. Each one is checked and processed the moment it
+            uploads, so once everything below turns green this page becomes your report request
+            record.
           </p>
         </div>
       }
@@ -910,217 +861,126 @@ export function SubmissionForm({
   );
 }
 
-/**
- * Per-upload soft warning from the #113 verification layer (deterministic
- * markers + AI judge). Each flagged file must be individually previewed and
- * confirmed by the stakeholder before the final Submit unlocks — this is
- * the "mandatory confirm checkbox" step from the issue, not a document
- * viewer used for browsing (#104's shared viewer, reused here since these
- * uploads are always PDF/image, never docx).
- */
-function FileVerificationWarnings({
-  warnings,
-  confirmed,
-  onConfirm,
-  disabled,
-}: {
-  warnings: { fileId: string; slug: string; name: string; previewUrl: string | null; reasons: string[] }[];
-  confirmed: Set<string>;
-  onConfirm: (fileId: string) => void;
-  disabled: boolean;
-}) {
-  const [openFileId, setOpenFileId] = useState<string | null>(null);
-  const openWarning = warnings.find((w) => w.fileId === openFileId) ?? null;
-
-  return (
-    <div className="space-y-2">
-      {warnings.map((w) => {
-        const isConfirmed = confirmed.has(w.fileId);
-        return (
-          <div
-            key={w.fileId}
-            className={`rounded-lg border px-3 py-3 ${isConfirmed ? "border-zinc-200 bg-zinc-50" : "border-amber-200 bg-amber-50"}`}
-          >
-            <p className="text-sm font-medium text-zinc-900">{w.name}</p>
-            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-amber-800">
-              {w.reasons.map((r, i) => (
-                <li key={i}>{r}</li>
-              ))}
-            </ul>
-            {isConfirmed ? (
-              <p className="mt-2 text-xs font-medium text-green-700">Confirmed</p>
-            ) : (
-              <div className="mt-2 flex items-center gap-2">
-                {w.previewUrl && isPreviewable(w.name, w.previewUrl) && (
-                  <button
-                    type="button"
-                    onClick={() => setOpenFileId(w.fileId)}
-                    className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Preview
-                  </button>
-                )}
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => onConfirm(w.fileId)}
-                  className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-                >
-                  Yes, this is the right file
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {openWarning && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setOpenFileId(null)}
-        >
-          <div
-            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
-              <p className="truncate text-sm font-medium text-zinc-900">{openWarning.name}</p>
-              <button
-                type="button"
-                onClick={() => setOpenFileId(null)}
-                className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-              >
-                Close
-              </button>
-            </div>
-            <div className="overflow-auto">
-              <DocumentViewer src={openWarning.previewUrl!} filename={openWarning.name} />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function RequestForm({
-  extractAction,
-  extractPending,
-  extractState,
-  adminOrgId,
-  adminClientId,
   projectBasePath,
   showTemplateDropdown,
   templates,
   selectedTemplateId,
   setSelectedTemplateId,
   currentRequirements,
-  handleHasFile,
-  requiredUnfilled,
+  files,
+  onAddFiles,
+  onRemove,
+  onConfirm,
+  onRetry,
+  ready,
+  continuePending,
+  continueError,
+  continueDuplicateId,
+  onContinue,
   beforeTemplateFields,
 }: {
-  extractAction: (payload: FormData) => void;
-  extractPending: boolean;
-  extractState: Extract<ExtractState, { step: 1 }>;
-  adminOrgId?: string;
-  adminClientId?: string;
   projectBasePath: string;
   showTemplateDropdown: boolean;
   templates: Template[];
   selectedTemplateId: string;
   setSelectedTemplateId: (id: string) => void;
   currentRequirements: FileRequirement[];
-  handleHasFile: (slug: string, has: boolean) => void;
-  requiredUnfilled: boolean;
+  files: ClientPipelineFile[];
+  onAddFiles: (requirement: FileRequirement, files: File[]) => void;
+  onRemove: (localId: string) => void;
+  onConfirm: (localId: string) => void;
+  onRetry: (localId: string) => void;
+  ready: boolean;
+  continuePending: boolean;
+  continueError: string | null;
+  continueDuplicateId: string | null;
+  onContinue: () => void;
   beforeTemplateFields?: React.ReactNode;
 }) {
+  const disabled = continuePending;
+  const hasAnyFiles = files.length > 0;
+
   return (
-    <div>
-      <form action={extractAction} className="space-y-6">
-        {adminOrgId && <input type="hidden" name="admin_org_id" value={adminOrgId} />}
-        {adminClientId && <input type="hidden" name="admin_client_id" value={adminClientId} />}
-        {beforeTemplateFields}
-        {/* Template selector */}
-        {showTemplateDropdown ? (
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">
-              Report type <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="template_id"
-              value={selectedTemplateId}
-              onChange={(e) => setSelectedTemplateId(e.target.value)}
-              disabled={extractPending}
-              className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-50"
-              required
-            >
-              <option value="">Select a report type…</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <input type="hidden" name="template_id" value={selectedTemplateId} />
-        )}
+    <div className="space-y-6">
+      {beforeTemplateFields}
+      {/* Template selector — locked once files exist, since switching
+          templates mid-pipeline would orphan the in-flight uploads. */}
+      {showTemplateDropdown ? (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-zinc-700">
+            Report type <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={selectedTemplateId}
+            onChange={(e) => setSelectedTemplateId(e.target.value)}
+            disabled={disabled || hasAnyFiles}
+            className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-400 disabled:cursor-not-allowed disabled:opacity-50"
+            required
+          >
+            <option value="">Select a report type…</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
-        {/* File slots — remount on template change to clear state */}
-        {selectedTemplateId && (
-          <div key={selectedTemplateId} className="space-y-5">
-            {currentRequirements.length === 0 ? (
-              <p className="text-center text-sm text-zinc-400">
-                No file uploads required for this report type.
-              </p>
-            ) : (
-              currentRequirements.map((req) => (
-                <FileSlot
-                  key={req.id}
-                  requirement={req}
-                  onHasFile={handleHasFile}
-                  disabled={extractPending}
-                />
-              ))
-            )}
-          </div>
-        )}
+      {selectedTemplateId && (
+        <div className="space-y-5">
+          {currentRequirements.length === 0 ? (
+            <p className="text-center text-sm text-zinc-400">
+              No file uploads required for this report type.
+            </p>
+          ) : (
+            currentRequirements.map((req) => (
+              <FileSlot
+                key={req.id}
+                requirement={req}
+                files={files.filter((f) => f.requirementId === req.id)}
+                disabled={disabled}
+                onAddFiles={onAddFiles}
+                onRemove={onRemove}
+                onConfirm={onConfirm}
+                onRetry={onRetry}
+              />
+            ))
+          )}
+        </div>
+      )}
 
-        {extractState.error && (
-          <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-            {extractState.error}
-            {extractState.duplicateProjectId && (
-              <>
-                {" "}
-                <a
-                  href={`${projectBasePath}/${extractState.duplicateProjectId}`}
-                  className="font-medium underline hover:text-red-900"
-                >
-                  View existing project →
-                </a>
-              </>
-            )}
-          </div>
-        )}
+      {continueError && (
+        <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {continueError}
+          {continueDuplicateId && (
+            <>
+              {" "}
+              <a
+                href={`${projectBasePath}/${continueDuplicateId}`}
+                className="font-medium underline hover:text-red-900"
+              >
+                View existing project →
+              </a>
+            </>
+          )}
+        </div>
+      )}
 
-        <button
-          type="submit"
-          disabled={!selectedTemplateId || requiredUnfilled || extractPending}
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {extractPending && <Spinner className="h-4 w-4" />}
-          {extractPending ? "Uploading…" : "Continue"}
-        </button>
+      <button
+        type="button"
+        onClick={onContinue}
+        disabled={!selectedTemplateId || !ready || continuePending}
+        className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {continuePending && <Spinner className="h-4 w-4" />}
+        {continuePending ? "Preparing your request…" : "Continue"}
+      </button>
 
-        {!extractPending && requiredUnfilled && (
-          <p className="text-center text-xs text-zinc-400">
-            Upload all required files to continue.
-          </p>
-        )}
-        {extractPending && (
-          <p className="text-center text-xs text-zinc-400">
-            Please keep this window open. This can take up to a minute for large files.
-          </p>
-        )}
-      </form>
+      {!continuePending && !ready && (
+        <p className="text-center text-xs text-zinc-400">
+          {hasAnyFiles ? "Waiting for every file to finish processing…" : "Upload all required files to continue."}
+        </p>
+      )}
     </div>
   );
 }

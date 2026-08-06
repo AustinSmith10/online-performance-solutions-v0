@@ -1,9 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteFileRequirement, updateFileRequirement } from "@/app/actions/file-requirements";
+import {
+  deleteFileRequirement,
+  updateFileRequirement,
+} from "@/app/actions/file-requirements";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { EditIconButton } from "@/components/EditIconButton";
+import { ReferenceSampleControl } from "@/components/ReferenceSampleControl";
 
 type FileRequirement = {
   id: string;
@@ -18,6 +22,8 @@ type FileRequirement = {
   marker_page_count_max: number | null;
   marker_regex: string | null;
   ai_judge_hint: string | null;
+  reference_sample_storage_path: string | null;
+  reference_sample_signed_url: string | null;
 };
 
 interface Props {
@@ -35,7 +41,9 @@ export function FileRequirementsSection({ templateId, requirements }: Props) {
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+    <div
+      style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}
+    >
       {requirements.map((r) => (
         <RequirementCard key={r.id} templateId={templateId} requirement={r} />
       ))}
@@ -64,9 +72,15 @@ function RequirementCard({
 
   function handleSave(fd: FormData) {
     startSaveTransition(async () => {
-      const result = await updateFileRequirement(templateId, requirement.id, {}, fd);
+      const result = await updateFileRequirement(
+        templateId,
+        requirement.id,
+        {},
+        fd,
+      );
       if (result.error || result.fieldErrors) {
-        const first = result.error ?? Object.values(result.fieldErrors ?? {}).flat()[0];
+        const first =
+          result.error ?? Object.values(result.fieldErrors ?? {}).flat()[0];
         setSaveError(first);
       } else {
         setSaveError(undefined);
@@ -82,7 +96,9 @@ function RequirementCard({
           {/* Name + max on one row */}
           <div className="flex items-end gap-3">
             <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-zinc-600">Name</label>
+              <label className="mb-1 block text-xs font-medium text-zinc-600">
+                Name
+              </label>
               <input
                 name="name"
                 type="text"
@@ -92,7 +108,9 @@ function RequirementCard({
               />
             </div>
             <div className="shrink-0">
-              <label className="mb-1 block text-xs font-medium text-zinc-600">Max uploads</label>
+              <label className="mb-1 block text-xs font-medium text-zinc-600">
+                Max uploads
+              </label>
               <input
                 name="max_count"
                 type="number"
@@ -137,10 +155,13 @@ function RequirementCard({
 
           {/* Verification (#113): deterministic markers optional, AI-judge hint recommended */}
           <div className="space-y-2 rounded-md border border-zinc-100 bg-zinc-50/60 p-3">
-            <p className="text-xs font-medium text-zinc-600">Upload verification (optional)</p>
+            <p className="text-xs font-medium text-zinc-600">
+              Upload verification (optional)
+            </p>
             <div>
               <label className="mb-1 block text-xs text-zinc-500">
-                AI judge hint — plain description of what this file should look like
+                AI judge hint — plain description of what this file should look
+                like
               </label>
               <input
                 name="ai_judge_hint"
@@ -157,14 +178,18 @@ function RequirementCard({
               <textarea
                 name="marker_text_patterns"
                 rows={2}
-                defaultValue={(requirement.marker_text_patterns ?? []).join("\n")}
+                defaultValue={(requirement.marker_text_patterns ?? []).join(
+                  "\n",
+                )}
                 placeholder={"Purchase Order\nPO Number"}
                 className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
             <div className="flex items-end gap-3">
               <div className="w-20">
-                <label className="mb-1 block text-xs text-zinc-500">Min pages</label>
+                <label className="mb-1 block text-xs text-zinc-500">
+                  Min pages
+                </label>
                 <input
                   name="marker_page_count_min"
                   type="number"
@@ -174,7 +199,9 @@ function RequirementCard({
                 />
               </div>
               <div className="w-20">
-                <label className="mb-1 block text-xs text-zinc-500">Max pages</label>
+                <label className="mb-1 block text-xs text-zinc-500">
+                  Max pages
+                </label>
                 <input
                   name="marker_page_count_max"
                   type="number"
@@ -184,7 +211,9 @@ function RequirementCard({
                 />
               </div>
               <div className="flex-1">
-                <label className="mb-1 block text-xs text-zinc-500">Regex (optional)</label>
+                <label className="mb-1 block text-xs text-zinc-500">
+                  Regex (optional)
+                </label>
                 <input
                   name="marker_regex"
                   type="text"
@@ -196,9 +225,7 @@ function RequirementCard({
             </div>
           </div>
 
-          {saveError && (
-            <p className="text-xs text-red-600">{saveError}</p>
-          )}
+          {saveError && <p className="text-xs text-red-600">{saveError}</p>}
 
           <div className="flex items-center gap-3">
             <button
@@ -210,27 +237,54 @@ function RequirementCard({
             </button>
             <button
               type="button"
-              onClick={() => { setEditing(false); setSaveError(undefined); }}
+              onClick={() => {
+                setEditing(false);
+                setSaveError(undefined);
+              }}
               className="text-xs text-zinc-500 hover:text-zinc-700"
             >
               Cancel
             </button>
           </div>
         </form>
+
+        {/* Outside the Save form — its own upload action, and HTML forbids nested <form>s. */}
+        <div className="mt-3">
+          <ReferenceSampleControl
+            templateId={templateId}
+            requirementId={requirement.id}
+            currentSignedUrl={requirement.reference_sample_signed_url}
+            currentFilename={
+              requirement.reference_sample_storage_path
+                ? (requirement.reference_sample_storage_path.split("/").pop() ??
+                  null)
+                : null
+            }
+          />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`rounded-lg border border-zinc-200 bg-white p-4 transition-opacity ${isDeletePending ? "opacity-40" : ""}`}>
+    <div
+      className={`rounded-lg border border-zinc-200 bg-white p-4 transition-opacity ${isDeletePending ? "opacity-40" : ""}`}
+    >
       {/* Name + actions */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-zinc-900">{requirement.name}</p>
-          <p className="mt-0.5 font-mono text-xs text-zinc-400">{requirement.slug}</p>
+          <p className="text-sm font-medium text-zinc-900">
+            {requirement.name}
+          </p>
+          <p className="mt-0.5 font-mono text-xs text-zinc-400">
+            {requirement.slug}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-3 pt-0.5">
-          <EditIconButton onClick={() => setEditing(true)} label={`Edit ${requirement.name}`} />
+          <EditIconButton
+            onClick={() => setEditing(true)}
+            label={`Edit ${requirement.name}`}
+          />
           <button
             onClick={handleDelete}
             disabled={isDeletePending}

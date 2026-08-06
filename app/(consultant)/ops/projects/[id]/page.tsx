@@ -44,6 +44,7 @@ import { WaiveForm } from "@/app/(admin)/admin/projects/[id]/_components/WaiveFo
 import { ConvertButton } from "@/app/(admin)/admin/projects/[id]/_components/ConvertButton";
 import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/DispatchButton";
 import { HighlightRing } from "@/components/HighlightRing";
+import { VerificationMismatchNote } from "@/components/VerificationMismatchNote";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { Stage } from "@/components/workspace/StageRail";
 
@@ -200,7 +201,9 @@ export default async function ConsultantProjectDetailPage({
       : Promise.resolve({ data: [] }),
     supabase
       .from("project_files")
-      .select("id, file_type, file_type_confirmed, original_filename, storage_path, created_at")
+      .select(
+        "id, file_type, file_type_confirmed, original_filename, storage_path, created_at, verification_mismatch_reasons, verification_confirmed_at"
+      )
       .eq("project_id", id)
       .not("file_type", "in", "(pbdb,pbdr,evidence,pbdb_pdf)")
       .order("created_at"),
@@ -1025,6 +1028,9 @@ export default async function ConsultantProjectDetailPage({
                       fileId={f.id as string}
                       currentFileType={f.file_type as string}
                     />
+                  )}
+                  {f.verification_mismatch_reasons && f.verification_confirmed_at && (
+                    <VerificationMismatchNote reasons={f.verification_mismatch_reasons as string[]} />
                   )}
                 </div>
                 <DocumentPreviewModal href={f.signedUrl} filename={f.original_filename as string} />

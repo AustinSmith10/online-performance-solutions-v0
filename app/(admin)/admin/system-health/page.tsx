@@ -7,6 +7,7 @@ import {
   jobGuidance,
   bounceGuidance,
   emailSendFailureGuidance,
+  aiProviderFailureGuidance,
   creditRaceEventGuidance,
   stalledProjectGuidance,
   pendingReviewGuidance,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/admin/error-guidance";
 import { ResolveSignalButton } from "@/components/ResolveSignalButton";
 import { ResolveEmailFailureButton } from "@/components/ResolveEmailFailureButton";
+import { ResolveAiProviderFailureButton } from "@/components/ResolveAiProviderFailureButton";
 import type { CreditRaceEvent } from "@/types";
 
 const CREDIT_RACE_EVENT_LABEL: Record<CreditRaceEvent["event_type"], string> = {
@@ -173,6 +175,26 @@ export default async function SystemHealthPage() {
             timestamp={f.created_at}
             href={f.project_id ? `/admin/projects/${f.project_id}` : null}
             resolveButton={<ResolveEmailFailureButton failureId={f.id} />}
+          />
+        ))}
+      </Section>
+
+      <Section
+        title="AI provider failures"
+        description="OpenAI/Anthropic calls that failed with a billing/quota or rate-limit error — document extraction and AI-judge verification fail open (return empty/degraded results) rather than blocking submissions, so this is the only place these failures surface."
+        kind="hard_error"
+        emptyText="No unresolved AI provider failures."
+      >
+        {data.aiProviderFailures.map((f) => (
+          <Row
+            key={f.id}
+            message={`${f.provider === "openai" ? "OpenAI" : "Anthropic"} ${
+              f.status === "quota_exceeded" ? "is out of credits" : "is being rate-limited"
+            } (during ${f.context})${f.error ? ` — ${f.error}` : ""}`}
+            guidance={aiProviderFailureGuidance(f.provider, f.status)}
+            timestamp={f.created_at}
+            href={f.project_id ? `/admin/projects/${f.project_id}` : null}
+            resolveButton={<ResolveAiProviderFailureButton failureId={f.id} />}
           />
         ))}
       </Section>

@@ -62,11 +62,21 @@ export function runDeterministicCheck(
   return { ok: true };
 }
 
-function buildJudgePrompt(hint: string, docText: string): string {
+/**
+ * When a reference sample is present (#115), it's additive grounding
+ * alongside the existing hint text, not a replacement for it — the prompt
+ * must otherwise match #113's original shape byte-for-byte so an
+ * unconfigured sample leaves the no-sample behavior unchanged.
+ */
+function buildJudgePrompt(hint: string, docText: string, sampleText?: string | null): string {
+  const sampleSection = sampleText
+    ? `\n\nHere is the text of a reference sample document that is a known-good example of what's expected:\n${sampleText.slice(0, 8000)}\n`
+    : "";
+
   return `You are checking whether an uploaded document matches what was expected for a specific upload slot, for an Australian building compliance system.
 
 Expected document description: ${hint}
-
+${sampleSection}
 Document text:
 ${docText.slice(0, 8000)}
 
@@ -77,16 +87,19 @@ Does this document match the expected description? Return ONLY a JSON object: { 
  * AI-judge layer (#113): reuses the extraction pipeline's hint-grounded
  * judge pattern (runTextCompletion) rather than a bespoke AI call. Fails
  * open on any error or unparseable response — a broken checker must never
- * block an otherwise-valid upload.
+ * block an otherwise-valid upload. `sampleText` (#115) is optional extra
+ * grounding extracted from an admin-uploaded reference sample; absent, the
+ * judge behaves exactly as it did in #113.
  */
 export async function runAiJudgeCheck(
   requirement: { aiJudgeHint: string | null },
-  docText: string
+  docText: string,
+  sampleText?: string | null
 ): Promise<{ ok: boolean; reason?: string } | null> {
   if (!requirement.aiJudgeHint) return null;
 
   try {
-    const raw = await runTextCompletion(buildJudgePrompt(requirement.aiJudgeHint, docText));
+    const raw = await runTextCompletion(buildJudgePrompt(requirement.aiJudgeHint, docText, sampleText), "file requirement AI judge");
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return { ok: true };
     const parsed = JSON.parse(match[0]) as { matches?: unknown; reason?: unknown };
@@ -104,12 +117,16 @@ export async function runAiJudgeCheck(
  * Orchestrates both layers for one uploaded file against its slot's
  * file_requirements row. PDF-only — non-PDF uploads (images) have no text
  * to check against and are skipped (fail-open by omission), matching this
- * layer's "never hard block" posture.
+ * layer's "never hard block" posture. `sampleText` (#115) is the already-
+ * extracted text of the requirement's reference sample, if one is
+ * configured — extracting it is the caller's job (it's shared across every
+ * upload into a multi-file slot, so it shouldn't be re-extracted per file).
  */
 export async function verifyUploadAgainstRequirement(
   requirement: FileRequirementLike,
   buffer: Buffer,
-  isPdf: boolean
+  isPdf: boolean,
+  sampleText?: string | null
 ): Promise<string[]> {
   if (!isPdf) return [];
 
@@ -128,10 +145,29 @@ export async function verifyUploadAgainstRequirement(
     reasons.push(deterministic.reason ?? `Doesn't look like ${requirement.name}.`);
   }
 
-  const judged = await runAiJudgeCheck(requirement, doc.text);
+  const judged = await runAiJudgeCheck(requirement, doc.text, sampleText);
   if (judged && !judged.ok) {
     reasons.push(judged.reason ?? `May not be ${requirement.name}.`);
   }
 
   return reasons;
+}
+
+/**
+ * Downloads and extracts a requirement's reference sample text for use as
+ * AI-judge grounding (#115). PDF-only, matching the judge's own scope; fails
+ * open (returns null) on any error so a bad sample never blocks verification
+ * for the file actually being checked.
+ */
+export async function extractReferenceSampleText(
+  downloadSample: () => Promise<Buffer>
+): Promise<string | null> {
+  try {
+    const buffer = await downloadSample();
+    const { text } = await extractPdfTextAndPageCount(buffer);
+    return text;
+  } catch (err) {
+    console.warn("[file-requirement-verification] failed to read reference sample, skipping:", err);
+    return null;
+  }
 }

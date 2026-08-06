@@ -200,6 +200,19 @@ export default async function ConsultantOpsPage({
 
   const availableProjects = (rawAvailable ?? []) as unknown as AvailableProject[];
 
+  // #115: a single aggregated query for "which of this consultant's projects
+  // has at least one stakeholder-confirmed verification mismatch" — not N+1
+  // lookups per row.
+  const { data: mismatchRows } = allAssigned.length
+    ? await supabase
+        .from("project_files")
+        .select("project_id")
+        .in("project_id", allAssigned.map((p) => p.id))
+        .not("verification_mismatch_reasons", "is", null)
+        .not("verification_confirmed_at", "is", null)
+    : { data: [] };
+  const mismatchProjectIds = new Set((mismatchRows ?? []).map((r) => r.project_id as string));
+
   function toDashboardProject(p: ProjectRow): DashboardProject {
     const isOverdue =
       !!p.expected_delivery_date && p.expected_delivery_date < todayIso && !TERMINAL_STATUSES.has(p.status);
@@ -219,6 +232,7 @@ export default async function ConsultantOpsPage({
       isOverdue,
       isPending,
       isRevision,
+      hasVerificationMismatch: mismatchProjectIds.has(p.id),
       pendingAssignment: isPending ? { projectId: p.id } : undefined,
       revisionReview:
         isRevision && !isPending

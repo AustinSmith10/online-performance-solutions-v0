@@ -200,6 +200,19 @@ export default async function AdminDashboardPage({
     }
   }
 
+  // #115: a single aggregated query for "which of these projects has at
+  // least one stakeholder-confirmed verification mismatch" — not N+1 lookups
+  // per row.
+  const { data: mismatchRows } = allActive.length
+    ? await supabase
+        .from("project_files")
+        .select("project_id")
+        .in("project_id", allActive.map((p) => p.id))
+        .not("verification_mismatch_reasons", "is", null)
+        .not("verification_confirmed_at", "is", null)
+    : { data: [] };
+  const mismatchProjectIds = new Set((mismatchRows ?? []).map((r) => r.project_id as string));
+
   const activeProjectItems: ActiveProjectItem[] = allActive.map((p) => ({
     id: p.id,
     href: `/admin/projects/${p.id}`,
@@ -211,6 +224,7 @@ export default async function AdminDashboardPage({
     overdue: !!(p.expected_delivery_date && p.expected_delivery_date < todayIso),
     awaitingStakeholder: pendingProjectIds.has(p.id),
     overridePending: p.payment_override,
+    hasVerificationMismatch: mismatchProjectIds.has(p.id),
   }));
 
   return (

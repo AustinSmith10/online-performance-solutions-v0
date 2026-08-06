@@ -141,19 +141,20 @@ describe("submitProject — verification mismatch gate (#113)", () => {
     expect(mock.projectFilesUpdateFn).not.toHaveBeenCalled();
   });
 
-  it("allows submission once the flagged file's id is included in confirmed_file_ids", async () => {
-    const mock = buildMock({ flaggedFiles: [{ id: "file-1", verification_mismatch_reasons: ["mismatch"] }] });
+  it("allows submission once the flagged file was already confirmed (#115: confirmation happens inline during upload, not at submit)", async () => {
+    const mock = buildMock({
+      flaggedFiles: [
+        { id: "file-1", verification_mismatch_reasons: ["mismatch"], verification_confirmed_at: "2024-01-01T00:00:00Z" },
+      ],
+    });
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
 
-    const fd = makeSubmitFormData();
-    fd.append("confirmed_file_ids", "file-1");
-
-    await submitProject({}, fd);
+    await submitProject({}, makeSubmitFormData());
     await afterPromise;
 
-    expect(mock.projectFilesUpdateFn).toHaveBeenCalledWith(
-      expect.objectContaining({ verification_confirmed_at: expect.any(String), verification_confirmed_by: ACTOR_ID })
-    );
+    // No re-stamping needed — confirmFileVerification already persisted this
+    // during the per-file pipeline, well before Continue was even enabled.
+    expect(mock.projectFilesUpdateFn).not.toHaveBeenCalled();
     expect(vi.mocked(auditLog)).toHaveBeenCalledWith(
       "project.review_confirmed",
       ACTOR_ID,

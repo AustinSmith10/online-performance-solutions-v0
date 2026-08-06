@@ -29,6 +29,14 @@ export function jobGuidance(jobName: string, message?: string | null): string {
     : `Check the worker logs for the "${jobName}" job for more detail.`;
 }
 
+export function aiProviderFailureGuidance(provider: string, status: string): string {
+  const providerLabel = provider === "openai" ? "OpenAI" : provider === "anthropic" ? "Anthropic" : provider;
+  if (status === "quota_exceeded") {
+    return `${providerLabel}'s account has run out of credits or hit a billing limit. Top up billing at the ${providerLabel} dashboard — until then, document extraction and AI-judge verification silently return empty/degraded results (the pipeline fails open rather than blocking submissions) whenever the other provider isn't configured or also fails.`;
+  }
+  return `${providerLabel} is rate-limiting requests. This is usually transient — if it persists, check the ${providerLabel} dashboard for a rate-limit tier that needs raising.`;
+}
+
 export function bounceGuidance(reason: string | null): string {
   const r = (reason ?? "").toLowerCase();
   if (r.includes("full")) {

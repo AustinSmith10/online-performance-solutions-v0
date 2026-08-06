@@ -101,6 +101,14 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
           {p.isOverdue && (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Overdue</span>
           )}
+          {p.hasVerificationMismatch && (
+            <span
+              className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+              title="A stakeholder confirmed a file despite a flagged verification mismatch"
+            >
+              Flagged doc
+            </span>
+          )}
         </div>
       </div>
       {p.revisionReview && (

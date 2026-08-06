@@ -1,5 +1,5 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
-import type { FailedJob, BounceEvent, CreditRaceEvent, EmailSendFailure } from "@/types";
+import type { FailedJob, BounceEvent, CreditRaceEvent, EmailSendFailure, AiProviderFailure } from "@/types";
 import { trayId } from "@/lib/notifications/tray-id";
 
 // Thresholds for the soft "needs attention" signals (issue #46). Not
@@ -51,6 +51,7 @@ export interface NeedsAttentionSignals {
   failedJobs: FailedJob[];
   bounceEvents: BounceEvent[];
   emailSendFailures: EmailSendFailure[];
+  aiProviderFailures: AiProviderFailure[];
   creditRaceEvents: CreditRaceEvent[];
   stalledProjects: StalledProjectSignal[];
   pendingReviews: StakeholderReviewSignal[];
@@ -74,6 +75,7 @@ export async function getNeedsAttentionSignals(
     { data: failedJobs, error: jobsError },
     { data: bounceEvents, error: bounceError },
     { data: emailSendFailures, error: emailSendFailuresError },
+    { data: aiProviderFailures, error: aiProviderFailuresError },
     { data: creditRaceEvents, error: creditRaceError },
     { data: stalledProjects, error: stalledError },
     { data: pendingReviews, error: pendingError },
@@ -92,6 +94,12 @@ export async function getNeedsAttentionSignals(
       .from("email_send_log")
       .select("id, to_email, subject, source, project_id, created_at, error")
       .eq("status", "failed")
+      .is("resolved_at", null)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("ai_provider_failures")
+      .select("id, provider, status, context, error, project_id, created_at")
       .is("resolved_at", null)
       .order("created_at", { ascending: false })
       .limit(100),
@@ -139,6 +147,7 @@ export async function getNeedsAttentionSignals(
     jobsError?.message ??
     bounceError?.message ??
     emailSendFailuresError?.message ??
+    aiProviderFailuresError?.message ??
     creditRaceError?.message ??
     stalledError?.message ??
     pendingError?.message ??
@@ -164,6 +173,9 @@ export async function getNeedsAttentionSignals(
       // already filtered by the query above — no resolved_signals/trayId
       // involved here.
       emailSendFailures: (emailSendFailures ?? []) as EmailSendFailure[],
+      // ai_provider_failures tracks its own resolved_at too (same reasoning
+      // as email_send_log above) — already filtered by the query.
+      aiProviderFailures: (aiProviderFailures ?? []) as AiProviderFailure[],
       creditRaceEvents: ((creditRaceEvents ?? []) as CreditRaceEvent[]).filter(
         (c) => !resolvedIds.has(trayId.creditRace(c.id))
       ),

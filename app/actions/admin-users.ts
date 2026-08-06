@@ -387,6 +387,24 @@ export async function resolveEmailFailure(failureId: string) {
   revalidatePath("/admin/dashboard");
 }
 
+export async function resolveAiProviderFailure(failureId: string) {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("ai_provider_failures")
+    .update({ resolved_at: new Date().toISOString() })
+    .eq("id", failureId);
+
+  if (error) throw new Error(error.message);
+
+  await auditLog("ai_provider.failure_resolved", actor.id, actor.email, {
+    metadata: { failure_id: failureId },
+  });
+
+  revalidatePath("/admin/system-health");
+}
+
 const CreateAccountSchema = z.object({
   email: z.string().email({ error: "Valid email required" }).trim().toLowerCase(),
   first_name: z.string().min(1, { error: "First name required" }).trim(),
