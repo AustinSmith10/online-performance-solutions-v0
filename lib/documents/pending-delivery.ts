@@ -10,6 +10,7 @@ import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 export interface ScheduleOrDeliverResult {
   delivered: boolean;
   scheduledFor: string | null;
+  stakeholderNames?: string[];
 }
 
 // Explicit-trigger PBDR delivery (admin/consultant clicks Convert, having
@@ -119,8 +120,8 @@ export async function scheduleOrDeliverPbdb(
   );
 
   if (effectiveDeliveryTime.getTime() <= now.getTime()) {
-    await dispatchPbdb(projectId, actorId);
-    return { delivered: true, scheduledFor: null };
+    const { stakeholderNames } = await dispatchPbdb(projectId, actorId);
+    return { delivered: true, scheduledFor: null, stakeholderNames };
   }
 
   const { error } = await supabase.from("pending_deliveries").upsert(

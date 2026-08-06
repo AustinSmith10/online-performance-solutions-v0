@@ -98,7 +98,7 @@ export function QaUploadedBanner({ cleanUrl }: { cleanUrl: string }) {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-zinc-900">PBDB uploaded</p>
               <p className="mt-0.5 text-xs text-zinc-500">
-                Saved and dispatched to stakeholders for approval — highlighted below.
+                Saved — review below, then dispatch to stakeholders when ready.
               </p>
             </div>
             <button

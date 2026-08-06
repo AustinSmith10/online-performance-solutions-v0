@@ -561,7 +561,8 @@ export async function submitProject(
             notify({
               recipientId: admin.id,
               type: "project_submitted",
-              message: `Duplicate address submission: "${siteAddress}" already has an active project for ${orgData?.name ?? orgId}. No new record was created.`,
+              title: "Duplicate submission",
+              message: `"${siteAddress}" already has an active project for ${orgData?.name ?? orgId} — no new record was created.`,
               emailSubject: "Duplicate address submission — OPS",
               emailHtml: duplicateSubmissionEmail({ siteAddress, orgId }),
             }).catch((err) =>
@@ -695,6 +696,7 @@ export async function submitProject(
       notify({
         recipientId: actsOnBehalf ? adminClientId : actor.id,
         type: "acknowledgement",
+        title: "Request received",
         message: `Your report request for ${siteAddress ?? "your property"} has been received and is being processed.`,
         projectId,
         emailSubject: "Report request received — OPS",

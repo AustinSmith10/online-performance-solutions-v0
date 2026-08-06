@@ -287,7 +287,8 @@ export function NotificationTray({
                     }}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={itemText}>{e.message}</p>
+                    <p style={itemTitle}>{e.title}</p>
+                    {e.message !== e.title && <p style={itemText}>{e.message}</p>}
                     <div style={itemMeta}>
                       <span style={itemTime}>{timeAgo(e.timestamp)}</span>
                       {e.href && (
@@ -421,9 +422,17 @@ const dot: React.CSSProperties = {
   flexShrink: 0,
 };
 
-const itemText: React.CSSProperties = {
+const itemTitle: React.CSSProperties = {
   fontSize: "13px",
-  color: "#3f3f46",
+  fontWeight: 600,
+  color: "#18181b",
+  margin: "0 0 2px",
+  lineHeight: "1.4",
+};
+
+const itemText: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#71717a",
   margin: "0 0 4px",
   lineHeight: "1.5",
 };

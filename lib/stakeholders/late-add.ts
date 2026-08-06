@@ -113,7 +113,7 @@ export async function inviteLateStakeholder(
     await notify({
       recipientId: portalUser.id as string,
       type: "approval_request",
-      message: `You've been added as a reviewer — your PBDB review is ready for you to submit a response.`,
+      message: `You've been added as a reviewer — your PBDB review is ready, please submit your response.`,
       projectId,
       emailSubject: `Approval required — PBDB review (ref: ${projectId.slice(0, 8)})`,
       emailHtml,

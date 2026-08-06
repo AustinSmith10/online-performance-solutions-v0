@@ -107,7 +107,7 @@ export async function sendStakeholderBufferUpdate(
         });
         return notify({
           recipientId: a.id as string,
-          type: "project_dispatched",
+          type: "stakeholder_awaiting_response",
           message: `${nonResponding.length} stakeholder(s) awaiting response for ${projectRef}.`,
           projectId,
           emailSubject: `Awaiting stakeholder response — ${projectRef}`,

@@ -447,6 +447,7 @@ export interface DispatchState {
   error?: string;
   success?: boolean;
   scheduledFor?: string | null;
+  stakeholderNames?: string[];
 }
 
 // Deliberate, admin/consultant-triggered PBDB dispatch — mirrors
@@ -525,7 +526,7 @@ export async function dispatchToStakeholders(
     const result = await scheduleOrDeliverPbdb(projectId, actor.id, actor.email as string);
     revalidatePath(`/admin/projects/${projectId}`);
     revalidatePath(`/ops/projects/${projectId}`);
-    return { success: true, scheduledFor: result.scheduledFor };
+    return { success: true, scheduledFor: result.scheduledFor, stakeholderNames: result.stakeholderNames };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Dispatch failed." };
   }

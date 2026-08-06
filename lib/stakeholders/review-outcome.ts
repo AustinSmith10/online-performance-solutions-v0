@@ -95,6 +95,7 @@ export async function notifyModificationsRequested({
       return notify({
         recipientId: u.id as string,
         type: "modifications_requested",
+        title: subjectLabel,
         message: `${stakeholderName} ${messageVerb} ${projectRef}${commentSuffix}`,
         projectId,
         emailSubject: `${subjectLabel} — ${projectRef}`,

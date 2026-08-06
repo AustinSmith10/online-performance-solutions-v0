@@ -5,6 +5,7 @@ import type {
   OverdueAssignmentSignal,
 } from "@/lib/admin/needs-attention";
 import { trayId } from "@/lib/notifications/tray-id";
+import { deriveTitleFromMessage } from "@/lib/notifications/title";
 
 export { trayId };
 
@@ -17,6 +18,7 @@ export const NEEDS_ATTENTION_POLL_MS = 45_000;
 export interface TrayEntry {
   id: string;
   kind: TrayEntryKind;
+  title: string;
   message: string;
   href: string | null;
   timestamp: string;
@@ -28,6 +30,9 @@ export function notificationToEntry(n: Notification, projectBasePath: string): T
   return {
     id: trayId.notification(n.id),
     kind: "notification",
+    // Rows written before the title column existed have none on file —
+    // derive one the same way notify() does for new rows.
+    title: n.title ?? deriveTitleFromMessage(n.message),
     message: n.message,
     href: n.project_id ? `${projectBasePath}/${n.project_id}` : null,
     timestamp: n.created_at,
@@ -44,6 +49,7 @@ export function failedJobToEntry(job: FailedJob, projectBasePath: string): TrayE
   return {
     id: trayId.job(job.id),
     kind: "hard_error",
+    title: "Job failed",
     message,
     href: projectId ? `${projectBasePath}/${projectId}` : null,
     timestamp: job.completed_on ?? job.created_on,
@@ -57,6 +63,7 @@ export function bounceEventToEntry(b: BounceEvent, projectBasePath: string): Tra
   return {
     id: trayId.bounce(b.id),
     kind: "hard_error",
+    title: b.type === "complaint" ? "Spam complaint" : "Email bounced",
     message: `${verb} ${b.email}${b.reason ? ` (${b.reason})` : ""}`,
     href: b.project_id ? `${projectBasePath}/${b.project_id}` : null,
     timestamp: b.created_at,
@@ -76,6 +83,7 @@ export function creditRaceEventToEntry(c: CreditRaceEvent, projectBasePath: stri
   return {
     id: trayId.creditRace(c.id),
     kind: "hard_error",
+    title: "Duplicate payment event blocked",
     message: `Duplicate ${CREDIT_RACE_EVENT_LABEL[c.event_type]} attempt was caught and skipped`,
     href: c.project_id ? `${projectBasePath}/${c.project_id}` : null,
     timestamp: c.detected_at,
@@ -91,6 +99,7 @@ export function stalledProjectToEntry(
   return {
     id: trayId.stalled(p.id),
     kind: "needs_attention",
+    title: "Project stalled",
     message: `Project ${p.project_number ?? p.id} looks stalled (still ${p.status.replace(/_/g, " ")})`,
     href: `${projectBasePath}/${p.id}`,
     timestamp: p.updated_at,
@@ -106,6 +115,7 @@ export function pendingReviewToEntry(
   return {
     id: trayId.pending(r.id),
     kind: "needs_attention",
+    title: "Awaiting stakeholder response",
     message: `${r.stakeholder_name} hasn't responded to their review request`,
     href: `${projectBasePath}/${r.project_id}`,
     timestamp: r.dispatched_at,
@@ -121,6 +131,7 @@ export function expiringTokenToEntry(
   return {
     id: trayId.expiring(r.id),
     kind: "needs_attention",
+    title: "Approval link expiring",
     message: `Approval link for ${r.stakeholder_name} expires soon`,
     href: `${projectBasePath}/${r.project_id}`,
     timestamp: r.expires_at,
@@ -138,7 +149,8 @@ export function overdueAssignmentToEntry(
   return {
     id: trayId.overdue(p.id),
     kind: "needs_attention",
-    message: `Assignment for ${ref} hasn't been accepted or declined within the accept window`,
+    title: "Assignment overdue",
+    message: `Assignment for ${ref} wasn't accepted or declined in time`,
     href: `${projectBasePath}/${p.id}`,
     timestamp: p.accept_overdue_alert_fired_at,
     isRead: false,

@@ -35,6 +35,7 @@ export type NotificationType =
   | "modifications_requested"
   | "stakeholder_waived"
   | "review_response_recorded"
+  | "stakeholder_awaiting_response"
   | "submission_edited"
   | "assignment_declined"
   | "assignment_overdue"
@@ -78,6 +79,7 @@ export interface Notification {
   recipient_id: string;
   project_id: string | null;
   type: NotificationType;
+  title: string | null;
   message: string;
   is_read: boolean;
   created_at: string;

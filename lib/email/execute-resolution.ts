@@ -263,7 +263,8 @@ async function executeNewSubmission(
         notify({
           recipientId: a.id as string,
           type: "email_reply_without_thread_token",
-          message: `${user.email as string} sent an email that looks like a reply, but it arrived with no thread reference — it was processed as a new report request instead of added to an existing thread. Please verify.`,
+          title: "Possible misrouted reply",
+          message: `${user.email as string}'s reply had no thread reference — processed as a new request instead. Please verify.`,
           projectId,
           emailSubject: "OPS: Possible misrouted email reply — please verify",
           emailHtml: `<p>An email from <strong>${e(user.email as string)}</strong> looks like a reply (Postmark detected reply-style content), but it had no thread reference, so it was processed as a brand-new report request rather than threaded onto an existing draft.</p><p>Please check whether <a href="${e(appUrl)}/admin/projects/${projectId}">this project</a> is correct, or whether its attachments actually belong on an existing thread.</p>`,
@@ -480,7 +481,8 @@ async function executeNewSubmission(
           notify({
             recipientId: a.id as string,
             type: "email_draft_notification_failed",
-            message: `A draft was created from ${user.email}'s emailed report request, but the "your draft is ready" notification failed to send — they haven't been told it exists yet.`,
+            title: "Draft notification failed",
+            message: `Draft created from ${user.email}'s emailed request, but the "draft is ready" notification failed to send.`,
             projectId,
             emailSubject: "OPS: Stakeholder was not notified of their email-created draft",
             emailHtml: `<p>A draft project was created from an email sent by <strong>${e(user.email as string)}</strong>, but the notification telling them to confirm it failed to send (check the Email delivery log for details).</p><p>They don't know the draft exists yet. Consider following up manually or resending from <a href="${e(appUrl)}/admin/projects/${projectId}">the project page</a>.</p>`,

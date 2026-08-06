@@ -60,7 +60,7 @@ export function PbdbSendPreview({ projectId, fileId, findings, acknowledged }: P
         onClick={openPreview}
         className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
       >
-        Preview what stakeholders will receive
+        Preview PBDB
       </button>
 
       {previewOpen && (

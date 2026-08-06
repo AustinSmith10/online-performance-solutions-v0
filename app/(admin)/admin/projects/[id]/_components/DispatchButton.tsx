@@ -16,7 +16,9 @@ export function DispatchButton({ projectId }: { projectId: string }) {
       <p className="text-sm text-green-700 font-medium">
         {state.scheduledFor
           ? `Dispatch scheduled for ${new Date(state.scheduledFor).toLocaleString("en-AU")}.`
-          : "Dispatched to stakeholders."}
+          : state.stakeholderNames && state.stakeholderNames.length > 0
+            ? `PBDB dispatched to ${state.stakeholderNames.join(", ")}.`
+            : "Dispatched to stakeholders."}
       </p>
     );
   }

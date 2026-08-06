@@ -1,10 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/sender";
+import { deriveTitleFromMessage } from "./title";
 import type { NotificationType } from "./types";
 
 export interface NotifyOptions {
   recipientId: string;
   type: NotificationType;
+  title?: string;
   message: string;
   projectId?: string;
   emailSubject: string;
@@ -15,6 +17,7 @@ export interface NotifyOptions {
 export async function notify({
   recipientId,
   type,
+  title,
   message,
   projectId,
   emailSubject,
@@ -28,6 +31,7 @@ export async function notify({
       recipient_id: recipientId,
       project_id: projectId ?? null,
       type,
+      title: title ?? deriveTitleFromMessage(message),
       message,
     }),
     admin.from("users").select("email").eq("id", recipientId).single(),

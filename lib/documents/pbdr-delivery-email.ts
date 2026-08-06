@@ -13,6 +13,7 @@ export interface DeliverPbdrEmailsParams {
   downloadUrl: string;
   expiresAt: string;
   subject: string;
+  notifyTitle?: string;
   notifyMessage: string;
   /** `sendEmail`'s `source` tag for the delivery_recipient branch — kept distinct per call site for the email_send_log. */
   recipientEmailSource: string;
@@ -35,6 +36,7 @@ export async function deliverPbdrEmails({
   downloadUrl,
   expiresAt,
   subject,
+  notifyTitle,
   notifyMessage,
   recipientEmailSource,
   logPrefix,
@@ -56,6 +58,7 @@ export async function deliverPbdrEmails({
     await notify({
       recipientId: submitter.id as string,
       type: "pbdr_delivery",
+      title: notifyTitle,
       message: notifyMessage,
       projectId,
       emailSubject: subject,

@@ -214,6 +214,7 @@ export async function resendPbdrEmail(
     downloadUrl,
     expiresAt,
     subject: `Your Performance Report — ${projectRef}`,
+    notifyTitle: "Report resent",
     notifyMessage: `Your PBDR for project ${projectRef} has been resent.`,
     recipientEmailSource: "conversion_resend_delivery_recipient",
     logPrefix: "[resend-pbdr-email]",

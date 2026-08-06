@@ -208,6 +208,7 @@ export async function declineAssignment(
         notify({
           recipientId: a.id as string,
           type: "assignment_declined",
+          title: "Assignment declined",
           message: `The assignment for ${projectRef} was declined and has returned to the unassigned pool.`,
           projectId,
           emailSubject: `Assignment declined — ${projectRef}`,
@@ -559,7 +560,8 @@ async function notifyAdminsOfSubmissionEdit(
       notify({
         recipientId: a.id as string,
         type: "submission_edited",
-        message: `A stakeholder ${changeSummary} for ${projectRef} (and may make further changes before pickup).`,
+        title: "Submission edited",
+        message: `A stakeholder ${changeSummary} for ${projectRef}; more changes may follow before pickup.`,
         projectId,
         emailSubject: `Submission updated — ${projectRef}`,
         emailHtml: `<p style="font-family:sans-serif">A stakeholder ${changeSummary} for project <strong>${projectRef}</strong>, and may make further changes before it's picked up. Review the current state in the admin dashboard.</p>`,

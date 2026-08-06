@@ -164,6 +164,7 @@ export async function submitPortalApproval(
   await notify({
     recipientId: user.id as string,
     type: "review_response_recorded",
+    title: "Response recorded",
     message: `Your ${response === "approved" ? "approval" : "change request"} for ${projectRef} has been recorded.`,
     projectId: review.project_id as string,
     emailSubject: `Review response recorded — ${projectRef}`,

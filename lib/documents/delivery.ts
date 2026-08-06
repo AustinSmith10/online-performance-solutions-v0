@@ -72,6 +72,10 @@ export async function deliverPbdr(
     return { success: false, reason: `Project is in ${project.status} status, expected dispatched.` };
   }
 
+  // Human-readable reference for all user-facing text below — falls back to
+  // the project ID's first 8 chars only when no project number is assigned yet.
+  const projectRef = (project.project_number as string | null) ?? projectId.slice(0, 8);
+
   // Hard gates
   const gate = await checkPbdrGate(projectId);
   if (!gate.allowed) {
@@ -84,7 +88,7 @@ export async function deliverPbdr(
       heading: "PBDR conversion blocked",
       bodyHtml:
         paragraph(
-          `Conversion could not start for project ${strong(projectId.slice(0, 8))}.`
+          `Conversion could not start for project ${strong(projectRef)}.`
         ) + noticeBox(e(reason), "error"),
     });
     const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
@@ -95,7 +99,7 @@ export async function deliverPbdr(
           type: "system_error",
           message: `PBDR conversion blocked: ${reason}`,
           projectId,
-          emailSubject: `PBDR conversion blocked — ${projectId.slice(0, 8)}`,
+          emailSubject: `PBDR conversion blocked — ${projectRef}`,
           emailHtml: html,
         }).catch(() => {})
       )
@@ -206,7 +210,7 @@ export async function deliverPbdr(
     const address = formatAddress(rawAddress);
 
     const pbdrFilename = buildPbdrFilename(
-      (project.project_number as string | null) ?? projectId.slice(0, 8),
+      projectRef,
       revisionIndex,
       address,
       conversionStart
@@ -255,13 +259,14 @@ export async function deliverPbdr(
       await deliverPbdrEmails({
         supabase,
         projectId,
-        templateProjectRef: projectId.slice(0, 8),
+        templateProjectRef: projectRef,
         submittedBy: project.submitted_by as string | null,
         deliveryRecipientEmail: project.delivery_recipient_email as string | null,
         downloadUrl,
         expiresAt,
-        subject: `Your Performance Report is ready — ${projectId.slice(0, 8)}`,
-        notifyMessage: `Your PBDR for project ${projectId.slice(0, 8)} has been delivered.`,
+        subject: `Your Performance Report is ready — ${projectRef}`,
+        notifyTitle: "Report delivered",
+        notifyMessage: `Your PBDR for project ${projectRef} has been delivered.`,
         recipientEmailSource: "document_delivery_recipient",
         logPrefix: "[deliver-pbdr]",
       });
@@ -299,7 +304,6 @@ export async function deliverPbdr(
     });
 
     // Notify super admins and assigned consultant to close the project in the legacy database
-    const projectRef = (project.project_number as string | null) ?? projectId.slice(0, 8);
     const completionMessage = `PBDR delivered for project ${projectRef}. Close the project record in the legacy database.`;
     const completionHtml = renderEmailShell({
       status: "success",
@@ -324,6 +328,7 @@ export async function deliverPbdr(
         notify({
           recipientId: id,
           type: "pbdr_delivery",
+          title: "PBDR delivered",
           message: completionMessage,
           projectId,
           emailSubject: `PBDR delivered — close legacy record for ${projectRef}`,
@@ -366,7 +371,7 @@ export async function deliverPbdr(
       statusLabel: "Failed",
       heading: "PBDR conversion failed",
       bodyHtml:
-        paragraph(`Conversion failed for project ${strong(projectId.slice(0, 8))}.`) +
+        paragraph(`Conversion failed for project ${strong(projectRef)}.`) +
         noticeBox(e(errorMsg), "error") +
         paragraph("The project status has been reset to dispatched.", 20),
     });
@@ -376,9 +381,10 @@ export async function deliverPbdr(
         notify({
           recipientId: u.id,
           type: "system_error",
-          message: `PBDR conversion failed for ${projectId.slice(0, 8)}: ${errorMsg}`,
+          title: "Conversion failed",
+          message: `PBDR conversion failed for ${projectRef}: ${errorMsg}`,
           projectId,
-          emailSubject: `PBDR conversion failed — ${projectId.slice(0, 8)}`,
+          emailSubject: `PBDR conversion failed — ${projectRef}`,
           emailHtml: html,
         }).catch(() => {})
       )

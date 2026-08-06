@@ -18,7 +18,10 @@ function e(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export async function dispatchPbdb(projectId: string, actorId: string): Promise<void> {
+export async function dispatchPbdb(
+  projectId: string,
+  actorId: string
+): Promise<{ stakeholderNames: string[] }> {
   const supabase = createAdminClient();
 
   const { data: project, error: projErr } = await supabase
@@ -247,4 +250,6 @@ export async function dispatchPbdb(projectId: string, actorId: string): Promise<
   console.log(
     `[dispatch-pbdb] project ${projectId} cycle ${reviewCycle} → ${stakeholders.length} stakeholder(s)`
   );
+
+  return { stakeholderNames: stakeholders.map((s) => s.name) };
 }

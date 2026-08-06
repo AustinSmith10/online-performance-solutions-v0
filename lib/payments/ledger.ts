@@ -146,7 +146,7 @@ export async function deductCredit(
         notify({
           recipientId: id,
           type: "insufficient_credit",
-          message: "Insufficient credits — dispatch blocked.",
+          message: "Insufficient credits — dispatch blocked. Please top up or contact your account manager.",
           emailSubject: "Insufficient credit balance — dispatch blocked",
           emailHtml: html,
         }).catch(() => {})
@@ -155,7 +155,7 @@ export async function deductCredit(
         notify({
           recipientId: id,
           type: "insufficient_credit",
-          message: "Insufficient credits — dispatch blocked.",
+          message: `Insufficient credits for ${orgName} — dispatch blocked.`,
           projectId,
           emailSubject: "Insufficient credit balance — dispatch blocked",
           emailHtml: html,
@@ -358,6 +358,7 @@ export async function logOverride(
       notify({
         recipientId: id,
         type: "payment_override",
+        title: "Payment override applied",
         message: `Payment override applied to ${projectRef}. Reason: ${reason}`,
         projectId,
         emailSubject: `Payment override applied — ${projectRef}`,
