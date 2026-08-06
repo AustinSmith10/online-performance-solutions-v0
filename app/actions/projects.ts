@@ -181,6 +181,7 @@ export async function declineAssignment(
       assigned_consultant_id: null,
       accepted_at: null,
       status: revertedStatus,
+      submission_edit_notified_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", projectId);
@@ -522,12 +523,23 @@ export async function updateStakeholderSubmission(
   return { success: true };
 }
 
+// Fires once per pre-assignment editing window: the first edit sends the
+// email and sets submission_edit_notified_at, every subsequent edit in the
+// same window is silently skipped. declineAssignment clears the guard
+// alongside assigned_consultant_id, so a reopened window can notify again.
 async function notifyAdminsOfSubmissionEdit(
   supabase: ReturnType<typeof createAdminClient>,
   projectId: string,
   project: { extracted_fields: unknown; project_number?: unknown },
   changeSummary: string
 ) {
+  const { data: current } = await supabase
+    .from("projects")
+    .select("submission_edit_notified_at")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (current?.submission_edit_notified_at) return;
+
   const fields = project.extracted_fields as Record<string, string> | null;
   const projectRef =
     fields?.["EXTRACT_ADDRESS"] ??
@@ -537,15 +549,20 @@ async function notifyAdminsOfSubmissionEdit(
   const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
   if (!admins || admins.length === 0) return;
 
+  await supabase
+    .from("projects")
+    .update({ submission_edit_notified_at: new Date().toISOString() })
+    .eq("id", projectId);
+
   await Promise.all(
     admins.map((a) =>
       notify({
         recipientId: a.id as string,
         type: "submission_edited",
-        message: `A stakeholder ${changeSummary} for ${projectRef}.`,
+        message: `A stakeholder ${changeSummary} for ${projectRef} (and may make further changes before pickup).`,
         projectId,
         emailSubject: `Submission updated — ${projectRef}`,
-        emailHtml: `<p style="font-family:sans-serif">A stakeholder ${changeSummary} for project <strong>${projectRef}</strong>. Review the changes in the admin dashboard.</p>`,
+        emailHtml: `<p style="font-family:sans-serif">A stakeholder ${changeSummary} for project <strong>${projectRef}</strong>, and may make further changes before it's picked up. Review the current state in the admin dashboard.</p>`,
       }).catch(() => {})
     )
   );

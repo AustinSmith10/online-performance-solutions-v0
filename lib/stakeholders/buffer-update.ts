@@ -3,6 +3,7 @@ import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/toke
 import { sendEmail } from "@/lib/email/sender";
 import { notify } from "@/lib/notifications/notify";
 import { renderStakeholderBufferUpdateEmail } from "@/lib/email/templates/StakeholderBufferUpdateEmail";
+import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
 
 export interface BufferUpdateResult {
   total: number;
@@ -84,24 +85,35 @@ export async function sendStakeholderBufferUpdate(
     });
   }
 
-  // Notify super admins of any still-non-responding stakeholders
+  // Notify admins of any still-non-responding stakeholders, using the same
+  // "review cycle needs attention" email as a rejection would (see
+  // notifyModificationsRequested) rather than a separate one-off template —
+  // fresh links have already been issued to them above.
   const nonResponding = reviews.filter((r) => (r.status as string) === "pending");
   if (nonResponding.length > 0) {
-    const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
-    const adminIds = (admins ?? []).map((u: { id: string }) => u.id as string);
-    const names = nonResponding.map((r) => r.stakeholder_name as string).join(", ");
-    const html = `<p style="font-family:sans-serif">${nonResponding.length} stakeholder(s) have not responded to the approval request for project <strong>${projectId.slice(0, 8)}</strong>: ${names}. Fresh links have been sent. If they do not respond, use the admin dashboard to waive their response.</p>`;
+    const { data: admins } = await supabase.from("users").select("id, first_name").in("role", ["super_admin", "admin"]);
+    const names = nonResponding.map((r) => r.stakeholder_name as string);
+    const projectRef = projectId.slice(0, 8);
+    const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/ops/projects/${projectId}`;
     await Promise.all(
-      adminIds.map((id) =>
-        notify({
-          recipientId: id,
+      (admins ?? []).map((a) => {
+        const firstName = (a.first_name as string | null) ?? "there";
+        const emailHtml = renderModificationsRequestedEmail({
+          consultantName: firstName,
+          projectId: projectRef,
+          modifications: [],
+          awaitingResponse: names,
+          projectUrl,
+        });
+        return notify({
+          recipientId: a.id as string,
           type: "project_dispatched",
-          message: `${nonResponding.length} stakeholder(s) awaiting response for ${projectId.slice(0, 8)}.`,
+          message: `${nonResponding.length} stakeholder(s) awaiting response for ${projectRef}.`,
           projectId,
-          emailSubject: `Awaiting stakeholder response — ${projectId.slice(0, 8)}`,
-          emailHtml: html,
-        }).catch(() => {})
-      )
+          emailSubject: `Awaiting stakeholder response — ${projectRef}`,
+          emailHtml,
+        }).catch(() => {});
+      })
     );
   }
 

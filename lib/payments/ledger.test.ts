@@ -8,9 +8,6 @@ vi.mock("@/lib/audit/log");
 vi.mock("@/lib/email/templates/CreditDeductionEmail", () => ({
   renderCreditDeductionEmail: vi.fn().mockReturnValue("<html>deduction</html>"),
 }));
-vi.mock("@/lib/email/templates/LowCreditEmail", () => ({
-  renderLowCreditEmail: vi.fn().mockReturnValue("<html>low-credit</html>"),
-}));
 
 import { topUpCredit, deductCredit, debitDeferred, logUpfront, logOverride, reconcileOverride } from "./ledger";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -190,7 +187,7 @@ describe("deductCredit", () => {
     );
   });
 
-  it("on ok with a low resulting balance: also fires a low-credit notification", async () => {
+  it("on ok with a low resulting balance: the single deduction email carries the low-balance warning, with no separate low-credit send", async () => {
     const mock = buildMock(
       { data: { status: "ok", new_balance: 2 }, error: null },
       {
@@ -203,8 +200,10 @@ describe("deductCredit", () => {
 
     await deductCredit(ORG_ID, PROJECT_ID, ACTOR_ID);
 
-    const lowCreditCalls = vi.mocked(notify).mock.calls.filter(([opts]) => opts.type === "low_credit");
-    expect(lowCreditCalls.length).toBeGreaterThan(0);
+    const deductionCalls = vi.mocked(notify).mock.calls.filter(([opts]) => opts.type === "credit_deduction");
+    expect(deductionCalls.length).toBeGreaterThan(0);
+    expect(deductionCalls.every(([opts]) => opts.message.includes("balance is now low"))).toBe(true);
+    expect(vi.mocked(notify).mock.calls.some(([opts]) => opts.type === "low_credit")).toBe(false);
   });
 });
 

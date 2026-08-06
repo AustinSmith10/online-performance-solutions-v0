@@ -44,12 +44,20 @@ export async function notifyModificationsRequested({
   messageVerb,
   subjectLabel,
 }: NotifyModificationsRequestedParams): Promise<void> {
-  const { data: allRejected } = await supabase
-    .from("stakeholder_reviews")
-    .select("stakeholder_name, comments")
-    .eq("project_id", projectId)
-    .eq("review_cycle", reviewCycle)
-    .in("status", ["rejected_with_comments", "rejected_without_comments"]);
+  const [{ data: allRejected }, { data: pending }] = await Promise.all([
+    supabase
+      .from("stakeholder_reviews")
+      .select("stakeholder_name, comments")
+      .eq("project_id", projectId)
+      .eq("review_cycle", reviewCycle)
+      .in("status", ["rejected_with_comments", "rejected_without_comments"]),
+    supabase
+      .from("stakeholder_reviews")
+      .select("stakeholder_name")
+      .eq("project_id", projectId)
+      .eq("review_cycle", reviewCycle)
+      .eq("status", "pending"),
+  ]);
 
   const modifications = (allRejected ?? [])
     .filter((r) => r.comments)
@@ -57,6 +65,7 @@ export async function notifyModificationsRequested({
       stakeholderName: r.stakeholder_name as string,
       comments: r.comments as string,
     }));
+  const awaitingResponse = (pending ?? []).map((r) => r.stakeholder_name as string);
 
   const consultantId = qaCompletedBy ?? assignedConsultantId;
   const recipientIds: string[] = [...(consultantId ? [consultantId] : [])];
@@ -80,6 +89,7 @@ export async function notifyModificationsRequested({
         consultantName: firstName,
         projectId: projectRef,
         modifications,
+        awaitingResponse,
         projectUrl,
       });
       return notify({

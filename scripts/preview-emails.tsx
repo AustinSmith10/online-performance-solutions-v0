@@ -14,7 +14,6 @@ import { renderApprovalRequestEmail } from "../lib/email/templates/ApprovalReque
 import { renderAvailableRequestsDigestEmail } from "../lib/email/templates/AvailableRequestsDigestEmail";
 import { ConsultantAssignedEmail } from "../lib/email/templates/ConsultantAssignedEmail";
 import { renderCreditDeductionEmail } from "../lib/email/templates/CreditDeductionEmail";
-import { renderLowCreditEmail } from "../lib/email/templates/LowCreditEmail";
 import { renderModificationsRequestedEmail } from "../lib/email/templates/ModificationsRequestedEmail";
 import { renderPbdrDeliveryEmail } from "../lib/email/templates/PBDRDeliveryEmail";
 import { QaCompleteEmail } from "../lib/email/templates/QaCompleteEmail";
@@ -83,10 +82,12 @@ const templates: { name: string; html: string }[] = [
     }),
   },
   {
-    name: "LowCreditEmail",
-    html: renderLowCreditEmail({
+    name: "CreditDeductionEmail-lowBalance",
+    html: renderCreditDeductionEmail({
       orgName: "Acme Builders",
-      currentBalance: 1,
+      projectRef: "14 Marine Parade",
+      creditsDeducted: 1,
+      newBalance: 1,
       portalUrl: `${APP}/portal`,
     }),
   },
@@ -102,6 +103,28 @@ const templates: { name: string; html: string }[] = [
         },
         { stakeholderName: "Bob Johnson", comments: "Title block needs the revised lot number." },
       ],
+      projectUrl: `${APP}/admin/projects/OPS-2026-118`,
+    }),
+  },
+  {
+    name: "ModificationsRequestedEmail-withAwaitingResponse",
+    html: renderModificationsRequestedEmail({
+      consultantName: "Alex Lee",
+      projectId: "OPS-2026-118",
+      modifications: [
+        { stakeholderName: "Jane Smith", comments: "Please update the energy star rating on page 3." },
+      ],
+      awaitingResponse: ["Bob Johnson", "Priya Patel"],
+      projectUrl: `${APP}/admin/projects/OPS-2026-118`,
+    }),
+  },
+  {
+    name: "ModificationsRequestedEmail-awaitingResponseOnly",
+    html: renderModificationsRequestedEmail({
+      consultantName: "Alex Lee",
+      projectId: "OPS-2026-118",
+      modifications: [],
+      awaitingResponse: ["Bob Johnson"],
       projectUrl: `${APP}/admin/projects/OPS-2026-118`,
     }),
   },

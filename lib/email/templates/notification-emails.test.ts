@@ -3,7 +3,6 @@ import { AcknowledgementEmail } from "./AcknowledgementEmail";
 import { renderAvailableRequestsDigestEmail } from "./AvailableRequestsDigestEmail";
 import { ConsultantAssignedEmail } from "./ConsultantAssignedEmail";
 import { renderCreditDeductionEmail } from "./CreditDeductionEmail";
-import { renderLowCreditEmail } from "./LowCreditEmail";
 import { renderPbdrDeliveryEmail } from "./PBDRDeliveryEmail";
 import { QaCompleteEmail } from "./QaCompleteEmail";
 import { renderReviewResponseConfirmationEmail } from "./ReviewResponseConfirmationEmail";
@@ -142,39 +141,22 @@ describe("renderCreditDeductionEmail", () => {
     expect(html).not.toContain("<script>x</script>");
     expect(html).toContain("&lt;script&gt;");
   });
-});
 
-// ─── LowCreditEmail ─────────────────────────────────────────────────────────────
-
-describe("renderLowCreditEmail", () => {
-  const base = {
-    orgName: "Acme Builders",
-    currentBalance: 1,
-    portalUrl: "https://ops.ddeg.com.au/portal",
-  };
-
-  it("includes the org name and current balance", () => {
-    const html = renderLowCreditEmail(base);
-    expect(html).toContain("Acme Builders");
-    expect(html).toContain("1 credit");
+  it("omits the low-balance notice when the balance is above the threshold", () => {
+    const html = renderCreditDeductionEmail(base);
+    expect(html).not.toMatch(/mailto:/);
+    expect(html).not.toContain("block new report requests");
   });
 
-  it("pluralises the balance correctly", () => {
-    expect(renderLowCreditEmail({ ...base, currentBalance: 2 })).toContain("2 credits");
+  it("includes a low-balance notice with the support contact when the new balance is below the threshold", () => {
+    const html = renderCreditDeductionEmail({ ...base, newBalance: 2 });
+    expect(html).toMatch(/mailto:/);
+    expect(html).toContain("block new report requests");
   });
 
-  it("includes the support contact address", () => {
-    expect(renderLowCreditEmail(base)).toMatch(/mailto:/);
-  });
-
-  it("includes the portal URL", () => {
-    expect(renderLowCreditEmail(base)).toContain("https://ops.ddeg.com.au/portal");
-  });
-
-  it("HTML-escapes the org name", () => {
-    const html = renderLowCreditEmail({ ...base, orgName: "A & B <Co>" });
-    expect(html).not.toContain("<Co>");
-    expect(html).toContain("&amp;");
+  it("respects a custom low-balance threshold", () => {
+    const html = renderCreditDeductionEmail({ ...base, newBalance: 4, lowBalanceThreshold: 5 });
+    expect(html).toMatch(/mailto:/);
   });
 });
 

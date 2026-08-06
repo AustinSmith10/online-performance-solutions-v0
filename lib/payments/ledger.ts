@@ -3,7 +3,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
 import { auditLog } from "@/lib/audit/log";
 import { renderCreditDeductionEmail } from "@/lib/email/templates/CreditDeductionEmail";
-import { renderLowCreditEmail } from "@/lib/email/templates/LowCreditEmail";
 import { renderEmailShell, e, paragraph, strong, panel } from "@/lib/email/templates/shell";
 
 const LOW_CREDIT_THRESHOLD = 3;
@@ -49,34 +48,6 @@ async function getClientName(orgId: string): Promise<string> {
   const supabase = createAdminClient();
   const { data } = await supabase.from("clients").select("name").eq("id", orgId).maybeSingle();
   return (data?.name as string | undefined) ?? "Client";
-}
-
-async function fireLowCreditNotifications(orgId: string, balance: number, orgName: string) {
-  if (balance >= LOW_CREDIT_THRESHOLD) return;
-  const [clientIds, adminIds] = await Promise.all([
-    getOrgClientIds(orgId),
-    getSuperAdminIds(),
-  ]);
-  const message = `Credit balance is low: ${balance} credit${balance === 1 ? "" : "s"} remaining.`;
-  // Client users and admins land on different account pages, so each group gets
-  // a CTA pointing at the view they can actually act on.
-  const recipients: { ids: string[]; portalUrl: string }[] = [
-    { ids: clientIds, portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/portal` },
-    { ids: adminIds, portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/admin/credits/${orgId}` },
-  ];
-  await Promise.all(
-    recipients.flatMap(({ ids, portalUrl }) =>
-      ids.map((id) =>
-        notify({
-          recipientId: id,
-          type: "low_credit",
-          message,
-          emailSubject: "Low credit balance — action required",
-          emailHtml: renderLowCreditEmail({ orgName, currentBalance: balance, portalUrl }),
-        }).catch(() => {})
-      )
-    )
-  );
 }
 
 // credit_deducted claims lost to a concurrent call are expected, quiet
@@ -201,13 +172,21 @@ export async function deductCredit(
     getOrgClientIds(orgId),
     resolveProjectRef(projectId),
   ]);
-  const message = `1 credit deducted. New balance: ${newBalance}.`;
+  const isLow = (newBalance as number) < LOW_CREDIT_THRESHOLD;
+  const message = isLow
+    ? `1 credit deducted. New balance: ${newBalance} — balance is now low.`
+    : `1 credit deducted. New balance: ${newBalance}.`;
   // Client users and admins land on different account pages, so each group gets
   // a CTA pointing at the view they can actually act on. Stakeholders as a group don't
   // necessarily have portal access to the specific project that triggered the deduction
   // (they may not be its submitter or reviewer), so their in-app notification omits
   // `projectId` — otherwise the "View" link 404s for anyone but that project's own
   // stakeholder(s). Admins always have access via /admin/projects/{id}, so theirs keeps it.
+  //
+  // This single send also covers the "balance is now low" case (see
+  // renderCreditDeductionEmail) — it shares the same recipients and the same
+  // trigger as the deduction itself, so a separate low-credit email would
+  // just be a second copy landing seconds later.
   const deductionRecipients: { ids: string[]; portalUrl: string; includeProjectId: boolean }[] = [
     { ids: clientIds, portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/portal`, includeProjectId: false },
     {
@@ -224,13 +203,14 @@ export async function deductCredit(
           type: "credit_deduction",
           message,
           ...(includeProjectId ? { projectId } : {}),
-          emailSubject: "Credit deducted",
+          emailSubject: isLow ? "Credit deducted — balance now low" : "Credit deducted",
           emailHtml: renderCreditDeductionEmail({
             orgName,
             projectRef,
             creditsDeducted: 1,
             newBalance: newBalance as number,
             portalUrl,
+            lowBalanceThreshold: LOW_CREDIT_THRESHOLD,
           }),
         }).catch(() => {})
       )
@@ -242,8 +222,6 @@ export async function deductCredit(
     projectId,
     metadata: { balance_after: newBalance },
   });
-
-  await fireLowCreditNotifications(orgId, newBalance as number, orgName);
 
   revalidatePath(`/admin/credits/${orgId}`);
   revalidatePath("/admin/credits");

@@ -34,6 +34,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_provider_failures: {
+        Row: {
+          context: string
+          created_at: string
+          error: string | null
+          id: string
+          project_id: string | null
+          provider: string
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          context: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          project_id?: string | null
+          provider: string
+          resolved_at?: string | null
+          status: string
+        }
+        Update: {
+          context?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          project_id?: string | null
+          provider?: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_provider_failures_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           key: string
@@ -962,6 +1003,9 @@ export type Database = {
       project_files: {
         Row: {
           created_at: string
+          extraction_error: string | null
+          extraction_result: Json | null
+          extraction_status: string
           file_type: string
           file_type_confirmed: boolean
           filename_mismatch_reason: string | null
@@ -975,6 +1019,7 @@ export type Database = {
           storage_path: string
           structure_scan_findings: Json | null
           uploaded_by: string
+          verification_completed_at: string | null
           verification_confirmed_at: string | null
           verification_confirmed_by: string | null
           verification_mismatch_reasons: Json | null
@@ -982,6 +1027,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          extraction_error?: string | null
+          extraction_result?: Json | null
+          extraction_status?: string
           file_type: string
           file_type_confirmed?: boolean
           filename_mismatch_reason?: string | null
@@ -995,6 +1043,7 @@ export type Database = {
           storage_path: string
           structure_scan_findings?: Json | null
           uploaded_by: string
+          verification_completed_at?: string | null
           verification_confirmed_at?: string | null
           verification_confirmed_by?: string | null
           verification_mismatch_reasons?: Json | null
@@ -1002,6 +1051,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          extraction_error?: string | null
+          extraction_result?: Json | null
+          extraction_status?: string
           file_type?: string
           file_type_confirmed?: boolean
           filename_mismatch_reason?: string | null
@@ -1015,6 +1067,7 @@ export type Database = {
           storage_path?: string
           structure_scan_findings?: Json | null
           uploaded_by?: string
+          verification_completed_at?: string | null
           verification_confirmed_at?: string | null
           verification_confirmed_by?: string | null
           verification_mismatch_reasons?: Json | null
@@ -1085,6 +1138,7 @@ export type Database = {
           source: string
           status: string
           strip_token_color: boolean
+          submission_edit_notified_at: string | null
           submitted_by: string
           template_id: string | null
           updated_at: string
@@ -1122,6 +1176,7 @@ export type Database = {
           source?: string
           status?: string
           strip_token_color?: boolean
+          submission_edit_notified_at?: string | null
           submitted_by: string
           template_id?: string | null
           updated_at?: string
@@ -1159,6 +1214,7 @@ export type Database = {
           source?: string
           status?: string
           strip_token_color?: boolean
+          submission_edit_notified_at?: string | null
           submitted_by?: string
           template_id?: string | null
           updated_at?: string
