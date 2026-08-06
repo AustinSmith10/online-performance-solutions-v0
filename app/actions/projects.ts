@@ -1211,10 +1211,14 @@ export type AcknowledgePbdbQaFlagsState = { error?: string; ok?: boolean };
 
 /**
  * Soft-block gate between upload and send: a consultant must acknowledge a
- * pbdb file's filename-mismatch reason and/or structure-scan findings
- * before Send unlocks. Scoped to the specific project_files row (one per
- * upload/version) so a fresh re-upload's findings are never covered by a
- * prior version's acknowledgment.
+ * pbdb file's structure-scan findings before Send unlocks. Scoped to the
+ * specific project_files row (one per upload/version) so a fresh re-upload's
+ * findings are never covered by a prior version's acknowledgment.
+ *
+ * The filename-mismatch reason is deliberately NOT part of this gate — the
+ * stored/dispatched filename is always system-generated from the current
+ * Rev number (buildPbdbFilename), never the uploaded file's own name, so a
+ * mismatch there carries no risk to what stakeholders receive.
  */
 export async function acknowledgePbdbQaFlags(
   projectId: string,

@@ -325,14 +325,14 @@ export default async function ConsultantProjectDetailPage({
   const pbdbFiles = rawPbdbFiles ?? [];
   const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
 
-  // Findings gate before Send (#112): filename mismatch (#109) + deterministic
-  // structure scan, both surfaced on the latest pbdb file row. Acknowledgment
-  // is scoped to that exact row/version, never carried over from a prior upload.
+  // Findings gate before Send (#112): deterministic structure scan, surfaced
+  // on the latest pbdb file row. Acknowledgment is scoped to that exact
+  // row/version, never carried over from a prior upload. The filename
+  // mismatch (#109) is shown separately as an editable, non-blocking field
+  // (see PbdbSendPreview) since the dispatched filename is always
+  // system-generated regardless of what was uploaded.
   const pbdbSendFindings: string[] = latestPbdb
-    ? [
-        ...(latestPbdb.filename_mismatch_reason ? [latestPbdb.filename_mismatch_reason as string] : []),
-        ...((latestPbdb.structure_scan_findings as { message: string }[] | null)?.map((f) => f.message) ?? []),
-      ]
+    ? ((latestPbdb.structure_scan_findings as { message: string }[] | null)?.map((f) => f.message) ?? [])
     : [];
   const pbdbFlagsAcknowledged = !!latestPbdb?.qa_flags_acknowledged_at;
   const pbdbReadyToSend = pbdbSendFindings.length === 0 || pbdbFlagsAcknowledged;

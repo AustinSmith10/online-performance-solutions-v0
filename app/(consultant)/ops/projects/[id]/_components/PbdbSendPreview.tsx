@@ -16,10 +16,9 @@ interface Props {
  * Sits between "Upload QA'd PBDB" and the Send/Dispatch action (#112): lets
  * the consultant preview exactly what the stakeholder will receive (the
  * converted PDF, generated/reused lazily via getOrCreateDispatchPdf) and,
- * when the upload has filename-mismatch or structure-scan findings, forces
- * an explicit acknowledgment before Send unlocks. Send itself stays a
- * separate action (DispatchButton) — this component only gates whether
- * that button is shown.
+ * when the upload has structure-scan findings, forces an explicit
+ * acknowledgment before Send unlocks. Send itself stays a separate action
+ * (DispatchButton) — this component only gates whether that button is shown.
  */
 export function PbdbSendPreview({ projectId, fileId, findings, acknowledged }: Props) {
   const router = useRouter();

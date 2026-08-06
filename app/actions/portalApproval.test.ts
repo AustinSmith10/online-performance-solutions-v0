@@ -62,7 +62,7 @@ function makeFormData(fields: Record<string, string>): FormData {
   return fd;
 }
 
-function buildMock() {
+function buildMock({ guardProject = PROJECT_GUARD as unknown } = {}) {
   const calls: Record<string, number> = {};
   const from = vi.fn((table: string) => {
     calls[table] = (calls[table] ?? 0) + 1;
@@ -77,7 +77,7 @@ function buildMock() {
     if (table === "projects") {
       // 1) guard select, 2) first_response_at update, 3) select downstream,
       // 4) rejected-path status update
-      if (n === 1) return chain(PROJECT_GUARD);
+      if (n === 1) return chain(guardProject);
       if (n === 2) return chain(null);
       if (n === 3) return chain(PROJECT_FULL);
       return chain(null);
@@ -123,6 +123,24 @@ describe("submitPortalApproval — rejection records revision_history", () => {
 
     await submitPortalApproval("review-1", {}, makeFormData({ response: "approved" }));
 
+    expect(recordRevisionEvent).not.toHaveBeenCalled();
+  });
+
+  // A second stakeholder rejecting the same cycle (project.status already
+  // "revision_required" from an earlier rejection) must not bump the PBDB
+  // revision_history counter again — otherwise Rev numbers skip ahead of the
+  // actual cycle count.
+  it("does not call recordRevisionEvent when another stakeholder already rejected this cycle", async () => {
+    const mock = buildMock({ guardProject: { status: "revision_required", review_cycle: 1 } });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await submitPortalApproval(
+      "review-1",
+      {},
+      makeFormData({ response: "rejected", comments: "Also fix page 5." })
+    );
+
+    expect(result.submitted).toBe(true);
     expect(recordRevisionEvent).not.toHaveBeenCalled();
   });
 });

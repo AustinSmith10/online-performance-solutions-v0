@@ -495,13 +495,16 @@ export async function dispatchToStakeholders(
     return { error: "Project is not ready for dispatch." };
   }
 
-  // Soft-block gate (#112): any filename mismatch or structure-scan finding
-  // on the current cycle's PBDB must be acknowledged before Send unlocks.
-  // Server-side enforcement backs the UI gate — the UI hides Send until
-  // acknowledged, but this is the actual guarantee.
+  // Soft-block gate (#112): any structure-scan finding on the current
+  // cycle's PBDB must be acknowledged before Send unlocks. Server-side
+  // enforcement backs the UI gate — the UI hides Send until acknowledged,
+  // but this is the actual guarantee. Filename mismatches are excluded —
+  // the dispatched filename is always system-generated from the current Rev
+  // number, never the uploaded file's name, so a mismatch there is purely
+  // informational.
   const { data: latestPbdb } = await supabase
     .from("project_files")
-    .select("filename_mismatch_reason, structure_scan_findings, qa_flags_acknowledged_at")
+    .select("structure_scan_findings, qa_flags_acknowledged_at")
     .eq("project_id", projectId)
     .eq("file_type", "pbdb")
     .eq("review_cycle", project.review_cycle as number)
@@ -512,8 +515,7 @@ export async function dispatchToStakeholders(
   const hasUnacknowledgedFlags =
     !!latestPbdb &&
     !latestPbdb.qa_flags_acknowledged_at &&
-    (!!latestPbdb.filename_mismatch_reason ||
-      ((latestPbdb.structure_scan_findings as unknown[] | null)?.length ?? 0) > 0);
+    ((latestPbdb.structure_scan_findings as unknown[] | null)?.length ?? 0) > 0;
 
   if (hasUnacknowledgedFlags) {
     return { error: "Please review and acknowledge the flagged issues before sending." };
@@ -1091,8 +1093,12 @@ export async function logStakeholderResponseOnBehalf(
         .eq("id", projectId);
 
       // Bumps the PBDB revision_history counter (#108) — the corrected reupload
-      // later derives its Rev{n} filename from this row, not review_cycle.
-      await recordRevisionEvent(supabase, projectId, "pbdb", "rejected");
+      // later derives its Rev{n} filename from this row, not review_cycle. Only
+      // the cycle's first rejection bumps it — see the matching guard in
+      // approval.ts and portalApproval.ts.
+      if (project.status !== "revision_required") {
+        await recordRevisionEvent(supabase, projectId, "pbdb", "rejected");
+      }
 
       await notifyModificationsRequested({
         supabase,

@@ -258,6 +258,29 @@ describe("submitApproval — rejected", () => {
     expect(rejCalls.length).toBeGreaterThan(0);
   });
 
+  // A second stakeholder rejecting the same cycle must not bump the PBDB
+  // revision_history counter a second time — otherwise Rev numbers skip
+  // ahead of the actual cycle count (e.g. Rev0 -> Rev2 after only one real
+  // reupload cycle) whenever more than one stakeholder rejects before the
+  // consultant re-uploads.
+  it("does not record a second revision_history row when another stakeholder already rejected this cycle", async () => {
+    const mock = buildMock({ guardProject: { status: "revision_required", review_cycle: 1 } });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    const result = await submitApproval("tok", null, {}, makeFormData({
+      response: "rejected",
+      comments: "Also fix page 5.",
+    }));
+    expect(result.submitted).toBe(true);
+    expect(mock.from).not.toHaveBeenCalledWith("revision_history");
+  });
+
+  it("records a revision_history row on the cycle's first rejection", async () => {
+    const mock = buildMock({ guardProject: { status: "dispatched", review_cycle: 1 } });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    await submitApproval("tok", null, {}, makeFormData({ response: "rejected", comments: "Fix page 3." }));
+    expect(mock.from).toHaveBeenCalledWith("revision_history");
+  });
+
   it("renders the aggregated modifications email when rejections have comments", async () => {
     vi.mocked(createAdminClient).mockReturnValue(
       buildMock({ secondaryReviews: [{ stakeholder_name: "Jane", comments: "Fix page 3." }] }) as never

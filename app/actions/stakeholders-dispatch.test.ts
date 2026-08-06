@@ -130,15 +130,15 @@ describe("dispatchToStakeholders — readiness gate", () => {
 });
 
 describe("dispatchToStakeholders — QA flags gate (#112)", () => {
-  it("blocks dispatch when the latest PBDB has an unacknowledged filename mismatch", async () => {
+  it("dispatches despite an unacknowledged filename mismatch — it's informational only, never gates Send", async () => {
     const project = { status: "in_progress", qa_completed_by: "consultant-1", assigned_consultant_id: "consultant-1", review_cycle: 1 };
     const latestPbdbFile = { filename_mismatch_reason: "Filename says Rev1, expected Rev2.", structure_scan_findings: null, qa_flags_acknowledged_at: null };
     vi.mocked(createAdminClient).mockReturnValue(buildMock(project, 0, latestPbdbFile) as never);
 
     const result = await dispatchToStakeholders(PROJECT_ID, {}, new FormData());
 
-    expect(result.error).toBe("Please review and acknowledge the flagged issues before sending.");
-    expect(scheduleOrDeliverPbdb).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(scheduleOrDeliverPbdb).toHaveBeenCalled();
   });
 
   it("blocks dispatch when the latest PBDB has unacknowledged structure-scan findings", async () => {

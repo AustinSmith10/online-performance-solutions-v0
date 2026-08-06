@@ -119,8 +119,14 @@ export async function submitApproval(
       .eq("id", review.project_id);
 
     // Bumps the PBDB revision_history counter (#108) — the corrected reupload
-    // later derives its Rev{n} filename from this row, not review_cycle.
-    await recordRevisionEvent(supabase, review.project_id, "pbdb", "rejected");
+    // later derives its Rev{n} filename from this row, not review_cycle. Only
+    // the cycle's first rejection bumps it: if another stakeholder already
+    // rejected this same cycle (status is already "revision_required"), the
+    // counter was already advanced for this cycle and must not be bumped
+    // again per additional rejecting stakeholder.
+    if (projectForGuard.status !== "revision_required") {
+      await recordRevisionEvent(supabase, review.project_id, "pbdb", "rejected");
+    }
 
     await notifyModificationsRequested({
       supabase,

@@ -221,7 +221,15 @@ export function FieldFlagReview({
   const selectedPreviewAvailable =
     !!selectedSourceUrl && isPreviewable(selectedCandidate?.source_document, selectedSourceUrl);
 
+  // Nothing worth showing once resolved: stakeholders never need this
+  // read-only reference card at all (they already attested to the value via
+  // the submission form), and consultants don't either when the flag has no
+  // real extraction evidence to reference (hasNoExtractionEvidence — just the
+  // stakeholder's own typed-in value, nothing to compare candidates against).
+  const suppressResolvedCard = stakeholderView || hasNoExtractionEvidence;
+
   if (!editing && status === "resolved") {
+    if (suppressResolvedCard) return null;
     // #105 tweak: once resolved, this field is done with the picker for
     // good — the row's own pencil icon now handles further edits as a plain
     // free-text field, same as any other submitted detail. This stays only
@@ -267,6 +275,7 @@ export function FieldFlagReview({
   }
 
   if (!editing) {
+    if (suppressResolvedCard) return null;
     // Transient: an "open" flag momentarily between a successful resolve
     // and the parent's router.refresh() picking up status="resolved".
     return (

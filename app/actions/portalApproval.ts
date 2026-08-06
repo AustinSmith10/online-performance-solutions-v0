@@ -121,7 +121,10 @@ export async function submitPortalApproval(
 
     // Bumps the PBDB revision_history counter (#108) — matches the equivalent
     // call in approval.ts and stakeholders.ts for the other two rejection paths.
-    await recordRevisionEvent(supabase, review.project_id as string, "pbdb", "rejected");
+    // Only the cycle's first rejection bumps it — see the matching guard there.
+    if (projectForGuard.status !== "revision_required") {
+      await recordRevisionEvent(supabase, review.project_id as string, "pbdb", "rejected");
+    }
 
     await notifyModificationsRequested({
       supabase,
