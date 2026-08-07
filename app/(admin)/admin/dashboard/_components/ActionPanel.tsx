@@ -15,6 +15,7 @@ import { adminSetProjectNumberFromDashboard, type AdminProjectNumberState } from
 import {
   resendInviteFailure,
   resolveEmailFailure,
+  resolveSystemError,
   type ResendFailureState,
 } from "@/app/actions/admin-users";
 import type { ConsultantAvailability, ProjectStatus } from "@/types";
@@ -699,9 +700,26 @@ function OverrideDrawerContent({ project }: { project: DashboardProject }) {
 
 function ErrorDrawerContent({
   error,
+  onSuccess,
 }: {
   error: { id: string; message: string; project_id: string | null; created_at: string };
+  onSuccess: (message: string) => void;
 }) {
+  const [resolvePending, setResolvePending] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  async function handleResolve() {
+    setResolvePending(true);
+    setResolveError(null);
+    try {
+      await resolveSystemError(error.id);
+      onSuccess("Marked resolved.");
+    } catch (err) {
+      setResolveError(err instanceof Error ? err.message : "Failed to mark resolved.");
+    } finally {
+      setResolvePending(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
@@ -723,6 +741,18 @@ function ErrorDrawerContent({
       ) : (
         <p className="text-xs text-zinc-400">No project linked — no retry available.</p>
       )}
+
+      <div className="flex items-center gap-2 border-t border-zinc-100 pt-4">
+        <button
+          type="button"
+          onClick={() => void handleResolve()}
+          disabled={resolvePending}
+          className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+        >
+          {resolvePending ? "Marking…" : "Mark resolved"}
+        </button>
+      </div>
+      {resolveError && <p className="text-xs text-red-600">{resolveError}</p>}
     </div>
   );
 }
@@ -1203,7 +1233,7 @@ export function ActionPanel({
           <OverrideDrawerContent project={drawer.project} />
         )}
         {drawer?.type === "error" && (
-          <ErrorDrawerContent error={drawer.error} />
+          <ErrorDrawerContent error={drawer.error} onSuccess={handleSuccess} />
         )}
         {drawer?.type === "email-failure" && (
           <EmailFailureDrawerContent

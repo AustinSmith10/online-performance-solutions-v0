@@ -913,6 +913,8 @@ export type Database = {
           message: string
           project_id: string | null
           recipient_id: string
+          resolved_at: string | null
+          title: string | null
           type: string
         }
         Insert: {
@@ -922,6 +924,8 @@ export type Database = {
           message: string
           project_id?: string | null
           recipient_id: string
+          resolved_at?: string | null
+          title?: string | null
           type: string
         }
         Update: {
@@ -931,6 +935,8 @@ export type Database = {
           message?: string
           project_id?: string | null
           recipient_id?: string
+          resolved_at?: string | null
+          title?: string | null
           type?: string
         }
         Relationships: [
@@ -1761,6 +1767,10 @@ export type Database = {
         Returns: undefined
       }
       admin_delete_user: { Args: { p_user_id: string }; Returns: undefined }
+      consultant_owns_project: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
       debit_deferred: {
         Args: {
           p_client_id: string

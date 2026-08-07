@@ -51,8 +51,10 @@ export async function sendEmail({ to, subject, html, replyTo, throwOnError, sour
     console.error("[email] failed to read emails_enabled setting — defaulting to enabled:", error);
   }
   if (!emailsEnabled) {
+    // Emails being disabled is an intentional admin setting, not a delivery
+    // failure — don't log it to email_send_log, or it shows up as a false
+    // "Email Failed" alert on the dashboard and System Health.
     console.warn("[email] emails disabled in system settings — skipping send");
-    await logSend({ to, subject, source, projectId, status: "failed", error: "Emails disabled in system settings — nothing was sent" });
     if (throwOnError) throw new Error("Emails disabled in system settings — nothing was sent");
     return false;
   }

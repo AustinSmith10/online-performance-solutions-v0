@@ -119,6 +119,7 @@ export default async function AdminDashboardPage({
       .from("notifications")
       .select("id, message, project_id, created_at")
       .eq("type", "system_error")
+      .is("resolved_at", null)
       .order("created_at", { ascending: false })
       .limit(10),
 

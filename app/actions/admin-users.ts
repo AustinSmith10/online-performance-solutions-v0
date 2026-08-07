@@ -387,6 +387,25 @@ export async function resolveEmailFailure(failureId: string) {
   revalidatePath("/admin/dashboard");
 }
 
+export async function resolveSystemError(notificationId: string) {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("notifications")
+    .update({ resolved_at: new Date().toISOString() })
+    .eq("id", notificationId)
+    .eq("type", "system_error");
+
+  if (error) throw new Error(error.message);
+
+  await auditLog("system_error.resolved", actor.id, actor.email, {
+    metadata: { notification_id: notificationId },
+  });
+
+  revalidatePath("/admin/dashboard");
+}
+
 export async function resolveAiProviderFailure(failureId: string) {
   const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
