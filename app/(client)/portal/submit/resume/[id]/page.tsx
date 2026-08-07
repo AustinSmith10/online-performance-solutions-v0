@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { SubmissionForm } from "../../_components/SubmissionForm";
 import type { ExtractState, TokenField, SectionLabels } from "@/app/actions/submission";
 import { getMetricsAutofillConfigs, resolveMetricsAutofill, buildMetricsPickRows } from "@/lib/documents/metrics-autofill";
+import { loadFileRequirements } from "@/lib/documents/submission-shared";
 
 const RAINFALL_TOKEN = "EXTRACT_RAINFALL_INTENSITY";
 const TRUSTEE_TOKEN = "EXTRACT_TRUSTEE";
@@ -75,6 +76,29 @@ export default async function ResumeDraftPage({
   const templateId =
     (project.template_id as string | null) ?? templates?.[0]?.id ?? "";
 
+  // Every uploaded file, previewable regardless of verification status — lets
+  // the stakeholder refer back to what they actually uploaded while filling
+  // in fields the AI couldn't find (mirrors finalizeSubmission's pattern).
+  const fileReqs = await loadFileRequirements(supabase, templateId);
+  const reqBySlug = new Map(fileReqs.map((r) => [r.slug, r.name]));
+  const { data: projectFiles } = await supabase
+    .from("project_files")
+    .select("storage_path, file_type, original_filename")
+    .eq("project_id", id);
+  const documents = await Promise.all(
+    (projectFiles ?? []).map(async (f) => {
+      const { data: signed } = await supabase.storage
+        .from("submissions")
+        .createSignedUrl(f.storage_path as string, 3600);
+      return {
+        slug: f.file_type as string,
+        label: reqBySlug.get(f.file_type as string) ?? (f.file_type as string),
+        name: f.original_filename as string,
+        previewUrl: signed?.signedUrl ?? null,
+      };
+    })
+  );
+
   // Load mappings and org config for this template
   const [{ data: mappings }, { data: orgData }, { data: tmplData }] =
     await Promise.all([
@@ -130,7 +154,6 @@ export default async function ResumeDraftPage({
   function makeField(
     m: { placeholder_token: string; display_label: string | null; field_key: string | null; is_required: boolean },
     value: string,
-    confidence: Confidence = "low",
     required = false,
     candidates?: TokenField["candidates"]
   ): TokenField {
@@ -138,18 +161,9 @@ export default async function ResumeDraftPage({
       token: m.placeholder_token,
       label: m.display_label ?? m.placeholder_token,
       value,
-      confidence,
       required,
       candidates,
     };
-  }
-
-  function bestConfidence(candidates: { confidence: Confidence }[]): Confidence {
-    const rank = (c: Confidence) => (c === "high" ? 2 : c === "medium" ? 1 : 0);
-    return candidates.reduce(
-      (best, c) => (rank(c.confidence) > rank(best) ? c.confidence : best),
-      "low" as Confidence
-    );
   }
 
   const tokenGroups = {
@@ -161,18 +175,17 @@ export default async function ResumeDraftPage({
         return makeField(
           m,
           value,
-          bestConfidence(flag.candidates),
           m.is_required,
           hasMultipleCandidates ? flag.candidates : undefined
         );
       }
-      return makeField(m, value, value.trim() ? "high" : "low", m.is_required);
+      return makeField(m, value, m.is_required);
     }),
     org: orgMappings.map((m) =>
-      makeField(m, savedFields[m.placeholder_token] ?? orgConfig[m.placeholder_token] ?? "", "high", false)
+      makeField(m, savedFields[m.placeholder_token] ?? orgConfig[m.placeholder_token] ?? "", false)
     ),
     client: clientMappings.map((m) =>
-      makeField(m, savedFields[m.placeholder_token] ?? "", "high", m.is_required)
+      makeField(m, savedFields[m.placeholder_token] ?? "", m.is_required)
     ),
   };
 
@@ -208,6 +221,7 @@ export default async function ResumeDraftPage({
     projectId: id,
     templateId,
     fileVerificationWarnings,
+    documents,
   };
 
   return (

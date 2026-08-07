@@ -20,16 +20,14 @@ describe("buildFieldFlagPlan", () => {
     expect(plan.finalValue).toBe("123 Main St");
   });
 
-  it("flags a single medium-confidence candidate as 'confidence'", async () => {
+  it("never flags a single medium-confidence candidate — confidence alone no longer flags", async () => {
     const plan = await buildFieldFlagPlan([candidate("123 Main St", { confidence: "medium" })], "exact");
-    expect(plan.needsFlag).toBe(true);
-    expect(plan.flagType).toBe("confidence");
+    expect(plan.needsFlag).toBe(false);
   });
 
-  it("flags a single low-confidence candidate as 'confidence'", async () => {
-    const plan = await buildFieldFlagPlan([candidate("", { confidence: "low", value: "" })], "exact");
-    expect(plan.needsFlag).toBe(true);
-    expect(plan.flagType).toBe("confidence");
+  it("never flags a single low-confidence candidate — confidence alone no longer flags", async () => {
+    const plan = await buildFieldFlagPlan([candidate("123 Main St", { confidence: "low" })], "exact");
+    expect(plan.needsFlag).toBe(false);
   });
 
   it("flags 2+ distinct candidates as 'inconsistency', picking the highest-confidence as final", async () => {
@@ -42,13 +40,13 @@ describe("buildFieldFlagPlan", () => {
     expect(plan.finalValue).toBe("456 Other Ave");
   });
 
-  it("flags as 'both' when candidates disagree and the best is still not high confidence", async () => {
+  it("flags 2+ distinct candidates as 'inconsistency' regardless of confidence level", async () => {
     const plan = await buildFieldFlagPlan(
       [candidate("123 Main St", { confidence: "medium" }), candidate("456 Other Ave", { confidence: "low" })],
       "exact"
     );
     expect(plan.needsFlag).toBe(true);
-    expect(plan.flagType).toBe("both");
+    expect(plan.flagType).toBe("inconsistency");
   });
 
   it("never flags when duplicate high-confidence candidates agree", async () => {

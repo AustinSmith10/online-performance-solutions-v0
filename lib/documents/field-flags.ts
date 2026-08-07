@@ -42,11 +42,16 @@ export async function buildFieldFlagPlan(
   const groups = await groupCandidates(candidates, comparisonMode);
   const distinct = groups.length > 1;
 
+  // Self-graded confidence is the model checking its own work — it's not an
+  // independent signal, so it no longer drives flagging. The only thing
+  // worth interrupting a reviewer for is a genuine discrepancy: candidates
+  // that disagree, whether from different documents or multiple distinct
+  // values bundled in one document (buildPrompt already splits those into
+  // separate array elements, so groupCandidates sees them the same way).
   const best = candidates.reduce((a, b) => (confidenceRank(b.confidence) > confidenceRank(a.confidence) ? b : a));
-  const bestIsLowConfidence = best.confidence !== "high";
 
-  const needsFlag = distinct || bestIsLowConfidence;
-  const flagType: FlagType = distinct && bestIsLowConfidence ? "both" : distinct ? "inconsistency" : "confidence";
+  const needsFlag = distinct;
+  const flagType: FlagType = "inconsistency";
 
   return { finalValue: best.value, needsFlag, flagType, candidateRecords: candidates };
 }

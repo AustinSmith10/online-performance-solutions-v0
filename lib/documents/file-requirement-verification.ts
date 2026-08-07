@@ -1,5 +1,15 @@
 import "server-only";
-import { extractPdfTextAndPageCount, runTextCompletion } from "@/lib/documents/extractor";
+import { extractPdfTextAndPageCount, runTextCompletion, type JsonOutputSchema } from "@/lib/documents/extractor";
+
+const JUDGE_SCHEMA: JsonOutputSchema = {
+  name: "judge_result",
+  schema: {
+    type: "object",
+    properties: { matches: { type: "boolean" }, reason: { type: "string" } },
+    required: ["matches", "reason"],
+    additionalProperties: false,
+  },
+};
 
 export interface FileRequirementMarkers {
   markerTextPatterns: string[] | null;
@@ -99,7 +109,11 @@ export async function runAiJudgeCheck(
   if (!requirement.aiJudgeHint) return null;
 
   try {
-    const raw = await runTextCompletion(buildJudgePrompt(requirement.aiJudgeHint, docText, sampleText), "file requirement AI judge");
+    const raw = await runTextCompletion(
+      buildJudgePrompt(requirement.aiJudgeHint, docText, sampleText),
+      "file requirement AI judge",
+      JUDGE_SCHEMA
+    );
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return { ok: true };
     const parsed = JSON.parse(match[0]) as { matches?: unknown; reason?: unknown };

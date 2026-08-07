@@ -247,7 +247,7 @@ export function FieldFlagReview({
           >
             {candidates.map((c, i) => (
               <option key={`${c.value}-${i}`} value={c.value}>
-                {c.value || "(empty)"} · {c.confidence} · {c.source_document}
+                {c.value || "(empty)"} · {c.source_document}
               </option>
             ))}
           </select>
@@ -299,7 +299,7 @@ export function FieldFlagReview({
                 {c.value || "(empty)"}
               </span>{" "}
               <span className="text-zinc-400">
-                ({c.confidence} confidence — {c.source_document})
+                ({c.source_document})
               </span>
               {c.value === currentValue && (
                 <span className="ml-1 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
@@ -368,7 +368,7 @@ export function FieldFlagReview({
             <span>
               <span className="font-medium text-zinc-900">{c.value || "(empty)"}</span>{" "}
               <span className="text-zinc-400">
-                ({c.confidence} confidence — {c.source_document})
+                ({c.source_document})
               </span>
               {/* #105: submitting without touching this flag now accepts the
                   default outright, so it needs to read as a deliberate,

@@ -1,5 +1,5 @@
 import "server-only";
-import type { ExtractedCandidate } from "./extractor";
+import type { ExtractedCandidate, JsonOutputSchema } from "./extractor";
 import { runTextCompletion } from "./extractor";
 
 export type ComparisonMode = "exact" | "normalized" | "semantic";
@@ -19,6 +19,70 @@ function numericSignature(v: string): string {
   return (v.match(/\d+/g) ?? []).join(",");
 }
 
+// Common address-type words that carry no disambiguating meaning on their
+// own (two different streets can both be a "St") — stripped before checking
+// word overlap. General text-similarity vocabulary, not a per-field-name
+// rule: it applies to whatever token is running in semantic mode, address or
+// otherwise, same as numericSignature above.
+const OVERLAP_STOPWORDS = new Set([
+  "st", "street", "rd", "road", "ave", "avenue", "ln", "lane", "dr", "drive",
+  "unit", "lot", "blvd", "boulevard", "ct", "court", "pl", "place", "the", "of", "and",
+]);
+
+function coreWords(v: string): Set<string> {
+  const words = v
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w && !/^\d+$/.test(w) && !OVERLAP_STOPWORDS.has(w));
+  return new Set(words);
+}
+
+function shareCoreWord(a: CandidateGroup, b: CandidateGroup): boolean {
+  const wordsA = coreWords(a.value);
+  for (const w of coreWords(b.value)) {
+    if (wordsA.has(w)) return true;
+  }
+  return false;
+}
+
+// Within a numeric-signature bucket, further partitions groups so only ones
+// that also share a non-numeric, non-stopword word ever reach the AI. Two
+// values that merely share a house number or postcode digit sequence — e.g.
+// "12 Smith St" vs "12 Jones St" — have nothing in common once the numbers
+// are set aside, and shouldn't even be *asked about*: matching digits alone
+// was never meant to be grounds for a possible merge, only the trigger for
+// checking whether the wording differs on an otherwise-identical value.
+// Simple union-find: any pair sharing a core word joins the same cluster.
+function clusterByWordOverlap(groups: CandidateGroup[]): CandidateGroup[][] {
+  const parent = groups.map((_, i) => i);
+  function find(i: number): number {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]];
+      i = parent[i];
+    }
+    return i;
+  }
+  function union(a: number, b: number): void {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[ra] = rb;
+  }
+  for (let i = 0; i < groups.length; i++) {
+    for (let j = i + 1; j < groups.length; j++) {
+      if (shareCoreWord(groups[i], groups[j])) union(i, j);
+    }
+  }
+  const clusters = new Map<number, CandidateGroup[]>();
+  groups.forEach((g, i) => {
+    const root = find(i);
+    const list = clusters.get(root) ?? [];
+    list.push(g);
+    clusters.set(root, list);
+  });
+  return [...clusters.values()];
+}
+
 function groupByKey(
   candidates: ExtractedCandidate[],
   keyFn: (v: string) => string
@@ -36,15 +100,31 @@ function groupByKey(
   return [...groups.values()];
 }
 
+// Both providers' structured-output modes require an object at the top
+// level (not a bare array), hence the "groups" wrapper — parseGroupIndices
+// reads that field.
+const SEMANTIC_GROUPS_SCHEMA: JsonOutputSchema = {
+  name: "semantic_groups",
+  schema: {
+    type: "object",
+    properties: {
+      groups: { type: "array", items: { type: "array", items: { type: "integer" } } },
+    },
+    required: ["groups"],
+    additionalProperties: false,
+  },
+};
+
 function parseGroupIndices(raw: string, count: number): number[][] {
-  const match = raw.match(/\[[\s\S]*\]/);
+  const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return [];
   try {
-    const parsed = JSON.parse(match[0]) as unknown;
-    if (!Array.isArray(parsed)) return [];
+    const parsed = JSON.parse(match[0]) as { groups?: unknown };
+    const groupsRaw = parsed.groups;
+    if (!Array.isArray(groupsRaw)) return [];
     const seen = new Set<number>();
     const groups: number[][] = [];
-    for (const g of parsed) {
+    for (const g of groupsRaw) {
       if (!Array.isArray(g)) continue;
       const idxs = g.filter(
         (i): i is number => typeof i === "number" && i >= 0 && i < count && !seen.has(i)
@@ -58,10 +138,10 @@ function parseGroupIndices(raw: string, count: number): number[][] {
   }
 }
 
-// Distinct-normalized-text groups that share a numeric signature (so they're
-// only "maybe the same" candidates, never ones that already differ in a
-// number) get asked of the AI as a batch: which of these denote the same
-// real-world value? On any failure to parse a confident answer, candidates
+// Candidates reaching here already share a numeric signature AND at least
+// one non-stopword word (clusterByWordOverlap) — so they're genuinely "maybe
+// the same, differently worded" candidates, not just two values that happen
+// to share a digit. On any failure to parse a confident answer, candidates
 // stay split — merging is opt-in, not the safe default.
 async function resolveSemanticEquivalence(groups: CandidateGroup[]): Promise<CandidateGroup[]> {
   if (groups.length <= 1) return groups;
@@ -70,11 +150,11 @@ async function resolveSemanticEquivalence(groups: CandidateGroup[]): Promise<Can
 
 ${groups.map((g, i) => `${i}: "${g.value}"`).join("\n")}
 
-Group the indices that refer to the SAME real-world value (e.g. differing only in abbreviation, word order, or casing — such as "St" vs "Street"). Do NOT merge values whose meaning differs. Return ONLY a JSON array of arrays of indices, one array per distinct real-world value, e.g. [[0,2],[1]]. Every index 0..${groups.length - 1} must appear exactly once.`;
+Group the indices that refer to the SAME real-world value (e.g. differing only in abbreviation, word order, or casing — such as "St" vs "Street"). Two values can share a number and still be different real-world values — e.g. the same house number on a different street, or the same postcode with a different street, suburb, or unit. Only merge when the difference is purely in how the same value is written (abbreviation, word order, casing, or formatting); never merge based on a shared number alone, and do NOT merge values whose meaning differs. Return ONLY a JSON object of this shape: { "groups": [[0,2],[1]] } — an array of arrays of indices, one inner array per distinct real-world value. Every index 0..${groups.length - 1} must appear exactly once.`;
 
   let raw: string;
   try {
-    raw = await runTextCompletion(prompt, "semantic candidate comparison");
+    raw = await runTextCompletion(prompt, "semantic candidate comparison", SEMANTIC_GROUPS_SCHEMA);
   } catch (err) {
     console.error("[compare-candidates] semantic equivalence call failed:", err);
     return groups;
@@ -120,8 +200,14 @@ export async function groupCandidates(
   for (const groups of byNumericSignature.values()) {
     if (groups.length === 1) {
       finalGroups.push(groups[0]);
-    } else {
-      finalGroups.push(...(await resolveSemanticEquivalence(groups)));
+      continue;
+    }
+    for (const cluster of clusterByWordOverlap(groups)) {
+      if (cluster.length === 1) {
+        finalGroups.push(cluster[0]);
+      } else {
+        finalGroups.push(...(await resolveSemanticEquivalence(cluster)));
+      }
     }
   }
   return finalGroups;

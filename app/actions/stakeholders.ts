@@ -22,6 +22,7 @@ import { sendStakeholderBufferUpdate } from "@/lib/stakeholders/buffer-update";
 import { attachEvidence } from "@/app/actions/evidence";
 import { parseEmlBody } from "@/lib/email/parseEml";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
+import { runTextCompletion } from "@/lib/documents/extractor";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1145,39 +1146,11 @@ ${body}
 
 Extract only the substantive message the sender wrote — their actual reply — with quoted previous messages, signatures, and disclaimers removed. Return the extracted text only, as plain text, with no explanation, preamble, or formatting.`;
 
-  if (process.env.ANTHROPIC_API_KEY) {
-    try {
-      const Anthropic = (await import("@anthropic-ai/sdk")).default;
-      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-      const response = await client.messages.create({
-        model: "claude-haiku-4-5",
-        max_tokens: 1024,
-        messages: [{ role: "user", content: prompt }],
-      });
-      const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
-      if (text) return { text };
-    } catch (err) {
-      console.error("[extractStakeholderCommentsFromEmail] Anthropic failed, falling back to OpenAI:", err);
-    }
-  }
-
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      const OpenAI = (await import("openai")).default;
-      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const response = await client.chat.completions.create({
-        model: "gpt-4o",
-        max_tokens: 1024,
-        temperature: 0,
-        messages: [{ role: "user", content: prompt }],
-      });
-      const text = response.choices[0]?.message?.content?.trim() ?? "";
-      if (text) return { text };
-    } catch (err) {
-      console.error("[extractStakeholderCommentsFromEmail] OpenAI also failed:", err);
-    }
-  }
-
-  return { text: body };
+  // Reuses the extraction pipeline's shared provider-fallback helper instead
+  // of a bespoke dual-provider block — same Haiku-primary/gpt-4o-fallback
+  // order, and gets classifyProviderError/reportProviderFailure alerting for
+  // free (previously missing here, unlike every other AI call site).
+  const text = (await runTextCompletion(prompt, "stakeholder email comment extraction")).trim();
+  return { text: text || body };
 }
 

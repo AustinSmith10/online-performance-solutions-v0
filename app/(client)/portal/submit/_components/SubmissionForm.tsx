@@ -16,7 +16,7 @@ import {
   type DraftPipelineStatus,
 } from "@/app/actions/submission-pipeline";
 import { createClient } from "@/lib/supabase/client";
-import type { Confidence } from "@/lib/documents/extractor";
+import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
 import type { MetricsPickRow } from "@/lib/documents/metrics-autofill";
 import { ClientWorkspace } from "../../_components/ClientWorkspace";
 import { ClientHeaderCard } from "../../_components/ClientHeaderCard";
@@ -48,68 +48,55 @@ interface Props {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// ── Confidence badge (step 2) ─────────────────────────────────────────────────
+// ── Field status badges (step 2) ──────────────────────────────────────────────
 
-function ConfidenceBadge({
+function DiscrepancyBadge({
   fieldKey,
-  confidence,
   modified,
   hasCandidates,
-  isExtractField,
 }: {
   fieldKey: string;
-  confidence: Confidence;
   modified: Set<string>;
   hasCandidates?: boolean;
-  isExtractField?: boolean;
 }) {
   if (modified.has(fieldKey)) return null;
-  if (hasCandidates) {
-    return (
-      <span className="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
-        Multiple values found — please check
-      </span>
-    );
-  }
-  if (confidence === "high") {
-    // Extract-type fields are the only ones actually subject to AI
-    // confidence/candidate checking — org/client fields are user-entered
-    // or config-driven and were never "checked", so don't claim they were.
-    if (!isExtractField) return null;
-    // Icon-only, no text, muted gray rather than green/"Verified" — a loud
-    // affirmative badge risks reading as "this is correct" when it only
-    // means the pipeline didn't flag anything. The tooltip carries the
-    // caveat for anyone who wants it; the default view stays quiet.
-    return (
-      <span
-        className="inline-flex shrink-0 items-center text-zinc-400"
-        title="AI found no issues with this field — still worth a quick check"
-      >
-        <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-          <path fillRule="evenodd" d="M16.704 5.29a1 1 0 010 1.414l-7.5 7.5a1 1 0 01-1.414 0l-3.5-3.5a1 1 0 111.414-1.414L8.5 12.086l6.79-6.79a1 1 0 011.414 0z" clipRule="evenodd" />
-        </svg>
-        <span className="sr-only">AI found no issues with this field</span>
-      </span>
-    );
-  }
+  if (!hasCandidates) return null;
   return (
-    <span
-      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-        confidence === "medium"
-          ? "bg-yellow-100 text-yellow-700"
-          : "bg-red-100 text-red-700"
-      }`}
-    >
-      {confidence === "low" ? "Not found — please check" : "Low confidence"}
+    <span className="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+      Multiple values found — please check
     </span>
   );
 }
 
-function fieldClass(modified: Set<string>, fieldKey: string, confidence: Confidence, hasCandidates?: boolean) {
+// Evidence-based "nothing found" signal — purely derived from the field being
+// objectively empty, never from AI self-graded confidence (that concept was
+// removed entirely). Mutually exclusive with DiscrepancyBadge's "documents
+// disagree" state.
+function NotFoundBadge({
+  fieldKey,
+  modified,
+  isEmpty,
+  hasCandidates,
+}: {
+  fieldKey: string;
+  modified: Set<string>;
+  isEmpty: boolean;
+  hasCandidates?: boolean;
+}) {
+  if (modified.has(fieldKey)) return null;
+  if (hasCandidates) return null;
+  if (!isEmpty) return null;
+  return (
+    <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+      Not found — please fill in
+    </span>
+  );
+}
+
+function fieldClass(modified: Set<string>, fieldKey: string, hasCandidates?: boolean, isNotFound?: boolean) {
   if (modified.has(fieldKey)) return "border-zinc-200 bg-white focus:ring-zinc-400";
   if (hasCandidates) return "border-orange-300 bg-orange-50 focus:ring-orange-400";
-  if (confidence === "low") return "border-red-300 bg-red-50 focus:ring-red-400";
-  if (confidence === "medium") return "border-yellow-300 bg-yellow-50 focus:ring-yellow-400";
+  if (isNotFound) return "border-blue-200 bg-blue-50 focus:ring-blue-400";
   return "border-zinc-200 bg-zinc-50 focus:ring-zinc-400";
 }
 
@@ -120,20 +107,25 @@ function TokenInput({
   modified,
   onMark,
   disabled,
-  isExtractField,
   onValueChange,
+  isExtractField,
 }: {
   field: TokenField;
   modified: Set<string>;
   onMark: (k: string) => void;
   disabled?: boolean;
-  isExtractField?: boolean;
   // Lets a parent re-derive dependent fields (e.g. a metrics-table autofill
   // lookup keyed on this token) as the user types, instead of only seeing
   // the value at submit time via the form's own name-based field.
   onValueChange?: (token: string, value: string) => void;
+  // True only for tokenGroups.extract fields. Org/client fields are never
+  // AI-extracted and must never show the "not found" marker.
+  isExtractField?: boolean;
 }) {
   const hasCandidates = (field.candidates?.length ?? 0) > 1;
+  // Evidence-based "nothing found" signal — purely derived from the field
+  // being objectively empty, never from AI self-graded confidence.
+  const isNotFound = Boolean(isExtractField) && field.required && !field.value.trim() && !hasCandidates;
   const [value, setValue] = useState(field.value);
 
   return (
@@ -143,13 +135,8 @@ function TokenInput({
           {field.label}
           {field.required && <span className="ml-0.5 text-red-500">*</span>}
         </span>
-        <ConfidenceBadge
-          fieldKey={field.token}
-          confidence={field.confidence}
-          modified={modified}
-          hasCandidates={hasCandidates}
-          isExtractField={isExtractField}
-        />
+        <DiscrepancyBadge fieldKey={field.token} modified={modified} hasCandidates={hasCandidates} />
+        <NotFoundBadge fieldKey={field.token} modified={modified} isEmpty={isNotFound} hasCandidates={hasCandidates} />
       </label>
       <input
         type="text"
@@ -162,7 +149,7 @@ function TokenInput({
           onMark(field.token);
           onValueChange?.(field.token, e.target.value);
         }}
-        className={`w-full rounded-md border px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${fieldClass(modified, field.token, field.confidence, hasCandidates)}`}
+        className={`w-full rounded-md border px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${fieldClass(modified, field.token, hasCandidates, isNotFound)}`}
       />
       {hasCandidates && (
         <div className="mt-2 space-y-1 rounded-md border border-orange-200 bg-orange-50/60 p-2">
@@ -189,7 +176,7 @@ function TokenInput({
               <span>
                 <span className="font-medium text-zinc-900">{c.value}</span>{" "}
                 <span className="text-zinc-400">
-                  ({c.confidence} confidence — {c.source_document})
+                  ({c.source_document})
                 </span>
               </span>
             </label>
@@ -259,6 +246,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
     rainfallPickRows,
     projectId,
     templateId,
+    documents,
   } = state;
 
   const [modified, setModified] = useState<Set<string>>(new Set());
@@ -310,6 +298,13 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
 
   const halcyonTokens = new Set(["EXTRACT_TRUSTEE", rainfallToken].filter(Boolean));
   const extractFieldsList = tokenGroups.extract.filter((t) => !halcyonTokens.has(t.token));
+
+  // Evidence-based count for the page-level banner below — same required +
+  // empty + no-candidates condition as TokenInput's isNotFound, computed once
+  // here so the banner and the per-field markers can never disagree.
+  const notFoundCount = extractFieldsList.filter(
+    (f) => f.required && !f.value.trim() && (f.candidates?.length ?? 0) <= 1 && !modified.has(f.token)
+  ).length;
 
   // Warn before unload while submitting
   useEffect(() => {
@@ -447,6 +442,19 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
           }
           overviewTab={
             <div className="space-y-3">
+              {notFoundCount > 0 && (
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                  <p className="font-medium">
+                    {notFoundCount === 1
+                      ? "We couldn't find 1 required detail in your documents."
+                      : `We couldn't find ${notFoundCount} required details in your documents.`}
+                  </p>
+                  <p className="mt-1 text-blue-700">
+                    Fields marked &quot;Not found&quot; below are empty — please fill them in yourself before
+                    submitting.
+                  </p>
+                </div>
+              )}
               {extractFieldsList.length > 0 && (
                 <div className="rounded-lg border border-zinc-200 bg-white p-6">
                   <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.extract}</h2>
@@ -459,8 +467,8 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                           modified={modified}
                           onMark={mark}
                           disabled={submitPending}
-                          isExtractField
                           onValueChange={handleExtractValueChange}
+                          isExtractField
                         />
                         {field.token === rainfallMatchToken && rainfallUnresolved && (
                           <p className="mt-1 text-xs text-red-600">
@@ -526,10 +534,26 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
             </div>
           }
           documentsTab={
-            <div className="rounded-lg border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">
-              Your uploaded documents have been received and are being processed — they&apos;ll be listed
-              here once your request is submitted.
-            </div>
+            documents.length > 0 ? (
+              <div className="space-y-2">
+                {documents.map((d) => (
+                  <div
+                    key={d.slug}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-zinc-900">{d.label}</p>
+                      <p className="truncate text-xs text-zinc-500">{d.name}</p>
+                    </div>
+                    <DocumentPreviewModal href={d.previewUrl} filename={d.name} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">
+                No documents uploaded yet.
+              </div>
+            )
           }
           reviewTab={
             <div className="rounded-lg border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">

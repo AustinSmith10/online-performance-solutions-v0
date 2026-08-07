@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
-import type { ExtractedField, Confidence, ExtractedCandidate, SingleDocExtraction } from "@/lib/documents/extractor";
+import type { ExtractedField, ExtractedCandidate, SingleDocExtraction } from "@/lib/documents/extractor";
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import { assembleAndPersistDraftFields } from "@/lib/documents/draft-assembly";
 import { resolveOrgId, loadFileRequirements, loadExtractTokens } from "@/lib/documents/submission-shared";
@@ -28,7 +28,6 @@ export interface TokenField {
   token: string;
   label: string;
   value: string;
-  confidence: Confidence;
   required: boolean;
   // Present only when 2+ distinct candidates were found across documents —
   // lets the review form offer a picker alongside free-text correction.
@@ -76,6 +75,10 @@ export type ExtractState =
       fileVerificationWarnings: {
         fileId: string; slug: string; name: string; previewUrl: string | null; reasons: string[];
       }[];
+      // Every uploaded file, previewable regardless of verification status —
+      // lets the stakeholder refer back to what they actually uploaded while
+      // filling in fields the AI couldn't find.
+      documents: { slug: string; label: string; name: string; previewUrl: string | null }[];
     };
 
 // ─── Step 1: request signed upload URLs ─────────────────────────────────────
@@ -314,24 +317,32 @@ export async function finalizeSubmission(
 
   const { extraction, draftFields, flagPlans } = assembly;
 
-  const fileVerificationWarnings: {
-    fileId: string; slug: string; name: string; previewUrl: string | null; reasons: string[];
-  }[] = await Promise.all(
-    files
-      .filter((f) => f.verification_mismatch_reasons && !f.verification_confirmed_at)
-      .map(async (f) => {
-        const { data: signed } = await supabase.storage
-          .from("submissions")
-          .createSignedUrl(f.storage_path as string, 3600);
-        return {
-          fileId: f.id as string,
-          slug: f.file_type as string,
-          name: f.original_filename as string,
-          previewUrl: signed?.signedUrl ?? null,
-          reasons: f.verification_mismatch_reasons as string[],
-        };
-      })
+  // Signs every uploaded file once — feeds both fileVerificationWarnings
+  // (mismatched files only) and documents (the full list, so the
+  // stakeholder can preview anything they uploaded regardless of
+  // verification outcome).
+  const signedFiles = await Promise.all(
+    files.map(async (f) => {
+      const { data: signed } = await supabase.storage
+        .from("submissions")
+        .createSignedUrl(f.storage_path as string, 3600);
+      return {
+        fileId: f.id as string,
+        slug: f.file_type as string,
+        label: reqBySlug.get(f.file_type as string)?.name ?? (f.file_type as string),
+        name: f.original_filename as string,
+        previewUrl: signed?.signedUrl ?? null,
+        reasons: (f.verification_mismatch_reasons as string[] | null) ?? null,
+        needsConfirmation: Boolean(f.verification_mismatch_reasons) && !f.verification_confirmed_at,
+      };
+    })
   );
+
+  const fileVerificationWarnings = signedFiles
+    .filter((f) => f.needsConfirmation)
+    .map(({ fileId, slug, name, previewUrl, reasons }) => ({ fileId, slug, name, previewUrl, reasons: reasons ?? [] }));
+
+  const documents = signedFiles.map(({ slug, label, name, previewUrl }) => ({ slug, label, name, previewUrl }));
 
   await auditLog("project.draft_created", actor.id, actor.email as string, {
     orgId,
@@ -356,7 +367,6 @@ export async function finalizeSubmission(
         token: m.placeholder_token,
         label: m.display_label ?? m.placeholder_token,
         value: draftFields[m.placeholder_token] ?? extraction.fields[m.placeholder_token]?.value ?? "",
-        confidence: extraction.fields[m.placeholder_token]?.confidence ?? ("low" as Confidence),
         required: m.is_required ?? false,
         candidates: hasMultipleCandidates ? plan!.candidateRecords : undefined,
       };
@@ -365,14 +375,12 @@ export async function finalizeSubmission(
       token: m.placeholder_token,
       label: m.display_label ?? m.placeholder_token,
       value: orgConfig[m.placeholder_token] ?? "",
-      confidence: "high" as Confidence,
       required: false,
     })),
     client: clientMappings.map((m) => ({
       token: m.placeholder_token,
       label: m.display_label ?? m.placeholder_token,
       value: "",
-      confidence: "high" as Confidence,
       required: m.is_required ?? false,
     })),
   };
@@ -394,6 +402,7 @@ export async function finalizeSubmission(
     projectId,
     templateId,
     fileVerificationWarnings,
+    documents,
   };
 }
 

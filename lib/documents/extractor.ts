@@ -76,6 +76,20 @@ function pickBest<T extends ExtractedField>(candidates: T[]): T | null {
 
 const EMPTY_FIELD: ExtractedField = { value: "", confidence: "low" };
 
+// Bounds worst-case prompt size on unusually large PDFs — same cap already
+// used by the file-requirement judge (file-requirement-verification.ts).
+// Applied to every place raw document text enters a prompt in this file.
+const DOC_TEXT_CHAR_CAP = 8000;
+
+// A JSON Schema (draft-2020-12-ish subset both providers' structured-output
+// modes accept) plus the name OpenAI's response_format requires. Passed
+// through runTextCompletion to force well-formed output at the API layer
+// instead of relying solely on regex-scraping free text.
+export interface JsonOutputSchema {
+  name: string;
+  schema: Record<string, unknown>;
+}
+
 function buildPrompt(
   documents: { label: string; text: string }[],
   tokens: ExtractToken[]
@@ -83,7 +97,7 @@ function buildPrompt(
   const docSections =
     documents.length > 0
       ? documents
-          .map((d) => `--- ${d.label.toUpperCase()} ---\n${d.text}`)
+          .map((d) => `--- ${d.label.toUpperCase()} ---\n${d.text.slice(0, DOC_TEXT_CHAR_CAP)}`)
           .join("\n\n")
       : "(no documents provided)";
 
@@ -116,7 +130,10 @@ ${tokenLines}
 Each field below "po_number" is an array. Almost always return a single-element array. Only
 return more than one element if this document itself clearly contains multiple genuinely distinct
 values for that field — e.g. a subdivision plan listing several site addresses, or several
-separate drawing numbers for the same field. Never split one value into multiple pieces, and
+separate drawing numbers for the same field (a Construction Issue Plan or PO covering several
+lots/projects is a common case). Never merge multiple distinct values into a single string (e.g.
+never return "12 Smith St and 45 Jones Rd" or "12 Smith St / 45 Jones Rd" as one value) — each
+distinct value must be its own array element. Never split one value into multiple pieces, and
 never fabricate extra entries when you are unsure; when in doubt, return one element.
 
 Field extraction rules:
@@ -161,146 +178,6 @@ function asExtractedFieldList(v: unknown): ExtractedField[] {
 export interface SingleDocResult {
   po_number: ExtractedField;
   fields: Record<string, ExtractedField[]>;
-}
-
-// ─── Verification pass (extraction-verification-layer-decisions) ───────────
-//
-// The extractor's own confidence is self-graded and overstates it — real
-// mistakes ("House Type" = "SR" / "SPECIAL GABLE" / "MORETONG5") came back
-// "high" and sailed through unflagged, because buildFieldFlagPlan only flags
-// on cross-document disagreement or an already-low self-grade. This pass is
-// an independent second opinion: for every field a single document's own
-// extraction call graded "high", judge it again from scratch — using that
-// same field's existing extraction hint (no new admin config) plus the
-// document's own text (so it catches a well-formed-but-wrong-cell value, not
-// just a malformed one) — and downgrade the confidence if the second opinion
-// disagrees. "Most-skeptical-voice-wins": the verifier can only ever lower a
-// grade, never raise one, and only high-confidence fields are sent (medium/
-// low already flag via the existing path, so there's nothing to gain by
-// checking them). Runs once per document as a single batched call covering
-// every high-confidence field that document contributed, not once per field.
-
-export interface VerificationEntry {
-  token: string;
-  idx: number;
-  hint: string;
-  value: string;
-}
-
-export interface VerificationResult {
-  confidence: Confidence;
-  reason: string;
-}
-
-// Pure — no I/O. Exported for unit testing. Only fields graded "high" by this
-// document's own extraction pass are worth a second opinion — anything
-// already medium/low already flags via buildFieldFlagPlan without our help.
-export function collectHighConfidenceEntries(
-  fields: Record<string, ExtractedField[]>,
-  tokens: ExtractToken[]
-): VerificationEntry[] {
-  const hintByToken = new Map(tokens.map((t) => [t.token, t.hint]));
-  const entries: VerificationEntry[] = [];
-  for (const [token, list] of Object.entries(fields)) {
-    list.forEach((f, idx) => {
-      if (f.confidence === "high" && f.value.trim()) {
-        entries.push({ token, idx, hint: hintByToken.get(token) ?? "", value: f.value });
-      }
-    });
-  }
-  return entries;
-}
-
-function buildVerificationPrompt(docText: string, entries: VerificationEntry[]): string {
-  const entryLines = entries
-    .map(
-      (e, i) =>
-        `${i}. Extraction rule: ${e.hint || "(no specific rule provided)"}\n   Extracted value: "${e.value}"`
-    )
-    .join("\n");
-
-  return `You are independently double-checking values a first-pass extractor already pulled from a document, for an Australian building compliance system. The first pass may be confidently wrong — judge each value fresh against the document text and its own extraction rule below; do not assume the first pass was correct just because it was confident.
-
-Document text:
-${docText}
-
-Entries to judge:
-${entryLines}
-
-For each entry, decide whether the extracted value plausibly and correctly satisfies its extraction rule, as it actually appears in the document text above. Return ONLY a JSON array with exactly one object per entry index, in this shape:
-[{ "index": 0, "confidence": "high|medium|low", "reason": "one short sentence if not high, empty string if high" }]
-
-Grade "high" only if you are independently confident the value is correct. Use "medium" if it's plausible but you're unsure, or "low" if it looks wrong, malformed, fused together with another value, or unsupported by the document text.`;
-}
-
-// Pure — no I/O. Exported for unit testing.
-export function parseVerificationResponse(raw: string, entryCount: number): Map<number, VerificationResult> {
-  const results = new Map<number, VerificationResult>();
-  const match = raw.match(/\[[\s\S]*\]/);
-  if (!match) return results;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(match[0]);
-  } catch {
-    return results;
-  }
-  if (!Array.isArray(parsed)) return results;
-
-  for (const item of parsed) {
-    if (!item || typeof item !== "object") continue;
-    const o = item as Record<string, unknown>;
-    const index = o.index;
-    if (typeof index !== "number" || index < 0 || index >= entryCount) continue;
-    if (!["high", "medium", "low"].includes(o.confidence as string)) continue;
-    results.set(index, {
-      confidence: o.confidence as Confidence,
-      reason: typeof o.reason === "string" ? o.reason : "",
-    });
-  }
-  return results;
-}
-
-// Mutates `fields` in place, downgrading (never raising) confidence —
-// "most-skeptical-voice-wins" (#8b: overwrite the grade in place, keep the
-// reason string as the trace, so pickBest/buildFieldFlagPlan/reshuffle all
-// work unmodified). Pure aside from the mutation — no I/O. Exported for unit
-// testing.
-export function applyVerificationResults(
-  fields: Record<string, ExtractedField[]>,
-  entries: VerificationEntry[],
-  results: Map<number, VerificationResult>
-): void {
-  entries.forEach((entry, i) => {
-    const result = results.get(i);
-    if (!result || result.confidence === "high") return;
-    const field = fields[entry.token]?.[entry.idx];
-    if (!field) return;
-    field.confidence = result.confidence;
-    field.reason = result.reason || undefined;
-  });
-}
-
-// Orchestrates one document's verification pass. Fails open (#6): a broken
-// checker must never make things worse than before this feature existed —
-// on any error, leave every field's self-graded confidence untouched and log
-// loudly, rather than flagging every high-confidence field (which would
-// bury reviewers in alarm-fatigue noise on every checker outage).
-async function verifyDocumentFields(
-  docText: string,
-  fields: Record<string, ExtractedField[]>,
-  tokens: ExtractToken[]
-): Promise<void> {
-  const entries = collectHighConfidenceEntries(fields, tokens);
-  if (entries.length === 0) return;
-
-  try {
-    const raw = await runTextCompletion(buildVerificationPrompt(docText, entries), "extraction verification pass");
-    const results = parseVerificationResponse(raw, entries.length);
-    applyVerificationResults(fields, entries, results);
-  } catch (err) {
-    console.error("[extractor] verification pass failed, leaving self-graded confidence:", err);
-  }
 }
 
 // Exported for unit testing (#64) — pure parsing, no I/O.
@@ -378,16 +255,46 @@ export async function extractPdfTextAndPageCount(
   return { text: (data.text as string).trim(), pageCount: (data as unknown as { numpages: number }).numpages };
 }
 
+// Dynamic per call — the token set varies by template. A single shared
+// per-field shape (value + confidence, both required) nested under po_number
+// and every token name, mirroring buildPrompt's expected structure exactly.
+function buildExtractionSchema(tokenNames: string[]): JsonOutputSchema {
+  const fieldItem = {
+    type: "object",
+    properties: {
+      value: { type: "string" },
+      confidence: { type: "string", enum: ["high", "medium", "low"] },
+    },
+    required: ["value", "confidence"],
+    additionalProperties: false,
+  };
+  const properties: Record<string, unknown> = { po_number: fieldItem };
+  for (const token of tokenNames) {
+    properties[token] = { type: "array", items: fieldItem };
+  }
+  return {
+    name: "document_extraction",
+    schema: {
+      type: "object",
+      properties,
+      required: ["po_number", ...tokenNames],
+      additionalProperties: false,
+    },
+  };
+}
+
 async function extractWithOpenAI(
   prompt: string,
   tokenNames: string[]
 ): Promise<SingleDocResult> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const schema = buildExtractionSchema(tokenNames);
   const response = await client.chat.completions.create({
     model: "gpt-4o",
     max_tokens: 1024,
     temperature: 0,
     messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_schema", json_schema: { name: schema.name, schema: schema.schema, strict: true } },
   });
   return parseJson(response.choices[0]?.message?.content ?? "", tokenNames);
 }
@@ -397,15 +304,31 @@ async function extractWithAnthropic(
   tokenNames: string[]
 ): Promise<SingleDocResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const schema = buildExtractionSchema(tokenNames);
   const response = await client.messages.create({
     model: "claude-haiku-4-5",
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
+    output_config: { format: { type: "json_schema", schema: schema.schema } },
   });
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
   return parseJson(text, tokenNames);
 }
 
+// A parsed-but-useless result (every field, including po_number, came back
+// "low") is treated the same as an outright failure for escalation purposes
+// — Haiku answered, but with nothing a reviewer could trust.
+function isAllLowConfidence(result: SingleDocResult): boolean {
+  const allFields = [result.po_number, ...Object.values(result.fields).flat()];
+  return allFields.every((f) => f.confidence === "low");
+}
+
+// Haiku is primary (cost lever — it's already trusted as the sole fallback
+// when OpenAI is down, so it's the right default here too); gpt-4o is only
+// invoked as an escalation when Haiku's own result doesn't clear the bar —
+// it threw, or it parsed but every field came back low confidence. If the
+// escalation itself fails, prefer a weak-but-present primary result over the
+// empty placeholder (still strictly better than before this change).
 async function runSingleExtraction(
   prompt: string,
   tokenNames: string[]
@@ -415,27 +338,31 @@ async function runSingleExtraction(
     fields: Object.fromEntries(tokenNames.map((t) => [t, [{ ...EMPTY_FIELD }]])),
   };
 
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      return await extractWithOpenAI(prompt, tokenNames);
-    } catch (err) {
-      console.error("[extractor] OpenAI failed, falling back to Anthropic:", err);
-      const status = classifyProviderError(err);
-      if (status) void reportProviderFailure({ provider: "openai", status, context: "document extraction", error: err });
-    }
-  }
+  let primaryResult: SingleDocResult | null = null;
 
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      return await extractWithAnthropic(prompt, tokenNames);
+      primaryResult = await extractWithAnthropic(prompt, tokenNames);
+      if (!isAllLowConfidence(primaryResult)) return primaryResult;
+      console.warn("[extractor] Haiku extraction was all-low-confidence, escalating to a stronger model");
     } catch (err) {
-      console.error("[extractor] Anthropic also failed:", err);
+      console.error("[extractor] Anthropic failed, escalating to OpenAI:", err);
       const status = classifyProviderError(err);
       if (status) void reportProviderFailure({ provider: "anthropic", status, context: "document extraction", error: err });
     }
   }
 
-  return empty;
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      return await extractWithOpenAI(prompt, tokenNames);
+    } catch (err) {
+      console.error("[extractor] OpenAI escalation failed:", err);
+      const status = classifyProviderError(err);
+      if (status) void reportProviderFailure({ provider: "openai", status, context: "document extraction", error: err });
+    }
+  }
+
+  return primaryResult ?? empty;
 }
 
 // One document's extraction call, standalone — callable independently the
@@ -454,7 +381,6 @@ export async function extractSingleDocument(
   const text = await extractPdfText(doc.buffer);
   const prompt = buildPrompt([{ label: doc.label, text }], extractTokens);
   const result = await runSingleExtraction(prompt, tokenNames);
-  await verifyDocumentFields(text, result.fields, extractTokens);
   return { label: doc.label, result };
 }
 
@@ -521,12 +447,46 @@ export async function extractDocumentFields(
   return mergeExtractionResults(perDocResults, extractTokens);
 }
 
-// Shared text-completion helper (same provider fallback as extraction) for
-// non-extraction AI calls that live alongside this pipeline — e.g. semantic
-// candidate-equivalence checks in lib/documents/compare-candidates.ts.
-// `context` labels the calling feature (e.g. "verification pass", "file
-// requirement AI judge") for anything reported via reportProviderFailure.
-export async function runTextCompletion(prompt: string, context = "AI text completion"): Promise<string> {
+// Shared text-completion helper for non-extraction AI calls that live
+// alongside this pipeline — the file-requirement AI judge
+// (lib/documents/file-requirement-verification.ts), semantic
+// candidate-equivalence (lib/documents/compare-candidates.ts), and
+// stakeholder email comment extraction (app/actions/stakeholders.ts).
+// `context` labels the calling feature for anything reported via
+// reportProviderFailure. `outputSchema`, when supplied, forces well-formed
+// JSON at the API layer for callers that need structured output; omit it for
+// plain-text tasks (e.g. email cleanup).
+//
+// Haiku is primary — these are all short-output classification/extraction
+// judgments, not tasks that need frontier-tier reasoning, and Haiku is
+// already trusted as the sole fallback when OpenAI is unavailable. gpt-4o is
+// the fallback on provider failure, not a routine escalation path (contrast
+// with runSingleExtraction's confidence-gated escalation above, which is
+// deliberately more cautious because extraction quality is reviewer-facing).
+export async function runTextCompletion(
+  prompt: string,
+  context = "AI text completion",
+  outputSchema?: JsonOutputSchema
+): Promise<string> {
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const response = await client.messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 512,
+        messages: [{ role: "user", content: prompt }],
+        ...(outputSchema
+          ? { output_config: { format: { type: "json_schema" as const, schema: outputSchema.schema } } }
+          : {}),
+      });
+      return response.content[0]?.type === "text" ? response.content[0].text : "";
+    } catch (err) {
+      console.error("[extractor] runTextCompletion Anthropic failed, falling back to OpenAI:", err);
+      const status = classifyProviderError(err);
+      if (status) void reportProviderFailure({ provider: "anthropic", status, context, error: err });
+    }
+  }
+
   if (process.env.OPENAI_API_KEY) {
     try {
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -535,28 +495,20 @@ export async function runTextCompletion(prompt: string, context = "AI text compl
         max_tokens: 512,
         temperature: 0,
         messages: [{ role: "user", content: prompt }],
+        ...(outputSchema
+          ? {
+              response_format: {
+                type: "json_schema" as const,
+                json_schema: { name: outputSchema.name, schema: outputSchema.schema, strict: true },
+              },
+            }
+          : {}),
       });
       return response.choices[0]?.message?.content ?? "";
     } catch (err) {
-      console.error("[extractor] runTextCompletion OpenAI failed, falling back to Anthropic:", err);
+      console.error("[extractor] runTextCompletion OpenAI also failed:", err);
       const status = classifyProviderError(err);
       if (status) void reportProviderFailure({ provider: "openai", status, context, error: err });
-    }
-  }
-
-  if (process.env.ANTHROPIC_API_KEY) {
-    try {
-      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-      const response = await client.messages.create({
-        model: "claude-haiku-4-5",
-        max_tokens: 512,
-        messages: [{ role: "user", content: prompt }],
-      });
-      return response.content[0]?.type === "text" ? response.content[0].text : "";
-    } catch (err) {
-      console.error("[extractor] runTextCompletion Anthropic also failed:", err);
-      const status = classifyProviderError(err);
-      if (status) void reportProviderFailure({ provider: "anthropic", status, context, error: err });
     }
   }
 
