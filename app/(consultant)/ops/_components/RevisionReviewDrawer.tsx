@@ -34,7 +34,7 @@ export interface ReviewRow {
 }
 
 export function projectLabel(p: Pick<RevisionProject, "project_number" | "extracted_fields" | "po_number" | "id">) {
-  const addr = (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ?? null;
+  const addr = (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined)?.trim() || null;
   if (p.project_number && addr) return `${p.project_number} — ${addr}`;
   return addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
 }

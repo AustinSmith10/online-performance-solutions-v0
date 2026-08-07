@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStakeholderReviewedProjectIds, stakeholderAccessFilter } from "@/lib/portal/access";
@@ -106,6 +106,15 @@ export default async function ClientProjectDetailPage({
 
   const project = data as unknown as ProjectDetail;
   const isDeleted = !!project.deleted_at;
+
+  // Still-incomplete drafts have no meaningful "read-only" view — send the
+  // stakeholder straight into the editable resume form instead of this
+  // detail page's flag-review UI, which is built for reviewing an already
+  // -submitted brief, not for the stakeholder's own first-pass data entry.
+  if (project.status === "draft" && !isDeleted) {
+    redirect(`/portal/submit/resume/${id}`);
+  }
+
   const isLocked = !!project.assigned_consultant_id;
   const pbdbVisible = PBDB_VISIBLE_STATUSES.has(project.status);
 

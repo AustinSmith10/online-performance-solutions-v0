@@ -458,7 +458,11 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
               {extractFieldsList.length > 0 && (
                 <div className="rounded-lg border border-zinc-200 bg-white p-6">
                   <h2 className="mb-1 text-sm font-semibold text-zinc-900">{sectionLabels.extract}</h2>
-                  {sectionLabels.extractDesc && <p className="mb-5 text-sm text-zinc-500">{sectionLabels.extractDesc}</p>}
+                  <p className="mb-5 text-sm text-zinc-500">
+                    {notFoundCount === 0
+                      ? sectionLabels.extractDesc
+                      : "We couldn't automatically extract these details — please fill them in below."}
+                  </p>
                   <div className="space-y-4">
                     {extractFieldsList.map((field) => (
                       <div key={field.token}>

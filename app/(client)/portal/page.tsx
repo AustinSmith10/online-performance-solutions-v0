@@ -65,10 +65,8 @@ type OrgRow = {
 function projectLabel(
   p: Pick<ProjectRow, "extracted_fields" | "po_number" | "id" | "created_at">
 ): string {
-  return (
-    (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ??
-    (p.po_number ? `PO ${p.po_number}` : `Draft — started ${formatAuDate(p.created_at)}`)
-  );
+  const address = (p.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined)?.trim();
+  return address || (p.po_number ? `PO ${p.po_number}` : `Draft — started ${formatAuDate(p.created_at)}`);
 }
 
 // Formatted server-side (not in the client row components) so hydration never re-runs
