@@ -1084,9 +1084,11 @@ export default async function ProjectDetailPage({
               <>
                 {submitterName}
                 {project.submitter?.company_role && (
-                  <span className="text-zinc-400"> · {project.submitter.company_role}</span>
+                  <span className="text-zinc-400"> ({project.submitter.company_role})</span>
                 )}
-                <span className="ml-2 text-xs text-zinc-400">{project.submitter?.email}</span>
+                {project.submitter?.email && (
+                  <span className="ml-2 text-xs text-zinc-400"> · {project.submitter.email}</span>
+                )}
               </>
             ) : (
               "—"
