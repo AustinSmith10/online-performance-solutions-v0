@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
 import { renderEmailShell, e, paragraph, strong, noticeBox } from "@/lib/email/templates/shell";
 
-export type AiProvider = "openai" | "anthropic";
+export type AiProvider = "anthropic";
 export type AiFailureStatus = "quota_exceeded" | "rate_limited";
 
 // Don't alert on every single failed call during a sustained outage — one
@@ -14,7 +14,6 @@ export type AiFailureStatus = "quota_exceeded" | "rate_limited";
 const ALERT_COOLDOWN_MS = 60 * 60 * 1000;
 
 const PROVIDER_LABEL: Record<AiProvider, string> = {
-  openai: "OpenAI",
   anthropic: "Anthropic",
 };
 

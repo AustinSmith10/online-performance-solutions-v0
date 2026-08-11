@@ -1,6 +1,5 @@
 import "server-only";
 import { createRequire } from "module";
-import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { classifyProviderError, reportProviderFailure } from "@/lib/ai/provider-failure";
 
@@ -283,22 +282,6 @@ function buildExtractionSchema(tokenNames: string[]): JsonOutputSchema {
   };
 }
 
-async function extractWithOpenAI(
-  prompt: string,
-  tokenNames: string[]
-): Promise<SingleDocResult> {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const schema = buildExtractionSchema(tokenNames);
-  const response = await client.chat.completions.create({
-    model: "gpt-4o",
-    max_tokens: 1024,
-    temperature: 0,
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_schema", json_schema: { name: schema.name, schema: schema.schema, strict: true } },
-  });
-  return parseJson(response.choices[0]?.message?.content ?? "", tokenNames);
-}
-
 async function extractWithAnthropic(
   prompt: string,
   tokenNames: string[]
@@ -306,7 +289,7 @@ async function extractWithAnthropic(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const schema = buildExtractionSchema(tokenNames);
   const response = await client.messages.create({
-    model: "claude-haiku-4-5",
+    model: "claude-sonnet-5",
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
     output_config: { format: { type: "json_schema", schema: schema.schema } },
@@ -315,20 +298,6 @@ async function extractWithAnthropic(
   return parseJson(text, tokenNames);
 }
 
-// A parsed-but-useless result (every field, including po_number, came back
-// "low") is treated the same as an outright failure for escalation purposes
-// — Haiku answered, but with nothing a reviewer could trust.
-function isAllLowConfidence(result: SingleDocResult): boolean {
-  const allFields = [result.po_number, ...Object.values(result.fields).flat()];
-  return allFields.every((f) => f.confidence === "low");
-}
-
-// Haiku is primary (cost lever — it's already trusted as the sole fallback
-// when OpenAI is down, so it's the right default here too); gpt-4o is only
-// invoked as an escalation when Haiku's own result doesn't clear the bar —
-// it threw, or it parsed but every field came back low confidence. If the
-// escalation itself fails, prefer a weak-but-present primary result over the
-// empty placeholder (still strictly better than before this change).
 async function runSingleExtraction(
   prompt: string,
   tokenNames: string[]
@@ -338,31 +307,17 @@ async function runSingleExtraction(
     fields: Object.fromEntries(tokenNames.map((t) => [t, [{ ...EMPTY_FIELD }]])),
   };
 
-  let primaryResult: SingleDocResult | null = null;
-
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      primaryResult = await extractWithAnthropic(prompt, tokenNames);
-      if (!isAllLowConfidence(primaryResult)) return primaryResult;
-      console.warn("[extractor] Haiku extraction was all-low-confidence, escalating to a stronger model");
+      return await extractWithAnthropic(prompt, tokenNames);
     } catch (err) {
-      console.error("[extractor] Anthropic failed, escalating to OpenAI:", err);
+      console.error("[extractor] Anthropic extraction failed:", err);
       const status = classifyProviderError(err);
       if (status) void reportProviderFailure({ provider: "anthropic", status, context: "document extraction", error: err });
     }
   }
 
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      return await extractWithOpenAI(prompt, tokenNames);
-    } catch (err) {
-      console.error("[extractor] OpenAI escalation failed:", err);
-      const status = classifyProviderError(err);
-      if (status) void reportProviderFailure({ provider: "openai", status, context: "document extraction", error: err });
-    }
-  }
-
-  return primaryResult ?? empty;
+  return empty;
 }
 
 // One document's extraction call, standalone — callable independently the
@@ -457,12 +412,8 @@ export async function extractDocumentFields(
 // JSON at the API layer for callers that need structured output; omit it for
 // plain-text tasks (e.g. email cleanup).
 //
-// Haiku is primary — these are all short-output classification/extraction
-// judgments, not tasks that need frontier-tier reasoning, and Haiku is
-// already trusted as the sole fallback when OpenAI is unavailable. gpt-4o is
-// the fallback on provider failure, not a routine escalation path (contrast
-// with runSingleExtraction's confidence-gated escalation above, which is
-// deliberately more cautious because extraction quality is reviewer-facing).
+// Haiku — these are all short-output classification/extraction judgments,
+// not tasks that need frontier-tier reasoning.
 export async function runTextCompletion(
   prompt: string,
   context = "AI text completion",
@@ -481,34 +432,9 @@ export async function runTextCompletion(
       });
       return response.content[0]?.type === "text" ? response.content[0].text : "";
     } catch (err) {
-      console.error("[extractor] runTextCompletion Anthropic failed, falling back to OpenAI:", err);
+      console.error("[extractor] runTextCompletion Anthropic failed:", err);
       const status = classifyProviderError(err);
       if (status) void reportProviderFailure({ provider: "anthropic", status, context, error: err });
-    }
-  }
-
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const response = await client.chat.completions.create({
-        model: "gpt-4o",
-        max_tokens: 512,
-        temperature: 0,
-        messages: [{ role: "user", content: prompt }],
-        ...(outputSchema
-          ? {
-              response_format: {
-                type: "json_schema" as const,
-                json_schema: { name: outputSchema.name, schema: outputSchema.schema, strict: true },
-              },
-            }
-          : {}),
-      });
-      return response.choices[0]?.message?.content ?? "";
-    } catch (err) {
-      console.error("[extractor] runTextCompletion OpenAI also failed:", err);
-      const status = classifyProviderError(err);
-      if (status) void reportProviderFailure({ provider: "openai", status, context, error: err });
     }
   }
 

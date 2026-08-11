@@ -1146,10 +1146,9 @@ ${body}
 
 Extract only the substantive message the sender wrote — their actual reply — with quoted previous messages, signatures, and disclaimers removed. Return the extracted text only, as plain text, with no explanation, preamble, or formatting.`;
 
-  // Reuses the extraction pipeline's shared provider-fallback helper instead
-  // of a bespoke dual-provider block — same Haiku-primary/gpt-4o-fallback
-  // order, and gets classifyProviderError/reportProviderFailure alerting for
-  // free (previously missing here, unlike every other AI call site).
+  // Reuses the extraction pipeline's shared completion helper instead of a
+  // bespoke call, and gets classifyProviderError/reportProviderFailure
+  // alerting for free (previously missing here, unlike every other AI call site).
   const text = (await runTextCompletion(prompt, "stakeholder email comment extraction")).trim();
   return { text: text || body };
 }

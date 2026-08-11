@@ -1,10 +1,26 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 vi.mock("server-only", () => ({}));
+
+const messagesCreate = vi.fn();
+vi.mock("@anthropic-ai/sdk", () => ({
+  default: class {
+    messages = { create: messagesCreate };
+  },
+}));
+
+// extractor.ts loads pdf-parse via createRequire (real Node require), which
+// bypasses vi.mock's module interception — so a real, valid PDF is used
+// instead of a mocked parser.
+const VALID_PDF = readFileSync(join(__dirname, "__fixtures__/valid-sample.pdf"));
 
 import {
   parseJson,
   mergeExtractionResults,
+  extractSingleDocument,
+  runTextCompletion,
   type SingleDocExtraction,
   type ExtractToken,
 } from "./extractor";
@@ -173,5 +189,41 @@ describe("mergeExtractionResults — pure cross-document merge (#115)", () => {
     expect(merged.candidates.EXTRACT_ADDRESS).toEqual([]);
     expect(merged.fields.EXTRACT_ADDRESS).toEqual({ value: "", confidence: "low" });
     expect(merged.poCandidates).toEqual([]);
+  });
+});
+
+describe("single-vendor (Anthropic-only) fail-open behavior", () => {
+  const ORIGINAL_ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+
+  beforeEach(() => {
+    messagesCreate.mockReset();
+    process.env.ANTHROPIC_API_KEY = "test-key";
+  });
+
+  afterAll(() => {
+    process.env.ANTHROPIC_API_KEY = ORIGINAL_ANTHROPIC_KEY;
+  });
+
+  const TOKENS: ExtractToken[] = [
+    { token: "EXTRACT_ADDRESS", label: "Address", hint: "full street address" },
+  ];
+
+  it("runSingleExtraction (via extractSingleDocument) returns the empty placeholder when Anthropic throws — no escalation", async () => {
+    messagesCreate.mockRejectedValue(new Error("Anthropic down"));
+
+    const { result } = await extractSingleDocument({ label: "doc.pdf", buffer: VALID_PDF }, TOKENS);
+
+    expect(result.po_number).toEqual({ value: "", confidence: "low" });
+    expect(result.fields.EXTRACT_ADDRESS).toEqual([{ value: "", confidence: "low" }]);
+    expect(messagesCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("runTextCompletion returns an empty string when Anthropic throws — no fallback provider", async () => {
+    messagesCreate.mockRejectedValue(new Error("Anthropic down"));
+
+    const text = await runTextCompletion("some prompt");
+
+    expect(text).toBe("");
+    expect(messagesCreate).toHaveBeenCalledTimes(1);
   });
 });
