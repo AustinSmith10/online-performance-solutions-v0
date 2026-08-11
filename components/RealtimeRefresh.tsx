@@ -39,14 +39,19 @@ export function RealtimeRefresh({ userId }: { userId: string }) {
       }, scheduleRefresh)
       .subscribe();
 
-    const pollInterval = setInterval(() => router.refresh(), NEEDS_ATTENTION_POLL_MS);
+    // Routed through the same debounce as the realtime handlers above rather
+    // than calling router.refresh() directly — otherwise this interval can
+    // fire while a realtime-triggered refresh is still in flight, and Next.js
+    // aborts the earlier RSC fetch (surfaces server-side as a Postgres 57014
+    // "canceling statement due to user request").
+    const pollInterval = setInterval(scheduleRefresh, NEEDS_ATTENTION_POLL_MS);
 
     return () => {
       if (timer.current) clearTimeout(timer.current);
       clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
-  }, [userId, scheduleRefresh, router]);
+  }, [userId, scheduleRefresh]);
 
   return null;
 }
