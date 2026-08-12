@@ -15,6 +15,7 @@ import {
   type AdminNavKey,
 } from "@/lib/settings/admin-nav-restrictions";
 import { setEmailsEnabled } from "@/lib/settings/emails-enabled";
+import { setJudgeDocumentTextCharCap } from "@/lib/settings/judge-document-text-cap";
 
 const DigestScheduleSchema = z.object({
   morning: z.string().refine(isValidTime, { error: "Enter a valid time (HH:MM)" }),
@@ -227,6 +228,49 @@ export async function updateAdminNavRestrictionsAction(
     actor.id as string,
     actor.email as string,
     { metadata: { restricted: validated.data.restricted } }
+  );
+
+  revalidatePath("/admin/settings");
+  return { saved: true };
+}
+
+const JudgeDocumentTextCapSchema = z.object({
+  cap: z.coerce.number({ error: "Enter a number" }).int({ error: "Enter a whole number" }).positive(),
+});
+
+export type UpdateJudgeDocumentTextCapState = {
+  saved?: boolean;
+  errors?: {
+    cap?: string[];
+    form?: string[];
+  };
+};
+
+export async function updateJudgeDocumentTextCapAction(
+  _prev: UpdateJudgeDocumentTextCapState,
+  formData: FormData
+): Promise<UpdateJudgeDocumentTextCapState> {
+  const actor = await requireRole("super_admin", "admin");
+
+  const validated = JudgeDocumentTextCapSchema.safeParse({
+    cap: formData.get("cap"),
+  });
+
+  if (!validated.success) {
+    const fieldErrors = validated.error.flatten().fieldErrors;
+    return { errors: { cap: fieldErrors.cap } };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await setJudgeDocumentTextCharCap(supabase, validated.data.cap, actor.id as string);
+
+  if (error) return { errors: { form: [error] } };
+
+  await auditLog(
+    "settings.judge_document_text_cap_updated",
+    actor.id as string,
+    actor.email as string,
+    { metadata: { cap: validated.data.cap } }
   );
 
   revalidatePath("/admin/settings");

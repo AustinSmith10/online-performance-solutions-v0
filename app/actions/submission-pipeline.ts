@@ -19,6 +19,7 @@ import { resolveOrgId, loadFileRequirements, loadExtractTokens, makeSampleTextLo
 import type { UploadManifestItem } from "@/app/actions/submission";
 import { verifyUploadAgainstRequirement } from "@/lib/documents/file-requirement-verification";
 import { extractSingleDocument, type SingleDocExtraction } from "@/lib/documents/extractor";
+import { getJudgeDocumentTextCharCap } from "@/lib/settings/judge-document-text-cap";
 
 type ExtractionStatus = "not_applicable" | "pending" | "running" | "completed" | "failed";
 
@@ -154,6 +155,7 @@ export async function processUploadedFile(
   try {
     const loadSampleText = makeSampleTextLoader(supabase, fileReqs);
     const sampleText = await loadSampleText(requirement.id);
+    const docTextCap = await getJudgeDocumentTextCharCap(supabase);
     reasons = await verifyUploadAgainstRequirement(
       {
         name: requirement.name,
@@ -165,7 +167,8 @@ export async function processUploadedFile(
       },
       buffer,
       isPdf,
-      sampleText
+      sampleText,
+      docTextCap
     );
   } catch (err) {
     console.error(`[submission-pipeline] verification failed for "${name}", failing open:`, err);

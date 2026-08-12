@@ -75,10 +75,14 @@ function pickBest<T extends ExtractedField>(candidates: T[]): T | null {
 
 const EMPTY_FIELD: ExtractedField = { value: "", confidence: "low" };
 
-// Bounds worst-case prompt size on unusually large PDFs — same cap already
-// used by the file-requirement judge (file-requirement-verification.ts).
-// Applied to every place raw document text enters a prompt in this file.
-const DOC_TEXT_CHAR_CAP = 8000;
+// Bounds worst-case prompt size on unusually large PDFs. Applied to every
+// place raw document text enters a prompt in this file. Sized well above the
+// largest real documents seen in practice (~91,000 chars) with headroom to
+// grow, while still guarding against a pathological huge PDF — Sonnet 5's 1M
+// token context window has no trouble with this. Independent of the judge's
+// own document-text cap (file-requirement-verification.ts), which is admin-
+// configurable rather than a fixed constant.
+const DOC_TEXT_CHAR_CAP = 150_000;
 
 // A JSON Schema (draft-2020-12-ish subset both providers' structured-output
 // modes accept) plus the name OpenAI's response_format requires. Passed

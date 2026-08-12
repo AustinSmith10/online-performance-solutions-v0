@@ -1,5 +1,6 @@
 import "server-only";
 import { extractPdfTextAndPageCount, runTextCompletion, type JsonOutputSchema } from "@/lib/documents/extractor";
+import { DEFAULT_JUDGE_DOCUMENT_TEXT_CHAR_CAP } from "@/lib/settings/judge-document-text-cap";
 
 const JUDGE_SCHEMA: JsonOutputSchema = {
   name: "judge_result",
@@ -77,10 +78,14 @@ export function runDeterministicCheck(
  * alongside the existing hint text, not a replacement for it — the prompt
  * must otherwise match #113's original shape byte-for-byte so an
  * unconfigured sample leaves the no-sample behavior unchanged.
+ *
+ * `docTextCap` is admin-configurable (lib/settings/judge-document-text-cap.ts)
+ * rather than a fixed constant — it directly trades off judge-call cost
+ * against how much of a long document the judge actually sees.
  */
-function buildJudgePrompt(hint: string, docText: string, sampleText?: string | null): string {
+function buildJudgePrompt(hint: string, docText: string, sampleText: string | null | undefined, docTextCap: number): string {
   const sampleSection = sampleText
-    ? `\n\nHere is the text of a reference sample document that is a known-good example of what's expected:\n${sampleText.slice(0, 8000)}\n`
+    ? `\n\nHere is the text of a reference sample document that is a known-good example of what's expected:\n${sampleText.slice(0, docTextCap)}\n`
     : "";
 
   return `You are checking whether an uploaded document matches what was expected for a specific upload slot, for an Australian building compliance system.
@@ -88,7 +93,7 @@ function buildJudgePrompt(hint: string, docText: string, sampleText?: string | n
 Expected document description: ${hint}
 ${sampleSection}
 Document text:
-${docText.slice(0, 8000)}
+${docText.slice(0, docTextCap)}
 
 Does this document match the expected description? Return ONLY a JSON object: { "matches": true|false, "reason": "one short sentence if false, empty string if true" }`;
 }
@@ -99,18 +104,22 @@ Does this document match the expected description? Return ONLY a JSON object: { 
  * open on any error or unparseable response — a broken checker must never
  * block an otherwise-valid upload. `sampleText` (#115) is optional extra
  * grounding extracted from an admin-uploaded reference sample; absent, the
- * judge behaves exactly as it did in #113.
+ * judge behaves exactly as it did in #113. `docTextCap` defaults to the
+ * settings-module default so existing call sites (and tests) don't need to
+ * pass it explicitly — production callers should fetch the admin-configured
+ * value via getJudgeDocumentTextCharCap and pass it through.
  */
 export async function runAiJudgeCheck(
   requirement: { aiJudgeHint: string | null },
   docText: string,
-  sampleText?: string | null
+  sampleText?: string | null,
+  docTextCap: number = DEFAULT_JUDGE_DOCUMENT_TEXT_CHAR_CAP
 ): Promise<{ ok: boolean; reason?: string } | null> {
   if (!requirement.aiJudgeHint) return null;
 
   try {
     const raw = await runTextCompletion(
-      buildJudgePrompt(requirement.aiJudgeHint, docText, sampleText),
+      buildJudgePrompt(requirement.aiJudgeHint, docText, sampleText, docTextCap),
       "file requirement AI judge",
       JUDGE_SCHEMA
     );
@@ -135,12 +144,15 @@ export async function runAiJudgeCheck(
  * extracted text of the requirement's reference sample, if one is
  * configured — extracting it is the caller's job (it's shared across every
  * upload into a multi-file slot, so it shouldn't be re-extracted per file).
+ * `docTextCap` defaults to the settings-module default; production callers
+ * should fetch the admin-configured value and pass it through.
  */
 export async function verifyUploadAgainstRequirement(
   requirement: FileRequirementLike,
   buffer: Buffer,
   isPdf: boolean,
-  sampleText?: string | null
+  sampleText?: string | null,
+  docTextCap: number = DEFAULT_JUDGE_DOCUMENT_TEXT_CHAR_CAP
 ): Promise<string[]> {
   if (!isPdf) return [];
 
@@ -159,7 +171,7 @@ export async function verifyUploadAgainstRequirement(
     reasons.push(deterministic.reason ?? `Doesn't look like ${requirement.name}.`);
   }
 
-  const judged = await runAiJudgeCheck(requirement, doc.text, sampleText);
+  const judged = await runAiJudgeCheck(requirement, doc.text, sampleText, docTextCap);
   if (judged && !judged.ok) {
     reasons.push(judged.reason ?? `May not be ${requirement.name}.`);
   }

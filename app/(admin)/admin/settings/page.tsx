@@ -5,11 +5,13 @@ import { getBusinessHours } from "@/lib/settings/business-hours";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { getAdminNavRestrictions } from "@/lib/settings/admin-nav-restrictions";
 import { getEmailsEnabled } from "@/lib/settings/emails-enabled";
+import { getJudgeDocumentTextCharCap } from "@/lib/settings/judge-document-text-cap";
 import { DigestScheduleForm } from "./_components/DigestScheduleForm";
 import { BusinessHoursForm } from "./_components/BusinessHoursForm";
 import { DeliveryDelayDurationsForm } from "./_components/DeliveryDelayDurationsForm";
 import { AdminNavRestrictionsForm } from "./_components/AdminNavRestrictionsForm";
 import { EmailsEnabledForm } from "./_components/EmailsEnabledForm";
+import { JudgeDocumentTextCapForm } from "./_components/JudgeDocumentTextCapForm";
 import { SettingsSection } from "./_components/SettingsSection";
 
 export default async function AdminSettingsPage() {
@@ -19,6 +21,7 @@ export default async function AdminSettingsPage() {
   const schedule = await getDigestSchedule(supabase);
   const businessHours = await getBusinessHours(supabase);
   const deliveryDelayDurations = await getDeliveryDelayDurations(supabase);
+  const judgeDocumentTextCap = await getJudgeDocumentTextCharCap(supabase);
   const navRestrictions =
     user.role === "super_admin" ? await getAdminNavRestrictions(supabase) : [];
   const emailsEnabled =
@@ -44,6 +47,13 @@ export default async function AdminSettingsPage() {
       >
         <BusinessHoursForm hours={businessHours} />
         <DeliveryDelayDurationsForm durations={deliveryDelayDurations} />
+      </SettingsSection>
+
+      <SettingsSection
+        title="Document processing"
+        description="How AI checks process uploaded documents."
+      >
+        <JudgeDocumentTextCapForm cap={judgeDocumentTextCap} />
       </SettingsSection>
 
       {user.role === "super_admin" && (
