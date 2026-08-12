@@ -91,6 +91,50 @@ async function seed() {
       clientId: stockland.id,
       totpExempt: true,
     },
+    {
+      email: "Kymberly.m@ops.test",
+      role: "admin",
+      firstName: "Kymberly",
+      lastName: "M",
+      clientId: null,
+      totpExempt: true,
+    },
+    {
+      email: "Trishan.T@ops.test",
+      role: "consultant",
+      firstName: "Trishan",
+      lastName: "T",
+      clientId: null,
+      availability: "available",
+      totpExempt: true,
+    },
+    {
+      email: "Hudson.s@ops.test",
+      role: "consultant",
+      firstName: "Hudson",
+      lastName: "S",
+      clientId: null,
+      availability: "available",
+      totpExempt: true,
+    },
+    {
+      email: "Cedric.N@ops.test",
+      role: "consultant",
+      firstName: "Cedric",
+      lastName: "N",
+      clientId: null,
+      availability: "available",
+      totpExempt: true,
+    },
+    {
+      email: "Nathan.P@ops.test",
+      role: "consultant",
+      firstName: "Nathan",
+      lastName: "P",
+      clientId: null,
+      availability: "available",
+      totpExempt: true,
+    },
   ];
 
   const { data: existingAuth } = await supabase.auth.admin.listUsers();
@@ -163,6 +207,11 @@ async function seed() {
   console.log("  admin@ops.test        — admin");
   console.log("  consultant@ops.test   — consultant");
   console.log("  stakeholder@ops.test  — stakeholder (Stockland)");
+  console.log("  Kymberly.m@ops.test   — admin (UAT)");
+  console.log("  Trishan.T@ops.test    — consultant (UAT)");
+  console.log("  Hudson.s@ops.test     — consultant (UAT)");
+  console.log("  Cedric.N@ops.test     — consultant (UAT)");
+  console.log("  Nathan.P@ops.test     — consultant (UAT)");
 }
 
 seed().catch((error) => {
