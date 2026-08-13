@@ -850,11 +850,6 @@ function RegenerateDemo() {
   const [confirming, setConfirming] = useState(false);
   const [dispatched, setDispatched] = useState(false);
 
-  useEffect(() => {
-    if (done) setConfirming(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done]);
-
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -875,7 +870,7 @@ function RegenerateDemo() {
           pending={running}
           pct={pct}
           onCancel={() => setConfirming(false)}
-          onConfirm={() => run()}
+          onConfirm={() => run(() => setConfirming(false))}
         />
       ) : (
         <button
@@ -914,13 +909,9 @@ function ConvertDeliverDemo() {
     }
     run(() => {
       if (staged) setScheduledFor("15 Aug 2026, 9:00 am");
+      setConfirming(false);
     });
   }
-
-  useEffect(() => {
-    if (done) setConfirming(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done]);
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4">
