@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ProgressTrack } from "@/components/ProgressTrack";
 
 type PreviewKind = "pdf" | "image" | "unsupported";
 
@@ -23,6 +24,12 @@ function detectKind(filename?: string | null, src?: string | null): PreviewKind 
 /** Whether DocumentViewer can render this file inline (vs. a download-only fallback). */
 export function isPreviewable(filename?: string | null, src?: string | null): boolean {
   return detectKind(filename, src) !== "unsupported";
+}
+
+/** Rounded render-progress percentage — 0 while the page count isn't known yet. */
+export function computeRenderProgress(pagesRendered: number, totalPages: number): number {
+  if (totalPages <= 0) return 0;
+  return Math.round((pagesRendered / totalPages) * 100);
 }
 
 interface DocumentViewerProps {
@@ -73,6 +80,13 @@ export function DocumentViewer({ src, filename, className = "" }: DocumentViewer
 function PdfCanvasViewer({ src, className }: { src: string; className: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  // Real progress computed directly from the render loop itself —
+  // pagesRendered/totalPages, once PDF.js's getDocument() resolves with a
+  // known page count. No per-page thumbnail tiles: a 29+ page document would
+  // blow out the layout, so this is just the running count + a % bar,
+  // scaling the same regardless of document length.
+  const [pagesRendered, setPagesRendered] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +94,8 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
 
     async function render() {
       setStatus("loading");
+      setPagesRendered(0);
+      setTotalPages(0);
       try {
         const pdfjs = await import("pdfjs-dist");
         pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -89,6 +105,7 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
 
         const doc = await pdfjs.getDocument(src).promise;
         if (cancelled || !container) return;
+        setTotalPages(doc.numPages);
 
         container.innerHTML = "";
         for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
@@ -103,6 +120,8 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
           if (!ctx) continue;
           container.appendChild(canvas);
           await page.render({ canvasContext: ctx, viewport }).promise;
+          if (cancelled) return;
+          setPagesRendered(pageNum);
         }
         if (!cancelled) setStatus("ready");
       } catch {
@@ -130,9 +149,25 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
     );
   }
 
+  const pct = computeRenderProgress(pagesRendered, totalPages);
+
   return (
     <div className={`overflow-auto bg-zinc-100 p-3 ${className}`}>
-      {status === "loading" && <p className="py-8 text-center text-sm text-zinc-400">Loading preview…</p>}
+      {status === "loading" && (
+        <div className="px-3 py-8">
+          {totalPages > 0 ? (
+            <div className="mx-auto max-w-xs">
+              <div className="mb-1 flex justify-between text-xs text-zinc-500">
+                <span>{`Rendering page ${pagesRendered} of ${totalPages}`}</span>
+                <span>{pct}%</span>
+              </div>
+              <ProgressTrack pct={pct} />
+            </div>
+          ) : (
+            <p className="text-center text-sm text-zinc-400">Loading preview…</p>
+          )}
+        </div>
+      )}
       <div ref={containerRef} />
     </div>
   );

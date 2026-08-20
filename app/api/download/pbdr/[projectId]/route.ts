@@ -3,9 +3,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { getStakeholderReviewedProjectIds, stakeholderAccessFilter } from "@/lib/portal/access";
+import {
+  startDownloadProgress,
+  updateDownloadProgress,
+  completeDownloadProgress,
+} from "@/lib/downloads/download-progress";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
@@ -69,14 +74,21 @@ export async function GET(
     return new NextResponse("File not found", { status: 404 });
   }
 
-  const { data: signed } = await supabase.storage
+  // Streamed from storage rather than a redirect to a signed URL (#129,
+  // mirroring #125's pbdb download route) — a redirect hands the browser
+  // straight to Supabase's storage CDN, bypassing this server entirely and
+  // leaving nowhere to count bytes served for the status endpoint below.
+  const { data: signed, error: signError } = await supabase.storage
     .from("documents")
-    .createSignedUrl(pbdrFile.storage_path as string, 300, {
-      download: (pbdrFile.original_filename as string) || true,
-    });
+    .createSignedUrl(pbdrFile.storage_path as string, 60);
 
-  if (!signed?.signedUrl) {
+  if (signError || !signed) {
     return new NextResponse("Could not generate download link", { status: 500 });
+  }
+
+  const upstream = await fetch(signed.signedUrl);
+  if (!upstream.ok || !upstream.body) {
+    return new NextResponse("Could not retrieve file", { status: 500 });
   }
 
   await auditLog("project.pbdr_downloaded", user.id as string, user.email as string, {
@@ -85,5 +97,34 @@ export async function GET(
     metadata: { filename: pbdrFile.original_filename, role: user.role },
   });
 
-  return NextResponse.redirect(signed.signedUrl);
+  const filename = (pbdrFile.original_filename as string) || "pbdr.pdf";
+  const contentLengthHeader = upstream.headers.get("content-length");
+  const totalBytes = contentLengthHeader ? Number(contentLengthHeader) : null;
+
+  // ?dl=<id> is set client-side (DownloadCard, or HeroActionMenu's
+  // "Download all" sequencer) on the same request being issued, right
+  // before the browser follows it — see components/DownloadCard.tsx and
+  // app/(client)/portal/_components/HeroActionMenu.tsx.
+  const dl = new URL(req.url).searchParams.get("dl");
+  if (dl) startDownloadProgress(dl, totalBytes);
+
+  let bytesServed = 0;
+  const counting = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      bytesServed += chunk.byteLength;
+      if (dl) updateDownloadProgress(dl, bytesServed);
+      controller.enqueue(chunk);
+    },
+    flush() {
+      if (dl) completeDownloadProgress(dl);
+    },
+  });
+
+  const headers: Record<string, string> = {
+    "Content-Type": upstream.headers.get("content-type") || "application/octet-stream",
+    "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+  };
+  if (totalBytes !== null) headers["Content-Length"] = String(totalBytes);
+
+  return new NextResponse(upstream.body.pipeThrough(counting), { headers });
 }

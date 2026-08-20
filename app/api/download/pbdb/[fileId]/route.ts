@@ -2,9 +2,14 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
+import {
+  startDownloadProgress,
+  updateDownloadProgress,
+  completeDownloadProgress,
+} from "@/lib/downloads/download-progress";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ fileId: string }> }
 ) {
   const { fileId } = await params;
@@ -46,11 +51,21 @@ export async function GET(
     .eq("id", file.project_id as string)
     .maybeSingle();
 
-  const { data: blob, error: downloadError } = await supabase.storage
+  // Streamed from storage rather than buffered fully into memory (#125):
+  // sign a short-lived URL and fetch it directly, piping the upstream
+  // response body straight through to the client. The Supabase JS client's
+  // own storage.download() fully buffers the file into a Blob before
+  // returning it — that's the buffering this issue removes.
+  const { data: signed, error: signError } = await supabase.storage
     .from("documents")
-    .download(file.storage_path as string);
+    .createSignedUrl(file.storage_path as string, 60);
 
-  if (downloadError || !blob) {
+  if (signError || !signed) {
+    return new NextResponse("Could not retrieve file", { status: 500 });
+  }
+
+  const upstream = await fetch(signed.signedUrl);
+  if (!upstream.ok || !upstream.body) {
     return new NextResponse("Could not retrieve file", { status: 500 });
   }
 
@@ -79,11 +94,34 @@ export async function GET(
   }
 
   const filename = (file.original_filename as string) || "pbdb.pdf";
+  const contentLengthHeader = upstream.headers.get("content-length");
+  const totalBytes = contentLengthHeader ? Number(contentLengthHeader) : null;
 
-  return new NextResponse(blob, {
-    headers: {
-      "Content-Type": blob.type || "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+  // ?dl=<id> is set client-side (DownloadCard) on the same anchor being
+  // clicked, right before the browser's default navigation fires — see
+  // components/DownloadCard.tsx. Its presence is what a separate poll
+  // request (app/api/download/pbdb/status/[dl]/route.ts) reads bytes-served
+  // progress from; absent for any other caller of this route.
+  const dl = new URL(req.url).searchParams.get("dl");
+  if (dl) startDownloadProgress(dl, totalBytes);
+
+  let bytesServed = 0;
+  const counting = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      bytesServed += chunk.byteLength;
+      if (dl) updateDownloadProgress(dl, bytesServed);
+      controller.enqueue(chunk);
+    },
+    flush() {
+      if (dl) completeDownloadProgress(dl);
     },
   });
+
+  const headers: Record<string, string> = {
+    "Content-Type": upstream.headers.get("content-type") || "application/octet-stream",
+    "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+  };
+  if (totalBytes !== null) headers["Content-Length"] = String(totalBytes);
+
+  return new NextResponse(upstream.body.pipeThrough(counting), { headers });
 }

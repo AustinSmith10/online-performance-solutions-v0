@@ -13,11 +13,12 @@
 // to review) still opens as a modal below — that's a real focused task, not
 // a picker.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PortalApprovalForm } from "@/app/(client)/portal/projects/[id]/_components/PortalApprovalForm";
 import { PendingReviewModal } from "./PendingReviewModal";
 import { DownloadCard } from "@/components/DownloadCard";
+import { rowStatus, nextIndex } from "@/lib/downloads/sequential-download";
 
 interface PendingReviewItem {
   id: string;
@@ -169,11 +170,91 @@ export function usePendingReviewHeroAction(items: PendingReviewItem[]): {
   return { button, expanded: expandedNode };
 }
 
+const SEQUENTIAL_POLL_MS = 200;
+// Never let a stalled row (unreachable status endpoint, a dl id the
+// streaming route never saw) block the rest of "Download all" forever.
+const SEQUENTIAL_MAX_WASH_MS = 20000;
+
 export function useReadyDownloadHeroAction(items: ReadyItemInput[]): {
   button: React.ReactNode;
   expanded: React.ReactNode;
 } {
   const [expanded, setExpanded] = useState(false);
+  // "Download all" (#129): one row downloads at a time via the real
+  // streamed pbdr route + its status endpoint (mirrors #125's pbdb
+  // mechanism) — only the active row shows real %, the rest show idle
+  // ("Download" pill, still independently clickable) or "Downloaded ✓".
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [activePct, setActivePct] = useState<number | null>(null);
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (activeIndex === null) return;
+    const item = items[activeIndex];
+    // nextIndex() only ever hands back a valid index or null, so this is
+    // unreachable in practice — a defensive no-op, not a state reset, to
+    // avoid a synchronous setState-in-effect.
+    if (!item) return;
+
+    let cancelled = false;
+    queueMicrotask(() => setActivePct(0));
+
+    const dl =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    // Bulk "download all" was already synthetic-anchor-driven before this
+    // issue (staggered, not user-gesture-per-file — there's no way for a
+    // single click to trigger N native downloads) — this only adds the ?dl=
+    // id, it doesn't change that existing shape.
+    const a = document.createElement("a");
+    a.href = `/api/download/pbdr/${item.id}?dl=${dl}`;
+    if (item.filename) a.download = item.filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    function advance() {
+      setCompletedIds((prev) => new Set(prev).add(item.id));
+      setActiveIndex((current) => (current === null ? null : nextIndex(current, items.length)));
+    }
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/download/pbdr/status/${dl}`, { cache: "no-store" });
+        if (cancelled) return;
+        if (!res.ok && res.status !== 404) return;
+        const data = (await res.json()) as { bytesServed: number; totalBytes: number | null; done: boolean };
+        if (data.totalBytes) {
+          setActivePct(Math.min(100, Math.round((data.bytesServed / data.totalBytes) * 100)));
+        }
+        if (data.done) {
+          setActivePct(100);
+          clearInterval(interval);
+          clearTimeout(maxWashTimer);
+          advance();
+        }
+      } catch {
+        // Best-effort — a failed poll just leaves this row's % where it was
+        // until the max-wash fallback below advances the queue.
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, SEQUENTIAL_POLL_MS);
+    const maxWashTimer = setTimeout(() => {
+      clearInterval(interval);
+      advance();
+    }, SEQUENTIAL_MAX_WASH_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      clearTimeout(maxWashTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- items identity changes every render (new arrays from the caller); re-keying on activeIndex alone is correct here
+  }, [activeIndex]);
 
   if (items.length === 0) return { button: null, expanded: null };
 
@@ -199,43 +280,44 @@ export function useReadyDownloadHeroAction(items: ReadyItemInput[]): {
         <span className="text-xs text-green-700">{items.length} reports ready</span>
         <button
           type="button"
-          onClick={() => downloadAllSequentially(items)}
-          className="rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700"
+          onClick={() => {
+            setCompletedIds(new Set());
+            setActiveIndex(0);
+          }}
+          disabled={activeIndex !== null}
+          className="rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
         >
           Download all
         </button>
       </div>
       <div className="divide-y divide-green-200/70">
-        {items.map((item) => (
-          <div key={item.id} className="flex items-center justify-between gap-3 py-2">
-            <span className="min-w-0 truncate text-sm text-green-900">{item.label}</span>
-            <div className="shrink-0">
-              <CompactDownloadButton projectId={item.id} filename={item.filename} />
+        {items.map((item, i) => {
+          const status = rowStatus(i, activeIndex, completedIds, item.id);
+          return (
+            <div key={item.id} className="flex items-center justify-between gap-3 py-2">
+              <span className="min-w-0 truncate text-sm text-green-900">{item.label}</span>
+              <div className="shrink-0">
+                {status === "downloading" ? (
+                  <span
+                    className="inline-flex items-center rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800"
+                    title={item.filename}
+                  >
+                    {activePct !== null ? `${activePct}%` : "…"}
+                  </span>
+                ) : status === "done" ? (
+                  <span className="inline-flex items-center rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white">
+                    Downloaded ✓
+                  </span>
+                ) : (
+                  <CompactDownloadButton projectId={item.id} filename={item.filename} />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 
   return { button, expanded: expandedNode };
-}
-
-// Fires each report's existing single-file download endpoint in sequence,
-// staggered slightly rather than all at once — no backend change (no zip
-// endpoint), but simultaneous same-tick downloads are more likely to trip a
-// browser's "this site is downloading multiple files" prompt/block than a
-// short stagger is. A true one-file zip would need a new server endpoint;
-// this is the lightweight version.
-function downloadAllSequentially(items: ReadyItemInput[]) {
-  items.forEach((item, i) => {
-    window.setTimeout(() => {
-      const a = document.createElement("a");
-      a.href = `/api/download/pbdr/${item.id}`;
-      if (item.filename) a.download = item.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }, i * 350);
-  });
 }

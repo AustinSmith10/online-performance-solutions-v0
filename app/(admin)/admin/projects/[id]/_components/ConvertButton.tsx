@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { triggerPbdrConversion, type ConvertState } from "@/app/actions/conversion";
+import { useProjectProgress } from "@/hooks/useProjectProgress";
+import { ProgressTrack } from "@/components/ProgressTrack";
 
 export function ConvertButton({ projectId }: { projectId: string }) {
   const boundAction = triggerPbdrConversion.bind(null, projectId);
@@ -10,6 +12,7 @@ export function ConvertButton({ projectId }: { projectId: string }) {
     {}
   );
   const [confirming, setConfirming] = useState(false);
+  const pct = useProjectProgress(projectId, pending);
 
   if (state.success) {
     return (
@@ -39,6 +42,15 @@ export function ConvertButton({ projectId }: { projectId: string }) {
             </p>
             {state.error && (
               <p className="mt-3 text-sm text-red-600">{state.error}</p>
+            )}
+            {pending && pct !== null && (
+              <div className="mt-4">
+                <div className="mb-1 flex justify-between text-xs text-zinc-500">
+                  <span>Converting…</span>
+                  <span>{pct}%</span>
+                </div>
+                <ProgressTrack pct={pct} tone="zinc" />
+              </div>
             )}
             <div className="mt-6 flex gap-3">
               <button

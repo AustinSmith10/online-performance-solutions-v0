@@ -9,12 +9,14 @@ vi.mock("@/lib/audit/log");
 vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/stakeholders/dispatch");
 vi.mock("@/lib/documents/pending-delivery");
+vi.mock("@/lib/documents/generator");
 
-import { uploadQaPbdb, adminDeleteProject, confirmProjectFileType } from "./projects";
+import { uploadQaPbdb, adminDeleteProject, confirmProjectFileType, generatePbdbForProject } from "./projects";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { auditLog } from "@/lib/audit/log";
+import { generatePbdb } from "@/lib/documents/generator";
 
 const PROJECT_ID = "proj-1";
 const CLIENT_ID = "org-1";
@@ -351,5 +353,70 @@ describe("confirmProjectFileType", () => {
         metadata: expect.objectContaining({ previous_file_type: "building_drawing_plans", confirmed_file_type: "purchase_order" }),
       })
     );
+  });
+});
+
+describe("generatePbdbForProject — progress_pct clears on failure (#127)", () => {
+  function buildGenerateMock() {
+    const progressUpdateFn = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) });
+    const project = {
+      id: PROJECT_ID,
+      client_id: CLIENT_ID,
+      project_number: "OPS-1",
+      status: "in_progress",
+    };
+    const from = vi.fn((table: string) => {
+      if (table === "projects") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: project, error: null }),
+          update: progressUpdateFn,
+        };
+      }
+      if (table === "field_flags") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockResolvedValue({ count: 0, data: [], error: null }),
+        };
+      }
+      if (table === "project_files") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+      }
+      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
+    });
+    return { from, progressUpdateFn };
+  }
+
+  beforeEach(() => {
+    vi.mocked(requireRole).mockResolvedValue({ id: ACTOR_ID, role: "consultant", email: "c@ddeg.com.au" } as never);
+  });
+
+  it("clears progress_pct to null when generatePbdb throws", async () => {
+    const mock = buildGenerateMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    vi.mocked(generatePbdb).mockRejectedValue(new Error("template rendering failed"));
+
+    const result = await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData());
+
+    expect(result.error).toBeTruthy();
+    expect(mock.progressUpdateFn).toHaveBeenCalledWith({ progress_pct: null });
+  });
+
+  it("does not touch progress_pct on success (generatePbdb itself sets it to 100)", async () => {
+    const mock = buildGenerateMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    vi.mocked(generatePbdb).mockResolvedValue(undefined);
+
+    const result = await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData());
+
+    expect(result.success).toBe(true);
+    expect(mock.progressUpdateFn).not.toHaveBeenCalled();
   });
 });

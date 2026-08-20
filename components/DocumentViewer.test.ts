@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isPreviewable } from "./DocumentViewer";
+import { isPreviewable, computeRenderProgress } from "./DocumentViewer";
 
 describe("isPreviewable", () => {
   it("detects a pdf from a signed URL when filename is a non-filename display label (#116)", () => {
@@ -29,5 +29,28 @@ describe("isPreviewable", () => {
 
   it("rejects unsupported formats like docx", () => {
     expect(isPreviewable("report.docx", "https://example.com/report.docx")).toBe(false);
+  });
+});
+
+describe("computeRenderProgress (#128)", () => {
+  it("is 0 while the page count isn't known yet", () => {
+    expect(computeRenderProgress(0, 0)).toBe(0);
+  });
+
+  it("scales the same for a short document", () => {
+    expect(computeRenderProgress(0, 6)).toBe(0);
+    expect(computeRenderProgress(3, 6)).toBe(50);
+    expect(computeRenderProgress(6, 6)).toBe(100);
+  });
+
+  it("scales the same for a long (29-page) document — no per-page tile blowout, just the % scaling differently per page", () => {
+    expect(computeRenderProgress(1, 29)).toBe(3);
+    expect(computeRenderProgress(15, 29)).toBe(52);
+    expect(computeRenderProgress(29, 29)).toBe(100);
+  });
+
+  it("rounds to the nearest whole percent", () => {
+    expect(computeRenderProgress(1, 3)).toBe(33);
+    expect(computeRenderProgress(2, 3)).toBe(67);
   });
 });

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { DocumentViewer, isPreviewable } from "@/components/DocumentViewer";
+import { ProgressTrack } from "@/components/ProgressTrack";
 import { Spinner, formatFileSize } from "./shared";
 import type { ClientPipelineFile, FileRequirement } from "./pipelineTypes";
 
@@ -170,6 +171,23 @@ function statusLabel(f: ClientPipelineFile): { text: string; tone: "neutral" | "
   return { text: "Ready", tone: "green" };
 }
 
+// Step-based progress (#130) — jumps in discrete steps that mirror the real
+// pipeline stages already tracked in submission-pipeline.ts (Uploading →
+// Checking → Extracting → Ready), not smoothed. No byte-level upload
+// progress: uploadToSignedUrl uses fetch internally with no progress
+// callback, and the upload transport itself doesn't change here. A flagged
+// file halts at "Needs review" (same step as Checking, since extraction
+// hasn't started) rather than auto-advancing. Hard failures (upload error,
+// extraction failure) get their own error messaging instead of a bar.
+export function stepProgress(f: ClientPipelineFile): number | null {
+  if (f.error || f.extractionStatus === "failed") return null;
+  if (f.uploading) return 25;
+  if (!f.verificationCompleted) return 50;
+  if (f.mismatchReasons && !f.confirmed) return 50;
+  if (f.extractionStatus === "running" || f.extractionStatus === "pending") return 75;
+  return 100;
+}
+
 function FileCard({
   file,
   onRemove,
@@ -189,6 +207,7 @@ function FileCard({
   const status = statusLabel(file);
   const busy =
     file.uploading || !file.verificationCompleted || file.extractionStatus === "running" || file.extractionStatus === "pending";
+  const pct = stepProgress(file);
 
   return (
     <div
@@ -230,6 +249,12 @@ function FileCard({
           </button>
         </div>
       </div>
+
+      {pct !== null && (
+        <div className="mt-2">
+          <ProgressTrack pct={pct} />
+        </div>
+      )}
 
       {flagged && (
         <div className="mt-2">

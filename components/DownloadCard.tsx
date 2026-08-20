@@ -23,6 +23,31 @@ interface DownloadCardProps {
 
 const CONFIRM_DELAY_MS = 1500;
 const FADE_DELAY_MS = 2000;
+const POLL_MS = 200;
+// Upper bound on how long the wash spinner waits for real progress before
+// falling back to the fixed-timer confirm — covers a status endpoint that's
+// unreachable, or a download id the streaming route never saw (dl stripped,
+// process instance mismatch, etc).
+const MAX_WASH_MS = 20000;
+
+// Only the streamed download routes (#125 pbdb, #129 pbdr) report
+// bytes-served progress, each via its own sibling status route. Other hrefs
+// (signed URLs to storage, other internal routes) keep the original
+// fixed-timer wash below.
+const TRACKABLE_DOWNLOAD_PREFIXES = ["/api/download/pbdb/", "/api/download/pbdr/"];
+
+function trackableStatusPrefix(href: string): string | null {
+  const prefix = TRACKABLE_DOWNLOAD_PREFIXES.find(
+    (p) => href.startsWith(p) && !href.startsWith(`${p}status/`)
+  );
+  return prefix ? `${prefix}status/` : null;
+}
+
+interface DownloadStatusResponse {
+  bytesServed: number;
+  totalBytes: number | null;
+  done: boolean;
+}
 
 const DEFAULT_BUTTON_CLASS =
   "shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50";
@@ -42,18 +67,86 @@ export function DownloadCard({
 }: DownloadCardProps) {
   const [phase, setPhase] = useState<"idle" | "wash" | "confirmed">("idle");
   const [downloaded, setDownloaded] = useState(false);
+  const [pct, setPct] = useState<number | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const anchorRef = useRef<HTMLAnchorElement | null>(null);
 
   useEffect(() => {
     const pending = timers.current;
     return () => {
       pending.forEach(clearTimeout);
+      if (pollInterval.current) clearInterval(pollInterval.current);
     };
   }, []);
+
+  function clearPendingTimers() {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+  }
+
+  function finishWash() {
+    if (pollInterval.current) {
+      clearInterval(pollInterval.current);
+      pollInterval.current = null;
+    }
+    clearPendingTimers();
+    setPhase("confirmed");
+    timers.current.push(setTimeout(() => setPhase("idle"), FADE_DELAY_MS));
+  }
+
+  function pollDownloadStatus(statusPrefix: string, dl: string) {
+    setPct(0);
+    const poll = async () => {
+      try {
+        const res = await fetch(`${statusPrefix}${dl}`, { cache: "no-store" });
+        if (!res.ok && res.status !== 404) return;
+        const data = (await res.json()) as DownloadStatusResponse;
+        if (data.totalBytes) {
+          setPct(Math.min(100, Math.round((data.bytesServed / data.totalBytes) * 100)));
+        }
+        if (data.done) {
+          setPct(100);
+          finishWash();
+        }
+      } catch {
+        // Best-effort — a failed poll just leaves the wash spinner running
+        // until MAX_WASH_MS's fallback below fires.
+      }
+    };
+    poll();
+    pollInterval.current = setInterval(poll, POLL_MS);
+    timers.current.push(setTimeout(finishWash, MAX_WASH_MS));
+  }
 
   function handleClick() {
     setDownloaded(true);
     setPhase("wash");
+    setPct(null);
+
+    const statusPrefix = href ? trackableStatusPrefix(href) : null;
+    if (statusPrefix && anchorRef.current) {
+      const dl =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      // Mutate this same anchor's href synchronously, before the browser
+      // processes this click's default navigation — still one real user
+      // gesture on the original element, unlike building/clicking a new <a>
+      // asynchronously from a fetched blob (see GeneratedPbdbDownload.tsx's
+      // comment on why that pattern silently drops downloads in some
+      // browsers). React won't fight this: since the `href` prop itself is
+      // unchanged, a later re-render (triggered by the state updates below)
+      // has nothing to reconcile back over this attribute.
+      const url = new URL(anchorRef.current.href, window.location.origin);
+      url.searchParams.set("dl", dl);
+      anchorRef.current.href = `${url.pathname}${url.search}`;
+      pollDownloadStatus(statusPrefix, dl);
+      return;
+    }
+
+    // Non-trackable hrefs (external signed URLs, other routes) keep the
+    // original fixed-timer wash.
     timers.current.push(
       setTimeout(() => setPhase("confirmed"), CONFIRM_DELAY_MS),
       setTimeout(() => setPhase("idle"), CONFIRM_DELAY_MS + FADE_DELAY_MS)
@@ -69,13 +162,16 @@ export function DownloadCard({
           }`}
         >
           {phase === "wash" ? (
-            <svg className="h-4 w-4 animate-spin text-green-600" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.25" />
-              <path
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.568 3 7.291l3-3.291z"
-              />
-            </svg>
+            <>
+              <svg className="h-4 w-4 animate-spin text-green-600" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.25" />
+                <path
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.568 3 7.291l3-3.291z"
+                />
+              </svg>
+              {pct !== null && <span className="text-sm font-medium text-green-700">{pct}%</span>}
+            </>
           ) : (
             <span className="flex items-center gap-1.5 text-sm font-semibold text-green-700">
               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -110,6 +206,7 @@ export function DownloadCard({
         )}
         {href && (
           <a
+            ref={anchorRef}
             href={href}
             download={filename ?? undefined}
             target={external ? "_blank" : undefined}

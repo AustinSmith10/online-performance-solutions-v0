@@ -3,6 +3,8 @@
 import { useActionState, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { generatePbdbForProject, type GeneratePbdbState } from "@/app/actions/projects";
+import { useProjectProgress } from "@/hooks/useProjectProgress";
+import { ProgressTrack } from "@/components/ProgressTrack";
 
 function Spinner() {
   return (
@@ -23,6 +25,7 @@ export function GeneratePbdbButton({ projectId }: { projectId: string }) {
   // client-side effect here isn't reliable.
   const boundAction = generatePbdbForProject.bind(null, projectId, pathname);
   const [state, formAction, pending] = useActionState<GeneratePbdbState, FormData>(boundAction, {});
+  const pct = useProjectProgress(projectId, pending);
 
   return (
     <form action={formAction}>
@@ -34,6 +37,15 @@ export function GeneratePbdbButton({ projectId }: { projectId: string }) {
         {pending && <Spinner />}
         {pending ? "Generating…" : "Generate PBDB"}
       </button>
+      {pending && pct !== null && (
+        <div className="mt-3 w-56">
+          <div className="mb-1 flex justify-between text-xs text-zinc-500">
+            <span>Generating…</span>
+            <span>{pct}%</span>
+          </div>
+          <ProgressTrack pct={pct} tone="zinc" />
+        </div>
+      )}
       {state.error && <p className="mt-2 text-sm text-red-600">{state.error}</p>}
     </form>
   );
@@ -51,6 +63,7 @@ export function RegeneratePbdbButton({
   const boundAction = generatePbdbForProject.bind(null, projectId, pathname);
   const [state, formAction, pending] = useActionState<GeneratePbdbState, FormData>(boundAction, {});
   const [confirming, setConfirming] = useState(false);
+  const pct = useProjectProgress(projectId, pending);
 
   useEffect(() => {
     if (state.success) queueMicrotask(() => setConfirming(false));
@@ -79,6 +92,15 @@ export function RegeneratePbdbButton({
               This will create a new version of the PBDB. Existing versions will be kept.
             </p>
             {state.error && <p className="mt-3 text-sm text-red-600">{state.error}</p>}
+            {pending && pct !== null && (
+              <div className="mt-4">
+                <div className="mb-1 flex justify-between text-xs text-zinc-500">
+                  <span>Regenerating…</span>
+                  <span>{pct}%</span>
+                </div>
+                <ProgressTrack pct={pct} tone="zinc" />
+              </div>
+            )}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"

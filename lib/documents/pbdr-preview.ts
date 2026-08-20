@@ -6,6 +6,7 @@ import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { buildPbdrFilename } from "@/lib/documents/naming";
 import { peekNextRevNumber, getRevisionHistory, formatRevisionHistoryRows } from "@/lib/documents/revision-history";
 import { formatAddress } from "@/lib/documents/formatters";
+import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
 
 export interface PbdrPreviewProject {
   id: string;
@@ -38,6 +39,20 @@ export async function buildPbdrPreview(
   supabase: SupabaseClient,
   project: PbdrPreviewProject
 ): Promise<PbdrPreview | null> {
+  await writeProgress(supabase, project.id, PROGRESS_MILESTONES[0]); // 20
+
+  try {
+    return await buildPbdrPreviewInner(supabase, project);
+  } catch (err) {
+    await writeProgress(supabase, project.id, null);
+    throw err;
+  }
+}
+
+async function buildPbdrPreviewInner(
+  supabase: SupabaseClient,
+  project: PbdrPreviewProject
+): Promise<PbdrPreview | null> {
   const { data: pbdbFile } = await supabase
     .from("project_files")
     .select("storage_path")
@@ -48,7 +63,10 @@ export async function buildPbdrPreview(
     .limit(1)
     .maybeSingle();
 
-  if (!pbdbFile) return null;
+  if (!pbdbFile) {
+    await writeProgress(supabase, project.id, null);
+    return null;
+  }
 
   const { data: docxBlob, error: dlErr } = await supabase.storage
     .from("documents")
@@ -96,7 +114,11 @@ export async function buildPbdrPreview(
     transformedDocx = stripRedTokenColor(transformedDocx);
   }
 
+  await writeProgress(supabase, project.id, PROGRESS_MILESTONES[1]); // 40
+
   const pdfBuffer = await convertDocxToPdf(transformedDocx);
+
+  await writeProgress(supabase, project.id, PROGRESS_MILESTONES[2]); // 70
 
   const rawAddress = project.extracted_fields?.["EXTRACT_ADDRESS"] ?? "";
   const address = formatAddress(rawAddress);
@@ -114,6 +136,8 @@ export async function buildPbdrPreview(
     .upload(storagePath, pdfBuffer, { contentType: "application/pdf", upsert: true });
 
   if (uploadErr) throw new Error(`Failed to store PBDR preview: ${uploadErr.message}`);
+
+  await writeProgress(supabase, project.id, PROGRESS_MILESTONES[4]); // 100
 
   return { storagePath, originalFilename };
 }

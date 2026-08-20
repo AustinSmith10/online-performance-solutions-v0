@@ -62,6 +62,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GET } from "./route";
+import { getDownloadProgress } from "@/lib/downloads/download-progress";
 
 function makeParams(projectId: string) {
   return { params: Promise.resolve({ projectId }) };
@@ -69,6 +70,15 @@ function makeParams(projectId: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(new Blob([new Uint8Array([1, 2, 3, 4])]), {
+        status: 200,
+        headers: { "content-length": "4", "content-type": "application/octet-stream" },
+      })
+    )
+  );
 });
 
 describe("GET /api/download/pbdr/[projectId]", () => {
@@ -102,8 +112,8 @@ describe("GET /api/download/pbdr/[projectId]", () => {
 
     const res = await GET(new Request("http://localhost"), makeParams("project-1"));
 
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("https://storage.example/signed");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-length")).toBe("4");
     expect(mockAuditLog).toHaveBeenCalledWith(
       "project.pbdr_downloaded",
       "consultant-1",
@@ -130,7 +140,7 @@ describe("GET /api/download/pbdr/[projectId]", () => {
 
     const res = await GET(new Request("http://localhost"), makeParams("project-1"));
 
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(200);
     expect(mockAuditLog).toHaveBeenCalledWith(
       "project.pbdr_downloaded",
       "stakeholder-1",
@@ -155,7 +165,7 @@ describe("GET /api/download/pbdr/[projectId]", () => {
 
     const res = await GET(new Request("http://localhost"), makeParams("project-1"));
 
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(200);
   });
 
   it.each(["admin", "super_admin"] as const)(
@@ -173,7 +183,7 @@ describe("GET /api/download/pbdr/[projectId]", () => {
 
       const res = await GET(new Request("http://localhost"), makeParams("project-1"));
 
-      expect(res.status).toBe(307);
+      expect(res.status).toBe(200);
       expect(mockAuditLog).toHaveBeenCalledWith(
         "project.pbdr_downloaded",
         "admin-1",
@@ -202,5 +212,25 @@ describe("GET /api/download/pbdr/[projectId]", () => {
     const res = await GET(new Request("http://localhost"), makeParams("project-1"));
 
     expect(res.status).toBe(401);
+  });
+
+  it("tracks bytes served under the ?dl= id and marks it done once fully streamed (#129)", async () => {
+    mockGetSessionUser.mockResolvedValue({
+      id: "admin-1",
+      email: "admin@example.com",
+      role: "admin",
+      client_id: null,
+    });
+    (createAdminClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeSupabaseMock({ projectResult: { data: { id: "project-1" }, error: null } })
+    );
+
+    const res = await GET(
+      new Request("http://localhost?dl=pbdr-dl-1"),
+      makeParams("project-1")
+    );
+    await res.arrayBuffer();
+
+    expect(getDownloadProgress("pbdr-dl-1")).toEqual({ bytesServed: 4, totalBytes: 4, done: true });
   });
 });
