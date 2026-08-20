@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
-    "worker": "tsx worker.ts",
+    "worker": "tsx --tsconfig tsconfig.worker.json worker.ts",
     "db:generate": "npx supabase gen types typescript --local > types/supabase.ts",
     "seed": "node --env-file=.env.local ./node_modules/.bin/tsx supabase/seed.ts",
     "test": "vitest run",
