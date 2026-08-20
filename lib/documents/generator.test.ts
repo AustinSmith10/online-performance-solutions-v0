@@ -4,9 +4,10 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin");
 
 // The rendering pipeline itself (real docx parsing) is exercised by
-// converter.test.ts / docx-structure-scan.test.ts. PizZip/Docxtemplater are
-// mocked out — render() and getZip() are no-ops that just hand back a stub
-// buffer.
+// converter.test.ts / docx-structure-scan.test.ts. This file is only
+// concerned with the ordering of the revision-history write relative to
+// the file upload/insert (#148), so PizZip/Docxtemplater are mocked out —
+// render() and getZip() are no-ops that just hand back a stub buffer.
 vi.mock("pizzip", () => ({
   default: vi.fn().mockImplementation(function PizZipStub() {
     return {};
@@ -188,6 +189,85 @@ function buildMock(opts: {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe("generatePbdb — revision-history event ordering (#148)", () => {
+  it("does not write a revision row when the project_files insert fails", async () => {
+    const mock = buildMock({ projectFilesInsertError: { message: "insert failed" } });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await expect(generatePbdb(PROJECT_ID, ACTOR_ID)).rejects.toThrow(/Failed to record PBDB in database/);
+
+    expect(mock.revisionHistoryInsertFn).not.toHaveBeenCalled();
+    expect(mock.revisionHistoryRows).toHaveLength(0);
+  });
+
+  it("writes exactly one revision row on a subsequent successful attempt after a failure", async () => {
+    // Shared in-memory tables persist across the two calls below, the way a
+    // real retry would hit the same database rows.
+    const revisionHistoryRows: Record<string, unknown>[] = [];
+    const projectFileRows: Record<string, unknown>[] = [];
+
+    const failingMock = buildMock({
+      revisionHistoryRows,
+      projectFileRows,
+      projectFilesInsertError: { message: "insert failed" },
+    });
+    vi.mocked(createAdminClient).mockReturnValue(failingMock as never);
+    await expect(generatePbdb(PROJECT_ID, ACTOR_ID)).rejects.toThrow();
+    expect(revisionHistoryRows).toHaveLength(0);
+
+    const succeedingMock = buildMock({ revisionHistoryRows, projectFileRows });
+    vi.mocked(createAdminClient).mockReturnValue(succeedingMock as never);
+    await generatePbdb(PROJECT_ID, ACTOR_ID);
+
+    expect(revisionHistoryRows).toHaveLength(1);
+    expect(revisionHistoryRows[0]).toMatchObject({
+      project_id: PROJECT_ID,
+      doc_type: "pbdb",
+      event: "initial",
+      rev_number: 0,
+    });
+    expect(projectFileRows).toHaveLength(1);
+  });
+
+  it("still records the initial revision event after a successful first generation", async () => {
+    const mock = buildMock({});
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await generatePbdb(PROJECT_ID, ACTOR_ID);
+
+    expect(mock.revisionHistoryInsertFn).toHaveBeenCalledTimes(1);
+    expect(mock.revisionHistoryRows[0]).toMatchObject({ event: "initial", doc_type: "pbdb" });
+    // The revision-history write must happen after the project_files insert
+    // has already resolved (ordering, not just "eventually called").
+    const insertOrder = mock.projectFilesInsertFn.mock.invocationCallOrder[0];
+    const revisionOrder = mock.revisionHistoryInsertFn.mock.invocationCallOrder[0];
+    expect(revisionOrder).toBeGreaterThan(insertOrder);
+  });
+
+  it("does not write a second revision row when regenerating (version > 1)", async () => {
+    const revisionHistoryRows: Record<string, unknown>[] = [
+      {
+        project_id: PROJECT_ID,
+        doc_type: "pbdb",
+        rev_number: 0,
+        event: "initial",
+        prepared_by: "consultant-1",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ];
+    const projectFileRows: Record<string, unknown>[] = [
+      { project_id: PROJECT_ID, file_type: "pbdb", version: 1, review_cycle: 1 },
+    ];
+    const mock = buildMock({ revisionHistoryRows, projectFileRows });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await generatePbdb(PROJECT_ID, ACTOR_ID);
+
+    expect(mock.revisionHistoryInsertFn).not.toHaveBeenCalled();
+    expect(revisionHistoryRows).toHaveLength(1);
+  });
 });
 
 describe("generatePbdb — progress_pct (#127)", () => {

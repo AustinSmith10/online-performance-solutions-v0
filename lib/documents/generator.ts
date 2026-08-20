@@ -2,7 +2,13 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatAddress } from "@/lib/documents/formatters";
-import { recordRevisionEvent, getRevisionHistory, formatRevisionHistoryRows } from "@/lib/documents/revision-history";
+import {
+  recordRevisionEvent,
+  getRevisionHistory,
+  formatRevisionHistoryRows,
+  peekNextRevNumber,
+  type RevisionHistoryRow,
+} from "@/lib/documents/revision-history";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
 
@@ -18,7 +24,9 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("id, client_id, template_id, project_number, extracted_fields, created_at, review_cycle, submitted_by")
+    .select(
+      "id, client_id, template_id, project_number, extracted_fields, created_at, review_cycle, submitted_by, assigned_consultant_id"
+    )
     .eq("id", projectId)
     .is("deleted_at", null)
     .single();
@@ -85,12 +93,28 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   // generation — a regenerate (version > 1, still pre-dispatch) does not
   // create a new row. Post-dispatch revisions are recorded separately, at
   // rejection time (see app/actions/approval.ts / app/actions/stakeholders.ts).
-  if (version === 1) {
-    await recordRevisionEvent(supabase, projectId, "pbdb", "initial");
-  }
+  //
+  // The row must not actually be *inserted* until the PBDB file has been
+  // uploaded and the project_files row committed (see the end of this
+  // function) — inserting it here, before that can fail, left an orphaned
+  // "initial" row on a failed upload/insert that a retry would duplicate
+  // (#148). But the rendered document still needs to show this pending
+  // event in its revision-history table and use its rev number for
+  // SYS_REV_NO, so peek the number/row it would get without writing it yet.
+  const pendingInitialEvent: RevisionHistoryRow | null =
+    version === 1
+      ? {
+          rev_number: await peekNextRevNumber(supabase, projectId, "pbdb"),
+          doc_type: "pbdb",
+          event: "initial",
+          prepared_by: (project.assigned_consultant_id as string | null) ?? null,
+          created_at: new Date().toISOString(),
+        }
+      : null;
 
   const fullHistory = await getRevisionHistory(supabase, projectId);
   const pbdbHistory = fullHistory.filter((row) => row.doc_type === "pbdb");
+  if (pendingInitialEvent) pbdbHistory.push(pendingInitialEvent);
 
   // This is the PBDB document, so its table shows only PBDB rows — PBDR
   // gets its own independently-scoped table (see lib/documents/delivery.ts).
@@ -229,6 +253,14 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     // Clean up the uploaded file if the DB record can't be written
     await supabase.storage.from("documents").remove([storagePath]);
     throw new Error(`Failed to record PBDB in database: ${insertError.message}`);
+  }
+
+  // Only now that the file is durably recorded do we commit the "initial"
+  // revision-history row itself — writing it earlier (before the upload/insert
+  // could fail) let a failed generation leave an orphan row that a retry
+  // would then duplicate (#148).
+  if (pendingInitialEvent) {
+    await recordRevisionEvent(supabase, projectId, "pbdb", "initial");
   }
 
   await writeProgress(supabase, projectId, PROGRESS_MILESTONES[4]); // 100

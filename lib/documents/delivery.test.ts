@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin");
+vi.mock("@/lib/stakeholders/tokens");
 vi.mock("@/lib/payments/gate");
 vi.mock("@/lib/documents/converter");
 vi.mock("@/lib/documents/color-strip");
@@ -18,6 +19,7 @@ import { convertPbdbToPbdr } from "@/lib/documents/converter";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { notify } from "@/lib/notifications/notify";
 import { sendEmail } from "@/lib/email/sender";
+import { computeSignedUrlExpirySeconds } from "@/lib/stakeholders/tokens";
 
 const PROJECT_ID = "proj-1";
 const CLIENT_ID = "org-1";
@@ -81,6 +83,7 @@ function buildMock(pbdbRows: Record<string, unknown>[], reviewCycle: number) {
     error: null,
   });
   const createSignedUrlFn = vi.fn().mockResolvedValue({ data: { signedUrl: "https://signed" }, error: null });
+  const progressWrites: (number | null)[] = [];
 
   const from = vi.fn((table: string) => {
     if (table === "projects") {
@@ -90,10 +93,17 @@ function buildMock(pbdbRows: Record<string, unknown>[], reviewCycle: number) {
         is: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: project, error: null }),
         maybeSingle: vi.fn().mockResolvedValue({ data: project, error: null }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null, count: 1 }),
-          }),
+        // Chainable for both the atomic double-.eq() status claim (awaited
+        // directly, expects {error, count}) and the single-.eq() progress_pct /
+        // final-status writes (chained via .then()).
+        update: vi.fn((patch: Record<string, unknown>) => {
+          if (patch && "progress_pct" in patch) progressWrites.push(patch.progress_pct as number | null);
+          const chain = {
+            eq: vi.fn(() => chain),
+            then: (fn: (v: unknown) => unknown) =>
+              Promise.resolve({ data: null, error: null, count: 1 }).then(fn),
+          };
+          return chain;
         }),
       };
     }
@@ -111,7 +121,7 @@ function buildMock(pbdbRows: Record<string, unknown>[], reviewCycle: number) {
     return queryable([]);
   });
 
-  return { from, insertFn, uploadFn, storage: { from: vi.fn().mockReturnValue({ download: downloadFn, upload: uploadFn, createSignedUrl: createSignedUrlFn, remove: vi.fn().mockResolvedValue({ data: null, error: null }) }) } };
+  return { from, insertFn, uploadFn, progressWrites, storage: { from: vi.fn().mockReturnValue({ download: downloadFn, upload: uploadFn, createSignedUrl: createSignedUrlFn, remove: vi.fn().mockResolvedValue({ data: null, error: null }) }) } };
 }
 
 beforeEach(() => {
@@ -121,6 +131,7 @@ beforeEach(() => {
   vi.mocked(convertDocxToPdf).mockResolvedValue(Buffer.from("pdf-bytes"));
   vi.mocked(notify).mockResolvedValue(undefined);
   vi.mocked(sendEmail).mockResolvedValue(true);
+  vi.mocked(computeSignedUrlExpirySeconds).mockResolvedValue(14 * 24 * 3600);
 });
 
 describe("deliverPbdr — scopes the PBDB lookup to the final-approved review cycle", () => {
@@ -152,5 +163,50 @@ describe("deliverPbdr — scopes the PBDB lookup to the final-approved review cy
 
     expect(result.success).toBe(false);
     expect(result.reason).toMatch(/QA'd PBDB not found/);
+  });
+});
+
+describe("deliverPbdr — progress_pct (#127)", () => {
+  it("writes chunked progress milestones in order on success", async () => {
+    const pbdbRows = [
+      { project_id: PROJECT_ID, file_type: "pbdb", storage_path: "org-1/proj-1/pbdb/v1_R0.docx", version: 1, review_cycle: 1 },
+    ];
+    const mock = buildMock(pbdbRows, 1);
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await deliverPbdr(PROJECT_ID, ADMIN_ID, "admin@ddeg.com.au");
+
+    expect(result.success).toBe(true);
+    expect(mock.progressWrites).toEqual([20, 40, 70, 90, 100]);
+  });
+
+  it("resets progress to null when conversion fails", async () => {
+    const pbdbRows = [
+      { project_id: PROJECT_ID, file_type: "pbdb", storage_path: "org-1/proj-1/pbdb/v1_R0.docx", version: 1, review_cycle: 1 },
+    ];
+    const mock = buildMock(pbdbRows, 1);
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    vi.mocked(convertDocxToPdf).mockRejectedValue(new Error("gotenberg timeout"));
+
+    const result = await deliverPbdr(PROJECT_ID, ADMIN_ID, "admin@ddeg.com.au");
+
+    expect(result.success).toBe(false);
+    // 20 (claimed) then 40 (pre-render), then the render throws, then the
+    // catch block clears it back to null.
+    expect(mock.progressWrites).toEqual([20, 40, null]);
+  });
+
+  it("never writes progress when the gate blocks conversion (staged path never calls deliverPbdr)", async () => {
+    const pbdbRows = [
+      { project_id: PROJECT_ID, file_type: "pbdb", storage_path: "org-1/proj-1/pbdb/v1_R0.docx", version: 1, review_cycle: 1 },
+    ];
+    const mock = buildMock(pbdbRows, 1);
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    vi.mocked(checkPbdrGate).mockResolvedValue({ allowed: false, creditDeducted: true });
+
+    const result = await deliverPbdr(PROJECT_ID, ADMIN_ID, "admin@ddeg.com.au");
+
+    expect(result.success).toBe(false);
+    expect(mock.progressWrites).toEqual([]);
   });
 });
