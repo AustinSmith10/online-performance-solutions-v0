@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { requireProjectAccess } from "@/lib/auth/project-access";
 import { auditLog } from "@/lib/audit/log";
 import { performAssignment } from "@/lib/projects/assign";
 import { generatePbdb } from "@/lib/documents/generator";
@@ -17,6 +18,8 @@ import { buildPbdbFilename } from "@/lib/documents/naming";
 import { appendRevisionHistoryRow, setCoverRevisionNumber } from "@/lib/documents/revision-table";
 import { scanDocxStructure } from "@/lib/documents/docx-structure-scan";
 import { getOrCreateDispatchPdf, type DispatchPdfProject } from "@/lib/documents/pbdb-pdf";
+import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
+import { writeProgress } from "@/lib/documents/progress";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function notifyAdminsQaComplete(
@@ -235,20 +238,10 @@ export async function uploadProjectFile(
   const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
-  // Verify access based on role
-  let query = supabase
-    .from("projects")
-    .select("id, client_id, assigned_consultant_id, extracted_fields, project_number")
-    .eq("id", projectId)
-    .is("deleted_at", null);
-
-  if (actor.role === "stakeholder") {
-    query = query.eq("client_id", actor.client_id as string);
-  } else if (actor.role === "consultant") {
-    query = query.eq("assigned_consultant_id", actor.id);
-  }
-
-  const { data: project } = await query.maybeSingle();
+  // #160: was bare client_id match for a stakeholder, letting any stakeholder
+  // in the org edit a colleague's project. Now submitter-or-reviewer, same
+  // rule lib/portal/access.ts already applies to the project list pages.
+  const project = await requireProjectAccess(supabase, actor, projectId);
   if (!project) return { error: "Project not found or access denied." };
 
   // Stakeholders can add new documents at any point in the project lifecycle —
@@ -260,7 +253,7 @@ export async function uploadProjectFile(
   if (file.size > 50 * 1024 * 1024) return { error: "File must be under 50 MB." };
 
   const fileBuffer = Buffer.from(await file.arrayBuffer());
-  const storagePath = `${project.client_id}/${projectId}/additional/${Date.now()}_${file.name}`;
+  const storagePath = `${project.client_id}/${projectId}/additional/${Date.now()}_${sanitizeFilename(file.name)}`;
 
   const { error: uploadError } = await supabase.storage
     .from("submissions")
@@ -306,14 +299,9 @@ export async function replaceProjectFile(
   const actor = await requireRole("stakeholder");
   const supabase = createAdminClient();
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, client_id, assigned_consultant_id, extracted_fields, project_number")
-    .eq("id", projectId)
-    .eq("client_id", actor.client_id as string)
-    .is("deleted_at", null)
-    .maybeSingle();
-
+  // #160: was bare client_id match, letting any stakeholder in the org
+  // replace a colleague's document. Now submitter-or-reviewer.
+  const project = await requireProjectAccess(supabase, actor, projectId);
   if (!project) return { error: "Project not found or access denied." };
 
   // Once a consultant has been assigned, no existing document — regardless of
@@ -336,7 +324,7 @@ export async function replaceProjectFile(
   if (file.size > 50 * 1024 * 1024) return { error: "File must be under 50 MB." };
 
   const fileBuffer = Buffer.from(await file.arrayBuffer());
-  const storagePath = `${project.client_id}/${projectId}/${existingFile.file_type}/${Date.now()}_${file.name}`;
+  const storagePath = `${project.client_id}/${projectId}/${existingFile.file_type}/${Date.now()}_${sanitizeFilename(file.name)}`;
 
   const { error: uploadError } = await supabase.storage
     .from("submissions")
@@ -462,14 +450,9 @@ export async function updateStakeholderSubmission(
   const actor = await requireRole("stakeholder");
   const supabase = createAdminClient();
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, client_id, assigned_consultant_id, extracted_fields, po_number, project_number")
-    .eq("id", projectId)
-    .eq("client_id", actor.client_id as string)
-    .is("deleted_at", null)
-    .maybeSingle();
-
+  // #160: was bare client_id match, letting any stakeholder in the org edit
+  // a colleague's submitted details. Now submitter-or-reviewer.
+  const project = await requireProjectAccess(supabase, actor, projectId);
   if (!project) return { error: "Project not found or access denied." };
   if (project.assigned_consultant_id) {
     return { error: "This project is under review — editing is no longer available." };
@@ -865,6 +848,7 @@ export async function generatePbdbForProject(
   try {
     await generatePbdb(projectId, actor.id);
   } catch (err) {
+    await writeProgress(supabase, projectId, null);
     return { error: err instanceof Error ? err.message : "PBDB generation failed. Please try again." };
   }
 

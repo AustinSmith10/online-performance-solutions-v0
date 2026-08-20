@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createHash } from "crypto";
 
 // ── Mock all server-side and external dependencies ────────────────────────────
 // vi.mock() is hoisted to the top of the file — use vi.hoisted() so the mock
@@ -13,7 +14,10 @@ const { mockSendEmail, mockAuditLog, mockValidateToken } = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/email/sender", () => ({ sendEmail: mockSendEmail }));
 vi.mock("@/lib/audit/log", () => ({ auditLog: mockAuditLog }));
-vi.mock("@/lib/stakeholders/tokens", () => ({ validateToken: mockValidateToken }));
+vi.mock("@/lib/stakeholders/tokens", () => ({
+  validateToken: mockValidateToken,
+  hashToken: (token: string) => createHash("sha256").update(token).digest("hex"),
+}));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(),
@@ -184,6 +188,10 @@ describe("POST /api/webhooks/email", () => {
     });
 
     it("queues as stakeholder_response via the stakeholders-table fallback instead of bouncing", async () => {
+      // Hoisted (not re-created per call) so both the #150 dedupe-check call
+      // and the actual insert call against "inbound_email_queue" share the
+      // same mock — the dedupe check itself doesn't call insert.
+      const insert = vi.fn().mockResolvedValue({ data: null, error: null });
       const fromMock = vi.fn((table: string) => {
         if (table === "stakeholders") {
           return makeQueryBuilder({
@@ -191,7 +199,7 @@ describe("POST /api/webhooks/email", () => {
           });
         }
         if (table === "inbound_email_queue") {
-          return makeQueryBuilder({ insert: vi.fn().mockResolvedValue({ data: null, error: null }) });
+          return makeQueryBuilder({ insert });
         }
         return makeQueryBuilder();
       });
@@ -215,9 +223,8 @@ describe("POST /api/webhooks/email", () => {
 
       expect(fromMock).toHaveBeenCalledWith("inbound_email_queue");
 
-      const queueCallIndex = fromMock.mock.calls.findIndex((c) => c[0] === "inbound_email_queue");
-      const insertedRow = fromMock.mock.results[queueCallIndex].value.insert.mock.calls[0][0];
-      expect(insertedRow).toMatchObject({
+      expect(insert).toHaveBeenCalledOnce();
+      expect(insert.mock.calls[0][0]).toMatchObject({
         proposed_category: "stakeholder_response",
         proposed_project_id: null,
         proposed_stakeholder_review_id: null,
@@ -695,6 +702,121 @@ describe("POST /api/webhooks/email", () => {
       const res = await POST(makeRequest(BASE_PAYLOAD));
       expect(res.status).toBe(200);
       expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  // #147: a soft-deleted or deactivated sender must not be treated as a
+  // recognised user — the sender lookup now filters on deleted_at IS NULL
+  // and is_active = true, so a row that fails either filter comes back as
+  // no match (single() resolves with an error/no data), same as no `users`
+  // row existing at all.
+  describe("inbound email from a deactivated/deleted user (#147)", () => {
+    it("filters the sender lookup on deleted_at IS NULL and is_active = true", async () => {
+      const usersBuilder = makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: null, error: { message: "no rows" } }) });
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users") return usersBuilder;
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof createAdminClient>);
+
+      const res = await POST(makeRequest(BASE_PAYLOAD));
+
+      expect(res.status).toBe(200);
+      expect(usersBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+      expect(usersBuilder.eq).toHaveBeenCalledWith("is_active", true);
+    });
+
+    it("falls through to the unrecognised-sender path when the active-status filter excludes the row", async () => {
+      // Simulates a deactivated/soft-deleted user: the filtered query finds
+      // no row, exactly like a sender with no `users` row at all.
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: null, error: { message: "no rows" } }) });
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({ from: fromMock } as unknown as ReturnType<typeof createAdminClient>);
+
+      const res = await POST(makeRequest(BASE_PAYLOAD));
+
+      expect(res.status).toBe(200);
+      expect(mockSendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ subject: expect.stringContaining("Unrecognised") })
+      );
+      expect(mockAuditLog).toHaveBeenCalledWith("email.unrecognised_sender", null, "client@example.com", expect.anything());
+    });
+  });
+
+  // #150: replaying the same Postmark delivery (same MessageID) must not
+  // produce a second queue row, a second set of uploaded attachments, or a
+  // second auto-reply.
+  describe("message_id dedupe (#150)", () => {
+    it("early-returns without uploading attachments, inserting, or emailing when message_id already exists", async () => {
+      const insert = vi.fn().mockResolvedValue({ data: null, error: null });
+      const upload = vi.fn().mockResolvedValue({ error: null });
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: CLIENT_USER, error: null }) });
+        if (table === "clients") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: ORG, error: null }) });
+        if (table === "inbound_email_queue") {
+          // The dedupe check's maybeSingle() finds an existing row.
+          return makeQueryBuilder({
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "existing-queue-row" }, error: null }),
+            insert,
+          });
+        }
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: fromMock,
+        storage: { from: vi.fn().mockReturnValue({ upload }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        Attachments: [
+          { Name: "plans.pdf", Content: PDF_BASE64, ContentType: "application/pdf", ContentLength: 100 },
+        ],
+      };
+
+      const res = await POST(makeRequest(payload));
+
+      expect(res.status).toBe(200);
+      expect(upload).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    it("proceeds normally (uploads, inserts, replies) when no row shares the message_id", async () => {
+      const insert = vi.fn().mockResolvedValue({ data: null, error: null });
+      const upload = vi.fn().mockResolvedValue({ error: null });
+      const fromMock = vi.fn((table: string) => {
+        if (table === "users") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: CLIENT_USER, error: null }) });
+        if (table === "clients") return makeQueryBuilder({ single: vi.fn().mockResolvedValue({ data: ORG, error: null }) });
+        if (table === "inbound_email_queue") return makeQueryBuilder({ insert });
+        return makeQueryBuilder();
+      });
+
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: fromMock,
+        storage: { from: vi.fn().mockReturnValue({ upload }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const payload = {
+        ...BASE_PAYLOAD,
+        Attachments: [
+          { Name: "plans.pdf", Content: PDF_BASE64, ContentType: "application/pdf", ContentLength: 100 },
+        ],
+      };
+
+      const res = await POST(makeRequest(payload));
+
+      expect(res.status).toBe(200);
+      expect(upload).toHaveBeenCalledOnce();
+      expect(insert).toHaveBeenCalledOnce();
+      expect(mockSendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: "client@example.com", subject: expect.stringContaining("received") })
+      );
     });
   });
 });

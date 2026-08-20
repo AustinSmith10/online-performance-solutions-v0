@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generateTokenString, computeTokenExpiry } from "./tokens";
+import { generateTokenString, computeTokenExpiry, hashToken, computeSignedUrlExpirySeconds } from "./tokens";
 import { sendEmail } from "@/lib/email/sender";
 import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
@@ -70,6 +70,7 @@ export async function inviteLateStakeholder(
       stakeholder_email: email,
       stakeholder_name: stakeholder.name,
       token,
+      token_hash: hashToken(token),
       dispatched_at: new Date().toISOString(),
       expires_at: expiresAt.toISOString(),
       fresh_token_sent_at: null,
@@ -95,7 +96,10 @@ export async function inviteLateStakeholder(
   const pbdbUrl = pbdbPdf
     ? await supabase.storage
         .from("documents")
-        .createSignedUrl(pbdbPdf.storagePath, 7 * 24 * 3600)
+        .createSignedUrl(
+          pbdbPdf.storagePath,
+          await computeSignedUrlExpirySeconds(new Date(), stateTerritory)
+        )
         .then((r) => r.data?.signedUrl ?? null)
     : null;
 

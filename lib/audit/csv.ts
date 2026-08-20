@@ -4,10 +4,11 @@ import type { AuditRow } from "./query";
 const HEADERS = ["Timestamp", "Event", "Category", "Actor", "Client", "Project", "Details"];
 
 function csvEscape(value: string): string {
-  if (/[",\r\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
+  const safeValue = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  if (/[",\r\n]/.test(safeValue)) {
+    return `"${safeValue.replace(/"/g, '""')}"`;
   }
-  return value;
+  return safeValue;
 }
 
 export function auditEntriesToCsv(entries: AuditRow[]): string {

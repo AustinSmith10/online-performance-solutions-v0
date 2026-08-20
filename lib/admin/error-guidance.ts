@@ -11,12 +11,6 @@ const JOB_GUIDANCE: Record<string, string> = {
     "This job failed while auto-expiring abandoned draft projects. Check the per-client abandoned_draft_days setting and the worker logs for a query error; if drafts have piled up, expire them manually from the project list.",
   "approval-buffer":
     "This job failed while checking dispatched projects for overdue stakeholder responses or issuing fresh approval tokens. Open the affected project's stakeholder reviews and confirm whether a fresh token still needs to be sent.",
-  "generate-pbdb":
-    "PBDB document generation failed for this project. Check the template and the submitted field data for anything malformed, then retry generation from the project detail page.",
-  "dispatch-pbdb":
-    "Dispatching the PBDB to stakeholders failed. Check the outbound email configuration and the project's stakeholder list, then retry dispatch from the project detail page.",
-  "deliver-pbdr":
-    "Final PBDR delivery to the client failed. Check the delivery recipient email and the document conversion step, then retry delivery from the project detail page.",
   "release-pending-deliveries":
     "Releasing a business-hours-gated PBDR delivery failed (see #63). Check the project's document conversion step, then retry delivery from the project detail page — the staged pending_deliveries row is cleared before the attempt, so it won't retry automatically.",
 };

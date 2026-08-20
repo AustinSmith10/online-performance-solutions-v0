@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { requireProjectAccess } from "@/lib/auth/project-access";
 import { auditLog } from "@/lib/audit/log";
+import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
 
 export type AttachEvidenceState = { error?: string; success?: boolean };
 
@@ -22,23 +24,6 @@ const ALLOWED_EVIDENCE_TYPES: Record<string, string> = {
   msg: "application/vnd.ms-outlook",
 };
 
-async function findAccessibleProject(
-  supabase: ReturnType<typeof createAdminClient>,
-  actor: { role: string; id: string },
-  projectId: string
-) {
-  let query = supabase
-    .from("projects")
-    .select("id, client_id, assigned_consultant_id")
-    .eq("id", projectId)
-    .is("deleted_at", null);
-  if (actor.role === "consultant") {
-    query = query.eq("assigned_consultant_id", actor.id);
-  }
-  const { data } = await query.maybeSingle();
-  return data;
-}
-
 export type RequestEvidenceUploadResult =
   | { error: string }
   | { path: string; signedUrl: string; token: string; contentType: string };
@@ -54,7 +39,7 @@ export async function requestEvidenceUploadUrl(
   const actor = await requireRole("consultant", "admin", "super_admin");
   const supabase = createAdminClient();
 
-  const project = await findAccessibleProject(supabase, actor, projectId);
+  const project = await requireProjectAccess(supabase, actor, projectId);
   if (!project) return { error: "Project not found or access denied." };
 
   if (!size || size === 0) return { error: "Please select a file." };
@@ -68,7 +53,7 @@ export async function requestEvidenceUploadUrl(
     };
   }
 
-  const storagePath = `${project.client_id}/${projectId}/evidence/${Date.now()}_${filename}`;
+  const storagePath = `${project.client_id}/${projectId}/evidence/${Date.now()}_${sanitizeFilename(filename)}`;
   const { data, error } = await supabase.storage.from("evidence").createSignedUploadUrl(storagePath);
   if (error || !data) return { error: "Failed to prepare upload. Please try again." };
 
@@ -91,7 +76,7 @@ export async function attachEvidence(
   const actor = await requireRole("consultant", "admin", "super_admin");
   const supabase = createAdminClient();
 
-  const project = await findAccessibleProject(supabase, actor, projectId);
+  const project = await requireProjectAccess(supabase, actor, projectId);
   if (!project) return { error: "Project not found or access denied." };
 
   // Confirm the upload actually landed at the expected path (and under the

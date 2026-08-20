@@ -16,7 +16,11 @@ vi.mock("@/lib/documents/converter");
 import { dispatchPbdb } from "./dispatch";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveStakeholders } from "@/lib/stakeholders/resolver";
-import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
+import {
+  generateTokenString,
+  computeTokenExpiry,
+  computeSignedUrlExpirySeconds,
+} from "@/lib/stakeholders/tokens";
 import { checkDispatchGate } from "@/lib/payments/gate";
 import { logUpfront } from "@/lib/payments/ledger";
 import { sendEmail } from "@/lib/email/sender";
@@ -110,6 +114,7 @@ beforeEach(() => {
   vi.mocked(logUpfront).mockResolvedValue(undefined);
   vi.mocked(generateTokenString).mockReturnValue("mock-token-123");
   vi.mocked(computeTokenExpiry).mockResolvedValue(new Date("2026-06-30T00:00:00Z"));
+  vi.mocked(computeSignedUrlExpirySeconds).mockResolvedValue(14 * 24 * 3600);
   vi.mocked(renderApprovalRequestEmail).mockReturnValue("<html>approval</html>");
   vi.mocked(sendEmail).mockResolvedValue(true);
   vi.mocked(resolveStakeholders).mockResolvedValue(ORG_STAKEHOLDERS);
@@ -263,7 +268,7 @@ describe("dispatchPbdb — stakeholder-facing artifact is a PDF, never the docx"
       expect.objectContaining({ file_type: "pbdb_pdf", storage_path: expectedPdfPath })
     );
     // The emailed link must point at the PDF path, never the raw docx path.
-    expect(createSignedUrlFn).toHaveBeenCalledWith(expectedPdfPath, 7 * 24 * 3600);
+    expect(createSignedUrlFn).toHaveBeenCalledWith(expectedPdfPath, 14 * 24 * 3600);
     expect(createSignedUrlFn).not.toHaveBeenCalledWith(docxRow.storage_path, expect.anything());
   });
 });

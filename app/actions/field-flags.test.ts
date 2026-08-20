@@ -39,6 +39,7 @@ function chain(data: unknown, error: unknown = null, count: number | null = null
   const self = () => obj;
   obj.select = self;
   obj.eq = self;
+  obj.is = self;
   obj.update = self;
   obj.single = resolve;
   obj.maybeSingle = resolve;
@@ -67,9 +68,21 @@ function buildMock({
     }
 
     if (table === "projects") {
-      if (n === 1) return chain({ status: "in_progress" }); // projectForStage
+      // n=1: requireProjectAccess's own fetch (#160) — grant access to ACTOR
+      // (a consultant assigned to this project).
+      if (n === 1) {
+        return chain({
+          id: "proj-1",
+          client_id: "org-1",
+          submitted_by: null,
+          assigned_consultant_id: ACTOR.id,
+          status: "in_progress",
+          extracted_fields: {},
+        });
+      }
+      if (n === 2) return chain({ status: "in_progress" }); // projectForStage
       // extracted_fields sync select then update
-      if (n === 2) return chain({ extracted_fields: {}, site_address: null });
+      if (n === 3) return chain({ extracted_fields: {}, site_address: null });
       return chain(null);
     }
 
@@ -168,7 +181,15 @@ describe("resolveAndAcknowledgeFieldFlag — merged resolve+acknowledge (#116)",
         return obj;
       }
       if (table === "projects") {
-        return chain({ status: "in_progress", extracted_fields: {}, site_address: null });
+        return chain({
+          id: "proj-1",
+          client_id: "org-1",
+          submitted_by: null,
+          assigned_consultant_id: ACTOR.id,
+          status: "in_progress",
+          extracted_fields: {},
+          site_address: null,
+        });
       }
       return chain(null);
     });
@@ -210,6 +231,16 @@ describe("acknowledgeFieldFlag — audit logging", () => {
     const from = vi.fn((table: string) => {
       if (table === "field_flags") {
         return chain({ project_id: "proj-1", field_key: "EXTRACT_PO", current_value: "OLD-1" });
+      }
+      if (table === "projects") {
+        return chain({
+          id: "proj-1",
+          client_id: "org-1",
+          submitted_by: null,
+          assigned_consultant_id: ACTOR.id,
+          status: "in_progress",
+          extracted_fields: {},
+        });
       }
       return chain(null);
     });

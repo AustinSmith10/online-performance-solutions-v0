@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { sendEmail } from "@/lib/email/sender";
 import { buildStakeholderReplyTo } from "@/lib/email/parser";
-import { generateTokenString } from "@/lib/stakeholders/tokens";
+import { generateTokenString, hashToken } from "@/lib/stakeholders/tokens";
 import { getCandidateReviewsForSender, type CandidateReview } from "@/lib/email-queue/candidate-reviews";
 import { renderClarificationRequestEmail } from "@/lib/email/templates/ClarificationRequestEmail";
 import {
@@ -375,6 +375,7 @@ export async function requestClarification(queueId: string, message: string): Pr
     .update({
       status: "awaiting_clarification",
       clarification_token: token,
+      clarification_token_hash: hashToken(token),
       clarification_expires_at: expiresAt.toISOString(),
       clarification_requested_at: new Date().toISOString(),
       clarification_requested_by: actor.id,

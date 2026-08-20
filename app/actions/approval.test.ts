@@ -9,15 +9,22 @@ vi.mock("@/lib/email/templates/ModificationsRequestedEmail");
 vi.mock("@/lib/email/templates/ApprovalRequestEmail");
 vi.mock("@/lib/email/sender", () => ({ sendEmail: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/documents/pbdb-pdf");
 
 import { submitApproval, requestNewApprovalLink } from "./approval";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { validateToken, generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
+import {
+  validateToken,
+  generateTokenString,
+  computeTokenExpiry,
+  hashToken,
+} from "@/lib/stakeholders/tokens";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { sendEmail } from "@/lib/email/sender";
+import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -311,7 +318,7 @@ describe("submitApproval — rejected", () => {
 describe("requestNewApprovalLink", () => {
   const CURRENT_REVIEW = {
     id: "review-current",
-    token: "expired-token",
+    token_hash: "hash-of-expired-token",
     status: "pending",
     stakeholder_name: "Jane Smith",
     stakeholder_email: "jane@example.com",
@@ -322,11 +329,10 @@ describe("requestNewApprovalLink", () => {
     currentReview = CURRENT_REVIEW as unknown,
     updateCount = 1,
   } = {}) {
-    const updateReview = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ data: null, error: null, count: updateCount }),
-      }),
-    });
+    const updateEqId = vi.fn();
+    const updateEqTokenHash = vi.fn().mockResolvedValue({ data: null, error: null, count: updateCount });
+    updateEqId.mockReturnValue({ eq: updateEqTokenHash });
+    const updateReview = vi.fn().mockReturnValue({ eq: updateEqId });
     const selectProject = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         single: vi.fn().mockResolvedValue({ data: project, error: null }),
@@ -344,6 +350,8 @@ describe("requestNewApprovalLink", () => {
 
     return {
       updateReview,
+      updateEqId,
+      updateEqTokenHash,
       from: vi.fn((table: string) => {
         if (table === "projects") return { select: selectProject };
         if (table === "stakeholder_reviews") {
@@ -357,8 +365,13 @@ describe("requestNewApprovalLink", () => {
 
   beforeEach(() => {
     vi.mocked(generateTokenString).mockReturnValue("new-token");
+    vi.mocked(hashToken).mockImplementation((t: string) => `hash-of-${t}`);
     vi.mocked(computeTokenExpiry).mockResolvedValue(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000));
     vi.mocked(renderApprovalRequestEmail).mockReturnValue("<html>reissue</html>");
+    vi.mocked(getOrCreateDispatchPdf).mockResolvedValue({
+      storagePath: "org-1/proj-1/pbdb/v1_file.pdf",
+      originalFilename: "file.pdf",
+    });
   });
 
   it("errors on an invalid token", async () => {
@@ -438,5 +451,89 @@ describe("requestNewApprovalLink", () => {
     const result = await requestNewApprovalLink("expired-token", {}, makeFormData({}));
     expect(result.error).toBeTruthy();
     expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+  });
+
+  // #159 — the CAS used to read back the plaintext `token` from a prior SELECT
+  // and match the UPDATE on it; it must now do the equivalent against
+  // `token_hash` on both sides, never touching plaintext at all.
+  it("matches the compare-and-swap update on token_hash, not plaintext token", async () => {
+    vi.mocked(validateToken).mockResolvedValue({ review: VALID_REVIEW as never, isExpired: true });
+    const mock = buildReissueMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await requestNewApprovalLink("expired-token", {}, makeFormData({}));
+
+    expect(result.sent).toBe(true);
+    // The write payload sets a fresh token_hash alongside the new plaintext token.
+    expect(mock.updateReview).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "new-token", token_hash: "hash-of-new-token" }),
+      { count: "exact" }
+    );
+    // The CAS match condition is the *current* review's own token_hash — never
+    // the plaintext token, and never re-derived from the new token.
+    expect(mock.updateEqId).toHaveBeenCalledWith("id", CURRENT_REVIEW.id);
+    expect(mock.updateEqTokenHash).toHaveBeenCalledWith("token_hash", CURRENT_REVIEW.token_hash);
+  });
+
+  // #133 — this is the one link-issuing path that used to skip verifying the
+  // PBDB PDF exists for the current cycle, which could hand out a link to a
+  // page with a broken Download button.
+  it("verifies/regenerates the PBDB PDF for the current cycle before sending the reissue email", async () => {
+    vi.mocked(validateToken).mockResolvedValue({ review: VALID_REVIEW as never, isExpired: true });
+    const mock = buildReissueMock({
+      project: {
+        review_cycle: 1,
+        client_id: "client-1",
+        strip_token_color: true,
+        project_number: "OPS-001",
+        extracted_fields: { EXTRACT_ADDRESS: "1 Main St" },
+        clients: { state_territory: "NSW" },
+      },
+    });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await requestNewApprovalLink("expired-token", {}, makeFormData({}));
+
+    expect(result.sent).toBe(true);
+    expect(vi.mocked(getOrCreateDispatchPdf)).toHaveBeenCalledWith(
+      mock,
+      expect.objectContaining({
+        id: "proj-1",
+        client_id: "client-1",
+        review_cycle: 1,
+        strip_token_color: true,
+        project_number: "OPS-001",
+        extracted_fields: { EXTRACT_ADDRESS: "1 Main St" },
+      }),
+      null
+    );
+    // Called before the reissue email is sent.
+    const pdfCallOrder = vi.mocked(getOrCreateDispatchPdf).mock.invocationCallOrder[0];
+    const emailCallOrder = vi.mocked(sendEmail).mock.invocationCallOrder[0];
+    expect(pdfCallOrder).toBeLessThan(emailCallOrder);
+  });
+
+  it("still sends the reissue email when no source docx exists for the cycle", async () => {
+    vi.mocked(validateToken).mockResolvedValue({ review: VALID_REVIEW as never, isExpired: true });
+    vi.mocked(getOrCreateDispatchPdf).mockResolvedValue(null);
+    const mock = buildReissueMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await requestNewApprovalLink("expired-token", {}, makeFormData({}));
+
+    expect(result.sent).toBe(true);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalled();
+  });
+
+  it("still sends the reissue email even if PDF verification/regeneration throws", async () => {
+    vi.mocked(validateToken).mockResolvedValue({ review: VALID_REVIEW as never, isExpired: true });
+    vi.mocked(getOrCreateDispatchPdf).mockRejectedValue(new Error("conversion failed"));
+    const mock = buildReissueMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await requestNewApprovalLink("expired-token", {}, makeFormData({}));
+
+    expect(result.sent).toBe(true);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalled();
   });
 });

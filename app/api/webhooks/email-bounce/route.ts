@@ -64,17 +64,39 @@ export async function POST(req: NextRequest) {
     projectId = (sendLog?.project_id as string | null) ?? null;
   }
 
-  const { error: insertError } = await supabase.from("bounce_events").insert({
-    email,
-    project_id: projectId,
-    reason,
-    type: isComplaint ? "complaint" : "bounce",
-    message_id: body.MessageID ?? null,
-    raw_payload: body as unknown as Record<string, unknown>,
-  });
+  // #150: Postmark retries on non-2xx or a slow response. (message_id, type)
+  // — not plain message_id — is the dedupe key: Postmark sends a `Bounce`
+  // and a `SpamComplaint` event for the same MessageID as genuinely distinct
+  // events, and a plain message_id key would silently drop the second one.
+  // upsert + ignoreDuplicates skips the insert on conflict rather than
+  // erroring, and .select() lets us tell whether a row was actually written.
+  const { data: insertedRows, error: insertError } = await supabase
+    .from("bounce_events")
+    .upsert(
+      {
+        email,
+        project_id: projectId,
+        reason,
+        type: isComplaint ? "complaint" : "bounce",
+        message_id: body.MessageID ?? null,
+        raw_payload: body as unknown as Record<string, unknown>,
+      },
+      { onConflict: "message_id,type", ignoreDuplicates: true }
+    )
+    .select("id");
 
   if (insertError) {
     console.error("[email-bounce-webhook] failed to insert bounce_events row:", insertError);
+    return NextResponse.json({ ok: true });
+  }
+
+  // A duplicate (message_id, type) pair — including the case where
+  // message_id is null and the partial unique index doesn't apply, in which
+  // case ignoreDuplicates never suppresses the insert and a row is always
+  // returned — falls through to no row being reported as inserted only when
+  // it truly collided, so skip the audit log rather than double-logging the
+  // same bounce/complaint on a Postmark retry.
+  if (!insertedRows || insertedRows.length === 0) {
     return NextResponse.json({ ok: true });
   }
 

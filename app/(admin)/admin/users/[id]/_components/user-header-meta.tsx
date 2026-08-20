@@ -6,10 +6,19 @@ import { useActionState } from "react";
 import { updateUserEmail, type EditUserEmailState } from "@/app/actions/admin-users";
 import { updateUserProfile, type EditUserState } from "@/app/actions/admin-users";
 import { EditIconButton } from "@/components/EditIconButton";
-import type { User, Client } from "@/types";
+import type { Client, UserRole } from "@/types";
+
+// Minimal DTO — only the fields this component actually renders/edits.
+// Do not widen this to the full `User` row; see issue #157.
+export interface UserHeaderMetaUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  client_id: string | null;
+}
 
 type Props = {
-  user: User;
+  user: UserHeaderMetaUser;
   clients: Pick<Client, "id" | "name">[];
 };
 
@@ -29,7 +38,7 @@ export function UserHeaderMeta({ user, clients }: Props) {
   );
 }
 
-function EmailField({ user }: { user: User }) {
+function EmailField({ user }: { user: UserHeaderMetaUser }) {
   const boundAction = updateUserEmail.bind(null, user.id);
   const [state, formAction, pending] = useActionState<EditUserEmailState, FormData>(boundAction, {});
   const [editing, setEditing] = useState(false);
@@ -86,7 +95,7 @@ function EmailField({ user }: { user: User }) {
   );
 }
 
-function ClientField({ user, clients }: { user: User; clients: Pick<Client, "id" | "name">[] }) {
+function ClientField({ user, clients }: { user: UserHeaderMetaUser; clients: Pick<Client, "id" | "name">[] }) {
   const boundAction = updateUserProfile.bind(null, user.id);
   const [state, formAction, pending] = useActionState<EditUserState, FormData>(boundAction, {});
   const [editing, setEditing] = useState(false);

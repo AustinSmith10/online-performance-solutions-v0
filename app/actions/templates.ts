@@ -8,6 +8,7 @@ import { auditLog } from "@/lib/audit/log";
 import { extractPlaceholderTokens } from "@/lib/documents/validator";
 import { detectSource, isKnownToken } from "@/lib/documents/field-keys";
 import type { ComparisonMode } from "@/lib/documents/compare-candidates";
+import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
 
 const COMPARISON_MODES = new Set<ComparisonMode>(["exact", "normalized", "semantic"]);
 function parseComparisonMode(v: FormDataEntryValue | null): ComparisonMode {
@@ -35,7 +36,7 @@ export async function uploadTemplate(
 
   const supabase = createAdminClient();
   const templateId = crypto.randomUUID();
-  const storagePath = `${orgId}/${templateId}/${file.name}`;
+  const storagePath = `${orgId}/${templateId}/${sanitizeFilename(file.name)}`;
 
   const fileBuffer = await file.arrayBuffer();
 
@@ -367,7 +368,7 @@ export async function reuploadTemplate(
     if (conflicts.length > 0) return { conflicts };
   }
 
-  const newStoragePath = `${template.client_id}/${templateId}/${file.name}`;
+  const newStoragePath = `${template.client_id}/${templateId}/${sanitizeFilename(file.name)}`;
 
   // Remove old file then upload new one
   await supabase.storage.from("templates").remove([template.storage_path as string]);

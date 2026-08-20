@@ -555,6 +555,11 @@ export async function resetUserTotp(userId: string) {
 
   const supabase = createAdminClient();
 
+  const { data: target } = await supabase.from("users").select("role").eq("id", userId).single();
+  if (actor.role === "admin" && target && (target.role === "super_admin" || target.role === "admin")) {
+    throw new Error("Insufficient permissions.");
+  }
+
   const { data: factorData } = await supabase.auth.admin.mfa.listFactors({ userId });
   const totpFactors = factorData?.factors?.filter((f) => f.factor_type === "totp") ?? [];
   await Promise.all(
@@ -576,6 +581,11 @@ export async function requireUserTotp(userId: string) {
   const actor = await requireRole("super_admin", "admin");
 
   const supabase = createAdminClient();
+
+  const { data: target } = await supabase.from("users").select("role").eq("id", userId).single();
+  if (actor.role === "admin" && target && (target.role === "super_admin" || target.role === "admin")) {
+    throw new Error("Insufficient permissions.");
+  }
 
   // Clear any stale unverified (partial) TOTP enrollment so the user starts fresh
   const { data: factorData } = await supabase.auth.admin.mfa.listFactors({ userId });
@@ -621,8 +631,16 @@ export async function updateUserEmail(
   const { email } = validated.data;
   const supabase = createAdminClient();
 
-  const { data: current } = await supabase.from("users").select("email").eq("id", userId).single();
+  const { data: current } = await supabase
+    .from("users")
+    .select("email, role")
+    .eq("id", userId)
+    .single();
   if (!current) return { errors: { email: ["User not found."] } };
+
+  if (actor.role === "admin" && (current.role === "super_admin" || current.role === "admin")) {
+    return { errors: { email: ["Insufficient permissions to edit this account."] } };
+  }
 
   const { error: authError } = await supabase.auth.admin.updateUserById(userId, {
     email,

@@ -15,11 +15,14 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { requireProjectAccess } from "@/lib/auth/project-access";
 import { resolveOrgId, loadFileRequirements, loadExtractTokens, makeSampleTextLoader } from "@/lib/documents/submission-shared";
 import type { UploadManifestItem } from "@/app/actions/submission";
 import { verifyUploadAgainstRequirement } from "@/lib/documents/file-requirement-verification";
 import { extractSingleDocument, type SingleDocExtraction } from "@/lib/documents/extractor";
 import { getJudgeDocumentTextCharCap } from "@/lib/settings/judge-document-text-cap";
+import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
+import { claimExtractionSlot } from "@/lib/documents/extraction-budget";
 
 type ExtractionStatus = "not_applicable" | "pending" | "running" | "completed" | "failed";
 
@@ -29,7 +32,13 @@ async function actorContext(adminOrgId: string | null, adminClientId: string | n
   const actsOnBehalf = isAdmin || actor.role === "consultant";
   const orgId = resolveOrgId(actor, actsOnBehalf, adminOrgId);
   const submittedBy = actsOnBehalf ? (adminClientId as string) : (actor.id as string);
-  return { actor, orgId, submittedBy };
+  // #149: a consultant submitting on behalf of a client is auto-assigned to
+  // the resulting project at draft-creation time — as if they'd picked it up
+  // from the pool themselves. An admin doing the same is NOT auto-assigned;
+  // that draft flows into the same project-number-and-pickup-pool process a
+  // stakeholder's own self-submission already goes through.
+  const assignedConsultantId = actor.role === "consultant" ? (actor.id as string) : null;
+  return { actor, orgId, submittedBy, assignedConsultantId };
 }
 
 // Idempotent — every per-file orchestrator call ensures the draft exists
@@ -42,12 +51,20 @@ async function ensureDraftProject(
   projectId: string,
   templateId: string,
   orgId: string,
-  submittedBy: string
+  submittedBy: string,
+  assignedConsultantId: string | null
 ): Promise<void> {
   await supabase
     .from("projects")
     .upsert(
-      { id: projectId, client_id: orgId, template_id: templateId, submitted_by: submittedBy, status: "draft" },
+      {
+        id: projectId,
+        client_id: orgId,
+        template_id: templateId,
+        submitted_by: submittedBy,
+        assigned_consultant_id: assignedConsultantId,
+        status: "draft",
+      },
       { onConflict: "id", ignoreDuplicates: true }
     );
 }
@@ -57,9 +74,10 @@ async function touchProject(supabase: ReturnType<typeof createAdminClient>, proj
 }
 
 // ─── Signed upload URL for a single file ────────────────────────────────────
-// Single-file counterpart to requestSubmissionUploadUrls — that one validates
-// every required slot is filled, which is wrong for the per-file flow where
-// slots fill in one at a time.
+// Historically had a batch counterpart (requestSubmissionUploadUrls) that
+// validated every required slot was filled up front — removed as dead code
+// (#140); this per-file flow, where slots fill in one at a time, is the only
+// live path now.
 
 export type RequestSingleUploadResult =
   | { error: string }
@@ -73,15 +91,15 @@ export async function requestSingleUploadUrl(
   slug: string,
   item: UploadManifestItem
 ): Promise<RequestSingleUploadResult> {
-  const { orgId, submittedBy } = await actorContext(adminOrgId, adminClientId);
+  const { orgId, submittedBy, assignedConsultantId } = await actorContext(adminOrgId, adminClientId);
   if (!orgId) return { error: "Client is required." };
   const supabase = createAdminClient();
 
   if (item.size > 50 * 1024 * 1024) return { error: `"${item.name}" exceeds the 50 MB limit.` };
 
-  await ensureDraftProject(supabase, projectId, templateId, orgId, submittedBy);
+  await ensureDraftProject(supabase, projectId, templateId, orgId, submittedBy, assignedConsultantId);
 
-  const path = `${orgId}/${projectId}/${slug}/${item.name}`;
+  const path = `${orgId}/${projectId}/${slug}/${sanitizeFilename(item.name)}`;
   const { data, error } = await supabase.storage.from("submissions").createSignedUploadUrl(path);
   if (error || !data) return { error: "Failed to prepare upload. Please try again." };
 
@@ -104,8 +122,24 @@ async function runExtractionForFile(
   label: string,
   buffer: Buffer,
   orgId: string,
-  templateId: string
+  templateId: string,
+  actorId: string
 ): Promise<void> {
+  // #152: per-user extraction budget, checked before every extraction call
+  // regardless of which of the three call sites triggered it (upload-time,
+  // post-confirmation, or retry).
+  const { allowed, limit } = await claimExtractionSlot(supabase, actorId);
+  if (!allowed) {
+    await supabase
+      .from("project_files")
+      .update({
+        extraction_status: "failed" as ExtractionStatus,
+        extraction_error: `Daily extraction limit reached (${limit}/24h). Try again later or contact an admin.`,
+      })
+      .eq("id", fileId);
+    return;
+  }
+
   await supabase.from("project_files").update({ extraction_status: "running" as ExtractionStatus }).eq("id", fileId);
   try {
     const { extractTokens } = await loadExtractTokens(supabase, orgId, templateId);
@@ -136,11 +170,11 @@ export async function processUploadedFile(
   name: string,
   path: string
 ): Promise<ProcessUploadedFileResult> {
-  const { actor, orgId, submittedBy } = await actorContext(adminOrgId, adminClientId);
+  const { actor, orgId, submittedBy, assignedConsultantId } = await actorContext(adminOrgId, adminClientId);
   if (!orgId) return { error: "Client is required." };
   const supabase = createAdminClient();
 
-  await ensureDraftProject(supabase, projectId, templateId, orgId, submittedBy);
+  await ensureDraftProject(supabase, projectId, templateId, orgId, submittedBy, assignedConsultantId);
 
   const fileReqs = await loadFileRequirements(supabase, templateId);
   const requirement = fileReqs.find((r) => r.id === requirementId);
@@ -198,7 +232,7 @@ export async function processUploadedFile(
   await touchProject(supabase, projectId);
 
   if (requirement.extraction && clean) {
-    await runExtractionForFile(supabase, fileId, requirement.name, buffer, orgId, templateId);
+    await runExtractionForFile(supabase, fileId, requirement.name, buffer, orgId, templateId, actor.id);
     await touchProject(supabase, projectId);
     const state = await readBackExtractionState(supabase, fileId);
     return { fileId, mismatchReasons: clean ? null : reasons, ...state };
@@ -226,6 +260,10 @@ export async function confirmFileVerification(fileId: string): Promise<FileActio
     .maybeSingle();
   if (fetchErr || !file) return { error: "File not found." };
 
+  if (!(await requireProjectAccess(supabase, actor, file.project_id as string))) {
+    return { error: "File not found." };
+  }
+
   await supabase
     .from("project_files")
     .update({ verification_confirmed_at: new Date().toISOString(), verification_confirmed_by: actor.id })
@@ -251,7 +289,8 @@ export async function confirmFileVerification(fileId: string): Promise<FileActio
           file.original_filename as string,
           buffer,
           project.client_id as string,
-          project.template_id as string
+          project.template_id as string,
+          actor.id
         );
       }
     }
@@ -279,7 +318,7 @@ async function readBackExtractionState(
 }
 
 export async function retryFileExtraction(fileId: string): Promise<FileActionResult> {
-  await requireRole("stakeholder", "consultant", "super_admin", "admin");
+  const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: file, error: fetchErr } = await supabase
@@ -289,12 +328,9 @@ export async function retryFileExtraction(fileId: string): Promise<FileActionRes
     .maybeSingle();
   if (fetchErr || !file) return { error: "File not found." };
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("client_id, template_id")
-    .eq("id", file.project_id as string)
-    .maybeSingle();
-  if (!project?.template_id) return { error: "Project not found." };
+  const project = await requireProjectAccess(supabase, actor, file.project_id as string);
+  if (!project) return { error: "File not found." };
+  if (!project.template_id) return { error: "Project not found." };
 
   const { data: downloaded, error: downloadError } = await supabase.storage
     .from("submissions")
@@ -308,7 +344,8 @@ export async function retryFileExtraction(fileId: string): Promise<FileActionRes
     file.original_filename as string,
     buffer,
     project.client_id as string,
-    project.template_id as string
+    project.template_id as string,
+    actor.id
   );
   await touchProject(supabase, file.project_id as string);
   return readBackExtractionState(supabase, fileId);
@@ -317,7 +354,7 @@ export async function retryFileExtraction(fileId: string): Promise<FileActionRes
 // ─── Remove an uploaded file (also covers "replace": remove, then re-upload) ─
 
 export async function removeUploadedFile(fileId: string): Promise<{ error?: string }> {
-  await requireRole("stakeholder", "consultant", "super_admin", "admin");
+  const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
   const { data: file, error: fetchErr } = await supabase
@@ -326,6 +363,10 @@ export async function removeUploadedFile(fileId: string): Promise<{ error?: stri
     .eq("id", fileId)
     .maybeSingle();
   if (fetchErr || !file) return { error: "File not found." };
+
+  if (!(await requireProjectAccess(supabase, actor, file.project_id as string))) {
+    return { error: "File not found." };
+  }
 
   await supabase.storage.from("submissions").remove([file.storage_path as string]);
   await supabase.from("project_files").delete().eq("id", fileId);

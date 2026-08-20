@@ -31,7 +31,9 @@ export async function getPublicHolidays(state: string | null, year: number): Pro
 
   let holidays: Set<string>;
   try {
-    const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/AU`);
+    const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/AU`, {
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as NagerHoliday[];
 

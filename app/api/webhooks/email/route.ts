@@ -10,9 +10,10 @@ import {
   attachmentBuffer,
   type PostmarkInboundEmail,
 } from "@/lib/email/parser";
-import { validateToken } from "@/lib/stakeholders/tokens";
+import { validateToken, hashToken } from "@/lib/stakeholders/tokens";
 import { e } from "@/lib/email/templates/shell";
 import { isPostmarkWebhookAuthorized } from "@/lib/email/webhook-auth";
+import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
 
 // Postmark retries on non-2xx — always return 200 so it doesn't retry on expected failures.
 // This does not apply to auth failures below: Postmark won't retry with different
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     const { data: awaiting } = await supabase
       .from("inbound_email_queue")
       .select("id, status")
-      .eq("clarification_token", payload.MailboxHash)
+      .eq("clarification_token_hash", hashToken(payload.MailboxHash))
       .gt("clarification_expires_at", new Date().toISOString())
       .maybeSingle();
 
@@ -121,10 +122,17 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 1. Look up sender ──────────────────────────────────────────────────────
+  // #147: a soft-deleted or deactivated user's inbound email must not be
+  // accepted and queued for admin action — same active-status filter shape
+  // used elsewhere in this codebase (e.g. softDeleteUser/deleteUser in
+  // app/actions/admin-users.ts). A sender that fails this filter falls
+  // through to the unrecognised-sender path below, same as no row at all.
   const { data: user } = await supabase
     .from("users")
     .select("id, email, client_id, role")
     .eq("email", fromEmail)
+    .is("deleted_at", null)
+    .eq("is_active", true)
     .single();
 
   if (!user || !user.client_id) {
@@ -283,6 +291,23 @@ async function queueInboundEmail(
     matchReason: MatchReason;
   }
 ) {
+  // #150: Postmark retries on non-2xx or a slow response, and this function
+  // does real work (storage upload, DB insert, outbound reply) before ever
+  // returning. Check for an existing row with the same message_id up front
+  // — before the attachment-upload loop, not just relying on ON CONFLICT on
+  // the final insert below — so a retried delivery does no work at all
+  // rather than re-uploading attachments it's about to discard.
+  if (payload.MessageID) {
+    const { data: existing } = await supabase
+      .from("inbound_email_queue")
+      .select("id")
+      .eq("message_id", payload.MessageID)
+      .maybeSingle();
+    if (existing) {
+      return;
+    }
+  }
+
   const queueId = crypto.randomUUID();
 
   const supportedFiles = payload.Attachments.filter((a) => isSupportedAttachment(a.ContentType));
@@ -290,7 +315,7 @@ async function queueInboundEmail(
 
   for (const attachment of supportedFiles) {
     const buffer = attachmentBuffer(attachment);
-    const storagePath = `${queueId}/${attachment.Name}`;
+    const storagePath = `${queueId}/${sanitizeFilename(attachment.Name)}`;
 
     const { error: uploadError } = await supabase.storage
       .from("pending-inbound")
@@ -324,6 +349,14 @@ async function queueInboundEmail(
   });
 
   if (insertError) {
+    // 23505 = unique_violation on the message_id constraint (#150) — a
+    // concurrent retry raced past the early check above and lost. The
+    // attachments this call just uploaded are orphaned under this call's
+    // own queueId (never referenced by the row that won), so they don't
+    // collide with anything and are harmless to leave; nothing else to do.
+    if ((insertError as { code?: string }).code === "23505") {
+      return;
+    }
     console.error("[email-webhook] Failed to insert inbound email queue row:", insertError);
     return;
   }

@@ -2,6 +2,8 @@ import "server-only";
 import { createRequire } from "module";
 import Anthropic from "@anthropic-ai/sdk";
 import { classifyProviderError, reportProviderFailure } from "@/lib/ai/provider-failure";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getAiExtractionEnabled } from "@/lib/settings/ai-extraction-enabled";
 
 const require = createRequire(import.meta.url);
 type PdfPageProxy = {
@@ -290,9 +292,16 @@ async function extractWithAnthropic(
   prompt: string,
   tokenNames: string[]
 ): Promise<SingleDocResult> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  // 180s — sized for up to 150k chars of input (DOC_TEXT_CHAR_CAP). Do not
+  // lower this: a shorter timeout fails silently into an empty extraction
+  // result on genuinely large documents rather than a visible error (#139).
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 180_000 });
   const schema = buildExtractionSchema(tokenNames);
   const response = await client.messages.create({
+    // Confirmed against GET /v1/models (2026-08-20, #154): "claude-sonnet-5"
+    // is currently the only ID Anthropic exposes for this model — there is
+    // no dated snapshot variant yet. Re-check the models endpoint and pin
+    // to a dated ID once one exists.
     model: "claude-sonnet-5",
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
@@ -300,6 +309,20 @@ async function extractWithAnthropic(
   });
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
   return parseJson(text, tokenNames);
+}
+
+// Fail-open wrapper around the app_settings-backed kill switch (#153) — a
+// Supabase misconfiguration or outage while reading the toggle must not
+// silently disable extraction, so any error here defaults to "enabled"
+// rather than propagating. Mirrors the fail-open behavior already used for
+// Anthropic call failures elsewhere in this file.
+async function isAiExtractionEnabled(): Promise<boolean> {
+  try {
+    return await getAiExtractionEnabled(createAdminClient());
+  } catch (err) {
+    console.error("[extractor] AI extraction kill-switch lookup failed, defaulting to enabled:", err);
+    return true;
+  }
 }
 
 async function runSingleExtraction(
@@ -310,6 +333,13 @@ async function runSingleExtraction(
     po_number: { ...EMPTY_FIELD },
     fields: Object.fromEntries(tokenNames.map((t) => [t, [{ ...EMPTY_FIELD }]])),
   };
+
+  // Kill switch (#153) — checked before touching the Anthropic SDK at all.
+  // Off short-circuits to the same empty-result fallback used for the
+  // no-API-key case, so this is not a new failure mode for callers.
+  if (!(await isAiExtractionEnabled())) {
+    return empty;
+  }
 
   if (process.env.ANTHROPIC_API_KEY) {
     try {
@@ -423,11 +453,19 @@ export async function runTextCompletion(
   context = "AI text completion",
   outputSchema?: JsonOutputSchema
 ): Promise<string> {
+  // Kill switch (#153) — same fallback shape as the no-API-key path below.
+  if (!(await isAiExtractionEnabled())) {
+    return "";
+  }
+
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      // 30s — short-output classification/extraction judgments (#139).
+      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 30_000 });
       const response = await client.messages.create({
-        model: "claude-haiku-4-5",
+        // Pinned to the dated snapshot confirmed via GET /v1/models
+        // (2026-08-20, #154).
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 512,
         messages: [{ role: "user", content: prompt }],
         ...(outputSchema

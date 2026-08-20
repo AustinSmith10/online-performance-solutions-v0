@@ -1,7 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { validateToken, generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
+import { validateToken, generateTokenString, computeTokenExpiry, hashToken } from "@/lib/stakeholders/tokens";
 import { auditLog } from "@/lib/audit/log";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { sendEmail } from "@/lib/email/sender";
@@ -11,6 +11,7 @@ import {
   notifyIfFullyApproved,
 } from "@/lib/stakeholders/review-outcome";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
+import { getOrCreateDispatchPdf, type DispatchPdfProject } from "@/lib/documents/pbdb-pdf";
 
 export interface ApprovalState {
   error?: string;
@@ -171,7 +172,9 @@ export async function requestNewApprovalLink(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("review_cycle, clients(state_territory)")
+    .select(
+      "review_cycle, client_id, strip_token_color, project_number, extracted_fields, clients(state_territory)"
+    )
     .eq("id", review.project_id)
     .single();
 
@@ -182,7 +185,7 @@ export async function requestNewApprovalLink(
   const currentCycle = project.review_cycle as number;
   const { data: currentReview } = await supabase
     .from("stakeholder_reviews")
-    .select("id, token, status, stakeholder_name, stakeholder_email")
+    .select("id, token_hash, status, stakeholder_name, stakeholder_email")
     .eq("project_id", review.project_id)
     .eq("review_cycle", currentCycle)
     .eq("stakeholder_email", review.stakeholder_email)
@@ -207,13 +210,38 @@ export async function requestNewApprovalLink(
   const { count } = await supabase
     .from("stakeholder_reviews")
     .update(
-      { token, expires_at: expiresAt.toISOString(), fresh_token_sent_at: new Date().toISOString() },
+      {
+        token,
+        token_hash: hashToken(token),
+        expires_at: expiresAt.toISOString(),
+        fresh_token_sent_at: new Date().toISOString(),
+      },
       { count: "exact" }
     )
     .eq("id", currentReview.id)
-    .eq("token", currentReview.token as string);
+    .eq("token_hash", currentReview.token_hash as string);
 
   if (!count) return { error: "This link is no longer eligible for a new one." };
+
+  // Verify/regenerate the PBDB PDF for the current cycle, same as every other
+  // link-issuing path (dispatch, late-add, admin resend) — otherwise this
+  // self-serve reissue can hand out a link to a page with a broken Download
+  // button. There's no logged-in staff member here (anonymous stakeholder
+  // action), so actorId is null and the PDF falls back to the source docx's
+  // own uploader. If no source docx exists at all for this cycle, don't block
+  // the reissue email — the approve page's own gating (#132) handles hiding
+  // the Download button in that case.
+  const dispatchPdfProject: DispatchPdfProject = {
+    id: review.project_id,
+    client_id: project.client_id as string,
+    review_cycle: currentCycle,
+    strip_token_color: project.strip_token_color as boolean | null,
+    project_number: project.project_number as string | null,
+    extracted_fields: project.extracted_fields as Record<string, string> | null,
+  };
+  await getOrCreateDispatchPdf(supabase, dispatchPdfProject, null).catch((err) => {
+    console.error(`[requestNewApprovalLink] PBDB PDF verify/regenerate failed:`, err);
+  });
 
   const approvalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
   const emailHtml = renderApprovalRequestEmail({

@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveStakeholders } from "./resolver";
-import { generateTokenString, computeTokenExpiry } from "./tokens";
+import { generateTokenString, computeTokenExpiry, hashToken, computeSignedUrlExpirySeconds } from "./tokens";
 import { checkDispatchGate } from "@/lib/payments/gate";
 import { deductCredit, debitDeferred, logUpfront } from "@/lib/payments/ledger";
 import { notify } from "@/lib/notifications/notify";
@@ -140,7 +140,7 @@ export async function dispatchPbdb(
   const pbdbUrl = pbdbPdf
     ? await supabase.storage
         .from("documents")
-        .createSignedUrl(pbdbPdf.storagePath, 7 * 24 * 3600)
+        .createSignedUrl(pbdbPdf.storagePath, await computeSignedUrlExpirySeconds(now, stateTerritory))
         .then((r) => r.data?.signedUrl ?? null)
     : null;
 
@@ -182,6 +182,7 @@ export async function dispatchPbdb(
         stakeholder_email: stakeholder.email.toLowerCase(),
         stakeholder_name: stakeholder.name,
         token,
+        token_hash: hashToken(token),
         dispatched_at: now.toISOString(),
         expires_at: expiresAt.toISOString(),
         fresh_token_sent_at: null,

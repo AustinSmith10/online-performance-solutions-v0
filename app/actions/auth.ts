@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SESSION_DURATION, SESSION_EXPIRY_COOKIE } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
+import { isSafeRedirectPath } from "@/lib/http/safe-redirect";
 import type { UserRole } from "@/types";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -173,7 +174,7 @@ export async function login(
   });
 
   const next = formData.get("next") as string | null;
-  redirect(next || roleHomePath(role));
+  redirect(isSafeRedirectPath(next) ? (next as string) : roleHomePath(role));
 }
 
 // ─── Logout ───────────────────────────────────────────────────────────────────

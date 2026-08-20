@@ -9,7 +9,7 @@ import {
   useUnsavedChanges,
   useRequestNavigate,
 } from "@/components/UnsavedChangesProvider";
-import type { User, Client, ConsultantAvailability } from "@/types";
+import type { Client, ConsultantAvailability, UserRole } from "@/types";
 
 const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
   available: "Available",
@@ -21,8 +21,22 @@ const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
 
 type Tab = "profile" | "availability";
 
+// Minimal DTO — only the fields this component actually renders/edits.
+// Do not widen this to the full `User` row; see issue #157.
+export interface UserTabsUser {
+  id: string;
+  role: UserRole;
+  client_id: string | null;
+  availability: ConsultantAvailability;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  company_role: string | null;
+  state_territory: string | null;
+}
+
 type Props = {
-  user: User;
+  user: UserTabsUser;
   clients: Pick<Client, "id" | "name">[];
   availabilityActions: Record<ConsultantAvailability, () => Promise<void>>;
 };
@@ -113,7 +127,7 @@ type FieldDef =
       required?: boolean;
     };
 
-function displayValue(user: User, field: FieldDef): string {
+function displayValue(user: UserTabsUser, field: FieldDef): string {
   if (field.kind === "select") {
     const current = String(user[field.key] ?? "");
     return field.options.find((o) => o.value === current)?.label ?? "—";
@@ -126,7 +140,7 @@ function ProfileSection({
   user,
   clients,
 }: {
-  user: User;
+  user: UserTabsUser;
   clients: Pick<Client, "id" | "name">[];
 }) {
   const showOrg = user.role === "stakeholder" || user.role === "consultant";
@@ -168,7 +182,7 @@ function ProfileSection({
   );
 }
 
-function EditableRow({ user, field }: { user: User; field: FieldDef }) {
+function EditableRow({ user, field }: { user: UserTabsUser; field: FieldDef }) {
   const boundAction = updateUserProfile.bind(null, user.id);
   const [state, formAction, pending] = useActionState<EditUserState, FormData>(boundAction, {});
   const [editing, setEditing] = useState(false);

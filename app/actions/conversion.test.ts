@@ -5,6 +5,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/auth/session");
 vi.mock("@/lib/supabase/admin");
+vi.mock("@/lib/stakeholders/tokens");
 vi.mock("@/lib/documents/delivery");
 vi.mock("@/lib/documents/pending-delivery");
 vi.mock("@/lib/audit/log");
@@ -20,6 +21,7 @@ import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { sendEmail } from "@/lib/email/sender";
 import { redirect } from "next/navigation";
+import { computeSignedUrlExpirySeconds } from "@/lib/stakeholders/tokens";
 
 const PROJECT_ID = "proj-1";
 const ADMIN = { id: "admin-1", email: "admin@ddeg.com.au", role: "super_admin" };
@@ -102,6 +104,7 @@ beforeEach(() => {
   vi.mocked(auditLog).mockResolvedValue(undefined as never);
   vi.mocked(notify).mockResolvedValue(undefined as never);
   vi.mocked(sendEmail).mockResolvedValue(true as never);
+  vi.mocked(computeSignedUrlExpirySeconds).mockResolvedValue(14 * 24 * 3600);
 });
 
 describe("triggerPbdrConversion", () => {

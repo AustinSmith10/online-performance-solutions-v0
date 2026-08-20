@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { setOrgFrozen } from "@/app/actions/clients";
-import { OrgDetailReadonly } from "./_components/org-detail-readonly";
+import { OrgDetailReadonly, type OrgDetailReadonlyOrg } from "./_components/org-detail-readonly";
 import { OrgConfigReadonly } from "./_components/org-config-readonly";
 import { EmailWhitelistDrawer } from "./_components/email-whitelist-drawer";
 import { OrgCreateAccountModal } from "./_components/org-create-account-modal";
@@ -122,6 +122,20 @@ export default async function OrganisationDetailPage({
   }
 
   const orgData = org as Client;
+
+  // Minimal DTO passed to OrgDetailReadonly (a client component) — deliberately
+  // excludes server-only-relevant fields like credit_balance/is_frozen/etc. that
+  // aren't rendered by that component. See issue #157.
+  const orgDetailDto: OrgDetailReadonlyOrg = {
+    id: orgData.id,
+    name: orgData.name,
+    payment_method: orgData.payment_method,
+    state_territory: orgData.state_territory,
+    delivery_working_days: orgData.delivery_working_days,
+    abandoned_draft_days: orgData.abandoned_draft_days,
+    accept_window_working_days: orgData.accept_window_working_days,
+    credit_limit: orgData.credit_limit,
+  };
   const orgUsers = (users ?? []) as Pick<
     User,
     "id" | "email" | "first_name" | "last_name" | "role" | "is_locked" | "created_at"
@@ -250,7 +264,7 @@ export default async function OrganisationDetailPage({
 
   const overviewContent = (
     <div className="space-y-3">
-      <OrgDetailReadonly org={orgData} />
+      <OrgDetailReadonly org={orgDetailDto} />
       <OrgConfigReadonly
         orgId={orgData.id}
         tokens={orgConfigTokens}

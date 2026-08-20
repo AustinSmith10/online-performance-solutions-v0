@@ -27,7 +27,10 @@ export async function getSessionUser() {
     .from("users")
     .select("*")
     .eq("id", user.id)
-    .single();
+    .is("deleted_at", null)
+    .eq("is_active", true)
+    .eq("is_locked", false)
+    .maybeSingle();
 
   return profile ?? null;
 }

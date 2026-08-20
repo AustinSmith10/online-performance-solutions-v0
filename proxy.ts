@@ -28,8 +28,47 @@ const ROLE_ROUTES: Array<{ prefix: string; roles: UserRole[] }> = [
   { prefix: "/portal", roles: ["stakeholder"] },
 ];
 
+// Supabase host, derived once from the configured project URL, for use in
+// connect-src/img-src CSP directives (REST/Storage over https, Realtime over wss).
+const SUPABASE_HOST = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).host;
+
+// Builds the Content-Security-Policy-Report-Only header value for a single
+// request, using a fresh per-request nonce for script-src.
+//
+// Report-only for now — see GitHub issue #158. Not yet wired to a report-to
+// endpoint (tracked separately) and not yet flipped to enforcing (tracked
+// separately). Expect a benign violation report on every PDF preview
+// (pdf.js's worker/eval usage), which is fine to ignore for this pass.
+function buildCspReportOnly(nonce: string): string {
+  return [
+    `script-src 'self' 'nonce-${nonce}'`,
+    `worker-src 'self'`,
+    `style-src 'self' 'unsafe-inline'`,
+    `img-src 'self' data: blob: https://${SUPABASE_HOST}`,
+    `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} blob:`,
+    `font-src 'self'`,
+    `frame-src 'none'`,
+    `object-src 'none'`,
+    `frame-ancestors 'none'`,
+    `form-action 'self'`,
+  ].join("; ");
+}
+
 export async function proxy(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString(
+    "base64"
+  );
+  const cspReportOnly = buildCspReportOnly(nonce);
+
+  // Applies the report-only CSP header to any response before it's returned,
+  // so every exit path from this function — redirects, JSON errors, and the
+  // pass-through response — carries the header.
+  const withCsp = <T extends NextResponse>(response: T): T => {
+    response.headers.set("Content-Security-Policy-Report-Only", cspReportOnly);
+    return response;
+  };
+
+  let supabaseResponse = withCsp(NextResponse.next({ request }));
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,7 +82,7 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          supabaseResponse = NextResponse.next({ request });
+          supabaseResponse = withCsp(NextResponse.next({ request }));
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -63,8 +102,10 @@ export async function proxy(request: NextRequest) {
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     // Redirect already-authenticated users away from login
     if (pathname === "/login" && user) {
-      return NextResponse.redirect(
-        new URL(portalForRole(user.app_metadata?.role as UserRole), request.url)
+      return withCsp(
+        NextResponse.redirect(
+          new URL(portalForRole(user.app_metadata?.role as UserRole), request.url)
+        )
       );
     }
     return supabaseResponse;
@@ -75,12 +116,12 @@ export async function proxy(request: NextRequest) {
   // No session → API routes get 401 JSON; pages redirect to login
   if (!user) {
     if (isApiRoute) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return withCsp(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    return withCsp(NextResponse.redirect(url));
   }
 
   // Auth flow paths (profile setup, 2FA) bypass the expiry check — invited users
@@ -95,18 +136,20 @@ export async function proxy(request: NextRequest) {
   const expiresAt = request.cookies.get(SESSION_EXPIRY_COOKIE)?.value;
   if (!expiresAt || Date.now() > parseInt(expiresAt, 10)) {
     if (isApiRoute) {
-      return NextResponse.json({ error: "Session expired" }, { status: 401 });
+      return withCsp(NextResponse.json({ error: "Session expired" }, { status: 401 }));
     }
-    return NextResponse.redirect(new URL("/api/auth/signout", request.url));
+    return withCsp(NextResponse.redirect(new URL("/api/auth/signout", request.url)));
   }
 
   // Profile completeness check
   const profileComplete = user.user_metadata?.profile_complete === true;
   if (!profileComplete) {
     if (isApiRoute) {
-      return NextResponse.json({ error: "Profile setup incomplete" }, { status: 403 });
+      return withCsp(
+        NextResponse.json({ error: "Profile setup incomplete" }, { status: 403 })
+      );
     }
-    return NextResponse.redirect(new URL("/complete-profile", request.url));
+    return withCsp(NextResponse.redirect(new URL("/complete-profile", request.url)));
   }
 
   // TOTP enrollment enforcement (skipped in development for easier local testing,
@@ -120,9 +163,9 @@ export async function proxy(request: NextRequest) {
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalData?.nextLevel === "aal1") {
       if (isApiRoute) {
-        return NextResponse.json({ error: "2FA setup required" }, { status: 403 });
+        return withCsp(NextResponse.json({ error: "2FA setup required" }, { status: 403 }));
       }
-      return NextResponse.redirect(new URL("/setup-2fa", request.url));
+      return withCsp(NextResponse.redirect(new URL("/setup-2fa", request.url)));
     }
   }
 
@@ -130,8 +173,8 @@ export async function proxy(request: NextRequest) {
 
   // Root → redirect to role portal
   if (pathname === "/") {
-    return NextResponse.redirect(
-      new URL(portalForRole(userRole), request.url)
+    return withCsp(
+      NextResponse.redirect(new URL(portalForRole(userRole), request.url))
     );
   }
 
@@ -139,10 +182,10 @@ export async function proxy(request: NextRequest) {
   const route = ROLE_ROUTES.find((r) => pathname.startsWith(r.prefix));
   if (route && (!userRole || !route.roles.includes(userRole))) {
     if (isApiRoute) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return withCsp(NextResponse.json({ error: "Forbidden" }, { status: 403 }));
     }
-    return NextResponse.redirect(
-      new URL(portalForRole(userRole), request.url)
+    return withCsp(
+      NextResponse.redirect(new URL(portalForRole(userRole), request.url))
     );
   }
 

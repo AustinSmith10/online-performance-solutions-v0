@@ -16,6 +16,8 @@ import {
 } from "@/lib/settings/admin-nav-restrictions";
 import { setEmailsEnabled } from "@/lib/settings/emails-enabled";
 import { setJudgeDocumentTextCharCap } from "@/lib/settings/judge-document-text-cap";
+import { setAiExtractionEnabled } from "@/lib/settings/ai-extraction-enabled";
+import { setExtractionDailyLimit } from "@/lib/settings/extraction-budget";
 
 const DigestScheduleSchema = z.object({
   morning: z.string().refine(isValidTime, { error: "Enter a valid time (HH:MM)" }),
@@ -228,6 +230,78 @@ export async function updateAdminNavRestrictionsAction(
     actor.id as string,
     actor.email as string,
     { metadata: { restricted: validated.data.restricted } }
+  );
+
+  revalidatePath("/admin/settings");
+  return { saved: true };
+}
+
+export type UpdateAiExtractionEnabledState = {
+  saved?: boolean;
+  errors?: { form?: string[] };
+};
+
+export async function updateAiExtractionEnabledAction(
+  _prev: UpdateAiExtractionEnabledState,
+  formData: FormData
+): Promise<UpdateAiExtractionEnabledState> {
+  const actor = await requireRole("super_admin");
+
+  const enabled = formData.get("enabled") === "on";
+
+  const supabase = createAdminClient();
+  const { error } = await setAiExtractionEnabled(supabase, enabled, actor.id as string);
+
+  if (error) return { errors: { form: [error] } };
+
+  await auditLog(
+    "settings.ai_extraction_enabled_updated",
+    actor.id as string,
+    actor.email as string,
+    { metadata: { enabled } }
+  );
+
+  revalidatePath("/admin/settings");
+  return { saved: true };
+}
+
+const ExtractionDailyLimitSchema = z.object({
+  limit: z.coerce.number({ error: "Enter a number" }).int({ error: "Enter a whole number" }).positive(),
+});
+
+export type UpdateExtractionDailyLimitState = {
+  saved?: boolean;
+  errors?: {
+    limit?: string[];
+    form?: string[];
+  };
+};
+
+export async function updateExtractionDailyLimitAction(
+  _prev: UpdateExtractionDailyLimitState,
+  formData: FormData
+): Promise<UpdateExtractionDailyLimitState> {
+  const actor = await requireRole("super_admin", "admin");
+
+  const validated = ExtractionDailyLimitSchema.safeParse({
+    limit: formData.get("limit"),
+  });
+
+  if (!validated.success) {
+    const fieldErrors = validated.error.flatten().fieldErrors;
+    return { errors: { limit: fieldErrors.limit } };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await setExtractionDailyLimit(supabase, validated.data.limit, actor.id as string);
+
+  if (error) return { errors: { form: [error] } };
+
+  await auditLog(
+    "settings.extraction_daily_limit_updated",
+    actor.id as string,
+    actor.email as string,
+    { metadata: { limit: validated.data.limit } }
   );
 
   revalidatePath("/admin/settings");

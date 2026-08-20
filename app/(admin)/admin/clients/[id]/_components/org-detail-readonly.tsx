@@ -5,7 +5,20 @@ import { useActionState } from "react";
 import { updateClient, type ClientFormState } from "@/app/actions/clients";
 import { EditIconButton } from "@/components/EditIconButton";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
-import type { Client } from "@/types";
+import type { PaymentMethod } from "@/types";
+
+// Minimal DTO — only the fields this component actually renders/edits.
+// Do not widen this to the full `Client` row; see issue #157.
+export interface OrgDetailReadonlyOrg {
+  id: string;
+  name: string;
+  payment_method: PaymentMethod;
+  state_territory: string | null;
+  delivery_working_days: number;
+  abandoned_draft_days: number;
+  accept_window_working_days: number;
+  credit_limit: number;
+}
 
 const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
 
@@ -59,7 +72,7 @@ const FIELDS: FieldDef[] = [
   { key: "credit_limit", label: "Credit limit (deferred)", kind: "number", min: 0 },
 ];
 
-function displayValue(org: Client, field: FieldDef): string {
+function displayValue(org: OrgDetailReadonlyOrg, field: FieldDef): string {
   const raw = org[field.key];
   return formatFieldValue(raw !== null && raw !== undefined ? String(raw) : "", field);
 }
@@ -76,7 +89,7 @@ function formatFieldValue(raw: string, field: FieldDef): string {
 }
 
 interface Props {
-  org: Client;
+  org: OrgDetailReadonlyOrg;
 }
 
 export function OrgDetailReadonly({ org }: Props) {
@@ -92,7 +105,7 @@ export function OrgDetailReadonly({ org }: Props) {
   );
 }
 
-function EditableRow({ org, field }: { org: Client; field: FieldDef }) {
+function EditableRow({ org, field }: { org: OrgDetailReadonlyOrg; field: FieldDef }) {
   const boundAction = updateClient.bind(null, org.id);
   const [state, formAction, pending] = useActionState<ClientFormState, FormData>(boundAction, {});
   const [editing, setEditing] = useState(false);

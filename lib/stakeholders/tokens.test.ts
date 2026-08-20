@@ -1,10 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHash } from "crypto";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin");
 vi.mock("@/lib/delivery/public-holidays");
 
-import { generateTokenString, computeTokenExpiry, validateToken } from "./tokens";
+import {
+  generateTokenString,
+  computeTokenExpiry,
+  validateToken,
+  hashToken,
+  computeSignedUrlExpirySeconds,
+} from "./tokens";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 
@@ -67,6 +74,87 @@ describe("computeTokenExpiry", () => {
   });
 });
 
+// ─── computeSignedUrlExpirySeconds (#161) ──────────────────────────────────────
+
+describe("computeSignedUrlExpirySeconds", () => {
+  beforeEach(() => {
+    vi.mocked(getPublicHolidays).mockResolvedValue(new Set<string>());
+  });
+
+  it("defaults to 14 business days ahead (no holidays, starting Monday)", async () => {
+    // Monday 2026-06-22 + 14 working days = Friday 2026-07-10
+    const from = new Date("2026-06-22T00:00:00Z");
+    const seconds = await computeSignedUrlExpirySeconds(from, null);
+    const expiry = new Date(from.getTime() + seconds * 1000);
+    expect(expiry.toISOString().slice(0, 10)).toBe("2026-07-10");
+  });
+
+  it("accounts for a public holiday inside the 14-business-day window", async () => {
+    vi.mocked(getPublicHolidays).mockResolvedValue(new Set(["2026-06-23"])); // Tuesday is a holiday
+    // Monday 2026-06-22 + 14 working days, with Tue 23rd a holiday, lands Monday 2026-07-13
+    const from = new Date("2026-06-22T00:00:00Z");
+    const seconds = await computeSignedUrlExpirySeconds(from, "NSW");
+    const expiry = new Date(from.getTime() + seconds * 1000);
+    expect(expiry.toISOString().slice(0, 10)).toBe("2026-07-13");
+  });
+
+  it("respects a custom businessDays argument", async () => {
+    // Monday 2026-06-22 + 5 working days = Monday 2026-06-29 (same as the
+    // approval token's own 5-day window, sanity-checking against a known value)
+    const from = new Date("2026-06-22T00:00:00Z");
+    const seconds = await computeSignedUrlExpirySeconds(from, null, 5);
+    const expiry = new Date(from.getTime() + seconds * 1000);
+    expect(expiry.toISOString().slice(0, 10)).toBe("2026-06-29");
+  });
+
+  it("fetches holidays for both years when the window spans a year boundary", async () => {
+    // Dec 2026 + 14 business days crosses into January 2027.
+    const from = new Date("2026-12-21T00:00:00Z");
+    await computeSignedUrlExpirySeconds(from, "NSW");
+    const fetchedYears = vi.mocked(getPublicHolidays).mock.calls.map((call) => call[1]);
+    expect(fetchedYears).toContain(2026);
+    expect(fetchedYears).toContain(2027);
+  });
+
+  it("does not fetch a second year when the window stays within one calendar year", async () => {
+    const from = new Date("2026-03-02T00:00:00Z"); // Monday, plenty of room before year-end
+    vi.mocked(getPublicHolidays).mockClear();
+    await computeSignedUrlExpirySeconds(from, "NSW");
+    const fetchedYears = vi.mocked(getPublicHolidays).mock.calls.map((call) => call[1]);
+    expect(fetchedYears).toEqual([2026]);
+  });
+});
+
+// ─── hashToken (#159) ─────────────────────────────────────────────────────────
+
+describe("hashToken", () => {
+  it("matches the well-known SHA-256 test vector for 'hello', lowercase hex", () => {
+    // Confirms encoding/casing matches Postgres's encode(sha256('hello'::bytea), 'hex'),
+    // which is the exact string this must agree with — see #134's backfill.
+    expect(hashToken("hello")).toBe(
+      "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+    );
+  });
+
+  it("is deterministic for the same input", () => {
+    const token = "some-approval-token-string";
+    expect(hashToken(token)).toBe(hashToken(token));
+  });
+
+  it("produces different hashes for different inputs", () => {
+    expect(hashToken("token-a")).not.toBe(hashToken("token-b"));
+  });
+
+  it("a token generated 'before' (hash computed by the SQL-equivalent path) validates identically to one generated 'after' (hash computed by this Node helper)", () => {
+    // Simulates the #134 SQL backfill's encode(sha256(token::bytea), 'hex') by
+    // computing the same digest via Node's crypto directly, independent of
+    // hashToken's own implementation, then confirming they agree bit-for-bit.
+    const preExistingToken = "pre-existing-plaintext-token-from-before-159";
+    const sqlEquivalentHash = createHash("sha256").update(preExistingToken).digest("hex");
+    expect(hashToken(preExistingToken)).toBe(sqlEquivalentHash);
+  });
+});
+
 // ─── validateToken ────────────────────────────────────────────────────────────
 
 function buildSupabaseMock(data: unknown, error: unknown = null) {
@@ -75,7 +163,7 @@ function buildSupabaseMock(data: unknown, error: unknown = null) {
     eq: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue({ data, error }),
   };
-  return { from: vi.fn().mockReturnValue(chain) };
+  return { from: vi.fn().mockReturnValue(chain), chain };
 }
 
 describe("validateToken", () => {
@@ -111,6 +199,19 @@ describe("validateToken", () => {
     expect(result).not.toBeNull();
     expect(result!.isExpired).toBe(false);
     expect(result!.review.id).toBe("review-1");
+  });
+
+  it("looks up by token_hash, not plaintext token (#159)", async () => {
+    const mock = buildSupabaseMock({
+      id: "review-1",
+      expires_at: new Date(Date.now() + 1000).toISOString(),
+    });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await validateToken("plaintext-token");
+
+    expect(mock.chain.eq).toHaveBeenCalledWith("token_hash", hashToken("plaintext-token"));
+    expect(mock.chain.eq).not.toHaveBeenCalledWith("token", expect.anything());
   });
 
   it("returns isExpired=true when the token expiry is in the past", async () => {

@@ -15,6 +15,7 @@ import {
   type ForgotPasswordState,
   type CompletePasswordResetState,
 } from "./auth";
+import { isSafeRedirectPath } from "@/lib/http/safe-redirect";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { auditLog } from "@/lib/audit/log";
@@ -50,6 +51,31 @@ function buildAdminMock({ emailCount = 0, ipCount = 0 } = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(headers).mockResolvedValue(new Headers({ "x-forwarded-for": "203.0.113.4" }));
+});
+
+// ─── login — redirect target validation ────────────────────────────────────────
+
+describe("isSafeRedirectPath — open redirect guard", () => {
+  it("rejects an absolute off-site URL", () => {
+    expect(isSafeRedirectPath("https://evil.example")).toBe(false);
+  });
+
+  it("rejects a protocol-relative URL", () => {
+    expect(isSafeRedirectPath("//evil.example")).toBe(false);
+  });
+
+  it("rejects a backslash-based URL", () => {
+    expect(isSafeRedirectPath("/\\evil.example")).toBe(false);
+  });
+
+  it("accepts a legitimate relative path", () => {
+    expect(isSafeRedirectPath("/ops/projects/123")).toBe(true);
+  });
+
+  it("rejects null/empty", () => {
+    expect(isSafeRedirectPath(null)).toBe(false);
+    expect(isSafeRedirectPath("")).toBe(false);
+  });
 });
 
 // ─── requestPasswordReset ───────────────────────────────────────────────────────

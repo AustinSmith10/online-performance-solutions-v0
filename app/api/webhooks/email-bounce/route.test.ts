@@ -42,14 +42,23 @@ const SPAM_COMPLAINT_PAYLOAD = {
   Description: "Feedback loop complaint",
 };
 
+// #150: the route now upserts with onConflict: "message_id,type" +
+// ignoreDuplicates, then .select("id") to see whether a row actually landed
+// — so the mock's "bounce_events" entry needs to support .upsert().select()
+// rather than a plain .insert(). `insertedRows` defaults to a single row
+// (the normal "this was a new event" case); pass [] to simulate a
+// duplicate (message_id, type) pair that ignoreDuplicates suppressed.
 function makeSupabaseMock({
   sendLogRow = null,
   insertError = null,
+  insertedRows = [{ id: "be-1" }],
 }: {
   sendLogRow?: { project_id: string | null } | null;
   insertError?: { message: string } | null;
+  insertedRows?: { id: string }[] | null;
 } = {}) {
-  const insert = vi.fn().mockResolvedValue({ error: insertError });
+  const select = vi.fn().mockResolvedValue({ data: insertedRows, error: insertError });
+  const upsert = vi.fn().mockReturnValue({ select });
   const from = vi.fn((table: string) => {
     if (table === "email_send_log") {
       return {
@@ -59,11 +68,11 @@ function makeSupabaseMock({
       };
     }
     if (table === "bounce_events") {
-      return { insert };
+      return { upsert };
     }
     throw new Error(`unexpected table: ${table}`);
   });
-  return { from, insert };
+  return { from, upsert, select };
 }
 
 describe("POST /api/webhooks/email-bounce", () => {
@@ -133,7 +142,7 @@ describe("POST /api/webhooks/email-bounce", () => {
       const res = await POST(makeRequest({ Type: "HardBounce", MessageID: "msg-abc" }));
 
       expect(res.status).toBe(200);
-      expect(mock.insert).not.toHaveBeenCalled();
+      expect(mock.upsert).not.toHaveBeenCalled();
     });
 
     it("records a hard bounce as type 'bounce' and audits it", async () => {
@@ -143,14 +152,15 @@ describe("POST /api/webhooks/email-bounce", () => {
       const res = await POST(makeRequest(HARD_BOUNCE_PAYLOAD));
 
       expect(res.status).toBe(200);
-      expect(mock.insert).toHaveBeenCalledWith(
+      expect(mock.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           email: "dead@example.com",
           project_id: "proj-1",
           type: "bounce",
           message_id: "msg-abc",
           reason: "HardBounce: The server was unable to deliver your message",
-        })
+        }),
+        expect.objectContaining({ onConflict: "message_id,type", ignoreDuplicates: true })
       );
       expect(mockAuditLog).toHaveBeenCalledWith(
         "email.bounce_received",
@@ -167,12 +177,13 @@ describe("POST /api/webhooks/email-bounce", () => {
       const res = await POST(makeRequest(SPAM_COMPLAINT_PAYLOAD));
 
       expect(res.status).toBe(200);
-      expect(mock.insert).toHaveBeenCalledWith(
+      expect(mock.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           email: "annoyed@example.com",
           project_id: null,
           type: "complaint",
-        })
+        }),
+        expect.objectContaining({ onConflict: "message_id,type", ignoreDuplicates: true })
       );
       expect(mockAuditLog).toHaveBeenCalledWith(
         "email.complaint_received",
@@ -190,6 +201,51 @@ describe("POST /api/webhooks/email-bounce", () => {
 
       expect(res.status).toBe(200);
       expect(mockAuditLog).not.toHaveBeenCalled();
+    });
+
+    // #150: (message_id, type) is the dedupe key, not plain message_id — a
+    // Bounce and a later SpamComplaint for the same MessageID must both be
+    // recorded as distinct rows, and a genuine replay of the same event
+    // must not be double-audited.
+    describe("message_id + type dedupe (#150)", () => {
+      it("skips the audit log when ignoreDuplicates suppressed the insert (replayed event)", async () => {
+        const mock = makeSupabaseMock({ sendLogRow: { project_id: "proj-1" }, insertedRows: [] });
+        vi.mocked(createAdminClient).mockReturnValue(mock as unknown as ReturnType<typeof createAdminClient>);
+
+        const res = await POST(makeRequest(HARD_BOUNCE_PAYLOAD));
+
+        expect(res.status).toBe(200);
+        expect(mock.upsert).toHaveBeenCalledOnce();
+        expect(mockAuditLog).not.toHaveBeenCalled();
+      });
+
+      it("uses (message_id, type) as the conflict target so a Bounce and a later SpamComplaint for the same MessageID both record and audit", async () => {
+        // First delivery: a HardBounce for msg-shared.
+        const bounceMock = makeSupabaseMock({ insertedRows: [{ id: "be-1" }] });
+        vi.mocked(createAdminClient).mockReturnValue(bounceMock as unknown as ReturnType<typeof createAdminClient>);
+        const res1 = await POST(makeRequest({ ...HARD_BOUNCE_PAYLOAD, MessageID: "msg-shared" }));
+        expect(res1.status).toBe(200);
+        expect(bounceMock.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ type: "bounce", message_id: "msg-shared" }),
+          expect.objectContaining({ onConflict: "message_id,type" })
+        );
+        expect(mockAuditLog).toHaveBeenCalledWith("email.bounce_received", null, expect.anything(), expect.anything());
+
+        vi.clearAllMocks();
+
+        // Second delivery: a SpamComplaint for the SAME MessageID — distinct
+        // `type`, so it's a different (message_id, type) pair and must still
+        // insert + audit, not be swallowed as a duplicate of the bounce.
+        const complaintMock = makeSupabaseMock({ insertedRows: [{ id: "be-2" }] });
+        vi.mocked(createAdminClient).mockReturnValue(complaintMock as unknown as ReturnType<typeof createAdminClient>);
+        const res2 = await POST(makeRequest({ ...SPAM_COMPLAINT_PAYLOAD, MessageID: "msg-shared" }));
+        expect(res2.status).toBe(200);
+        expect(complaintMock.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ type: "complaint", message_id: "msg-shared" }),
+          expect.objectContaining({ onConflict: "message_id,type" })
+        );
+        expect(mockAuditLog).toHaveBeenCalledWith("email.complaint_received", null, expect.anything(), expect.anything());
+      });
     });
   });
 });

@@ -31,15 +31,21 @@ export interface DispatchPdf {
  * calls for the same cycle instead of re-converting.
  *
  * Returns null if no source docx exists yet for this cycle.
+ *
+ * `actorId` is the staff member to attribute a freshly-generated PDF to. Pass
+ * `null` when there is no logged-in staff member driving the call (e.g. a
+ * stakeholder-triggered self-serve action) — the generated PDF is then
+ * attributed to the source docx's own `uploaded_by` instead, since
+ * `project_files.uploaded_by` is NOT NULL.
  */
 export async function getOrCreateDispatchPdf(
   supabase: SupabaseClient,
   project: DispatchPdfProject,
-  actorId: string
+  actorId: string | null
 ): Promise<DispatchPdf | null> {
   const { data: sourceDocx } = await supabase
     .from("project_files")
-    .select("storage_path, original_filename, version")
+    .select("storage_path, original_filename, version, uploaded_by")
     .eq("project_id", project.id)
     .eq("file_type", "pbdb")
     .eq("review_cycle", project.review_cycle)
@@ -111,12 +117,14 @@ export async function getOrCreateDispatchPdf(
 
   if (uploadErr) throw new Error(`Failed to store PBDB PDF: ${uploadErr.message}`);
 
+  const attributedTo = actorId ?? (sourceDocx.uploaded_by as string);
+
   const { error: insertErr } = await supabase.from("project_files").insert({
     project_id: project.id,
     file_type: "pbdb_pdf",
     storage_path: storagePath,
     original_filename: originalFilename,
-    uploaded_by: actorId,
+    uploaded_by: attributedTo,
     version: sourceDocx.version as number,
     review_cycle: project.review_cycle,
   });

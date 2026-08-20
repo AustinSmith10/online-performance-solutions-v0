@@ -7,13 +7,18 @@ import {
   resetUserTotp,
   requireUserTotp,
 } from "@/app/actions/admin-users";
-import { UserTabs } from "./_components/user-tabs";
+import { UserTabs, type UserTabsUser } from "./_components/user-tabs";
 import { UserHeaderActions } from "./_components/user-header-actions";
-import { UserHeaderMeta } from "./_components/user-header-meta";
+import { UserHeaderMeta, type UserHeaderMetaUser } from "./_components/user-header-meta";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { ProfileTabs } from "@/components/workspace/ProfileTabs";
 import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_components/HeaderStatInline";
 import type { User, Client, ConsultantAvailability } from "@/types";
+
+// Minimal DTO passed to client components below — deliberately excludes
+// server-only-relevant fields like credit_balance/totp_enabled/etc. that
+// aren't rendered by those components. See issue #157.
+type UserDetailDto = UserTabsUser & UserHeaderMetaUser;
 
 export default async function UserDetailPage({
   params,
@@ -35,6 +40,19 @@ export default async function UserDetailPage({
 
   const u = userResult.data as User & { clients: Pick<Client, "id" | "name"> | null };
   const clients = (orgsResult.data ?? []) as Pick<Client, "id" | "name">[];
+
+  const userDto: UserDetailDto = {
+    id: u.id,
+    email: u.email,
+    role: u.role,
+    client_id: u.client_id,
+    availability: u.availability,
+    first_name: u.first_name,
+    last_name: u.last_name,
+    phone: u.phone,
+    company_role: u.company_role,
+    state_territory: u.state_territory,
+  };
 
   // Reflects the most recent invite attempt only — a later successful resend
   // should clear this even if the earlier failure row is still unresolved.
@@ -124,7 +142,7 @@ export default async function UserDetailPage({
         />
       </div>
 
-      <UserHeaderMeta user={u} clients={clients} />
+      <UserHeaderMeta user={userDto} clients={clients} />
 
       <div className="mt-3.5 flex flex-wrap gap-x-7 gap-y-1.5 border-t border-zinc-100 pt-3 text-sm">
         <HeaderStatInline
@@ -211,7 +229,7 @@ export default async function UserDetailPage({
 
   const profileContent = (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
-      <UserTabs user={u} clients={clients} availabilityActions={availabilityActions} />
+      <UserTabs user={userDto} clients={clients} availabilityActions={availabilityActions} />
     </div>
   );
 

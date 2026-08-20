@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
 
 export type FileRequirementState = {
   error?: string;
@@ -254,7 +255,7 @@ export async function uploadReferenceSample(
 
   if (fetchErr || !existing) return { error: "File requirement not found." };
 
-  const storagePath = `file-requirements/${requirementId}/${file.name}`;
+  const storagePath = `file-requirements/${requirementId}/${sanitizeFilename(file.name)}`;
   const fileBuffer = await file.arrayBuffer();
 
   const { error: uploadError } = await supabase.storage

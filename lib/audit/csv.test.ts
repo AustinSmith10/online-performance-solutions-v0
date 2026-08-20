@@ -18,6 +18,45 @@ function row(overrides: Partial<AuditRow>): AuditRow {
   };
 }
 
+describe("auditEntriesToCsv — formula injection protection (#141)", () => {
+  it("prefixes a formula-injection payload with a leading quote", () => {
+    const csv = auditEntriesToCsv([
+      row({ actor_email: '=HYPERLINK("http://evil.com")' }),
+    ]);
+    expect(csv).toContain(`"'=HYPERLINK(""http://evil.com"")"`);
+    expect(csv).not.toMatch(/,=HYPERLINK/);
+  });
+
+  it.each(["=cmd", "+cmd", "-cmd", "@cmd", "\tcmd", "\rcmd"])(
+    "neutralizes a cell starting with %j",
+    (dangerous) => {
+      const csv = auditEntriesToCsv([row({ actor_email: dangerous })]);
+      const actorCell = csv.split("\r\n")[1]?.split(",")[3] ?? "";
+      expect(actorCell.startsWith("'") || actorCell.startsWith(`"'`)).toBe(true);
+    }
+  );
+
+  it("leaves normal actor emails untouched", () => {
+    const csv = auditEntriesToCsv([row({ actor_email: "user@example.com" })]);
+    expect(csv).toContain("user@example.com");
+    expect(csv).not.toContain("'user@example.com");
+  });
+
+  it("does not double-prefix a value already starting with a quote", () => {
+    const csv = auditEntriesToCsv([row({ actor_email: "'already-quoted" })]);
+    const actorCell = csv.split("\r\n")[1]?.split(",")[3] ?? "";
+    expect(actorCell).toBe("'already-quoted");
+  });
+
+  it("still produces a valid CSV for normal, non-malicious data", () => {
+    const csv = auditEntriesToCsv([
+      row({ event_type: "auth.login", metadata: { role: "admin" } }),
+    ]);
+    expect(csv.split("\r\n").length).toBeGreaterThan(1);
+    expect(csv).toContain("User logged in");
+  });
+});
+
 describe("auditEntriesToCsv", () => {
   it("uses human-readable labels and category names instead of raw codes", () => {
     const csv = auditEntriesToCsv([

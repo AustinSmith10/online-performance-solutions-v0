@@ -235,6 +235,31 @@ describe("getOrCreateDispatchPdf", () => {
     expect(mock.insertFn).toHaveBeenCalledWith(expect.objectContaining({ review_cycle: 2, version: 3 }));
   });
 
+  it("falls back to the source docx's uploaded_by when actorId is null (#133)", async () => {
+    // The self-serve link-reissue path has no logged-in staff member to
+    // attribute a freshly-generated PDF to, so it passes actorId: null and
+    // the insert must attribute the PDF to the source docx's own uploader
+    // instead (project_files.uploaded_by is NOT NULL).
+    const docx = {
+      storage_path: "org-1/proj-1/pbdb/v1_file.docx",
+      original_filename: "file.docx",
+      version: 1,
+      uploaded_by: "original-uploader-1",
+    };
+    const mock = buildSupabaseMock({ sourceDocx: docx, pbdbRevision: 0 });
+
+    const result = await getOrCreateDispatchPdf(
+      mock as never,
+      { ...BASE_PROJECT, review_cycle: 1 },
+      null
+    );
+
+    expect(mock.insertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ uploaded_by: "original-uploader-1" })
+    );
+    expect(result).not.toBeNull();
+  });
+
   it("throws and cleans up the uploaded object if recording the pbdb_pdf row fails", async () => {
     const docx = { storage_path: "org-1/proj-1/pbdb/v1_file.docx", original_filename: "file.docx", version: 1 };
     const mock = buildSupabaseMock({ sourceDocx: docx, pbdbRevision: 0 });

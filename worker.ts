@@ -2,7 +2,6 @@ import { PgBoss } from "pg-boss";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { purgeRecoveryBin } from "@/lib/jobs/purge-recovery-bin";
 import { purgeRejectedInboundAttachments } from "@/lib/jobs/purge-rejected-inbound-attachments";
-import { generatePbdb } from "@/lib/documents/generator";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 import { sendStakeholderBufferUpdate } from "@/lib/stakeholders/buffer-update";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
@@ -26,20 +25,20 @@ async function main() {
 
   // pg-boss v12 requires queues to exist (via createQueue) before they can be
   // scheduled or sent to — schedule()/send() insert rows with a FK to queue.name.
+  // retryBackoff is a queue-level option (not a work() option) — it enables
+  // exponential backoff between retry attempts instead of pg-boss's default
+  // zero-delay immediate retry (#144).
   for (const queue of [
     "purge-recovery-bin",
     "purge-rejected-inbound-attachments",
     "expire-draft",
-    "generate-pbdb",
-    "dispatch-pbdb",
     "approval-buffer",
     "assignment-accept-overdue",
-    "deliver-pbdr",
     "release-pending-deliveries",
     AVAILABLE_REQUESTS_DIGEST_QUEUE,
     "reconcile-digest-schedule",
   ]) {
-    await boss.createQueue(queue);
+    await boss.createQueue(queue, { retryBackoff: true });
   }
 
   // Purge soft-deleted projects older than 30 days. Runs daily at midnight.
@@ -111,40 +110,6 @@ async function main() {
       throw new Error(`failed for client(s): ${failedClients.join(", ")}`);
     }
   });
-
-  // Generate PBDB for a project. Job data: { projectId: string, actorId: string }
-  await boss.work<{ projectId: string; actorId: string }>(
-    "generate-pbdb",
-    async (jobs) => {
-      for (const job of jobs) {
-        const { projectId, actorId } = job.data;
-        try {
-          await generatePbdb(projectId, actorId);
-          console.log(`[generate-pbdb] generated PBDB for project ${projectId}`);
-        } catch (err) {
-          console.error(`[generate-pbdb] failed for project ${projectId}:`, err);
-          throw err;
-        }
-      }
-    }
-  );
-
-  // Dispatch PBDB to stakeholders. Job data: { projectId: string, actorId: string }
-  await boss.work<{ projectId: string; actorId: string }>(
-    "dispatch-pbdb",
-    async (jobs) => {
-      for (const job of jobs) {
-        const { projectId, actorId } = job.data;
-        try {
-          await dispatchPbdb(projectId, actorId);
-          console.log(`[dispatch-pbdb] dispatched project ${projectId}`);
-        } catch (err) {
-          console.error(`[dispatch-pbdb] failed for project ${projectId}:`, err);
-          throw err;
-        }
-      }
-    }
-  );
 
   // Approval buffer: daily at 09:00.
   // After 1 working day from first_response_at, send update emails.
@@ -260,21 +225,6 @@ async function main() {
       console.log(`[assignment-accept-overdue] fired alert for project ${projectId}`);
     }
   });
-
-  // Deliver PBDR for a project. Job data: { projectId: string, actorId: string, actorEmail: string }
-  await boss.work<{ projectId: string; actorId: string | null; actorEmail: string | null }>(
-    "deliver-pbdr",
-    async (jobs) => {
-      for (const job of jobs) {
-        const { projectId, actorId, actorEmail } = job.data;
-        const result = await deliverPbdr(projectId, actorId, actorEmail);
-        if (!result.success) {
-          console.error(`[deliver-pbdr] failed for ${projectId}: ${result.reason}`);
-          throw new Error(result.reason);
-        }
-      }
-    }
-  );
 
   // Release staged PBDR deliveries (#63): admin/consultant-triggered
   // conversions whose delivery-delay preset pushed them past "now" (or

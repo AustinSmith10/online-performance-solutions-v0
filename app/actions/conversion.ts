@@ -9,6 +9,7 @@ import { auditLog } from "@/lib/audit/log";
 import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
 import { buildPbdrPreview, type PbdrPreviewProject } from "@/lib/documents/pbdr-preview";
+import { computeSignedUrlExpirySeconds } from "@/lib/stakeholders/tokens";
 
 export type ConvertState = { error?: string; success?: boolean; scheduledFor?: string | null };
 
@@ -168,7 +169,9 @@ export async function resendPbdrEmail(
 
   let projectQuery = supabase
     .from("projects")
-    .select("id, client_id, project_number, delivery_recipient_email, submitted_by")
+    .select(
+      "id, client_id, project_number, delivery_recipient_email, submitted_by, clients(state_territory)"
+    )
     .eq("id", projectId)
     .in("status", ["delivered", "complete"])
     .is("deleted_at", null);
@@ -191,9 +194,15 @@ export async function resendPbdrEmail(
 
   if (!pbdrFile) return { error: "No PBDR file found for this project." };
 
+  const stateTerritory =
+    (project.clients as unknown as { state_territory: string | null } | null)?.state_territory ?? null;
+
   const { data: signed } = await supabase.storage
     .from("documents")
-    .createSignedUrl(pbdrFile.storage_path as string, 30 * 24 * 3600);
+    .createSignedUrl(
+      pbdrFile.storage_path as string,
+      await computeSignedUrlExpirySeconds(new Date(), stateTerritory)
+    );
 
   if (!signed?.signedUrl) return { error: "Failed to generate download link." };
 

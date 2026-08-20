@@ -8,7 +8,12 @@ import { auditLog } from "@/lib/audit/log";
 import { scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { inviteLateStakeholder } from "@/lib/stakeholders/late-add";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
-import { generateTokenString, computeTokenExpiry } from "@/lib/stakeholders/tokens";
+import {
+  generateTokenString,
+  computeTokenExpiry,
+  hashToken,
+  computeSignedUrlExpirySeconds,
+} from "@/lib/stakeholders/tokens";
 import { sendEmail } from "@/lib/email/sender";
 import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
@@ -677,6 +682,7 @@ export async function resendFreshToken(
     .from("stakeholder_reviews")
     .update({
       token,
+      token_hash: hashToken(token),
       expires_at: expiresAt.toISOString(),
       fresh_token_sent_at: new Date().toISOString(),
     })
@@ -702,7 +708,10 @@ export async function resendFreshToken(
   const pbdbUrl = pbdbPdf
     ? await supabase.storage
         .from("documents")
-        .createSignedUrl(pbdbPdf.storagePath, 7 * 24 * 3600)
+        .createSignedUrl(
+          pbdbPdf.storagePath,
+          await computeSignedUrlExpirySeconds(new Date(), stateTerritory)
+        )
         .then((r) => r.data?.signedUrl ?? null)
     : null;
 
@@ -872,6 +881,7 @@ export async function updateStakeholderEmail(
     .from("stakeholder_reviews")
     .update({
       token,
+      token_hash: hashToken(token),
       expires_at: expiresAt.toISOString(),
       fresh_token_sent_at: new Date().toISOString(),
     })
@@ -897,7 +907,10 @@ export async function updateStakeholderEmail(
   const pbdbUrl = pbdbPdf
     ? await supabase.storage
         .from("documents")
-        .createSignedUrl(pbdbPdf.storagePath, 7 * 24 * 3600)
+        .createSignedUrl(
+          pbdbPdf.storagePath,
+          await computeSignedUrlExpirySeconds(new Date(), stateTerritory)
+        )
         .then((r) => r.data?.signedUrl ?? null)
     : null;
 

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { requireProjectAccess } from "@/lib/auth/project-access";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import type { ExtractedField, ExtractedCandidate, SingleDocExtraction } from "@/lib/documents/extractor";
@@ -92,111 +93,6 @@ export interface UploadManifestItem {
   size: number;
 }
 
-export type RequestUploadsResult =
-  | { error: string }
-  | {
-      projectId: string;
-      uploads: {
-        slug: string;
-        index: number;
-        name: string;
-        path: string;
-        signedUrl: string;
-        token: string;
-      }[];
-    };
-
-// Best-effort cleanup for files the browser already uploaded before a
-// sibling upload in the same batch failed — nothing references these paths
-// yet (no draft project exists), so they're safe to remove.
-export async function abortSubmissionUploads(paths: string[]): Promise<void> {
-  await requireRole("stakeholder", "consultant", "super_admin", "admin");
-  if (!paths.length) return;
-  const supabase = createAdminClient();
-  await supabase.storage.from("submissions").remove(paths);
-}
-
-export async function requestSubmissionUploadUrls(
-  templateId: string,
-  adminOrgId: string | null,
-  adminClientId: string | null,
-  manifestBySlug: Record<string, UploadManifestItem[]>
-): Promise<RequestUploadsResult> {
-  const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
-  const supabase = createAdminClient();
-
-  if (!templateId) return { error: "No template selected." };
-
-  const isAdmin = actor.role === "super_admin" || actor.role === "admin";
-  const actsOnBehalf = isAdmin || actor.role === "consultant";
-  const orgId = resolveOrgId(actor, actsOnBehalf, adminOrgId);
-  if (!orgId) return { error: "Client is required." };
-  if (actsOnBehalf && !adminClientId?.trim()) return { error: "Stakeholder account is required." };
-
-  const fileReqs = await loadFileRequirements(supabase, templateId);
-
-  // Collect manifest items per requirement slot (defensively re-sliced to max_count)
-  const itemsBySlug: Record<string, UploadManifestItem[]> = {};
-  for (const req of fileReqs) {
-    itemsBySlug[req.slug] = (manifestBySlug[req.slug] ?? []).slice(0, req.max_count);
-  }
-
-  // Validate required slots
-  for (const req of fileReqs) {
-    if (req.required && !itemsBySlug[req.slug]?.length) {
-      return { error: `"${req.name}" is required. Please attach a file.` };
-    }
-  }
-
-  // Validate file sizes (50 MB per file)
-  for (const req of fileReqs) {
-    for (const item of itemsBySlug[req.slug] ?? []) {
-      if (item.size > 50 * 1024 * 1024) {
-        return { error: `"${req.name}" — "${item.name}" exceeds the 50 MB limit.` };
-      }
-    }
-  }
-
-  // Validate no_duplicates within each slot
-  for (const req of fileReqs) {
-    if (req.no_duplicates) {
-      const names = (itemsBySlug[req.slug] ?? []).map((i) => i.name);
-      if (new Set(names).size < names.length) {
-        return { error: `"${req.name}" cannot contain files with duplicate names.` };
-      }
-    }
-  }
-
-  const projectId = crypto.randomUUID();
-
-  const uploadPlan = fileReqs.flatMap((req) =>
-    (itemsBySlug[req.slug] ?? []).map((item, index) => ({
-      slug: req.slug,
-      index,
-      name: item.name,
-      path: `${orgId}/${projectId}/${req.slug}/${item.name}`,
-    }))
-  );
-
-  const signedResults = await Promise.all(
-    uploadPlan.map((item) => supabase.storage.from("submissions").createSignedUploadUrl(item.path))
-  );
-
-  const failed = signedResults.find((r) => r.error);
-  if (failed?.error) {
-    return { error: "Failed to prepare uploads. Please try again." };
-  }
-
-  return {
-    projectId,
-    uploads: uploadPlan.map((item, i) => ({
-      ...item,
-      signedUrl: signedResults[i].data!.signedUrl,
-      token: signedResults[i].data!.token,
-    })),
-  };
-}
-
 // ─── Step 1b: finalize — merge already-computed per-file results, persist ───
 // #115: verification and (where applicable) extraction have already run per
 // file, the instant each landed (see app/actions/submission-pipeline.ts).
@@ -219,6 +115,12 @@ export async function finalizeSubmission(
   const orgId = resolveOrgId(actor, actsOnBehalf, adminOrgId);
   if (!orgId) return { step: 1, error: "Client is required." };
   if (actsOnBehalf && !adminClientId?.trim()) return { step: 1, error: "Stakeholder account is required." };
+
+  // #160: nothing below this point checked that projectId actually belongs
+  // to this actor/org before operating on its files.
+  if (!(await requireProjectAccess(supabase, actor, projectId))) {
+    return { step: 1, error: "Project not found or access denied." };
+  }
 
   const fileReqs = await loadFileRequirements(supabase, templateId);
   const reqBySlug = new Map(fileReqs.map((r) => [r.slug, r]));

@@ -87,12 +87,13 @@ export default async function ApprovePage({
 
   // Check if stakeholder has a portal account (in parallel with other queries)
   const supabase = createAdminClient();
-  const [{ data: pbdbFile }, { data: portalUser }] = await Promise.all([
+  const [{ data: pbdbPdf }, { data: portalUser }] = await Promise.all([
     supabase
       .from("project_files")
       .select("storage_path, original_filename")
       .eq("project_id", review.project_id)
-      .eq("file_type", "pbdb")
+      .eq("file_type", "pbdb_pdf")
+      .eq("review_cycle", review.review_cycle)
       .order("version", { ascending: false })
       .limit(1)
       .maybeSingle(),
@@ -117,10 +118,10 @@ export default async function ApprovePage({
           Please review the document below and submit your response.
         </p>
 
-        {pbdbFile && (
+        {pbdbPdf && (
           <ApproveDownloadLink
             href={`/approve/${tokenString}/download`}
-            filename={pbdbFile.original_filename as string | null}
+            filename={pbdbPdf.original_filename as string | null}
           />
         )}
 

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
+import { requireProjectAccess } from "@/lib/auth/project-access";
 import { auditLog } from "@/lib/audit/log";
 import { extractDocumentFields, type ExtractedCandidate } from "@/lib/documents/extractor";
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
@@ -59,7 +60,7 @@ export async function resolveAndAcknowledgeFieldFlag(
 // database write, not two sequential ones.
 async function resolveFieldFlagCore(
   supabase: ReturnType<typeof createAdminClient>,
-  actor: { id: string; email: string },
+  actor: { id: string; email: string; role: string; client_id?: unknown },
   flagId: string,
   input: { value: string; reason: ResolutionReason; note?: string; force?: boolean },
   extraUpdateFields: Record<string, unknown> = {}
@@ -72,6 +73,9 @@ async function resolveFieldFlagCore(
     .maybeSingle();
 
   if (!flag) return { ok: false, error: "Flag not found." };
+
+  const accessibleProject = await requireProjectAccess(supabase, actor, flag.project_id as string);
+  if (!accessibleProject) return { ok: false, error: "Flag not found." };
 
   // Snapshot for a force-override's audit trail — captured before the update
   // below overwrites it, so the log can show both what changed and what it
@@ -201,6 +205,20 @@ export async function acknowledgeFieldFlag(flagId: string): Promise<AcknowledgeF
   const actor = await requireRole("consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
+  const { data: existingFlag } = await supabase
+    .from("field_flags")
+    .select("project_id")
+    .eq("id", flagId)
+    .maybeSingle();
+  if (!existingFlag) return { ok: false, error: "Flag not found." };
+
+  const accessibleProject = await requireProjectAccess(
+    supabase,
+    actor,
+    existingFlag.project_id as string
+  );
+  if (!accessibleProject) return { ok: false, error: "Flag not found." };
+
   const { data: flag, error } = await supabase
     .from("field_flags")
     .update({
@@ -265,12 +283,10 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
   const profile = await requireRole("stakeholder", "consultant", "super_admin", "admin");
   const supabase = createAdminClient();
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, client_id, template_id, assigned_consultant_id")
-    .eq("id", projectId)
-    .is("deleted_at", null)
-    .maybeSingle();
+  // Tenancy check (#160) — kept strictly separate from the assignment-gate
+  // business rule just below, which is a workflow lock ("your project is
+  // frozen once a consultant picks it up"), not an access-control decision.
+  const project = await requireProjectAccess(supabase, profile, projectId);
   if (!project) return { ok: false, error: "Project not found." };
   if (!project.template_id) return { ok: false, error: "Project has no template." };
   if (profile.role === "stakeholder" && project.assigned_consultant_id) {
