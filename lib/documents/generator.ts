@@ -4,7 +4,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatAddress } from "@/lib/documents/formatters";
 import { recordRevisionEvent, getRevisionHistory, formatRevisionHistoryRows } from "@/lib/documents/revision-history";
 import { buildPbdbFilename } from "@/lib/documents/naming";
-import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
 
 /**
  * Runs docxtemplater find-and-replace on the project's active template .docx,
@@ -14,7 +13,6 @@ import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
  */
 export async function generatePbdb(projectId: string, actorId: string): Promise<void> {
   const supabase = createAdminClient();
-  await writeProgress(supabase, projectId, PROGRESS_MILESTONES[0]); // 20
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
@@ -54,8 +52,6 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   if (templateError || !template) {
     throw new Error("No active template found — template may be inactive or missing");
   }
-
-  await writeProgress(supabase, projectId, PROGRESS_MILESTONES[1]); // 40
 
   const { data: templateBlob, error: downloadError } = await supabase.storage
     .from("templates")
@@ -187,8 +183,6 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
 
   const outputBuffer = doc.getZip().generate({ type: "nodebuffer" }) as Buffer;
 
-  await writeProgress(supabase, projectId, PROGRESS_MILESTONES[2]); // 70
-
   // Filename: {projectNumber}-S PBDB Rev{n} {address} {date} For QA.docx
   const rawAddress = (extractedFields["EXTRACT_ADDRESS"] ?? "").trim();
   const address = formatAddress(rawAddress);
@@ -213,8 +207,6 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
 
   if (uploadError) throw new Error(`Failed to store generated PBDB: ${uploadError.message}`);
 
-  await writeProgress(supabase, projectId, PROGRESS_MILESTONES[3]); // 90
-
   const { error: insertError } = await supabase.from("project_files").insert({
     project_id: projectId,
     file_type: "pbdb",
@@ -230,7 +222,5 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     await supabase.storage.from("documents").remove([storagePath]);
     throw new Error(`Failed to record PBDB in database: ${insertError.message}`);
   }
-
-  await writeProgress(supabase, projectId, PROGRESS_MILESTONES[4]); // 100
 }
 
