@@ -24,6 +24,7 @@ import {
   notifyIfFullyApproved,
 } from "@/lib/stakeholders/review-outcome";
 import { sendStakeholderBufferUpdate } from "@/lib/stakeholders/buffer-update";
+import { logger } from "@/lib/observability/logger";
 import { attachEvidence } from "@/app/actions/evidence";
 import { parseEmlBody } from "@/lib/email/parseEml";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
@@ -314,7 +315,7 @@ export async function addProjectStakeholder(
   if (error) return { error: error.message };
 
   await inviteLateStakeholder(projectId, { name, email }, actor.id).catch((err) => {
-    console.error(`[addProjectStakeholder] late-add invite failed for ${email}:`, err);
+    logger.error({ event: "addProjectStakeholder.invite_failed", email, err }, "Late-add invite failed");
   });
 
   revalidatePath(`/admin/projects/${projectId}`);
@@ -376,7 +377,7 @@ export async function addProjectStakeholderFromRoster(
   if (error) return { error: error.message };
 
   await inviteLateStakeholder(projectId, { name, email }, actor.id).catch((err) => {
-    console.error(`[addProjectStakeholderFromRoster] late-add invite failed for ${email}:`, err);
+    logger.error({ event: "addProjectStakeholderFromRoster.invite_failed", email, err }, "Late-add invite failed");
   });
 
   revalidatePath(`/admin/projects/${projectId}`);
@@ -734,7 +735,7 @@ export async function resendFreshToken(
     projectId,
     ...(replyTo ? { replyTo } : {}),
   }).catch((err) => {
-    console.error(`[resend-token] email to ${review.stakeholder_email} failed:`, err);
+    logger.error({ event: "resend-token.email_failed", email: review.stakeholder_email, err }, "Resend-token email failed");
   });
 
   await auditLog("stakeholder.token_resent", actor.id, actor.email as string, {
@@ -930,7 +931,7 @@ export async function updateStakeholderEmail(
     source: "stakeholder_update_email",
     projectId,
   }).catch((err) => {
-    console.error(`[update-email] email to ${newEmail} failed:`, err);
+    logger.error({ event: "update-email.email_failed", email: newEmail, err }, "Update-email notification failed");
   });
 
   redirect(

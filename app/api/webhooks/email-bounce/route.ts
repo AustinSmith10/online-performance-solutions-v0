@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { isPostmarkWebhookAuthorized } from "@/lib/email/webhook-auth";
+import { logger } from "@/lib/observability/logger";
 
 // Postmark retries on non-2xx — always return 200 so it doesn't retry on
 // expected failures. Auth failures are the exception: Postmark won't retry
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   const email = body.Email?.trim();
   if (!email) {
-    console.error("[email-bounce-webhook] payload missing Email:", body);
+    logger.error({ event: "email-bounce-webhook.missing_email", payload: body }, "Bounce webhook payload missing Email");
     return NextResponse.json({ ok: true });
   }
 

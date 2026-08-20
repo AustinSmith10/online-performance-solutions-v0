@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { UserRole } from "@/types";
+import { REQUEST_ID_HEADER } from "@/lib/observability/request-context";
 
 // Inlined to avoid importing lib/auth/session.ts which pulls in next/headers
 const SESSION_EXPIRY_COOKIE = "ops-session-expires";
@@ -60,15 +61,30 @@ export async function proxy(request: NextRequest) {
   );
   const cspReportOnly = buildCspReportOnly(nonce);
 
-  // Applies the report-only CSP header to any response before it's returned,
-  // so every exit path from this function — redirects, JSON errors, and the
-  // pass-through response — carries the header.
+  // One ID per request, generated here rather than trusting an inbound
+  // header — Railway sits in front of this app, so an inbound x-request-id
+  // could just as easily be a caller lying as a real upstream hop.
+  const requestId = crypto.randomUUID();
+
+  // Server Components/Route Handlers/Server Actions read this back via
+  // getRequestId() (lib/observability/request-context.ts). Passing it as a
+  // request header is what makes it visible past this function — proxy.ts
+  // runs before the actual page/action request, not around it, so there's
+  // no shared call stack to thread a value through.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(REQUEST_ID_HEADER, requestId);
+  const nextArgs = { request: { headers: requestHeaders } };
+
+  // Applies the report-only CSP header and the request ID to any response
+  // before it's returned, so every exit path from this function — redirects,
+  // JSON errors, and the pass-through response — carries both.
   const withCsp = <T extends NextResponse>(response: T): T => {
     response.headers.set("Content-Security-Policy-Report-Only", cspReportOnly);
+    response.headers.set(REQUEST_ID_HEADER, requestId);
     return response;
   };
 
-  let supabaseResponse = withCsp(NextResponse.next({ request }));
+  let supabaseResponse = withCsp(NextResponse.next(nextArgs));
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -82,7 +98,7 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          supabaseResponse = withCsp(NextResponse.next({ request }));
+          supabaseResponse = withCsp(NextResponse.next(nextArgs));
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );

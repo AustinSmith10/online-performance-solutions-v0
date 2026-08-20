@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
+    "@sentry/nextjs": "^10.70.0",
+    "@sentry/node": "^10.70.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.107.0",
     "docxtemplater": "^3.68.7",
@@ -26,6 +28,7 @@
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^4.10.38",
     "pg-boss": "^12.18.2",
+    "pino": "^10.3.1",
     "pizzip": "^3.2.0",
     "postmark": "^5.0.0",
     "react": "19.2.4",

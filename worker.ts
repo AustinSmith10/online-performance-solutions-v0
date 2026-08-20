@@ -1,4 +1,5 @@
-import { PgBoss } from "pg-boss";
+import * as Sentry from "@sentry/node";
+import { PgBoss, type Job } from "pg-boss";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { purgeRecoveryBin } from "@/lib/jobs/purge-recovery-bin";
 import { purgeRejectedInboundAttachments } from "@/lib/jobs/purge-rejected-inbound-attachments";
@@ -14,10 +15,45 @@ import {
   AVAILABLE_REQUESTS_DIGEST_QUEUE,
 } from "@/lib/jobs/digest-schedule-reconciler";
 
+// A separate init from sentry.server.config.ts — this process runs via
+// `npm run worker`, never through Next.js, so instrumentation.ts's
+// register() never executes here.
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV,
+  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+});
+
 async function main() {
   const boss = new PgBoss(process.env.DATABASE_URL!);
 
-  boss.on("error", (error: Error) => console.error("[worker] pg-boss error:", error));
+  // Wraps a queue handler so an uncaught error is reported to Sentry —
+  // tagged with the queue name and pg-boss's own job id, which is what
+  // actually correlates a worker-side failure back to a specific run (see
+  // lib/observability/request-context.ts for why this isn't a request ID:
+  // every queue here is cron-triggered, not enqueued from a web request) —
+  // before rethrowing so pg-boss's existing retry/failed-job behavior is
+  // unchanged.
+  function work<T extends object = object>(
+    queueName: string,
+    handler: (jobs: Job<T>[]) => Promise<void>
+  ) {
+    return boss.work<T>(queueName, async (jobs) => {
+      try {
+        await handler(jobs);
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { queue: queueName, jobId: jobs[0]?.id },
+        });
+        throw err;
+      }
+    });
+  }
+
+  boss.on("error", (error: Error) => {
+    console.error("[worker] pg-boss error:", error);
+    Sentry.captureException(error, { tags: { source: "pg-boss" } });
+  });
 
   await boss.start();
 
@@ -43,7 +79,7 @@ async function main() {
 
   // Purge soft-deleted projects older than 30 days. Runs daily at midnight.
   await boss.schedule("purge-recovery-bin", "0 0 * * *", {});
-  await boss.work("purge-recovery-bin", async () => {
+  await work("purge-recovery-bin", async () => {
     const supabase = createAdminClient();
     const { purgedCount, failedProjectIds } = await purgeRecoveryBin(supabase);
 
@@ -57,7 +93,7 @@ async function main() {
   // than 30 days (#102). The queue row itself is never touched. Runs daily at
   // midnight, alongside purge-recovery-bin.
   await boss.schedule("purge-rejected-inbound-attachments", "0 0 * * *", {});
-  await boss.work("purge-rejected-inbound-attachments", async () => {
+  await work("purge-rejected-inbound-attachments", async () => {
     const supabase = createAdminClient();
     const { purgedCount, failedQueueIds } = await purgeRejectedInboundAttachments(supabase);
 
@@ -70,7 +106,7 @@ async function main() {
   // Expire abandoned email-sourced drafts. Runs daily at 02:00.
   // Per-client cutoff derived from clients.abandoned_draft_days (default 14).
   await boss.schedule("expire-draft", "0 2 * * *", {});
-  await boss.work("expire-draft", async () => {
+  await work("expire-draft", async () => {
     const supabase = createAdminClient();
 
     const { data: clients, error: clientError } = await supabase
@@ -115,7 +151,7 @@ async function main() {
   // After 1 working day from first_response_at, send update emails.
   // Fresh tokens issued to non-responding stakeholders.
   await boss.schedule("approval-buffer", "0 9 * * 1-5", {});
-  await boss.work("approval-buffer", async () => {
+  await work("approval-buffer", async () => {
     const supabase = createAdminClient();
 
     // Find dispatched projects with a first_response_at but buffer not yet fired
@@ -165,7 +201,7 @@ async function main() {
   // migrations 57/58); updated_at is reused since nothing else writes to an
   // unaccepted "awaiting response" project between the push and accept/decline.
   await boss.schedule("assignment-accept-overdue", "15 9 * * 1-5", {});
-  await boss.work("assignment-accept-overdue", async () => {
+  await work("assignment-accept-overdue", async () => {
     const supabase = createAdminClient();
 
     const { data: projects, error } = await supabase
@@ -232,7 +268,7 @@ async function main() {
   // scheduleOrDeliverPbdr rather than run immediately. Sweep every 10 minutes
   // and run any whose scheduled_for has arrived.
   await boss.schedule("release-pending-deliveries", "*/10 * * * *", {});
-  await boss.work("release-pending-deliveries", async () => {
+  await work("release-pending-deliveries", async () => {
     const supabase = createAdminClient();
 
     const { data: due, error } = await supabase
@@ -283,7 +319,7 @@ async function main() {
   // Twice-daily digest of available (submitted, unassigned) projects, sent to
   // consultants/admins/super_admins. Send times are admin-configurable — see
   // reconcile-digest-schedule below, which keeps this in sync without a restart.
-  await boss.work(AVAILABLE_REQUESTS_DIGEST_QUEUE, async () => {
+  await work(AVAILABLE_REQUESTS_DIGEST_QUEUE, async () => {
     const supabase = createAdminClient();
     const result = await sendAvailableRequestsDigest(supabase);
     console.log(
@@ -297,7 +333,7 @@ async function main() {
   const settingsClient = createAdminClient();
   await reconcileDigestSchedule(boss, settingsClient);
   await boss.schedule("reconcile-digest-schedule", "*/1 * * * *", {});
-  await boss.work("reconcile-digest-schedule", async () => {
+  await work("reconcile-digest-schedule", async () => {
     await reconcileDigestSchedule(boss, createAdminClient());
   });
 }

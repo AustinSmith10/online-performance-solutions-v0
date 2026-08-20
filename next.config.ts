@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -38,4 +39,28 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Wraps the config to upload source maps and inject release/tracing config
+// at build time. No-ops safely without SENTRY_AUTH_TOKEN/SENTRY_ORG/
+// SENTRY_PROJECT set (upload is skipped, a warning is logged) — safe to ship
+// ahead of real Sentry credentials existing.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  // Source maps are uploaded to Sentry then deleted from the client bundle —
+  // stack traces stay readable in Sentry without shipping maps to end users.
+  sourcemaps: {
+    deleteSourcemapsAfterUpload: true,
+  },
+
+  silent: !process.env.CI,
+  webpack: {
+    treeshake: { removeDebugLogging: true },
+  },
+
+  // Routes /monitoring through this app instead of a direct browser->Sentry
+  // request, so ad-blockers that block Sentry's ingest domain don't silently
+  // drop client-side error reports.
+  tunnelRoute: "/monitoring",
+});
