@@ -353,6 +353,14 @@ async function runSingleExtraction(
       console.error("[extractor] Anthropic extraction failed:", err);
       const status = classifyProviderError(err);
       if (status) void reportProviderFailure({ provider: "anthropic", status, context: "document extraction", error: err });
+      // #174: a genuine call/parse failure (timeout, 5xx, network, bad JSON)
+      // must NOT be swallowed into an all-empty result — the submitter can't
+      // tell that apart from "the document genuinely has nothing", and it
+      // silently breaks the cross-document address check. Re-throw so the
+      // upload pipeline marks extraction_status = "failed" and the UI shows
+      // the retry / replace / support guidance (#177). Deliberate empties
+      // (kill switch off, no API key) still return `empty` below.
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
 

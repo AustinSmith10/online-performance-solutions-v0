@@ -208,13 +208,12 @@ describe("single-vendor (Anthropic-only) fail-open behavior", () => {
     { token: "EXTRACT_ADDRESS", label: "Address", hint: "full street address" },
   ];
 
-  it("runSingleExtraction (via extractSingleDocument) returns the empty placeholder when Anthropic throws — no escalation", async () => {
+  it("runSingleExtraction (via extractSingleDocument) re-throws when Anthropic throws — so the pipeline can mark the file failed, not silently produce an empty result (#174)", async () => {
     messagesCreate.mockRejectedValue(new Error("Anthropic down"));
 
-    const { result } = await extractSingleDocument({ label: "doc.pdf", buffer: VALID_PDF }, TOKENS);
-
-    expect(result.po_number).toEqual({ value: "", confidence: "low" });
-    expect(result.fields.EXTRACT_ADDRESS).toEqual([{ value: "", confidence: "low" }]);
+    await expect(
+      extractSingleDocument({ label: "doc.pdf", buffer: VALID_PDF }, TOKENS)
+    ).rejects.toThrow("Anthropic down");
     expect(messagesCreate).toHaveBeenCalledTimes(1);
   });
 

@@ -351,7 +351,19 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
     (mappings ?? []).map((m) => [m.placeholder_token as string, (m.display_label as string | null) ?? (m.placeholder_token as string)])
   );
 
-  const extraction = await extractDocumentFields(documents, extractTokens);
+  // #174: extractDocumentFields now re-throws a genuine provider/parse
+  // failure instead of merging an all-empty result. Surface it as a clean
+  // retriable error rather than "re-extract succeeded" with nothing changed.
+  let extraction: Awaited<ReturnType<typeof extractDocumentFields>>;
+  try {
+    extraction = await extractDocumentFields(documents, extractTokens);
+  } catch (err) {
+    console.error(`[reExtractProject] extraction failed for ${projectId}:`, err);
+    return {
+      ok: false,
+      error: "The document extractor didn't respond. Wait a moment and try again.",
+    };
+  }
 
   const existingByToken = new Map((existingFlags ?? []).map((f) => [f.field_key as string, f]));
 
