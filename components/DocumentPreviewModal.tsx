@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { DocumentViewer, isPreviewable } from "@/components/DocumentViewer";
 
 interface DocumentPreviewModalProps {
@@ -29,21 +30,27 @@ export function DocumentPreviewModal({
       if (e.key === "Escape") setOpen(false);
     }
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    // Lock body scroll while the modal is up.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [open]);
 
   if (!href || !isPreviewable(filename, href)) return null;
 
-  return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} className={buttonClassName}>
-        {buttonLabel}
-      </button>
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setOpen(false)}
-        >
+  // Rendered through a portal to <body> (#177): rendered inline, an ancestor
+  // stacking context on the admin project page trapped the overlay behind the
+  // upload drop-zone. The backdrop is opaque and z-index sits above every
+  // other layer in the app (max in use is z-[60]).
+  const overlay = open && typeof document !== "undefined" ? (
+    createPortal(
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/80 p-4"
+        onClick={() => setOpen(false)}
+      >
           <div
             className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
@@ -62,8 +69,17 @@ export function DocumentPreviewModal({
               <DocumentViewer src={href} filename={filename} />
             </div>
           </div>
-        </div>
-      )}
+      </div>,
+      document.body
+    )
+  ) : null;
+
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className={buttonClassName}>
+        {buttonLabel}
+      </button>
+      {overlay}
     </>
   );
 }

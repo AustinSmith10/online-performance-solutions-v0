@@ -1094,6 +1094,19 @@ export default async function ProjectDetailPage({
           canRegenerate={canRegeneratePbdb}
         />
       )}
+      {!isDeleted && project.status !== "paused" && (
+        // #177: delete used to live only behind the settings gear at the very
+        // bottom ("took me forever to figure out"). Surfaced here on the page;
+        // AdminDeleteButton keeps its confirm dialog and adminDeleteProject
+        // keeps the 30-day recovery-bin guardrail.
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-red-100 bg-red-50/40 p-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-zinc-900">Delete project</p>
+            <p className="truncate text-xs text-zinc-500">Recovery bin for 30 days, then purged.</p>
+          </div>
+          <AdminDeleteButton projectId={id} />
+        </div>
+      )}
     </>
   );
 

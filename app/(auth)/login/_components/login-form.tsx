@@ -13,9 +13,17 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "";
   const urlError = searchParams.get("error");
+  const urlNotice = searchParams.get("notice");
 
   return (
     <>
+      {urlNotice === "signed-out" && (
+        <p className="mb-4 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          You&apos;ve been signed out because your session timed out. Sign in again to pick up where
+          you left off.
+        </p>
+      )}
+
       {urlError === "invalid-link" && (
         <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
           Invite link is invalid or has expired. Please request a new invite.

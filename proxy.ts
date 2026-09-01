@@ -183,7 +183,12 @@ export async function proxy(request: NextRequest) {
     if (isApiRoute) {
       return withCsp(NextResponse.json({ error: "Session expired" }, { status: 401 }));
     }
-    return withCsp(NextResponse.redirect(new URL("/api/auth/signout", request.url)));
+    // Carry a reason through signout → login so the login page can explain
+    // "you've been signed out" rather than looking like OPS broke (#177).
+    const signoutUrl = new URL("/api/auth/signout", request.url);
+    signoutUrl.searchParams.set("reason", "expired");
+    signoutUrl.searchParams.set("next", pathname);
+    return withCsp(NextResponse.redirect(signoutUrl));
   }
 
   // Profile completeness check
@@ -229,9 +234,11 @@ export async function proxy(request: NextRequest) {
     if (isApiRoute) {
       return withCsp(NextResponse.json({ error: "Forbidden" }, { status: 403 }));
     }
-    return withCsp(
-      NextResponse.redirect(new URL(portalForRole(userRole), request.url))
-    );
+    // Land the user back in their own portal with a dismissible explanation
+    // (AccessNoticeBanner) instead of a silent redirect that reads as a bug (#177).
+    const destination = new URL(portalForRole(userRole), request.url);
+    destination.searchParams.set("notice", "wrong-area");
+    return withCsp(NextResponse.redirect(destination));
   }
 
   return supabaseResponse;

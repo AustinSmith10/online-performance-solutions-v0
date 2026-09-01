@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
+import { AccessNoticeBanner } from "@/components/AccessNoticeBanner";
 import { logout } from "@/app/actions/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPendingEmailQueueCount } from "@/lib/email/queue-pending-count";
@@ -72,6 +74,9 @@ export default async function ConsultantLayout({
           </nav>
         </div>
       </header>
+      <Suspense>
+        <AccessNoticeBanner />
+      </Suspense>
       <main className="min-w-0 flex-1 p-4 lg:p-8">{children}</main>
       <RealtimeRefresh userId={user.id as string} />
       <NotificationToasts

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { DocumentViewer, isPreviewable } from "@/components/DocumentViewer";
 import { ProgressTrack } from "@/components/ProgressTrack";
 import { Spinner, formatFileSize } from "./shared";
+import { SUPPORT_MAILTO } from "@/lib/config/support";
 import type { ClientPipelineFile, FileRequirement } from "./pipelineTypes";
 
 interface FileSlotProps {
@@ -286,16 +287,46 @@ function FileCard({
       )}
 
       {file.extractionStatus === "failed" && (
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 space-y-1.5">
           {file.extractionError && <p className="text-xs text-red-600">{file.extractionError}</p>}
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={onRetry}
-            className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-          >
-            Retry
-          </button>
+          <p className="text-xs text-red-700">
+            We couldn&apos;t read this document. Here&apos;s what to try next:
+          </p>
+          <ul className="list-disc space-y-0.5 pl-4 text-xs text-red-700">
+            <li>
+              <span className="font-medium">Retry</span> — a temporary glitch usually clears on a
+              second attempt.
+            </li>
+            <li>
+              <span className="font-medium">Replace the file</span> — remove it and upload a clearer
+              copy (a text-based PDF reads best; a photo or scan of a page often doesn&apos;t).
+            </li>
+            <li>
+              Still stuck?{" "}
+              <a href={SUPPORT_MAILTO} className="font-medium underline hover:text-red-900">
+                Contact support
+              </a>
+              .
+            </li>
+          </ul>
+          <div className="flex items-center gap-2 pt-0.5">
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={onRetry}
+              className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={onRemove}
+              className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              Remove &amp; replace
+            </button>
+          </div>
         </div>
       )}
     </div>

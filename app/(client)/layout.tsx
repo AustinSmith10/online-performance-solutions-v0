@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
+import { AccessNoticeBanner } from "@/components/AccessNoticeBanner";
 import { logout } from "@/app/actions/auth";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { NotificationToasts } from "@/components/NotificationToasts";
@@ -63,6 +65,9 @@ export default async function ClientLayout({ children }: { children: React.React
           </nav>
         </div>
       </header>
+      <Suspense>
+        <AccessNoticeBanner />
+      </Suspense>
       <main className="min-w-0 flex-1">{children}</main>
       <RealtimeRefresh userId={user.id as string} />
       <NotificationToasts
