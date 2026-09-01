@@ -41,3 +41,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# build-audit / maintain skill outputs (regenerable — not source)
+/AUDIT.md
+/SECURITY-FIX-PLAN.md
+
+# playwright run artifacts
+/test-results/
