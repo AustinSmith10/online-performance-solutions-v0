@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { acknowledgePbdbQaFlags, getPbdbPreviewUrl } from "@/app/actions/projects";
 import { DocumentViewer } from "@/components/DocumentViewer";
@@ -41,6 +42,22 @@ export function PbdbSendPreview({ projectId, fileId, findings, acknowledged }: P
     setPreviewState({ status: "ready", url: result.url, filename: result.filename });
   }
 
+  // Esc to close + lock body scroll while the preview is up. Matches
+  // DocumentPreviewModal so the two previewers behave identically.
+  useEffect(() => {
+    if (!previewOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setPreviewOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [previewOpen]);
+
   async function handleAcknowledge() {
     setAckPending(true);
     setAckError(null);
@@ -63,28 +80,31 @@ export function PbdbSendPreview({ projectId, fileId, findings, acknowledged }: P
         Preview PBDB
       </button>
 
-      {previewOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setPreviewOpen(false)}
-        >
+      {previewOpen && typeof document !== "undefined" &&
+        createPortal(
+          // Portalled to <body> and sized like DocumentPreviewModal (#177):
+          // rendered inline it inherits the drawer's narrow containing block
+          // and the document is unreadable. z above every other layer.
           <div
-            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/80 p-4"
+            onClick={() => setPreviewOpen(false)}
           >
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
-              <p className="truncate text-sm font-medium text-zinc-900">
-                {previewState.status === "ready" ? previewState.filename : "PBDB preview"}
-              </p>
-              <button
-                type="button"
-                onClick={() => setPreviewOpen(false)}
-                className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-              >
-                Close
-              </button>
-            </div>
-            <div className="overflow-auto">
+            <div
+              className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
+                <p className="truncate text-sm font-medium text-zinc-900">
+                  {previewState.status === "ready" ? previewState.filename : "PBDB preview"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPreviewOpen(false)}
+                  className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                >
+                  Close
+                </button>
+              </div>
               {previewState.status === "loading" && (
                 <p className="px-6 py-12 text-center text-sm text-zinc-500">Generating preview…</p>
               )}
@@ -95,9 +115,9 @@ export function PbdbSendPreview({ projectId, fileId, findings, acknowledged }: P
                 <DocumentViewer src={previewState.url} filename={previewState.filename} />
               )}
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {findings.length > 0 && !acknowledged && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
