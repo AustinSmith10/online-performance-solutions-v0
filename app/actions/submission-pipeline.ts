@@ -16,61 +16,29 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { requireProjectAccess } from "@/lib/auth/project-access";
-import { resolveOrgId, loadFileRequirements, loadExtractTokens, makeSampleTextLoader } from "@/lib/documents/submission-shared";
+import { loadExtractTokens, loadFileRequirements } from "@/lib/documents/submission-shared";
 import type { UploadManifestItem } from "@/app/actions/submission";
-import { verifyUploadAgainstRequirement } from "@/lib/documents/file-requirement-verification";
 import { extractSingleDocument, type SingleDocExtraction } from "@/lib/documents/extractor";
-import { getJudgeDocumentTextCharCap } from "@/lib/settings/judge-document-text-cap";
 import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
 import { claimExtractionSlot } from "@/lib/documents/extraction-budget";
+import {
+  runUploadPipeline,
+  deriveActorContext,
+  ensureDraftProject,
+  touchProject,
+  type ExtractionStatus,
+} from "@/lib/documents/upload-pipeline";
 
-type ExtractionStatus = "not_applicable" | "pending" | "running" | "completed" | "failed";
-
+// #149: a consultant submitting on behalf of a client is auto-assigned to
+// the resulting project at draft-creation time — as if they'd picked it up
+// from the pool themselves. An admin doing the same is NOT auto-assigned;
+// that draft flows into the same project-number-and-pickup-pool process a
+// stakeholder's own self-submission already goes through. (Encoded in
+// deriveActorContext.)
 async function actorContext(adminOrgId: string | null, adminClientId: string | null) {
   const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
-  const isAdmin = actor.role === "super_admin" || actor.role === "admin";
-  const actsOnBehalf = isAdmin || actor.role === "consultant";
-  const orgId = resolveOrgId(actor, actsOnBehalf, adminOrgId);
-  const submittedBy = actsOnBehalf ? (adminClientId as string) : (actor.id as string);
-  // #149: a consultant submitting on behalf of a client is auto-assigned to
-  // the resulting project at draft-creation time — as if they'd picked it up
-  // from the pool themselves. An admin doing the same is NOT auto-assigned;
-  // that draft flows into the same project-number-and-pickup-pool process a
-  // stakeholder's own self-submission already goes through.
-  const assignedConsultantId = actor.role === "consultant" ? (actor.id as string) : null;
-  return { actor, orgId, submittedBy, assignedConsultantId };
-}
-
-// Idempotent — every per-file orchestrator call ensures the draft exists
-// rather than requiring a single "first" caller to win a race. The client
-// generates `projectId` once (crypto.randomUUID()) and reuses it for the
-// whole upload session, so there's no ambiguity about which row is "the"
-// draft; ON CONFLICT DO NOTHING avoids a check-then-insert TOCTOU gap.
-async function ensureDraftProject(
-  supabase: ReturnType<typeof createAdminClient>,
-  projectId: string,
-  templateId: string,
-  orgId: string,
-  submittedBy: string,
-  assignedConsultantId: string | null
-): Promise<void> {
-  await supabase
-    .from("projects")
-    .upsert(
-      {
-        id: projectId,
-        client_id: orgId,
-        template_id: templateId,
-        submitted_by: submittedBy,
-        assigned_consultant_id: assignedConsultantId,
-        status: "draft",
-      },
-      { onConflict: "id", ignoreDuplicates: true }
-    );
-}
-
-async function touchProject(supabase: ReturnType<typeof createAdminClient>, projectId: string): Promise<void> {
-  await supabase.from("projects").update({ updated_at: new Date().toISOString() }).eq("id", projectId);
+  const ctx = deriveActorContext(actor, adminOrgId, adminClientId);
+  return { actor, ...ctx };
 }
 
 // ─── Signed upload URL for a single file ────────────────────────────────────
@@ -160,6 +128,14 @@ async function runExtractionForFile(
   }
 }
 
+/**
+ * Non-streaming entry point — a thin drain over runUploadPipeline (the same
+ * generator the SSE route drives). The live upload UI uses the SSE route;
+ * this stays as the reconnect/refresh fallback and for any caller that just
+ * wants the final result in one await. Because it consumes the identical
+ * generator, its DB side effects and return shape match the streamed path
+ * exactly.
+ */
 export async function processUploadedFile(
   projectId: string,
   templateId: string,
@@ -170,75 +146,40 @@ export async function processUploadedFile(
   name: string,
   path: string
 ): Promise<ProcessUploadedFileResult> {
-  const { actor, orgId, submittedBy, assignedConsultantId } = await actorContext(adminOrgId, adminClientId);
-  if (!orgId) return { error: "Client is required." };
-  const supabase = createAdminClient();
+  const actor = await requireRole("stakeholder", "consultant", "super_admin", "admin");
 
-  await ensureDraftProject(supabase, projectId, templateId, orgId, submittedBy, assignedConsultantId);
+  let fileId: string | undefined;
+  let mismatchReasons: string[] | null = null;
+  let extractionStatus: ExtractionStatus = "not_applicable";
+  let extractionError: string | null = null;
 
-  const fileReqs = await loadFileRequirements(supabase, templateId);
-  const requirement = fileReqs.find((r) => r.id === requirementId);
-  if (!requirement) return { error: "Unknown file requirement." };
-
-  const { data: downloaded, error: downloadError } = await supabase.storage.from("submissions").download(path);
-  if (downloadError || !downloaded) return { error: `Failed to read "${name}".` };
-  const buffer = Buffer.from(await downloaded.arrayBuffer());
-
-  const isPdf = name.toLowerCase().endsWith(".pdf");
-  let reasons: string[] = [];
-  try {
-    const loadSampleText = makeSampleTextLoader(supabase, fileReqs);
-    const sampleText = await loadSampleText(requirement.id);
-    const docTextCap = await getJudgeDocumentTextCharCap(supabase);
-    reasons = await verifyUploadAgainstRequirement(
-      {
-        name: requirement.name,
-        markerTextPatterns: requirement.marker_text_patterns,
-        markerPageCountMin: requirement.marker_page_count_min,
-        markerPageCountMax: requirement.marker_page_count_max,
-        markerRegex: requirement.marker_regex,
-        aiJudgeHint: requirement.ai_judge_hint,
-      },
-      buffer,
-      isPdf,
-      sampleText,
-      docTextCap
-    );
-  } catch (err) {
-    console.error(`[submission-pipeline] verification failed for "${name}", failing open:`, err);
+  for await (const ev of runUploadPipeline({
+    actor,
+    projectId,
+    templateId,
+    adminOrgId,
+    adminClientId,
+    requirementId,
+    slug,
+    name,
+    path,
+  })) {
+    if (ev.type === "error") {
+      return ev.fileId ? { fileId: ev.fileId, error: ev.message } : { error: ev.message };
+    }
+    if (ev.type === "file_created") {
+      fileId = ev.fileId;
+      mismatchReasons = ev.mismatchReasons;
+    } else if (ev.type === "settled") {
+      fileId = ev.fileId;
+      extractionStatus = ev.extractionStatus;
+      extractionError = ev.extractionError;
+      mismatchReasons = ev.mismatchReasons;
+    }
   }
 
-  const clean = reasons.length === 0;
-  const extractionStatus: ExtractionStatus = !requirement.extraction ? "not_applicable" : clean ? "running" : "pending";
-
-  const { data: inserted, error: insertError } = await supabase
-    .from("project_files")
-    .insert({
-      project_id: projectId,
-      file_type: slug,
-      storage_path: path,
-      original_filename: name,
-      uploaded_by: actor.id,
-      verification_mismatch_reasons: clean ? null : reasons,
-      verification_completed_at: new Date().toISOString(),
-      extraction_status: extractionStatus,
-    })
-    .select("id")
-    .single();
-
-  if (insertError || !inserted) return { error: "Failed to save the uploaded file. Please try again." };
-  const fileId = inserted.id as string;
-
-  await touchProject(supabase, projectId);
-
-  if (requirement.extraction && clean) {
-    await runExtractionForFile(supabase, fileId, requirement.name, buffer, orgId, templateId, actor.id);
-    await touchProject(supabase, projectId);
-    const state = await readBackExtractionState(supabase, fileId);
-    return { fileId, mismatchReasons: clean ? null : reasons, ...state };
-  }
-
-  return { fileId, mismatchReasons: clean ? null : reasons, extractionStatus };
+  if (!fileId) return { error: "Failed to save the uploaded file. Please try again." };
+  return { fileId, mismatchReasons, extractionStatus, extractionError };
 }
 
 // ─── Stakeholder confirms a flagged file ────────────────────────────────────

@@ -18,6 +18,9 @@ function makeFile(overrides: Partial<ClientPipelineFile> = {}): ClientPipelineFi
     confirmed: false,
     extractionStatus: "not_applicable",
     extractionError: null,
+    stage: null,
+    stageDetail: null,
+    extractProgress: null,
     ...overrides,
   };
 }
@@ -70,5 +73,44 @@ describe("stepProgress (#130)", () => {
     expect(
       stepProgress(makeFile({ verificationCompleted: true, extractionStatus: "failed" }))
     ).toBeNull();
+  });
+
+  it("uses the streamed reading/verifying stages for the finer steps", () => {
+    expect(stepProgress(makeFile({ stage: "uploading" }))).toBe(25);
+    expect(stepProgress(makeFile({ stage: "reading" }))).toBe(40);
+    expect(stepProgress(makeFile({ stage: "verifying" }))).toBe(55);
+  });
+
+  it("fills the extraction step by field progress when the stream reports it", () => {
+    expect(
+      stepProgress(
+        makeFile({
+          verificationCompleted: true,
+          stage: "extracting",
+          extractionStatus: "running",
+          extractProgress: { found: 0, total: 8 },
+        })
+      )
+    ).toBe(75);
+    expect(
+      stepProgress(
+        makeFile({
+          verificationCompleted: true,
+          stage: "extracting",
+          extractionStatus: "running",
+          extractProgress: { found: 4, total: 8 },
+        })
+      )
+    ).toBe(87);
+    expect(
+      stepProgress(
+        makeFile({
+          verificationCompleted: true,
+          stage: "extracting",
+          extractionStatus: "running",
+          extractProgress: { found: 8, total: 8 },
+        })
+      )
+    ).toBe(99);
   });
 });

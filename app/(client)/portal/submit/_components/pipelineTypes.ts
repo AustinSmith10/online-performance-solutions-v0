@@ -17,6 +17,12 @@ export interface FileRequirement {
  * flagged file's preview shows the stakeholder's own upload without waiting
  * on a server-issued signed URL.
  */
+// Live stage from the SSE upload pipeline — drives the narration on the
+// file card while it's still settling. `null` once the file is terminal
+// (Ready / flagged / failed) or when only the reconnect poll is feeding
+// state (which reports the coarser extractionStatus instead).
+export type LiveStage = "uploading" | "reading" | "verifying" | "extracting";
+
 export interface ClientPipelineFile {
   localId: string;
   requirementId: string;
@@ -32,6 +38,13 @@ export interface ClientPipelineFile {
   confirmed: boolean;
   extractionStatus: ExtractionStatus;
   extractionError: string | null;
+  // Streamed narration (SSE path only).
+  stage: LiveStage | null;
+  // One-line detail under the status, e.g. "Read 4 of 7 values".
+  stageDetail: string | null;
+  // Field-level extraction progress while `stage === "extracting"`, for the
+  // progress bar. Cleared once the file settles.
+  extractProgress: { found: number; total: number } | null;
 }
 
 export function isSettled(f: ClientPipelineFile): boolean {

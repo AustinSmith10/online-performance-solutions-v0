@@ -21,9 +21,38 @@ import {
   mergeExtractionResults,
   extractSingleDocument,
   runTextCompletion,
+  countCompletedFields,
+  extractionFieldTotal,
   type SingleDocExtraction,
   type ExtractToken,
 } from "./extractor";
+
+describe("countCompletedFields — streamed extraction progress (#115)", () => {
+  it("counts only fully-emitted confidence pairs in a partial JSON snapshot", () => {
+    const partial =
+      '{ "po_number": { "value": "PO1", "confidence": "high" }, ' +
+      '"EXTRACT_ADDRESS": [ { "value": "12 Smith St", "confidence": "medium" } ], ' +
+      '"EXTRACT_WD_NO": [ { "value": "WD-1", "conf';
+    expect(countCompletedFields(partial)).toBe(2);
+  });
+
+  it("is zero before the first field closes", () => {
+    expect(countCompletedFields('{ "po_number": { "value": "PO1", "confi')).toBe(0);
+  });
+
+  it("tolerates whitespace variants", () => {
+    expect(countCompletedFields('"confidence":"low" "confidence" : "high"')).toBe(2);
+  });
+
+  it("extractionFieldTotal is token count plus po_number", () => {
+    expect(
+      extractionFieldTotal([
+        { token: "A", label: "A", hint: "" },
+        { token: "B", label: "B", hint: "" },
+      ])
+    ).toBe(3);
+  });
+});
 
 describe("parseJson — same-document multi-candidate parsing (#64)", () => {
   it("returns one candidate for the normal single-element-array case", () => {

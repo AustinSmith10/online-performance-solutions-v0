@@ -9,12 +9,12 @@ import {
 } from "@/app/actions/submission";
 import {
   requestSingleUploadUrl,
-  processUploadedFile,
   confirmFileVerification,
   retryFileExtraction,
   removeUploadedFile,
   type DraftPipelineStatus,
 } from "@/app/actions/submission-pipeline";
+import { streamUploadedFile, reducePipelineFile } from "./streamUpload";
 import { createClient } from "@/lib/supabase/client";
 import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
 import type { MetricsPickRow } from "@/lib/documents/metrics-autofill";
@@ -627,6 +627,14 @@ export function SubmissionForm({
           if (!f.fileId) return f;
           const match = status.files.find((s) => s.fileId === f.fileId);
           if (!match) return f;
+          // Once the poll sees the file terminal, drop any stale SSE
+          // narration (e.g. a frozen "Extracting…" from a dropped stream).
+          const terminal =
+            match.verificationCompleted &&
+            (match.extractionStatus === "completed" ||
+              match.extractionStatus === "not_applicable" ||
+              match.extractionStatus === "failed" ||
+              (!!match.mismatchReasons && !match.confirmed));
           return {
             ...f,
             verificationCompleted: match.verificationCompleted,
@@ -634,6 +642,7 @@ export function SubmissionForm({
             confirmed: match.confirmed,
             extractionStatus: match.extractionStatus,
             extractionError: match.extractionError,
+            stage: terminal ? null : f.stage,
           };
         })
       );
@@ -661,6 +670,9 @@ export function SubmissionForm({
           confirmed: false,
           extractionStatus: "not_applicable",
           extractionError: null,
+          stage: "uploading",
+          stageDetail: null,
+          extractProgress: null,
         },
       ]);
 
@@ -683,38 +695,35 @@ export function SubmissionForm({
           });
         if (uploadErr) throw new Error(`Failed to upload "${file.name}". Please try again.`);
 
-        const processed = await processUploadedFile(
-          projectIdRef.current,
-          selectedTemplateId,
-          adminOrgId ?? null,
-          adminClientId ?? null,
-          requirement.id,
-          requirement.slug,
-          file.name,
-          uploadResult.path
+        // SSE: fold each pipeline stage into this file's state as it streams.
+        await streamUploadedFile(
+          {
+            projectId: projectIdRef.current,
+            templateId: selectedTemplateId,
+            adminOrgId: adminOrgId ?? null,
+            adminClientId: adminClientId ?? null,
+            requirementId: requirement.id,
+            slug: requirement.slug,
+            name: file.name,
+            path: uploadResult.path,
+          },
+          (event) => {
+            setFiles((prev) =>
+              prev.map((f) => (f.localId === localId ? reducePipelineFile(f, event) : f))
+            );
+          }
         );
-        if (processed.error) throw new Error(processed.error);
-
+      } catch (err) {
         setFiles((prev) =>
           prev.map((f) =>
             f.localId === localId
               ? {
                   ...f,
                   uploading: false,
-                  fileId: processed.fileId ?? null,
-                  verificationCompleted: true,
-                  mismatchReasons: processed.mismatchReasons ?? null,
-                  extractionStatus: processed.extractionStatus ?? "not_applicable",
-                  extractionError: processed.extractionError ?? null,
+                  stage: null,
+                  stageDetail: null,
+                  error: err instanceof Error ? err.message : "Upload failed.",
                 }
-              : f
-          )
-        );
-      } catch (err) {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.localId === localId
-              ? { ...f, uploading: false, error: err instanceof Error ? err.message : "Upload failed." }
               : f
           )
         );

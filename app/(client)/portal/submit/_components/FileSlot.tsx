@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { DocumentViewer, isPreviewable } from "@/components/DocumentViewer";
 import { ProgressTrack } from "@/components/ProgressTrack";
 import { Spinner, formatFileSize } from "./shared";
@@ -131,16 +132,20 @@ export function FileSlot({ requirement, files, disabled, onAddFiles, onRemove, o
 
       {slotError && <p className="mt-1 text-xs text-red-600">{slotError}</p>}
 
-      {previewFile && (
+      {previewFile && typeof document !== "undefined" &&
+        createPortal(
+          // Portalled to <body> so a transformed/contained ancestor can't
+          // become the containing block for this `fixed` overlay (same trap as
+          // #177 for DocumentPreviewModal).
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
           onClick={() => setPreviewLocalId(null)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+            className="flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
               <p className="truncate text-sm font-medium text-zinc-900">{previewFile.name}</p>
               <button
                 type="button"
@@ -150,21 +155,27 @@ export function FileSlot({ requirement, files, disabled, onAddFiles, onRemove, o
                 Close
               </button>
             </div>
-            <div className="overflow-auto">
-              <DocumentViewer src={previewFile.objectUrl} filename={previewFile.name} />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <DocumentViewer src={previewFile.objectUrl} filename={previewFile.name} fill />
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </div>
   );
 }
 
 function statusLabel(f: ClientPipelineFile): { text: string; tone: "neutral" | "amber" | "green" | "red" } {
-  if (f.uploading) return { text: "Uploading…", tone: "neutral" };
+  if (f.uploading || f.stage === "uploading") return { text: "Uploading…", tone: "neutral" };
   if (f.error) return { text: f.error, tone: "red" };
+  // Streamed stages (#115 SSE) — a live narration of what's actually
+  // happening to this file right now, ahead of the coarser status flags.
+  if (f.stage === "reading") return { text: "Reading the document…", tone: "neutral" };
+  if (f.stage === "verifying") return { text: "Checking it's the right document…", tone: "neutral" };
   if (!f.verificationCompleted) return { text: "Checking…", tone: "neutral" };
   if (f.mismatchReasons && !f.confirmed) return { text: "Needs review", tone: "amber" };
+  if (f.stage === "extracting") return { text: "Extracting values…", tone: "neutral" };
   if (f.extractionStatus === "running" || f.extractionStatus === "pending") {
     return { text: "Extracting…", tone: "neutral" };
   }
@@ -173,19 +184,26 @@ function statusLabel(f: ClientPipelineFile): { text: string; tone: "neutral" | "
 }
 
 // Step-based progress (#130) — jumps in discrete steps that mirror the real
-// pipeline stages already tracked in submission-pipeline.ts (Uploading →
-// Checking → Extracting → Ready), not smoothed. No byte-level upload
-// progress: uploadToSignedUrl uses fetch internally with no progress
-// callback, and the upload transport itself doesn't change here. A flagged
-// file halts at "Needs review" (same step as Checking, since extraction
-// hasn't started) rather than auto-advancing. Hard failures (upload error,
-// extraction failure) get their own error messaging instead of a bar.
+// pipeline stages (Uploading → Reading → Checking → Extracting → Ready). The
+// SSE pipeline (#115) feeds `stage` for the finer reading/verifying steps
+// and `extractProgress` for a real "N of M values" fill during extraction;
+// without a stream (reconnect poll) it falls back to the original four
+// steps. A flagged file halts at "Needs review" rather than advancing. Hard
+// failures get their own error messaging instead of a bar.
 export function stepProgress(f: ClientPipelineFile): number | null {
   if (f.error || f.extractionStatus === "failed") return null;
-  if (f.uploading) return 25;
+  if (f.uploading || f.stage === "uploading") return 25;
+  if (f.stage === "reading") return 40;
+  if (f.stage === "verifying") return 55;
   if (!f.verificationCompleted) return 50;
   if (f.mismatchReasons && !f.confirmed) return 50;
-  if (f.extractionStatus === "running" || f.extractionStatus === "pending") return 75;
+  if (f.stage === "extracting" || f.extractionStatus === "running" || f.extractionStatus === "pending") {
+    if (f.extractProgress && f.extractProgress.total > 0) {
+      const frac = f.extractProgress.found / f.extractProgress.total;
+      return 75 + Math.min(24, Math.max(0, Math.round(frac * 24)));
+    }
+    return 75;
+  }
   return 100;
 }
 
@@ -207,8 +225,15 @@ function FileCard({
   const flagged = !!file.mismatchReasons && !file.confirmed;
   const status = statusLabel(file);
   const busy =
-    file.uploading || !file.verificationCompleted || file.extractionStatus === "running" || file.extractionStatus === "pending";
+    file.uploading ||
+    !!file.stage ||
+    !file.verificationCompleted ||
+    file.extractionStatus === "running" ||
+    file.extractionStatus === "pending";
   const pct = stepProgress(file);
+  // Live one-liner under the status while a file is still settling, and the
+  // "Found N of M values" summary that persists next to Ready.
+  const detail = !file.error && !flagged ? file.stageDetail : null;
 
   return (
     <div
@@ -256,6 +281,8 @@ function FileCard({
           <ProgressTrack pct={pct} />
         </div>
       )}
+
+      {detail && <p className="mt-1.5 text-xs text-zinc-500">{detail}</p>}
 
       {flagged && (
         <div className="mt-2">

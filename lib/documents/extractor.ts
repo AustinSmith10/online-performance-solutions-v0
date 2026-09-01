@@ -386,6 +386,101 @@ export async function extractSingleDocument(
   return { label: doc.label, result };
 }
 
+// ─── Streaming extraction (upload-pipeline live progress) ──────────────────
+//
+// Same call as extractSingleDocument, but over client.messages.stream() so
+// the upload pipeline can surface "found N of M values" while the single
+// (potentially slow) Sonnet call is still running. The field count is the
+// only progress signal the model exposes — there is no sub-progress within
+// one field — so this is a coarse tick, not a byte meter. Fail-open contract
+// is identical to the non-streaming path: any error (including a missing
+// .stream helper under test) yields the empty placeholder, never throws.
+
+// Pure, unit-tested: how many field objects the model has fully emitted so
+// far in a partial JSON snapshot. Every field object (po_number and each
+// token-array element) closes with a `"confidence": "high|medium|low"` pair,
+// so a completed-pair count is a safe lower bound on progress even while the
+// trailing object is still streaming in.
+export function countCompletedFields(snapshot: string): number {
+  return (snapshot.match(/"confidence"\s*:\s*"(?:high|medium|low)"/g) ?? []).length;
+}
+
+async function extractWithAnthropicStreaming(
+  prompt: string,
+  tokenNames: string[],
+  onProgress: (found: number) => void
+): Promise<SingleDocResult> {
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 180_000 });
+  const schema = buildExtractionSchema(tokenNames);
+  const stream = client.messages.stream({
+    model: "claude-sonnet-5",
+    max_tokens: 1024,
+    messages: [{ role: "user", content: prompt }],
+    output_config: { format: { type: "json_schema", schema: schema.schema } },
+  });
+  stream.on("text", (_delta, snapshot) => {
+    try {
+      onProgress(countCompletedFields(snapshot));
+    } catch {
+      // A progress-sink failure must never abort the extraction itself.
+    }
+  });
+  const message = await stream.finalMessage();
+  const text = message.content[0]?.type === "text" ? message.content[0].text : "";
+  return parseJson(text, tokenNames);
+}
+
+async function runSingleExtractionStreaming(
+  prompt: string,
+  tokenNames: string[],
+  onProgress: (found: number) => void
+): Promise<SingleDocResult> {
+  const empty: SingleDocResult = {
+    po_number: { ...EMPTY_FIELD },
+    fields: Object.fromEntries(tokenNames.map((t) => [t, [{ ...EMPTY_FIELD }]])),
+  };
+
+  if (!(await isAiExtractionEnabled())) return empty;
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      return await extractWithAnthropicStreaming(prompt, tokenNames, onProgress);
+    } catch (err) {
+      console.error("[extractor] streaming Anthropic extraction failed:", err);
+      const status = classifyProviderError(err);
+      if (status) void reportProviderFailure({ provider: "anthropic", status, context: "document extraction", error: err });
+    }
+  }
+
+  return empty;
+}
+
+// The token count the caller should treat as "100%" — every extract token
+// plus po_number, matching what countCompletedFields sees in the response.
+export function extractionFieldTotal(extractTokens: ExtractToken[]): number {
+  return extractTokens.length + 1;
+}
+
+export async function extractSingleDocumentStreaming(
+  doc: ExtractionDocument,
+  extractTokens: ExtractToken[],
+  onProgress?: (found: number, total: number) => void
+): Promise<SingleDocExtraction> {
+  const tokenNames = extractTokens.map((t) => t.token);
+  const total = extractionFieldTotal(extractTokens);
+  const text = await extractPdfText(doc.buffer);
+  const prompt = buildPrompt([{ label: doc.label, text }], extractTokens);
+  let last = 0;
+  const result = await runSingleExtractionStreaming(prompt, tokenNames, (found) => {
+    const clamped = Math.min(found, total);
+    if (clamped > last) {
+      last = clamped;
+      onProgress?.(clamped, total);
+    }
+  });
+  return { label: doc.label, result };
+}
+
 // Cross-document merge — pure, no I/O. Separated from the per-document LLM
 // call (#115) so it can run once at Continue-time over already-computed
 // per-file results (cached on project_files) with zero further LLM calls,
