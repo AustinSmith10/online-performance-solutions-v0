@@ -43,8 +43,10 @@ import { RevertButton } from "@/app/(admin)/admin/projects/[id]/_components/Reve
 import { ConvertButton } from "@/app/(admin)/admin/projects/[id]/_components/ConvertButton";
 import { PbdrPreviewButton } from "@/app/(admin)/admin/projects/[id]/_components/PbdrPreviewButton";
 import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/DispatchButton";
+import { PbdbDispatchSchedule } from "@/app/(admin)/admin/projects/[id]/_components/PbdbDispatchSchedule";
 import { VerificationMismatchNote } from "@/components/VerificationMismatchNote";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
+import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
 import type { Stage } from "@/components/workspace/StageRail";
 import { RealtimeSubscriptionRefresher } from "@/components/RealtimeSubscriptionRefresher";
 
@@ -190,6 +192,7 @@ export default async function ConsultantProjectDetailPage({
     { data: rawAuditEntries },
     { data: rawRevisionNotes },
     { data: pendingDelivery },
+    { data: pendingPbdbDelivery },
     { data: openFieldFlags },
   ] = await Promise.all([
     project.template_id
@@ -250,6 +253,7 @@ export default async function ConsultantProjectDetailPage({
       .select("review_cycle, note")
       .eq("project_id", id),
     supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).eq("delivery_type", "pbdr").maybeSingle(),
+    supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).eq("delivery_type", "pbdb").maybeSingle(),
     supabase
       .from("field_flags")
       .select(
@@ -467,24 +471,29 @@ export default async function ConsultantProjectDetailPage({
   // this page recomputing its own version of the same check.
   const effectiveStatus = resolveEffectiveStatus(project.status, currentCycleReviews);
 
+  // Shared dispatch-readiness rule (#168) — the same classifier the
+  // `dispatchToStakeholders` server action uses, so the card and the action
+  // can't disagree about whether a (re)dispatch is possible. "redispatch"
+  // also covers `dispatched` / `revision_required` + 0 current-cycle rows:
+  // a fresh revised upload awaiting redispatch, or a project stranded by the
+  // #166 outage.
+  const dispatchReadiness = classifyPbdbDispatchReadiness({
+    status: effectiveStatus,
+    qaCompletedBy: project.qa_completed_by,
+    currentCycleReviewCount: currentCycleReviews.length,
+  });
+
   const pbdbCardState: "locked" | "upload" | "ready_to_dispatch" | "pending" | "revision" | "ready_to_redispatch" | "approved" = !latestPbdb
     ? "locked"
-    : (effectiveStatus === "dispatched" || effectiveStatus === "revision_required") && currentCycleReviews.length === 0
-    ? // A revised PBDB was just uploaded (bumping review_cycle) — either an
-      // early reissue while status is still "dispatched" (a consultant
-      // acting on one stakeholder's feedback before everyone's responded),
-      // or a correction after "revision_required" — and no stakeholder_reviews
-      // rows exist for the new cycle yet, so redispatch hasn't happened. If
-      // rows already exist for the current cycle, this cycle was already
-      // sent and is genuinely mid-review ("pending"/"revision" below).
-      "ready_to_redispatch"
+    : dispatchReadiness.kind === "redispatch"
+    ? "ready_to_redispatch"
     : effectiveStatus === "dispatched"
     ? "pending"
     : effectiveStatus === "revision_required"
     ? "revision"
     : isTerminal || effectiveStatus === "converting"
     ? "approved"
-    : project.status === "in_progress" && project.qa_completed_by
+    : dispatchReadiness.kind === "initial"
     ? "ready_to_dispatch"
     : "upload";
 
@@ -700,18 +709,25 @@ export default async function ConsultantProjectDetailPage({
             />
           )}
           {pbdbReadyToSend && (
-            <>
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
-                <ProjectDeliveryDelayPresetSelect
-                  projectId={id}
-                  initialValue={project.pbdb_delivery_delay_preset}
-                  durations={deliveryDurations}
-                  docType="pbdb"
-                />
-              </div>
-              <DispatchButton projectId={id} />
-            </>
+            pendingPbdbDelivery ? (
+              <PbdbDispatchSchedule
+                projectId={id}
+                scheduledFor={pendingPbdbDelivery.scheduled_for as string}
+              />
+            ) : (
+              <>
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+                  <ProjectDeliveryDelayPresetSelect
+                    projectId={id}
+                    initialValue={project.pbdb_delivery_delay_preset}
+                    durations={deliveryDurations}
+                    docType="pbdb"
+                  />
+                </div>
+                <DispatchButton projectId={id} />
+              </>
+            )
           )}
           <PbdbReuploadToggle projectId={id} />
         </div>
@@ -847,18 +863,25 @@ export default async function ConsultantProjectDetailPage({
             />
           )}
           {pbdbReadyToSend && (
-            <>
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
-                <ProjectDeliveryDelayPresetSelect
-                  projectId={id}
-                  initialValue={project.pbdb_delivery_delay_preset}
-                  durations={deliveryDurations}
-                  docType="pbdb"
-                />
-              </div>
-              <DispatchButton projectId={id} />
-            </>
+            pendingPbdbDelivery ? (
+              <PbdbDispatchSchedule
+                projectId={id}
+                scheduledFor={pendingPbdbDelivery.scheduled_for as string}
+              />
+            ) : (
+              <>
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+                  <ProjectDeliveryDelayPresetSelect
+                    projectId={id}
+                    initialValue={project.pbdb_delivery_delay_preset}
+                    durations={deliveryDurations}
+                    docType="pbdb"
+                  />
+                </div>
+                <DispatchButton projectId={id} />
+              </>
+            )
           )}
         </div>
       </FocusCard>

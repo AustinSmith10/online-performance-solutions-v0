@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   adminSetProjectNumber,
   type AdminProjectNumberState,
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
+  const router = useRouter();
   const boundAction = adminSetProjectNumber.bind(null, projectId);
   const [state, action, pending] = useActionState<AdminProjectNumberState, FormData>(
     boundAction,
@@ -25,10 +27,15 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
 
   useEffect(() => {
     if (!state.success) return;
-    const t1 = setTimeout(() => { setEditing(false); setOverlayVisible(true); }, 0);
-    const t2 = setTimeout(() => setOverlayVisible(false), 3500);
+    const t1 = setTimeout(() => {
+      setEditing(false);
+      setOverlayVisible(true);
+      router.refresh();
+    }, 0);
+    // Keep the overlay up longer when it carries a duplicate warning to read.
+    const t2 = setTimeout(() => setOverlayVisible(false), state.warning ? 8000 : 3500);
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [state.success]);
+  }, [state.success, state.warning, router]);
 
   return (
     <>
@@ -41,9 +48,15 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
               </svg>
             </div>
             <p className="text-base font-semibold text-zinc-900">Project number saved</p>
-            <p className="mt-2 text-sm text-zinc-500">
-              Generate the PBDB from the PBDB step below.
-            </p>
+            {state.warning ? (
+              <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-left text-xs text-amber-800">
+                {state.warning}
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-zinc-500">
+                Generate the PBDB from the PBDB step below.
+              </p>
+            )}
             <button
               type="button"
               onClick={() => setOverlayVisible(false)}
@@ -79,13 +92,16 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
                 <input
                   name="project_number"
                   type="text"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
                   defaultValue={currentNumber ?? ""}
-                  placeholder="e.g. 25-001"
+                  placeholder="e.g. 250001"
                   required
                   className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
                 />
                 <p className="mt-1 text-xs text-zinc-400">
-                  The suffix <span className="font-mono">-S</span> is appended automatically in generated documents.
+                  Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically in generated documents.
                 </p>
               </div>
 

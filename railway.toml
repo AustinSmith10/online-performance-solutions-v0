@@ -10,6 +10,13 @@ startCommand = "npm start"
 healthcheckPath = "/api/health"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
+# Release phase (#167): apply any pending migrations BEFORE the new version
+# serves traffic. `supabase db push` exits non-zero on any failure, which
+# aborts the deploy — the previous version keeps serving. Runs once per
+# deploy, on ops-web only. Requires a DIRECT Postgres connection string
+# (port 5432, not the 6543 pooler) in this service's Railway variables as
+# SUPABASE_DB_URL (or DATABASE_URL as a fallback).
+preDeployCommand = ["bash scripts/deploy/apply-migrations.sh"]
 
 [services.ops-worker]
 # pg-boss background job worker

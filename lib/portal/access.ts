@@ -12,10 +12,12 @@ export async function getStakeholderReviewedProjectIds(
   supabase: SupabaseClient,
   email: string
 ): Promise<string[]> {
+  // stakeholder_email is stored canonically lowercase (#169); normalise the
+  // lookup key too so this never depends on the caller's casing.
   const { data } = await supabase
     .from("stakeholder_reviews")
     .select("project_id")
-    .eq("stakeholder_email", email);
+    .eq("stakeholder_email", email.toLowerCase());
 
   const ids = new Set((data ?? []).map((r) => r.project_id as string));
   return [...ids].filter((id) => UUID_RE.test(id));

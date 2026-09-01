@@ -34,20 +34,39 @@ export function ProjectNumberForm({
     }
   }, [state.success, router]);
 
+  // Track which warning string was dismissed, so a fresh save with a new
+  // warning shows again without an effect resetting a boolean.
+  const [dismissedWarning, setDismissedWarning] = useState<string | null>(null);
+  const showWarning = !!state.warning && state.warning !== dismissedWarning;
+
   const showForm = !completed || editing;
 
   const body = (
     <div className={bare ? "" : "px-5 py-4"}>
       {completed && !editing ? (
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-green-700">
-              Project number set: {projectNumber}-S
-            </p>
-            <EditIconButton
-              onClick={() => setEditing(true)}
-              label="Edit project number"
-              className="text-green-700 hover:bg-green-100 hover:text-green-900"
-            />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-green-700">
+                Project number set: {projectNumber}-S
+              </p>
+              <EditIconButton
+                onClick={() => setEditing(true)}
+                label="Edit project number"
+                className="text-green-700 hover:bg-green-100 hover:text-green-900"
+              />
+            </div>
+            {showWarning && (
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                {state.warning}{" "}
+                <button
+                  type="button"
+                  onClick={() => setDismissedWarning(state.warning ?? null)}
+                  className="font-medium underline hover:no-underline"
+                >
+                  Dismiss
+                </button>
+              </p>
+            )}
           </div>
         ) : (
           <form action={formAction} className="space-y-3">
@@ -62,14 +81,17 @@ export function ProjectNumberForm({
                 id="project_number"
                 name="project_number"
                 type="text"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
                 required
                 disabled={pending}
                 defaultValue={projectNumber ?? ""}
-                placeholder="e.g. 25-001"
+                placeholder="e.g. 250001"
                 className="block w-full max-w-xs rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-50"
               />
               <p className="mt-1 text-xs text-zinc-400">
-                The suffix <span className="font-mono">-S</span> is appended automatically in generated documents.
+                Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically in generated documents.
               </p>
             </div>
             <div className="flex items-center gap-3">

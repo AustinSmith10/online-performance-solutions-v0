@@ -133,7 +133,7 @@ export default async function ClientProjectDetailPage({
       .eq("project_id", id)
       .eq("review_cycle", project.review_cycle)
       .maybeSingle(),
-    project.status === "dispatched"
+    project.status === "dispatched" || project.status === "revision_required"
       ? supabase
           .from("stakeholder_reviews")
           .select("status, stakeholder_email")
@@ -141,6 +141,14 @@ export default async function ClientProjectDetailPage({
           .eq("review_cycle", project.review_cycle)
       : Promise.resolve({ data: null }),
   ]);
+
+  // Outage signature (#169): a project that reads as dispatched /
+  // revision_required but has zero stakeholder_reviews rows for the current
+  // cycle — nobody was actually invited. Can't be legitimate; surface it as
+  // "contact DDEG" rather than letting the stakeholder see "nothing needed".
+  const currentCycleReviewsMissing =
+    (project.status === "dispatched" || project.status === "revision_required") &&
+    (reviewRows ?? []).length === 0;
 
   const templateName = (templateRow?.name as string | null) ?? null;
   const consultantRevisionNote = (revisionNoteRow?.note as string | null) ?? null;
@@ -395,6 +403,25 @@ export default async function ClientProjectDetailPage({
         <p className="text-sm text-zinc-600">This project has been paused. We&apos;ll notify you once it resumes.</p>
       </FocusCard>
     );
+  } else if (currentCycleReviewsMissing) {
+    focusCard = (
+      <FocusCard
+        tone="amber"
+        title="Your review hasn't been set up"
+        subtitle="This looks like a configuration problem on our side."
+      >
+        <p className="text-sm text-zinc-700">
+          This brief is marked as sent for review, but we can&apos;t find your review invitation.
+          Please contact DDEG so we can re-send it — don&apos;t assume nothing is needed from you.
+        </p>
+        <a
+          href={SUPPORT_MAILTO}
+          className="mt-3 inline-flex items-center rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-50"
+        >
+          Contact DDEG →
+        </a>
+      </FocusCard>
+    );
   } else if (clientReviewOpen) {
     // Checked ahead of the blanket "revision_required" branch below so it
     // takes priority whenever this stakeholder's own review is still open.
@@ -516,6 +543,8 @@ export default async function ClientProjectDetailPage({
             ? "This project is in the recovery bin and will be permanently deleted after 30 days."
             : project.status === "draft"
             ? "Your documents have been saved as a draft — continue from the panel on the left to submit your request."
+            : currentCycleReviewsMissing
+            ? "This brief is marked as sent for review, but your review invitation is missing. Please contact DDEG."
             : stepperResult.caption}
         </p>
       </div>

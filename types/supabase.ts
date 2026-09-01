@@ -622,6 +622,32 @@ export type Database = {
           },
         ]
       }
+      extraction_usage_events: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extraction_usage_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       field_flags: {
         Row: {
           candidate_values: Json
@@ -776,6 +802,7 @@ export type Database = {
           clarification_requested_at: string | null
           clarification_requested_by: string | null
           clarification_token: string | null
+          clarification_token_hash: string | null
           created_at: string
           from_email: string
           from_name: string | null
@@ -807,6 +834,7 @@ export type Database = {
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
           clarification_token?: string | null
+          clarification_token_hash?: string | null
           created_at?: string
           from_email: string
           from_name?: string | null
@@ -838,6 +866,7 @@ export type Database = {
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
           clarification_token?: string | null
+          clarification_token_hash?: string | null
           created_at?: string
           from_email?: string
           from_name?: string | null
@@ -1136,6 +1165,7 @@ export type Database = {
           pbdb_delivery_delay_preset: string
           pbdb_downloaded_at: string | null
           po_number: string | null
+          progress_pct: number | null
           project_number: string | null
           qa_completed_by: string | null
           review_buffer_fired_at: string | null
@@ -1174,6 +1204,7 @@ export type Database = {
           pbdb_delivery_delay_preset?: string
           pbdb_downloaded_at?: string | null
           po_number?: string | null
+          progress_pct?: number | null
           project_number?: string | null
           qa_completed_by?: string | null
           review_buffer_fired_at?: string | null
@@ -1212,6 +1243,7 @@ export type Database = {
           pbdb_delivery_delay_preset?: string
           pbdb_downloaded_at?: string | null
           po_number?: string | null
+          progress_pct?: number | null
           project_number?: string | null
           qa_completed_by?: string | null
           review_buffer_fired_at?: string | null
@@ -1424,6 +1456,7 @@ export type Database = {
           stakeholder_name: string
           status: string
           token: string
+          token_hash: string | null
           waive_reason: string | null
           waived_at: string | null
           waived_by: string | null
@@ -1447,6 +1480,7 @@ export type Database = {
           stakeholder_name: string
           status?: string
           token: string
+          token_hash?: string | null
           waive_reason?: string | null
           waived_at?: string | null
           waived_by?: string | null
@@ -1470,6 +1504,7 @@ export type Database = {
           stakeholder_name?: string
           status?: string
           token?: string
+          token_hash?: string | null
           waive_reason?: string | null
           waived_at?: string | null
           waived_by?: string | null
@@ -1767,6 +1802,13 @@ export type Database = {
         Returns: undefined
       }
       admin_delete_user: { Args: { p_user_id: string }; Returns: undefined }
+      claim_extraction_slot: {
+        Args: { p_limit: number; p_user_id: string; p_window_hours?: number }
+        Returns: {
+          remaining: number
+          status: string
+        }[]
+      }
       consultant_owns_project: {
         Args: { p_project_id: string }
         Returns: boolean
@@ -1793,6 +1835,19 @@ export type Database = {
           status: string
         }[]
       }
+      dispatch_pbdb_reviews: {
+        Args: {
+          p_actor_id: string
+          p_audit_metadata: Json
+          p_org_id: string
+          p_project_id: string
+          p_review_cycle: number
+          p_reviews: Json
+        }
+        Returns: {
+          review_row_count: number
+        }[]
+      }
       get_failed_jobs: {
         Args: never
         Returns: {
@@ -1810,6 +1865,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      latest_schema_migration: { Args: never; Returns: string }
       log_override: {
         Args: { p_performed_by: string; p_project_id: string; p_reason: string }
         Returns: {

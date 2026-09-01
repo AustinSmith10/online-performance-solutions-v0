@@ -7,12 +7,13 @@ import { requireRole } from "@/lib/auth/session";
 import { requireProjectAccess } from "@/lib/auth/project-access";
 import { auditLog } from "@/lib/audit/log";
 import { performAssignment } from "@/lib/projects/assign";
+import { validateProjectNumber, findDuplicateProjectNumber } from "@/lib/projects/project-number";
 import { generatePbdb } from "@/lib/documents/generator";
 import { formatAddress } from "@/lib/documents/formatters";
 import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
-import { expediteDelivery, scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
+import { expediteDelivery, expeditePbdbDispatch, scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { appendRevisionHistoryRow, setCoverRevisionNumber } from "@/lib/documents/revision-table";
@@ -555,18 +556,23 @@ async function notifyAdminsOfSubmissionEdit(
 
 // ─── Admin: set / override project number ─────────────────────────────────
 
-export type AdminProjectNumberState = { error?: string; success?: boolean };
+export type AdminProjectNumberState = { error?: string; success?: boolean; warning?: string };
 
-// Shared core: set number, audit log. PBDB generation is a separate, manual
-// step (see generatePbdbForProject) — this no longer triggers it.
-// Returns an error string on failure, undefined on success.
+// Shared core: validate + set number, audit log. PBDB generation is a
+// separate, manual step (see generatePbdbForProject) — this no longer
+// triggers it. Returns `{ error }` on failure, `{ warning }` on success when
+// the (permitted) number duplicates another live project.
 async function _applyProjectNumber(
   projectId: string,
   rawNumber: string,
   actorId: string,
   actorEmail: string
-): Promise<string | undefined> {
+): Promise<{ error?: string; warning?: string }> {
   const supabase = createAdminClient();
+
+  const validation = validateProjectNumber(rawNumber);
+  if (!validation.ok) return { error: validation.error };
+  const projectNumber = validation.value;
 
   const { data: project } = await supabase
     .from("projects")
@@ -575,23 +581,23 @@ async function _applyProjectNumber(
     .is("deleted_at", null)
     .maybeSingle();
 
-  if (!project) return "Project not found.";
+  if (!project) return { error: "Project not found." };
 
   const previousNumber = project.project_number as string | null;
 
   const { error: updateError } = await supabase
     .from("projects")
-    .update({ project_number: rawNumber })
+    .update({ project_number: projectNumber })
     .eq("id", projectId);
 
-  if (updateError) return updateError.message;
+  if (updateError) return { error: updateError.message };
 
   await auditLog("project.number_set", actorId, actorEmail, {
     projectId,
     orgId: project.client_id as string,
     metadata: {
-      project_number: rawNumber,
-      ...(previousNumber && previousNumber !== rawNumber
+      project_number: projectNumber,
+      ...(previousNumber && previousNumber !== projectNumber
         ? { previous_number: previousNumber }
         : {}),
       actor: "admin",
@@ -600,6 +606,11 @@ async function _applyProjectNumber(
 
   revalidatePath(`/admin/projects/${projectId}`);
   revalidatePath(`/ops/projects/${projectId}`);
+
+  const duplicate = await findDuplicateProjectNumber(supabase, projectNumber, projectId);
+  return duplicate
+    ? { warning: `Heads up — project number ${projectNumber} is already used by another live project (${duplicate.label}). Project numbers aren't unique; double-check the site address.` }
+    : {};
 }
 
 export async function adminSetProjectNumber(
@@ -609,13 +620,18 @@ export async function adminSetProjectNumber(
 ): Promise<AdminProjectNumberState> {
   const actor = await requireRole("super_admin", "admin");
 
-  const rawNumber = (formData.get("project_number") as string | null)?.trim();
-  if (!rawNumber) return { error: "Project number is required." };
+  const result = await _applyProjectNumber(
+    projectId,
+    (formData.get("project_number") as string | null) ?? "",
+    actor.id,
+    actor.email as string
+  );
+  if (result.error) return { error: result.error };
 
-  const err = await _applyProjectNumber(projectId, rawNumber, actor.id, actor.email as string);
-  if (err) return { error: err };
-
-  redirect(`/admin/projects/${projectId}?number_saved=1`);
+  // Non-blocking duplicate warning must survive back to the form, so this
+  // path returns success state (the form shows its own confirmation +
+  // warning) rather than redirecting to the ?number_saved=1 banner.
+  return { success: true, warning: result.warning };
 }
 
 // Dashboard variant: same work, returns success state instead of redirecting
@@ -627,18 +643,20 @@ export async function adminSetProjectNumberFromDashboard(
 ): Promise<AdminProjectNumberState> {
   const actor = await requireRole("super_admin", "admin");
 
-  const rawNumber = (formData.get("project_number") as string | null)?.trim();
-  if (!rawNumber) return { error: "Project number is required." };
+  const result = await _applyProjectNumber(
+    projectId,
+    (formData.get("project_number") as string | null) ?? "",
+    actor.id,
+    actor.email as string
+  );
+  if (result.error) return { error: result.error };
 
-  const err = await _applyProjectNumber(projectId, rawNumber, actor.id, actor.email as string);
-  if (err) return { error: err };
-
-  return { success: true };
+  return { success: true, warning: result.warning };
 }
 
 // ─── Consultant: set / edit project number ─────────────────────────────────
 
-export type ProjectNumberState = { error?: string; success?: boolean };
+export type ProjectNumberState = { error?: string; success?: boolean; warning?: string };
 
 export async function saveProjectNumber(
   projectId: string,
@@ -663,12 +681,13 @@ export async function saveProjectNumber(
 
   const previousNumber = project.project_number as string | null;
 
-  const rawNumber = (formData.get("project_number") as string | null)?.trim();
-  if (!rawNumber) return { error: "Project number is required." };
+  const validation = validateProjectNumber((formData.get("project_number") as string | null) ?? "");
+  if (!validation.ok) return { error: validation.error };
+  const projectNumber = validation.value;
 
   const { error: updateError } = await supabase
     .from("projects")
-    .update({ project_number: rawNumber })
+    .update({ project_number: projectNumber })
     .eq("id", projectId);
 
   if (updateError) return { error: updateError.message };
@@ -677,8 +696,8 @@ export async function saveProjectNumber(
     projectId,
     orgId: project.client_id as string,
     metadata: {
-      project_number: rawNumber,
-      ...(previousNumber && previousNumber !== rawNumber
+      project_number: projectNumber,
+      ...(previousNumber && previousNumber !== projectNumber
         ? { previous_number: previousNumber }
         : {}),
     },
@@ -691,7 +710,13 @@ export async function saveProjectNumber(
   // PBDB" on its own the moment project_number is set (server-state-driven,
   // same principle as the PBDB-download step), so the old toast/spotlight
   // targeting #pbdb-section was redundant. See pbdb-feedback-focus-step memory.
-  return { success: true };
+  const duplicate = await findDuplicateProjectNumber(supabase, projectNumber, projectId);
+  return duplicate
+    ? {
+        success: true,
+        warning: `Heads up — project number ${projectNumber} is already used by another live project (${duplicate.label}). Project numbers aren't unique; double-check the site address.`,
+      }
+    : { success: true };
 }
 
 // ─── Consultant: edit project details (submitted details, PO, org values, project number) ──
@@ -700,7 +725,7 @@ export async function saveProjectNumber(
 // extracted_fields, never into clients.client_config — so they override the
 // org's global config for this project only, per issue #38.
 
-export type UpdateProjectDetailsState = { error?: string; success?: boolean };
+export type UpdateProjectDetailsState = { error?: string; success?: boolean; warning?: string };
 
 export async function updateProjectDetails(
   projectId: string,
@@ -748,6 +773,15 @@ export async function updateProjectDetails(
   const newProjectNumber = rawProjectNumber || (project.project_number as string | null);
   const projectNumberChanged = (project.project_number ?? null) !== newProjectNumber;
 
+  // Validate only a genuine change — an unrelated edit must not re-run the
+  // six-digit check against a grandfathered legacy number, and we omit
+  // project_number from the UPDATE entirely when unchanged so the NOT VALID
+  // DB constraint never re-inspects a legacy row.
+  if (projectNumberChanged) {
+    const validation = validateProjectNumber(newProjectNumber);
+    if (!validation.ok) return { error: validation.error };
+  }
+
   if (changedTokens.length === 0 && !poChanged && !projectNumberChanged) {
     return { error: "No changes were made." };
   }
@@ -757,7 +791,7 @@ export async function updateProjectDetails(
     .update({
       extracted_fields: updatedFields,
       po_number: newPoNumber,
-      project_number: newProjectNumber,
+      ...(projectNumberChanged ? { project_number: newProjectNumber } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", projectId);
@@ -780,6 +814,16 @@ export async function updateProjectDetails(
 
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
+
+  if (projectNumberChanged && newProjectNumber) {
+    const duplicate = await findDuplicateProjectNumber(supabase, newProjectNumber, projectId);
+    if (duplicate) {
+      return {
+        success: true,
+        warning: `Heads up — project number ${newProjectNumber} is already used by another live project (${duplicate.label}). Project numbers aren't unique; double-check the site address.`,
+      };
+    }
+  }
   return { success: true };
 }
 
@@ -1574,6 +1618,51 @@ export async function expediteProjectDelivery(projectId: string): Promise<Expedi
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
   return { delivered: result.delivered, scheduledFor: result.scheduledFor };
+}
+
+// #170: bring a staged (normal/extended) PBDB dispatch forward. A PBDB
+// dispatch is a reviewer notification with no business-hours gate, so this
+// always sends immediately.
+export async function expediteProjectPbdbDispatch(projectId: string): Promise<ExpediteDeliveryState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  if (actor.role === "consultant") {
+    const { data: project } = await supabase
+      .from("projects")
+      .select("assigned_consultant_id")
+      .eq("id", projectId)
+      .single();
+    if (project?.assigned_consultant_id !== actor.id) {
+      return { error: "You are not assigned to this project." };
+    }
+  }
+
+  const { data: pending } = await supabase
+    .from("pending_deliveries")
+    .select("scheduled_for")
+    .eq("project_id", projectId)
+    .eq("delivery_type", "pbdb")
+    .maybeSingle();
+
+  if (!pending) {
+    return { error: "No PBDB dispatch is currently scheduled for this project." };
+  }
+
+  try {
+    await expeditePbdbDispatch(projectId, actor.id);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Dispatch failed." };
+  }
+
+  await auditLog("pbdb.dispatch_expedited", actor.id, actor.email as string, {
+    projectId,
+    metadata: { previously_scheduled_for: pending.scheduled_for },
+  });
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { delivered: true, scheduledFor: null };
 }
 
 export type SetDeliveryDelayPresetState = { error?: string };

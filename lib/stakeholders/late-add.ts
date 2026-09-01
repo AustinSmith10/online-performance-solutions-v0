@@ -63,7 +63,10 @@ export async function inviteLateStakeholder(
       ? `${process.env.NEXT_PUBLIC_APP_URL}/portal/projects/${projectId}`
       : `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
 
-  await supabase.from("stakeholder_reviews").upsert(
+  // If this write fails silently the late-added reviewer gets an email with a
+  // token that was never persisted (dead link) AND the PBDR-conversion gate
+  // won't wait on them — the #166 pattern. Bail before sending anything.
+  const { error: reviewWriteError } = await supabase.from("stakeholder_reviews").upsert(
     {
       project_id: projectId,
       review_cycle: reviewCycle,
@@ -80,6 +83,14 @@ export async function inviteLateStakeholder(
     },
     { onConflict: "project_id,review_cycle,stakeholder_email" }
   );
+
+  if (reviewWriteError) {
+    console.error(
+      `[late-add-stakeholder] failed to create review row for ${email} on project ${projectId}:`,
+      reviewWriteError
+    );
+    throw new Error(`Failed to create the review row for ${email}: ${reviewWriteError.message}`);
+  }
 
   const pbdbPdf = await getOrCreateDispatchPdf(
     supabase,

@@ -33,14 +33,33 @@ const ROLE_ROUTES: Array<{ prefix: string; roles: UserRole[] }> = [
 // connect-src/img-src CSP directives (REST/Storage over https, Realtime over wss).
 const SUPABASE_HOST = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).host;
 
+// Derives Sentry's CSP violation-report ingestion URL from the browser DSN
+// (same DSN instrumentation-client.ts uses — it's public, not a secret).
+// Returns null when no DSN is configured, so this stays a no-op until a
+// Sentry project exists — see GitHub issue #162.
+function sentryCspReportEndpoint(): string | null {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+  if (!dsn) return null;
+  try {
+    const dsnUrl = new URL(dsn);
+    const projectId = dsnUrl.pathname.replace(/^\//, "");
+    return `https://${dsnUrl.host}/api/${projectId}/security/?sentry_key=${dsnUrl.username}`;
+  } catch {
+    return null;
+  }
+}
+
 // Builds the Content-Security-Policy-Report-Only header value for a single
 // request, using a fresh per-request nonce for script-src.
 //
-// Report-only for now — see GitHub issue #158. Not yet wired to a report-to
-// endpoint (tracked separately) and not yet flipped to enforcing (tracked
-// separately). Expect a benign violation report on every PDF preview
+// Report-only for now — see GitHub issue #158; not yet flipped to enforcing
+// (tracked in #165). Expect a benign violation report on every PDF preview
 // (pdf.js's worker/eval usage), which is fine to ignore for this pass.
-function buildCspReportOnly(nonce: string): string {
+//
+// `report-uri` is included alongside `report-to` because Safari never
+// implemented the Reporting API — without it, CSP violations from Safari
+// users would silently vanish instead of reaching Sentry.
+function buildCspReportOnly(nonce: string, reportEndpoint: string | null): string {
   return [
     `script-src 'self' 'nonce-${nonce}'`,
     `worker-src 'self'`,
@@ -52,6 +71,9 @@ function buildCspReportOnly(nonce: string): string {
     `object-src 'none'`,
     `frame-ancestors 'none'`,
     `form-action 'self'`,
+    ...(reportEndpoint
+      ? [`report-to csp-endpoint`, `report-uri ${reportEndpoint}`]
+      : []),
   ].join("; ");
 }
 
@@ -59,7 +81,8 @@ export async function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString(
     "base64"
   );
-  const cspReportOnly = buildCspReportOnly(nonce);
+  const cspReportEndpoint = sentryCspReportEndpoint();
+  const cspReportOnly = buildCspReportOnly(nonce, cspReportEndpoint);
 
   // One ID per request, generated here rather than trusting an inbound
   // header — Railway sits in front of this app, so an inbound x-request-id
@@ -80,6 +103,12 @@ export async function proxy(request: NextRequest) {
   // JSON errors, and the pass-through response — carries both.
   const withCsp = <T extends NextResponse>(response: T): T => {
     response.headers.set("Content-Security-Policy-Report-Only", cspReportOnly);
+    if (cspReportEndpoint) {
+      response.headers.set(
+        "Reporting-Endpoints",
+        `csp-endpoint="${cspReportEndpoint}"`
+      );
+    }
     response.headers.set(REQUEST_ID_HEADER, requestId);
     return response;
   };

@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/node";
 import { PgBoss, type Job } from "pg-boss";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { assertSchemaCurrentOrExit } from "@/lib/schema/drift-guard";
 import { purgeRecoveryBin } from "@/lib/jobs/purge-recovery-bin";
 import { purgeRejectedInboundAttachments } from "@/lib/jobs/purge-rejected-inbound-attachments";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
@@ -25,6 +26,11 @@ Sentry.init({
 });
 
 async function main() {
+  // #167: refuse to start against a schema older than this build expects.
+  // Covers deploys that bypass the release-phase migration step; turns a
+  // silent PGRST204 mid-job into a red deploy.
+  await assertSchemaCurrentOrExit(createAdminClient());
+
   const boss = new PgBoss(process.env.DATABASE_URL!);
 
   // Wraps a queue handler so an uncaught error is reported to Sentry —
