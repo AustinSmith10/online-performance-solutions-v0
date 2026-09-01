@@ -52,7 +52,7 @@ export function DocumentPreviewModal({
         onClick={() => setOpen(false)}
       >
           <div
-            className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+            className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
@@ -65,9 +65,7 @@ export function DocumentPreviewModal({
                 Close
               </button>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col">
-              <DocumentViewer src={href} filename={filename} className="flex-1" />
-            </div>
+            <DocumentViewer src={href} filename={filename} />
           </div>
       </div>,
       document.body

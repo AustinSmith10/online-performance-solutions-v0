@@ -5,6 +5,9 @@ import { ProgressTrack } from "@/components/ProgressTrack";
 
 type PreviewKind = "pdf" | "image" | "unsupported";
 
+type PdfjsModule = typeof import("pdfjs-dist");
+type PdfDoc = Awaited<ReturnType<PdfjsModule["getDocument"]>["promise"]>;
+
 function extKind(name: string): PreviewKind | null {
   const ext = name.split("?")[0].split(".").pop()?.toLowerCase();
   if (ext === "pdf") return "pdf";
@@ -60,9 +63,10 @@ interface DocumentViewerProps {
 /**
  * Generic inline document preview. Renders PDF via PDF.js canvas rendering
  * (never a native iframe/embed — unreliable on mobile Safari) and PNG/JPEG
- * as plain images. Both are zoomable and drag-to-pan so a reader can
- * actually read a shrunk-to-fit A3 drawing. Anything else (TIFF, docx,
- * unknown) gets a "preview not available" fallback with a download link.
+ * as plain images. Both are zoomable (toolbar + / − / Fit width / 100%, or
+ * the +/-/0 keys) and scroll natively so a reader can actually read a
+ * shrunk-to-fit A3 drawing. Anything else (TIFF, docx, unknown) gets a
+ * "preview not available" fallback with a download link.
  */
 export function DocumentViewer({ src, filename, className = "" }: DocumentViewerProps) {
   const kind = detectKind(filename, src);
@@ -89,67 +93,11 @@ export function DocumentViewer({ src, filename, className = "" }: DocumentViewer
   );
 }
 
-// PDF pages render at 2× so text on a shrunk-to-fit A3 sheet is still sharp
-// when the reader zooms back in. Display size is controlled separately via CSS.
-const RENDER_SCALE = 2;
-
-// ── click-and-drag panning on a scroll container ─────────────────────────────
-function usePanScroll(ref: React.RefObject<HTMLDivElement | null>) {
-  const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const [dragging, setDragging] = useState(false);
-
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.button !== 0) return;
-      const el = ref.current;
-      if (!el) return;
-      drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
-      setDragging(true);
-      try {
-        el.setPointerCapture(e.pointerId);
-      } catch {
-        /* capture is best-effort */
-      }
-    },
-    [ref]
-  );
-
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      const el = ref.current;
-      if (!el || !drag.current) return;
-      el.scrollLeft = drag.current.left - (e.clientX - drag.current.x);
-      el.scrollTop = drag.current.top - (e.clientY - drag.current.y);
-    },
-    [ref]
-  );
-
-  const end = useCallback(
-    (e: React.PointerEvent) => {
-      const el = ref.current;
-      if (el && drag.current) {
-        try {
-          el.releasePointerCapture(e.pointerId);
-        } catch {
-          /* already released */
-        }
-      }
-      drag.current = null;
-      setDragging(false);
-    },
-    [ref]
-  );
-
-  return {
-    dragging,
-    handlers: {
-      onPointerDown,
-      onPointerMove,
-      onPointerUp: end,
-      onPointerCancel: end,
-    },
-  };
-}
+// PDF pages render at 1.6× so text on a shrunk-to-fit A3 sheet stays sharp
+// when the reader zooms back in, without the multi-second-per-page canvas
+// cost that 2× incurs on a 27-sheet A3 drawing set. Display size is
+// controlled separately via CSS.
+const RENDER_SCALE = 1.6;
 
 function ZoomBar({
   zoom,
@@ -206,18 +154,12 @@ function ZoomBar({
 }
 
 function ImageViewer({ src, filename, className }: { src: string; filename?: string | null; className: string }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
-  const { dragging, handlers } = usePanScroll(scrollRef);
 
   return (
-    <div className={`flex min-h-[65vh] flex-col ${className}`}>
-      <ZoomBar zoom={zoom} onZoom={setZoom} onFit={() => setZoom(1)} note="drag to pan" />
-      <div
-        ref={scrollRef}
-        className={`flex-1 overflow-auto bg-zinc-100 ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
-        {...handlers}
-      >
+    <div className={`flex h-[78vh] flex-col ${className}`}>
+      <ZoomBar zoom={zoom} onZoom={setZoom} onFit={() => setZoom(1)} />
+      <div className="flex-1 overflow-auto bg-zinc-100">
         <div className="flex min-h-full min-w-full items-start justify-center p-3">
           {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary signed-URL source, not a static asset */}
           <img
@@ -243,7 +185,6 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
   const [pageCssWidth, setPageCssWidth] = useState(0);
   // null until the first fit calculation; then an explicit multiplier.
   const [zoom, setZoom] = useState<number | null>(null);
-  const { dragging, handlers } = usePanScroll(scrollRef);
   // Once the reader zooms by hand, stop auto-fitting on resize — until they
   // press "Fit width" again.
   const userZoomed = useRef(false);
@@ -278,6 +219,13 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
   useEffect(() => {
     let cancelled = false;
     const container = containerRef.current;
+    // Track the loading task and the in-flight page render so cleanup can tear
+    // them down. Without this, React StrictMode's double-invoke in dev (and any
+    // real src change) leaves the first pdf.js worker job running and the
+    // second getDocument() deadlocks behind it — the viewer sticks on
+    // "Rendering page 0".
+    let loadingTask: { promise: Promise<PdfDoc>; destroy: () => Promise<void> } | null = null;
+    let renderTask: { promise: Promise<void>; cancel: () => void } | null = null;
 
     async function render() {
       setStatus("loading");
@@ -292,7 +240,8 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
           import.meta.url
         ).toString();
 
-        const doc = await pdfjs.getDocument(src).promise;
+        loadingTask = pdfjs.getDocument(src);
+        const doc = await loadingTask.promise;
         if (cancelled || !container) return;
         setTotalPages(doc.numPages);
 
@@ -310,9 +259,17 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
           const ctx = canvas.getContext("2d");
           if (!ctx) continue;
           container.appendChild(canvas);
-          await page.render({ canvasContext: ctx, viewport }).promise;
+          renderTask = page.render({ canvasContext: ctx, viewport });
+          await renderTask.promise;
+          renderTask = null;
           if (cancelled) return;
           setPagesRendered(pageNum);
+          // Show the document as soon as the first page is on screen — the
+          // reader can scroll and zoom while the rest of a big drawing set
+          // fills in behind the sticky "rendering page N" note. Yield to the
+          // event loop between pages so scrolling/clicks stay responsive.
+          if (pageNum === 1) setStatus("ready");
+          await new Promise((r) => setTimeout(r, 0));
         }
         if (!cancelled) setStatus("ready");
       } catch {
@@ -323,6 +280,12 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
     render();
     return () => {
       cancelled = true;
+      try {
+        renderTask?.cancel();
+      } catch {
+        /* already settled */
+      }
+      loadingTask?.destroy().catch(() => {});
     };
   }, [src]);
 
@@ -372,20 +335,20 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
   }
 
   const pct = computeRenderProgress(pagesRendered, totalPages);
+  const stillRendering = totalPages > 0 && pagesRendered < totalPages;
+  const note = stillRendering
+    ? `Rendering ${pagesRendered}/${totalPages}…`
+    : totalPages > 1
+      ? `${totalPages} pages`
+      : undefined;
 
   return (
-    <div className={`flex min-h-[65vh] flex-col ${className}`}>
-      <ZoomBar
-        zoom={zoom ?? 1}
-        onZoom={zoomTo}
-        onFit={fit}
-        note={totalPages > 1 ? `${totalPages} pages · drag to pan` : "drag to pan"}
-      />
+    <div className={`flex h-[78vh] flex-col ${className}`}>
+      <ZoomBar zoom={zoom ?? 1} onZoom={zoomTo} onFit={fit} note={note} />
       <div
         ref={scrollRef}
         tabIndex={0}
-        className={`flex-1 overflow-auto bg-zinc-100 p-3 outline-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
-        {...handlers}
+        className="flex-1 overflow-auto bg-zinc-100 p-3 outline-none"
       >
         {status === "loading" && (
           <div className="px-3 py-8">
