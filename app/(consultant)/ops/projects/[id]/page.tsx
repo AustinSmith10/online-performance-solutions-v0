@@ -471,12 +471,20 @@ export default async function ConsultantProjectDetailPage({
     },
     {
       label: "Revision",
-      value:
-        latestVersion !== null
-          ? `Rev ${currentRevNumber} · generation ${latestVersion}`
-          : `Rev ${currentRevNumber}`,
-      hint: "The Rev only bumps on a stakeholder rejection, not on a regenerate. Regenerating within a cycle only increases the generation count.",
+      value: `Rev ${currentRevNumber}`,
+      hint: "The version number stakeholders see — it's on the PBDB cover, the revision-history table and the filename. It only bumps when a stakeholder rejects and a corrected document goes back out.",
     },
+    // Regeneration counter — a separate, internal thing. Only worth showing
+    // once it's been regenerated at least once (#176).
+    ...(latestVersion !== null && latestVersion > 1
+      ? [
+          {
+            label: "Current PBDB",
+            value: `generation ${latestVersion}`,
+            hint: "Regenerating the PBDB within a Rev produces a new generation of the file. It's an internal counter — it doesn't change the Rev, the document's revision number, or what stakeholders see.",
+          },
+        ]
+      : []),
   ];
 
   const addr = (project.extracted_fields?.["EXTRACT_ADDRESS"] as string | undefined) ?? null;
@@ -550,12 +558,12 @@ export default async function ConsultantProjectDetailPage({
       <div className="mt-3 flex flex-wrap items-center gap-x-7 gap-y-1.5 border-t border-zinc-100 pt-3 text-sm">
         <span
           className="inline-flex items-center gap-1 cursor-help text-zinc-500"
-          title={`Review cycle ${project.review_cycle} — increases by one each time a stakeholder rejects the PBDB and a corrected revision is sent out.`}
+          title={`Revision ${currentRevNumber} — the version stakeholders are reviewing. It's the number on the PBDB cover, the revision-history table and the filename, and it only bumps when a stakeholder rejects and a corrected document goes back out.`}
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 002.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0112.888 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
           </svg>
-          <span className="font-medium text-zinc-900">{project.review_cycle}</span>
+          <span className="font-medium text-zinc-900">Rev {currentRevNumber}</span>
         </span>
         <HeaderStatInline
           label="Submitted"
@@ -1191,7 +1199,7 @@ export default async function ConsultantProjectDetailPage({
     ) : (
       <CollapsibleSection
         title="Stakeholder reviews"
-        subtitle="All review cycles — each cycle corresponds to one version of the PBDB sent to stakeholders."
+        subtitle="One block per revision sent to stakeholders. Rev 0 is the first review; each later Rev follows a rejection."
         defaultOpen
       >
         {reviewCycles.map((cycle) => {
@@ -1201,14 +1209,14 @@ export default async function ConsultantProjectDetailPage({
           return (
             <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
               <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
-                <span className="text-xs font-semibold text-zinc-700">Cycle {cycle}</span>
+                <span className="text-xs font-semibold text-zinc-700">Rev {cycle - 1}</span>
                 {pbdbForCycle ? (
                   <span className="text-xs text-zinc-400">
-                    · PBDB v{pbdbForCycle.version as number}
+                    · PBDB generation {pbdbForCycle.version as number}
                     · {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
                   </span>
                 ) : (
-                  <span className="text-xs text-zinc-400">· No PBDB for this cycle</span>
+                  <span className="text-xs text-zinc-400">· No PBDB for this Rev</span>
                 )}
                 {isCurrent && (
                   <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
