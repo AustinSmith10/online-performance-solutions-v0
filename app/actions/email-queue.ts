@@ -8,6 +8,7 @@ import { sendEmail } from "@/lib/email/sender";
 import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { generateTokenString, hashToken } from "@/lib/stakeholders/tokens";
 import { getCandidateReviewsForSender, type CandidateReview } from "@/lib/email-queue/candidate-reviews";
+import { buildProjectSearchFilter } from "@/lib/projects/search";
 import { renderClarificationRequestEmail } from "@/lib/email/templates/ClarificationRequestEmail";
 import {
   executeQueueRowResolution,
@@ -275,12 +276,9 @@ export async function searchProjectsForReassign(query: string): Promise<ProjectS
     .order("created_at", { ascending: false })
     .limit(15);
 
-  const trimmed = query.trim();
-  if (trimmed) {
-    const escaped = trimmed.replace(/[%,]/g, "");
-    q = q.or(
-      `site_address.ilike.%${escaped}%,po_number.ilike.%${escaped}%,project_number.ilike.%${escaped}%`
-    );
+  const searchFilter = buildProjectSearchFilter(query);
+  if (searchFilter) {
+    q = q.or(searchFilter);
   }
 
   const { data } = await q;

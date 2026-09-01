@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { buildProjectSearchFilter } from "@/lib/projects/search";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -111,10 +112,9 @@ export default async function ProjectsPage({
     ? query.order("name", { referencedTable: "clients", ascending: sortOrder === "asc" })
     : query.order(sortCol, { ascending: sortOrder === "asc" });
 
-  if (q?.trim()) {
-    query = query.or(
-      `site_address.ilike.%${q.trim()}%,po_number.ilike.%${q.trim()}%`
-    );
+  const searchFilter = buildProjectSearchFilter(q);
+  if (searchFilter) {
+    query = query.or(searchFilter);
   }
   if (status?.trim()) query = query.eq("status", status.trim());
   if (orgIds !== null) {

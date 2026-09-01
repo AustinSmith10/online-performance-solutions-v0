@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { buildProjectSearchFilter } from "@/lib/projects/search";
 import { RestoreButton } from "./_components/RestoreButton";
 import { PurgeButton } from "./_components/PurgeButton";
 import { EntityRestoreButton } from "./_components/EntityRestoreButton";
@@ -175,8 +176,9 @@ export default async function AdminRecoveryPage({
     .not("deleted_at", "is", null)
     .order(sortCol, { ascending: sortOrder === "asc" });
 
-  if (q?.trim()) {
-    query = query.or(`site_address.ilike.%${q.trim()}%,po_number.ilike.%${q.trim()}%`);
+  const searchFilter = buildProjectSearchFilter(q);
+  if (searchFilter) {
+    query = query.or(searchFilter);
   }
   if (status?.trim()) query = query.eq("status", status.trim());
   if (orgIds !== null) {
