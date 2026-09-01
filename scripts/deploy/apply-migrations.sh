@@ -5,9 +5,14 @@
 # the previously-running version keeps serving.
 #
 # Required env (set in the ops-web Railway service variables):
-#   SUPABASE_DB_URL   Postgres connection string for the production database
-#                     (Supabase dashboard → Settings → Database → Connection
-#                     string → URI, "Use connection pooling" OFF).
+#   SUPABASE_DB_URL   Direct Postgres connection string for the production
+#                     database (Supabase dashboard → Project Settings →
+#                     Database → Connection string → "Direct connection",
+#                     port 5432 — NOT the transaction pooler on 6543, which
+#                     can't run migrations).
+#   DATABASE_URL      Accepted as a fallback if SUPABASE_DB_URL is unset — but
+#                     only if it is a *direct* 5432 URL. ops-worker's
+#                     DATABASE_URL may be a pooler URL; don't assume.
 #
 # This replaces the deleted, unwired scripts/migrate.ts and its parallel
 # `_migrations` ledger — the Supabase CLI's own `supabase_migrations.
@@ -15,8 +20,9 @@
 
 set -euo pipefail
 
-if [[ -z "${SUPABASE_DB_URL:-}" ]]; then
-  echo "[apply-migrations] FATAL: SUPABASE_DB_URL is not set — cannot apply migrations." >&2
+DB_URL="${SUPABASE_DB_URL:-${DATABASE_URL:-}}"
+if [[ -z "$DB_URL" ]]; then
+  echo "[apply-migrations] FATAL: neither SUPABASE_DB_URL nor DATABASE_URL is set — cannot apply migrations." >&2
   exit 1
 fi
 
@@ -24,6 +30,6 @@ echo "[apply-migrations] applying pending migrations to production…"
 
 # --include-all: apply every local migration not yet recorded remotely, in
 # order, without the interactive confirmation prompt.
-npx --yes supabase db push --db-url "$SUPABASE_DB_URL" --include-all
+npx --yes supabase db push --db-url "$DB_URL" --include-all
 
 echo "[apply-migrations] done — schema is up to date."
