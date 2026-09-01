@@ -304,11 +304,11 @@ async function extractWithAnthropic(
     // to a dated ID once one exists.
     model: "claude-sonnet-5",
     max_tokens: 1024,
-    // #174: pin determinism. Identity-critical tokens (EXTRACT_ADDRESS) were
-    // extracted differently across retries, so the cross-document identity
-    // flag fired inconsistently. temperature 0 makes a given document+prompt
-    // yield the same candidates every run.
-    temperature: 0,
+    // #174 originally pinned temperature: 0 here for determinism, but Sonnet 5
+    // removed the sampling params — sending `temperature` (even 0) is a 400,
+    // which fail-open-swallowed every extraction into an empty result. Sonnet 5
+    // is already near-deterministic; determinism for the identity-flag issue
+    // has to come from the prompt/schema, not a param the model rejects.
     messages: [{ role: "user", content: prompt }],
     output_config: { format: { type: "json_schema", schema: schema.schema } },
   });
@@ -473,7 +473,8 @@ export async function runTextCompletion(
         model: "claude-haiku-4-5-20251001",
         max_tokens: 512,
         // #174: deterministic judgments — a wrong-type document should get
-        // the same verdict on every retry, not flicker between runs.
+        // the same verdict on every retry, not flicker between runs. Haiku 4.5
+        // (unlike Sonnet 5) still accepts the sampling params, so this stays.
         temperature: 0,
         messages: [{ role: "user", content: prompt }],
         ...(outputSchema
