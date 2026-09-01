@@ -270,9 +270,10 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   if (insertError) {
     // Clean up the uploaded file if the DB record can't be written
     await supabase.storage.from("documents").remove([storagePath]);
-    // 23505 = unique_violation on project_files (project_id, file_type,
-    // version) — a concurrent generate raced us to this version and won.
-    // Its file is already durably stored, so this run just aborts (#172).
+    // 23505 = unique_violation on the partial index
+    // project_files_project_type_version_key (pbdb/pbdr rows only) — a
+    // concurrent generate raced us to this version and won. Its file is
+    // already durably stored, so this run just aborts (#172).
     if (insertError.code === "23505") {
       throw new Error(
         "Another PBDB generation for this project finished first — nothing to do."
