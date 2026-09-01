@@ -20,6 +20,7 @@ import { requireRole } from "@/lib/auth/session";
 import { scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { auditLog } from "@/lib/audit/log";
 import { enqueueGeneratePbdb } from "@/lib/jobs/queue-client";
+import { generatePbdb } from "@/lib/documents/generator";
 
 const PROJECT_ID = "proj-1";
 const CLIENT_ID = "org-1";
@@ -437,5 +438,30 @@ describe("generatePbdbForProject — enqueues to the worker (#172)", () => {
     const result = await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData());
 
     expect(result.error).toMatch(/already being generated/i);
+  });
+
+  it("falls back to inline generation when the queue is unreachable (no DATABASE_URL)", async () => {
+    const mock = buildGenerateMock(null);
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    vi.mocked(enqueueGeneratePbdb).mockRejectedValue(new Error("no pg-boss connection string"));
+    vi.mocked(generatePbdb).mockResolvedValue(undefined as never);
+
+    const result = await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData());
+
+    expect(result.success).toBe(true);
+    expect(generatePbdb).toHaveBeenCalledWith(PROJECT_ID, ACTOR_ID);
+    expect(mock.progressUpdateFn).toHaveBeenCalledWith({ progress_pct: 5 });
+  });
+
+  it("surfaces the real error and clears progress when inline fallback generation fails", async () => {
+    const mock = buildGenerateMock(null);
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    vi.mocked(enqueueGeneratePbdb).mockRejectedValue(new Error("no pg-boss connection string"));
+    vi.mocked(generatePbdb).mockRejectedValue(new Error("template render blew up"));
+
+    const result = await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData());
+
+    expect(result.error).toBe("template render blew up");
+    expect(mock.progressUpdateFn).toHaveBeenCalledWith({ progress_pct: null });
   });
 });

@@ -9,6 +9,7 @@ import { auditLog } from "@/lib/audit/log";
 import { performAssignment } from "@/lib/projects/assign";
 import { validateProjectNumber, findDuplicateProjectNumber } from "@/lib/projects/project-number";
 import { enqueueGeneratePbdb } from "@/lib/jobs/queue-client";
+import { generatePbdb } from "@/lib/documents/generator";
 import { formatAddress } from "@/lib/documents/formatters";
 import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
@@ -903,20 +904,34 @@ export async function generatePbdbForProject(
   // lose the response and hang the spinner. The action enqueues and returns;
   // the Focus card advances off server state (the new project_files row) and
   // the button polls progress_pct until the worker clears it.
-  let jobId: string | null;
+  let jobId: string | null = null;
+  let queueUnavailable = false;
   try {
     jobId = await enqueueGeneratePbdb({ projectId, actorId: actor.id, isRegenerate });
   } catch (err) {
-    console.error(`[generatePbdbForProject] enqueue failed for ${projectId}:`, err);
-    return { error: "Couldn't start PBDB generation. Please try again in a moment." };
+    // No DATABASE_URL / pg-boss unreachable (local dev, or a queue outage).
+    // Fall back to running the generation inline rather than blocking — same
+    // path as before #172. Prod always has the queue + worker.
+    console.error(`[generatePbdbForProject] enqueue failed for ${projectId}, running inline:`, err);
+    queueUnavailable = true;
   }
-  if (!jobId) {
+
+  if (queueUnavailable) {
+    try {
+      await writeProgress(supabase, projectId, 5);
+      await generatePbdb(projectId, actor.id);
+    } catch (genErr) {
+      await writeProgress(supabase, projectId, null);
+      return { error: genErr instanceof Error ? genErr.message : "PBDB generation failed. Please try again." };
+    }
+  } else if (!jobId) {
     // singletonKey collision — a generation job is already queued/active.
     return { error: "A document is already being generated for this project — wait for it to finish, then try again." };
+  } else {
+    // Mark in-flight immediately so the card shows progress and the per-project
+    // lock above engages before the worker picks the job up.
+    await writeProgress(supabase, projectId, 5);
   }
-  // Mark in-flight immediately so the card shows progress and the per-project
-  // lock above engages before the worker picks the job up.
-  await writeProgress(supabase, projectId, 5);
 
   if (!isRegenerate && (status === "submitted" || status === "assigned")) {
     await supabase
