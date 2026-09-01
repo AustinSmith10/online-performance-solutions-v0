@@ -102,7 +102,9 @@ async function seed() {
     {
       email: "Trishan.T@ops.test",
       role: "consultant",
-      firstName: "Trishan",
+      // #178: real consultant's name is "Trishen" (the login handle keeps the
+      // legacy "Trishan.T" spelling).
+      firstName: "Trishen",
       lastName: "T",
       clientId: null,
       availability: "available",
