@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Drawer } from "./Drawer";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
 import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
+import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/DispatchButton";
 import { DownloadCard } from "@/components/DownloadCard";
+import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
 
 export interface RevisionProject {
   id: string;
@@ -59,6 +61,23 @@ function DrawerContent({
   const currentReviews = reviews.filter((r) => r.review_cycle === project.review_cycle);
   const rejections = currentReviews.filter((r) => r.status === "rejected_with_comments");
 
+  // Mirror the project page's pbdbCardState: once the consultant has uploaded
+  // the revised PBDB, uploadQaPbdb has advanced review_cycle and the new cycle
+  // has no stakeholder_reviews rows yet — the only step left is to redispatch,
+  // not upload again. Same shared rule the project card and the dispatch
+  // action use, so this popup can't tell the consultant to redo a step.
+  const awaitingRedispatch =
+    classifyPbdbDispatchReadiness({
+      status: "revision_required",
+      qaCompletedBy: null,
+      currentCycleReviewCount: currentReviews.length,
+    }).kind === "redispatch";
+
+  // The most recent PBDB is the corrected one when we're awaiting redispatch.
+  const priorFeedback = awaitingRedispatch
+    ? reviews.filter((r) => r.review_cycle === project.review_cycle - 1 && r.comments)
+    : [];
+
   return (
     <div className="space-y-5">
       {/* Project summary */}
@@ -67,10 +86,53 @@ function DrawerContent({
         <p className="mt-0.5 text-xs text-zinc-500">
           {project.clients?.name ?? "—"}
           {" · "}
-          <span className="font-medium text-red-600">Revision required — cycle {project.review_cycle}</span>
+          {awaitingRedispatch ? (
+            <span className="font-medium text-green-700">
+              Revised PBDB uploaded — ready to redispatch (cycle {project.review_cycle})
+            </span>
+          ) : (
+            <span className="font-medium text-red-600">Revision required — cycle {project.review_cycle}</span>
+          )}
         </p>
       </div>
 
+      {/* Awaiting redispatch — the revised upload is done; the remaining step
+          is to resend it to stakeholders. Do NOT show the upload form. */}
+      {awaitingRedispatch && (
+        <>
+          {priorFeedback.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                What the previous version was rejected for
+              </p>
+              <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
+                {priorFeedback.map((r) => (
+                  <li key={r.id} className="px-4 py-3">
+                    <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-zinc-700">{r.comments}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-4">
+            <p className="text-sm font-medium text-green-900">The revised PBDB is uploaded</p>
+            <p className="mt-1 text-xs text-green-800">
+              {pbdbFile ? `Generation ${pbdbFile.version} is ready. ` : ""}
+              Resend it to every stakeholder for this project, including anyone who already
+              approved. Open the full project to choose the delivery timing.
+            </p>
+            <div className="mt-3">
+              <DispatchButton projectId={project.id} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Everything below is the normal "needs a revised upload" flow. */}
+      {!awaitingRedispatch && (
+        <>
       {/* Stakeholder feedback */}
       {currentReviews.length > 0 && (
         <div>
@@ -157,6 +219,8 @@ function DrawerContent({
           />
         </PbdbQaUploadForm>
       </div>
+        </>
+      )}
     </div>
   );
 }
