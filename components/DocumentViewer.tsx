@@ -185,6 +185,12 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
   const [pageCssWidth, setPageCssWidth] = useState(0);
   // null until the first fit calculation; then an explicit multiplier.
   const [zoom, setZoom] = useState<number | null>(null);
+  // Latest zoom, readable synchronously from inside the async render loop so
+  // each canvas is born at its final display size (see the loop below).
+  const zoomRef = useRef<number | null>(null);
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
   // Once the reader zooms by hand, stop auto-fitting on resize — until they
   // press "Fit width" again.
   const userZoomed = useRef(false);
@@ -250,12 +256,20 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
           const page = await doc.getPage(pageNum);
           if (cancelled) return;
           const viewport = page.getViewport({ scale: RENDER_SCALE });
-          if (pageNum === 1) setPageCssWidth(viewport.width / RENDER_SCALE);
+          const base = viewport.width / RENDER_SCALE;
+          if (pageNum === 1) setPageCssWidth(base);
           const canvas = document.createElement("canvas");
           canvas.className = "mx-auto mb-3 block max-w-none shadow-sm";
           canvas.width = viewport.width;
           canvas.height = viewport.height;
-          canvas.dataset.baseWidth = String(viewport.width / RENDER_SCALE);
+          canvas.dataset.baseWidth = String(base);
+          // Fix the display size *before* the canvas is painted. Without this
+          // the canvas shows at its bitmap width (~1900px) until the layout
+          // effect below shrinks it — 24 pages of that thrash the container
+          // width and yank the scroll position around as you read.
+          const clientW = scrollRef.current?.clientWidth ?? 0;
+          const dz = zoomRef.current ?? (clientW > 0 ? computeFitZoom(clientW, base) : 1);
+          canvas.style.width = `${Math.round(base * dz)}px`;
           const ctx = canvas.getContext("2d");
           if (!ctx) continue;
           container.appendChild(canvas);
@@ -294,8 +308,9 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
     if (zoom === null && pageCssWidth > 0) fit();
   }, [zoom, pageCssWidth, fit]);
 
-  // Apply the current zoom to every rendered canvas — pure CSS width, instant,
-  // no re-render of the PDF.
+  // Re-apply zoom to every canvas when it *changes* (toolbar / keyboard / fit).
+  // Freshly streamed-in canvases are already sized in the render loop, so this
+  // only needs to run on an actual zoom change, not on every page.
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container || zoom === null) return;
@@ -303,7 +318,7 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
       const base = Number(canvas.dataset.baseWidth) || 0;
       canvas.style.width = base > 0 ? `${Math.round(base * zoom)}px` : "";
     });
-  }, [zoom, pagesRendered]);
+  }, [zoom]);
 
   // Keyboard zoom while the scroll area has focus.
   useEffect(() => {
