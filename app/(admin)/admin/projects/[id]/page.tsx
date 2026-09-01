@@ -26,6 +26,7 @@ import { ProjectDeliveryDelayPresetSelect } from "@/components/ProjectDeliveryDe
 import { PendingDeliveryPanel } from "@/components/PendingDeliveryPanel";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
+import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import { DownloadCard } from "@/components/DownloadCard";
 import { ConfirmFileTypeControl } from "@/components/ConfirmFileTypeControl";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
@@ -227,6 +228,14 @@ export default async function ProjectDetailPage({
   const pendingDelivery = pendingDeliveryResult.data as { scheduled_for: string } | null;
   const pendingPbdbDelivery = pendingPbdbDeliveryResult.data as { scheduled_for: string } | null;
   const deliveryDurations = await getDeliveryDelayDurations(supabase);
+  // #176: projected send date shown beside every delivery-timing control, so
+  // it's never conflated with the contractual due date.
+  const [pbdbSendPreview, pbdrSendPreview] = await Promise.all([
+    previewNextSendTime(id, "pbdb").catch(() => null),
+    previewNextSendTime(id, "pbdr").catch(() => null),
+  ]);
+  const pbdbSendPreviewIso = pbdbSendPreview ? pbdbSendPreview.toISOString() : undefined;
+  const pbdrSendPreviewIso = pbdrSendPreview ? pbdrSendPreview.toISOString() : undefined;
 
   type ProjectDetail = {
     id: string;
@@ -671,11 +680,16 @@ export default async function ProjectDetailPage({
           valueClassName={assignedName ? undefined : "text-amber-700"}
           noLeftBorder
         />
-        <HeaderStatInline label="Submitted" value={new Date(project.created_at).toLocaleDateString("en-AU")} />
+        <HeaderStatInline
+          label="Submitted"
+          value={new Date(project.created_at).toLocaleDateString("en-AU")}
+          title="When the client submitted this project"
+        />
         <HeaderStatInline
           label="Due"
           value={project.expected_delivery_date ? new Date(project.expected_delivery_date).toLocaleDateString("en-AU") : "—"}
           valueClassName={isOverdue ? "text-red-600" : undefined}
+          title="The PBDR's contractual due date — not the same as the PBDB/PBDR send date, which the delivery-timing control sets"
         />
         <HeaderStatInline
           value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"}
@@ -824,6 +838,7 @@ export default async function ProjectDetailPage({
                     initialValue={project.pbdb_delivery_delay_preset}
                     durations={deliveryDurations}
                     docType="pbdb"
+                    projectedSendDate={pbdbSendPreviewIso}
                   />
                 </div>
                 <DispatchButton projectId={id} />
@@ -869,6 +884,7 @@ export default async function ProjectDetailPage({
                     initialValue={project.pbdb_delivery_delay_preset}
                     durations={deliveryDurations}
                     docType="pbdb"
+                    projectedSendDate={pbdbSendPreviewIso}
                   />
                 </div>
                 <DispatchButton projectId={id} />
@@ -1006,6 +1022,7 @@ export default async function ProjectDetailPage({
               projectId={id}
               initialValue={project.delivery_delay_preset}
               durations={deliveryDurations}
+              projectedSendDate={pbdrSendPreviewIso}
             />
           </div>
           <ConvertButton projectId={id} />
@@ -1416,6 +1433,7 @@ export default async function ProjectDetailPage({
           initialValue={project.pbdb_delivery_delay_preset}
           durations={deliveryDurations}
           docType="pbdb"
+          projectedSendDate={pbdbSendPreviewIso}
         />
       </div>
 
@@ -1429,6 +1447,7 @@ export default async function ProjectDetailPage({
           initialValue={project.delivery_delay_preset}
           durations={deliveryDurations}
           docType="pbdr"
+          projectedSendDate={pbdrSendPreviewIso}
         />
         {deliveryLocked ? (
           <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-500">
