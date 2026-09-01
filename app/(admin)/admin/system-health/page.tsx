@@ -117,6 +117,20 @@ export default async function SystemHealthPage() {
           steps. Mark an entry resolved once you&apos;ve dealt with it — it&apos;ll come back on
           its own if the underlying issue recurs.
         </p>
+        {process.env.SENTRY_ISSUES_URL && (
+          <p className="mt-2 text-xs text-zinc-500">
+            This page is the resolve workflow for known operational failures. For the full stream
+            of unexpected errors and their stack traces,{" "}
+            <a
+              href={process.env.SENTRY_ISSUES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              open the error stream in Sentry →
+            </a>
+          </p>
+        )}
       </div>
 
       <Section
@@ -181,14 +195,14 @@ export default async function SystemHealthPage() {
 
       <Section
         title="AI provider failures"
-        description="OpenAI/Anthropic calls that failed with a billing/quota or rate-limit error — document extraction and AI-judge verification fail open (return empty/degraded results) rather than blocking submissions, so this is the only place these failures surface."
+        description="Anthropic calls that failed with a billing/quota or rate-limit error — document extraction and AI-judge verification fail open (return empty/degraded results) rather than blocking submissions, so this page (and Sentry) are where these failures surface."
         kind="hard_error"
         emptyText="No unresolved AI provider failures."
       >
         {data.aiProviderFailures.map((f) => (
           <Row
             key={f.id}
-            message={`${f.provider === "openai" ? "OpenAI" : "Anthropic"} ${
+            message={`${f.provider === "anthropic" ? "Anthropic" : f.provider} ${
               f.status === "quota_exceeded" ? "is out of credits" : "is being rate-limited"
             } (during ${f.context})${f.error ? ` — ${f.error}` : ""}`}
             guidance={aiProviderFailureGuidance(f.provider, f.status)}

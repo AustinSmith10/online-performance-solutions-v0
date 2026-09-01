@@ -4,6 +4,7 @@ import { notify } from "@/lib/notifications/notify";
 import { auditLog } from "@/lib/audit/log";
 import { renderCreditDeductionEmail } from "@/lib/email/templates/CreditDeductionEmail";
 import { renderEmailShell, e, paragraph, strong, panel } from "@/lib/email/templates/shell";
+import { captureOpsHealthEvent } from "@/lib/observability/ops-health-sentry";
 
 const LOW_CREDIT_THRESHOLD = 3;
 
@@ -63,6 +64,13 @@ async function recordCreditRaceEvent(
     client_id: clientId,
     project_id: projectId,
     event_type: eventType,
+  });
+  await captureOpsHealthEvent({
+    category: "credit-race",
+    fingerprintKey: eventType,
+    message: `Credit race condition caught (${eventType})`,
+    extra: { eventType, clientId },
+    projectId: projectId ?? undefined,
   });
 }
 

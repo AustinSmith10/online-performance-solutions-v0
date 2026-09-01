@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
+import { captureOpsHealthEvent } from "@/lib/observability/ops-health-sentry";
 import { renderEmailShell, e, paragraph, strong, noticeBox } from "@/lib/email/templates/shell";
 
 export type AiProvider = "anthropic";
@@ -87,10 +88,23 @@ export async function reportProviderFailure(opts: {
     });
     if (insertErr) console.error("[provider-failure] failed to log row:", insertErr);
 
-    if ((count ?? 0) > 0) return; // already alerted for this provider within the cooldown window
-
-    const providerLabel = PROVIDER_LABEL[opts.provider];
+    const providerLabel = PROVIDER_LABEL[opts.provider] ?? opts.provider;
     const statusLabel = opts.status === "quota_exceeded" ? "is out of credits" : "is being rate-limited";
+
+    // Mirror every failure into Sentry (like the ai_provider_failures insert
+    // above, and unlike the admin email/bell alert below, this is not
+    // cooldown-throttled — Sentry aggregates by fingerprint and its own
+    // alert rules handle rate-limiting).
+    await captureOpsHealthEvent({
+      category: "ai-provider-failure",
+      fingerprintKey: `${opts.provider}:${opts.status}`,
+      level: opts.status === "quota_exceeded" ? "error" : "warning",
+      message: `${providerLabel} ${statusLabel} (during ${opts.context})`,
+      extra: { error: errorMessage.slice(0, 500) },
+      projectId: opts.projectId,
+    });
+
+    if ((count ?? 0) > 0) return; // already alerted for this provider within the cooldown window
 
     const { data: admins } = await supabase
       .from("users")

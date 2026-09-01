@@ -33,6 +33,21 @@ async function logSend(fields: { to: string; subject: string; source: string; pr
   } catch (logError) {
     console.error("[email] failed to write email_send_log:", logError);
   }
+
+  if (fields.status === "failed") {
+    // Mirror into Sentry for alerting/trends. Recipient address is
+    // deliberately omitted (PII — see sentry.server.config.ts); `source` +
+    // `projectId` are enough to find the email_send_log row / System Health
+    // entry.
+    const { captureOpsHealthEvent } = await import("@/lib/observability/ops-health-sentry");
+    await captureOpsHealthEvent({
+      category: "email-send-failure",
+      fingerprintKey: fields.source,
+      message: `Email failed to send (${fields.source})`,
+      extra: { error: fields.error ?? null, subject: fields.subject },
+      projectId: fields.projectId,
+    });
+  }
 }
 
 /**

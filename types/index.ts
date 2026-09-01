@@ -119,7 +119,7 @@ export interface EmailSendFailure {
 
 export interface AiProviderFailure {
   id: string;
-  provider: "openai" | "anthropic";
+  provider: "anthropic";
   status: "quota_exceeded" | "rate_limited";
   context: string;
   error: string | null;

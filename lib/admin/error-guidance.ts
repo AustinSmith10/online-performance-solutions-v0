@@ -24,9 +24,9 @@ export function jobGuidance(jobName: string, message?: string | null): string {
 }
 
 export function aiProviderFailureGuidance(provider: string, status: string): string {
-  const providerLabel = provider === "openai" ? "OpenAI" : provider === "anthropic" ? "Anthropic" : provider;
+  const providerLabel = provider === "anthropic" ? "Anthropic" : provider;
   if (status === "quota_exceeded") {
-    return `${providerLabel}'s account has run out of credits or hit a billing limit. Top up billing at the ${providerLabel} dashboard — until then, document extraction and AI-judge verification silently return empty/degraded results (the pipeline fails open rather than blocking submissions) whenever the other provider isn't configured or also fails.`;
+    return `${providerLabel}'s account has run out of credits or hit a billing limit. Top up billing at the ${providerLabel} dashboard — until then, document extraction and AI-judge verification silently return empty/degraded results (the pipeline fails open rather than blocking submissions).`;
   }
   return `${providerLabel} is rate-limiting requests. This is usually transient — if it persists, check the ${providerLabel} dashboard for a rate-limit tier that needs raising.`;
 }
