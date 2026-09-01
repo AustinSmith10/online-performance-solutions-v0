@@ -99,7 +99,7 @@ export function ProjectDeliveryDelayPresetSelect({
       {error && <p className="text-xs text-red-600">{error}</p>}
       {projectedSendDate && (
         <p className="text-xs text-zinc-500">
-          {dirty ? "Currently saved setting sends" : "With this setting, sends"} on{" "}
+          {dirty && "Saved setting: "}Sends on{" "}
           <span className="font-medium text-zinc-700">
             {new Date(projectedSendDate).toLocaleDateString("en-AU", {
               weekday: "short",
@@ -108,7 +108,8 @@ export function ProjectDeliveryDelayPresetSelect({
               year: "numeric",
             })}
           </span>
-          {" "}— this is the send date, not the project due date.
+          , this is the date the{" "}
+          {docType === "pbdb" ? "PBDB is sent for review" : "PBDR is sent to the client"}.
         </p>
       )}
     </div>
