@@ -81,7 +81,9 @@ export function ReferenceSampleControl({
       )}
 
       {showPreview && currentSignedUrl && (
-        <DocumentViewer src={currentSignedUrl} filename={currentFilename} className="max-h-96" />
+        <div className="overflow-hidden rounded-md border border-zinc-200">
+          <DocumentViewer src={currentSignedUrl} filename={currentFilename} className="max-h-[70vh]" />
+        </div>
       )}
 
       <form action={formAction} className="space-y-2">

@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { isPreviewable, computeRenderProgress } from "./DocumentViewer";
+import {
+  isPreviewable,
+  computeRenderProgress,
+  clampZoom,
+  computeFitZoom,
+  MIN_ZOOM,
+  MAX_ZOOM,
+} from "./DocumentViewer";
 
 describe("isPreviewable", () => {
   it("detects a pdf from a signed URL when filename is a non-filename display label (#116)", () => {
@@ -52,5 +59,35 @@ describe("computeRenderProgress (#128)", () => {
   it("rounds to the nearest whole percent", () => {
     expect(computeRenderProgress(1, 3)).toBe(33);
     expect(computeRenderProgress(2, 3)).toBe(67);
+  });
+});
+
+describe("clampZoom", () => {
+  it("keeps a value inside [MIN_ZOOM, MAX_ZOOM]", () => {
+    expect(clampZoom(1)).toBe(1);
+    expect(clampZoom(0)).toBe(MIN_ZOOM);
+    expect(clampZoom(-5)).toBe(MIN_ZOOM);
+    expect(clampZoom(99)).toBe(MAX_ZOOM);
+  });
+});
+
+describe("computeFitZoom — starting zoom that makes a page fill the pane", () => {
+  it("shrinks a wide A3 sheet (≈1587pt) to fit a ~1100px pane", () => {
+    const z = computeFitZoom(1100, 1587);
+    expect(z).toBeCloseTo((1100 - 24) / 1587, 5);
+    expect(z).toBeLessThan(1);
+  });
+
+  it("never starts above 100% for a page narrower than the pane (A4 ≈ 595pt)", () => {
+    expect(computeFitZoom(1100, 595)).toBe(1);
+  });
+
+  it("respects MIN_ZOOM for an absurdly wide sheet in a tiny pane", () => {
+    expect(computeFitZoom(120, 10000)).toBe(MIN_ZOOM);
+  });
+
+  it("degrades to 1 when a dimension isn't known yet", () => {
+    expect(computeFitZoom(0, 1587)).toBe(1);
+    expect(computeFitZoom(1100, 0)).toBe(1);
   });
 });
