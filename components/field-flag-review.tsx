@@ -370,12 +370,15 @@ export function FieldFlagReview({
               <span className="text-zinc-400">
                 ({c.source_document})
               </span>
-              {/* #105: submitting without touching this flag now accepts the
-                  default outright, so it needs to read as a deliberate,
-                  already-selected option rather than just "the first radio". */}
+              {/* The value that came in on the submission for this field —
+                  either the submitter picked this candidate on the review
+                  step, or it was the auto-selected value they left in place.
+                  Either way it's what the submission asserts, not a system
+                  "default" (#105) — label it as the submitter's choice so the
+                  consultant knows what they're verifying against the source. */}
               {c.value === currentValue && (
-                <span className="ml-1 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
-                  default
+                <span className="ml-1 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                  Submitter&apos;s choice
                 </span>
               )}
               <CandidatePreviewButton
