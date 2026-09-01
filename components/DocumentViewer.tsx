@@ -57,6 +57,18 @@ interface DocumentViewerProps {
   /** Used to detect the file type — falls back to sniffing `src` if omitted. */
   filename?: string | null;
   className?: string;
+  /**
+   * Fill the parent flex column (`flex-1 min-h-0`) instead of taking a fixed
+   * `78vh`. Pass this from a modal panel that already owns a bounded height, so
+   * the viewer can never grow tall enough to push the panel's own header/toolbar
+   * off-screen. Inline (non-modal) callers leave it off.
+   */
+  fill?: boolean;
+}
+
+/** Root sizing for a viewer shell: fill a bounded flex parent, or take a fixed 78vh. */
+function shellClass(fill: boolean, className: string): string {
+  return `flex ${fill ? "min-h-0 flex-1" : "h-[78vh]"} flex-col ${className}`;
 }
 
 /**
@@ -67,15 +79,15 @@ interface DocumentViewerProps {
  * shrunk-to-fit A3 drawing. Anything else (TIFF, docx, unknown) gets a
  * "preview not available" fallback with a download link.
  */
-export function DocumentViewer({ src, filename, className = "" }: DocumentViewerProps) {
+export function DocumentViewer({ src, filename, className = "", fill = false }: DocumentViewerProps) {
   const kind = detectKind(filename, src);
 
   if (kind === "pdf") {
-    return <PdfCanvasViewer src={src} className={className} />;
+    return <PdfCanvasViewer src={src} className={className} fill={fill} />;
   }
 
   if (kind === "image") {
-    return <ImageViewer src={src} filename={filename} className={className} />;
+    return <ImageViewer src={src} filename={filename} className={className} fill={fill} />;
   }
 
   return (
@@ -110,7 +122,7 @@ function ZoomBar({
   const btn =
     "flex h-7 w-7 items-center justify-center rounded-md border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 disabled:opacity-40";
   return (
-    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-1.5 border-b border-zinc-200 bg-zinc-50/95 px-3 py-1.5 backdrop-blur">
+    <div className="sticky top-0 z-10 flex shrink-0 flex-wrap items-center gap-1.5 border-b border-zinc-200 bg-zinc-50/95 px-3 py-1.5 backdrop-blur">
       <button
         type="button"
         className={btn}
@@ -150,11 +162,21 @@ function ZoomBar({
   );
 }
 
-function ImageViewer({ src, filename, className }: { src: string; filename?: string | null; className: string }) {
+function ImageViewer({
+  src,
+  filename,
+  className,
+  fill,
+}: {
+  src: string;
+  filename?: string | null;
+  className: string;
+  fill: boolean;
+}) {
   const [zoom, setZoom] = useState(1);
 
   return (
-    <div className={`flex h-[78vh] flex-col ${className}`}>
+    <div className={shellClass(fill, className)}>
       <ZoomBar zoom={zoom} onZoom={setZoom} onFit={() => setZoom(1)} />
       <div className="flex-1 overflow-auto bg-zinc-100">
         <div className="flex min-h-full min-w-full items-start justify-center p-3">
@@ -253,7 +275,7 @@ function PdfPage({
   );
 }
 
-function PdfCanvasViewer({ src, className }: { src: string; className: string }) {
+function PdfCanvasViewer({ src, className, fill }: { src: string; className: string; fill: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [doc, setDoc] = useState<PdfDoc | null>(null);
@@ -365,16 +387,19 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
         const d = await loadingTask.promise;
         if (cancelled) return;
 
-        // Size every placeholder from page 1 — cheap, and these documents
-        // (PBDB / PBDR / drawing sets) are page-uniform in practice.
-        const first = await d.getPage(1);
+        // Reserve each placeholder box from its own page's dimensions. Sizing
+        // every page from page 1 (on the "these sets are page-uniform" guess)
+        // mis-reserves the odd landscape appendix / title sheet, and scroll
+        // anchoring then lurches the view down the document when that page
+        // finally rasterizes. Metadata only — no rendering happens here.
+        const dims: PageDim[] = await Promise.all(
+          Array.from({ length: d.numPages }, async (_, i) => {
+            const page = await d.getPage(i + 1);
+            const vp = page.getViewport({ scale: 1 });
+            return { num: i + 1, w: vp.width, h: vp.height };
+          })
+        );
         if (cancelled) return;
-        const vp = first.getViewport({ scale: 1 });
-        const dims: PageDim[] = Array.from({ length: d.numPages }, (_, i) => ({
-          num: i + 1,
-          w: vp.width,
-          h: vp.height,
-        }));
         setDoc(d);
         setPages(dims);
         setStatus("ready");
@@ -390,6 +415,15 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
       loadingTask?.destroy().catch(() => {});
     };
   }, [src]);
+
+  // ── Always open at the top ─────────────────────────────────────────────
+  // `overflow-anchor: none` on the scroll container (see JSX) stops the
+  // browser nudging scrollTop as pages rasterize in below the viewport; this
+  // also pins the very first frame to page 1 in case a prior render left the
+  // container scrolled (src swap, StrictMode remount).
+  useEffect(() => {
+    if (status === "ready" && scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [status]);
 
   // ── Render pages near the scroll position; re-evaluate as the user scrolls ──
   useEffect(() => {
@@ -455,12 +489,12 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
   const note = pages.length > 1 ? `${pages.length} pages` : undefined;
 
   return (
-    <div className={`flex h-[78vh] flex-col ${className}`}>
+    <div className={shellClass(fill, className)}>
       <ZoomBar zoom={dz} onZoom={zoomTo} onFit={fit} note={note} />
       <div
         ref={scrollRef}
         tabIndex={0}
-        className="flex-1 overflow-auto bg-zinc-100 p-3 outline-none"
+        className="flex-1 overflow-auto bg-zinc-100 p-3 outline-none [overflow-anchor:none]"
       >
         {status === "loading" && (
           <p className="py-10 text-center text-sm text-zinc-400">Loading preview…</p>

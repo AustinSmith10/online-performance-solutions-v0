@@ -16,11 +16,18 @@ describe("computeEffectiveDeliveryTime", () => {
     expect(result.toISOString()).toBe(now.toISOString());
   });
 
-  it("expedited defers to the next business-hours window when now is outside it", () => {
-    // 2024-01-08T12:00:00Z = 2024-01-08 23:00 AEDT (Monday night) -> Tue 9am AEDT
+  it("expedited delivers immediately even outside business hours — it overrides the #63 gate", () => {
+    // 2024-01-08T12:00:00Z = 2024-01-08 23:00 AEDT (Monday night)
     const now = new Date("2024-01-08T12:00:00.000Z");
     const result = computeEffectiveDeliveryTime(now, "expedited", DURATIONS, HOURS, NO_HOLIDAYS);
-    expect(result.toISOString()).toBe("2024-01-08T22:00:00.000Z");
+    expect(result.toISOString()).toBe(now.toISOString());
+  });
+
+  it("expedited delivers immediately on a weekend / public holiday too", () => {
+    // 2024-01-06 = Saturday
+    const now = new Date("2024-01-06T02:30:00.000Z");
+    const result = computeEffectiveDeliveryTime(now, "expedited", DURATIONS, HOURS, NO_HOLIDAYS);
+    expect(result.toISOString()).toBe(now.toISOString());
   });
 
   it("normal (1 working day) lands on the next working day's opening time", () => {

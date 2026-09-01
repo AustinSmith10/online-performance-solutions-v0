@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { acknowledgeFieldFlag } from "@/app/actions/field-flags";
 import { DocumentViewer, isPreviewable } from "@/components/DocumentViewer";
@@ -74,16 +75,21 @@ export function FlagAcknowledgeControl({
       <button type="button" onClick={() => setOpen(true)} className={triggerClassName}>
         {triggerLabel}
       </button>
-      {open && (
+      {open && typeof document !== "undefined" &&
+        createPortal(
+          // Portalled to <body>: rendered inline, a transformed/contained
+          // ancestor on the project page becomes the containing block for this
+          // `fixed` overlay, so the scrim stops short and the 100dvh panel is
+          // offset past the viewport (same trap as #177 for DocumentPreviewModal).
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
           onClick={() => setOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+            className="flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
               <p className="truncate text-sm font-medium text-zinc-900">{label}</p>
               <button
                 type="button"
@@ -94,7 +100,7 @@ export function FlagAcknowledgeControl({
               </button>
             </div>
 
-            <div className="space-y-1 border-b border-zinc-100 px-4 py-3">
+            <div className="shrink-0 space-y-1 border-b border-zinc-100 px-4 py-3">
               {candidates.map((c, i) => (
                 <p key={`${c.value}-${i}`} className="text-xs text-zinc-600">
                   <span className={i === acceptedIdx ? "font-semibold text-zinc-900" : "text-zinc-700"}>
@@ -112,9 +118,9 @@ export function FlagAcknowledgeControl({
               ))}
             </div>
 
-            <div className="overflow-auto">
+            <div className="flex min-h-0 flex-1 flex-col overflow-auto">
               {sourceUrl && isPreviewable(sourceFilename, sourceUrl) ? (
-                <DocumentViewer src={sourceUrl} filename={sourceFilename} />
+                <DocumentViewer src={sourceUrl} filename={sourceFilename} fill />
               ) : (
                 <p className="px-6 py-12 text-center text-sm text-zinc-500">
                   No previewable source document found for this candidate.
@@ -122,7 +128,7 @@ export function FlagAcknowledgeControl({
               )}
             </div>
 
-            <div className="space-y-2 border-t border-zinc-100 px-4 py-3">
+            <div className="shrink-0 space-y-2 border-t border-zinc-100 px-4 py-3">
               <label className="flex cursor-pointer items-start gap-2 text-xs text-zinc-700">
                 <input
                   type="checkbox"
@@ -155,8 +161,9 @@ export function FlagAcknowledgeControl({
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </>
   );
 }

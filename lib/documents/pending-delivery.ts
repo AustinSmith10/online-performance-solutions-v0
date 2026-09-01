@@ -1,7 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { computeEffectiveDeliveryTime, type DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
-import { isWithinBusinessHours, nextBusinessHoursStart } from "@/lib/delivery/business-hours";
 import { getBusinessHours } from "@/lib/settings/business-hours";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { deliverPbdr } from "@/lib/documents/delivery";
@@ -14,12 +13,11 @@ export interface ScheduleOrDeliverResult {
 }
 
 // Explicit-trigger PBDR delivery (admin/consultant clicks Convert, having
-// already picked the project's delivery delay preset), gated to business
-// hours (#63) and that preset (#66). Effective delivery time is the later of
-// "now + preset delay" and the next business-hours window. Expedited has no
-// delay, so it reduces to delivering immediately if within business hours,
-// otherwise staging for the next window. Normal/Extended push the time out
-// further, staging in `pending_deliveries` for a worker cron to pick up.
+// already picked the project's delivery delay preset). Normal/Extended are
+// gated to business hours (#63) and pushed out by the preset delay (#66),
+// staging in `pending_deliveries` for a worker cron to pick up. Expedited
+// means literally now — a deliberate "send it regardless" choice that
+// overrides the business-hours gate — so it delivers inline immediately.
 export async function scheduleOrDeliverPbdr(
   projectId: string,
   actorId: string | null = null,
@@ -199,63 +197,25 @@ export interface ExpediteDeliveryResult {
   reason?: string;
 }
 
-// Manual override: brings a staged delivery forward as if it were re-triggered
-// right now with the "expedited" preset — i.e. the earliest business-hours
-// window from this instant, not literally immediate (still gated by #63).
+// Manual override: brings a staged PBDR delivery forward and sends it now,
+// overriding the #63 business-hours gate — the same "send it regardless"
+// semantics as picking the "expedited" preset (see computeEffectiveDeliveryTime).
+// Clears the pending row first so the worker cron can't also fire it.
 export async function expediteDelivery(
   projectId: string,
   actorId: string | null,
   actorEmail: string | null
 ): Promise<ExpediteDeliveryResult> {
   const supabase = createAdminClient();
-  const now = new Date();
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("client_id, clients(state_territory)")
-    .eq("id", projectId)
-    .single();
+  await supabase
+    .from("pending_deliveries")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("delivery_type", "pbdr");
 
-  const stateTerritory =
-    (project?.clients as unknown as { state_territory: string | null } | null)
-      ?.state_territory ?? null;
-
-  const [businessHours, holidaysThisYear, holidaysNextYear] = await Promise.all([
-    getBusinessHours(supabase),
-    getPublicHolidays(stateTerritory, now.getUTCFullYear()),
-    getPublicHolidays(stateTerritory, now.getUTCFullYear() + 1),
-  ]);
-  const holidays = new Set([...holidaysThisYear, ...holidaysNextYear]);
-
-  const target = isWithinBusinessHours(now, businessHours, holidays)
-    ? now
-    : nextBusinessHoursStart(now, businessHours, holidays);
-
-  if (target.getTime() <= now.getTime()) {
-    await supabase
-      .from("pending_deliveries")
-      .delete()
-      .eq("project_id", projectId)
-      .eq("delivery_type", "pbdr");
-    const result = await deliverPbdr(projectId, actorId, actorEmail);
-    return { delivered: result.success, scheduledFor: null, reason: result.reason };
-  }
-
-  const { error } = await supabase.from("pending_deliveries").upsert(
-    {
-      project_id: projectId,
-      delivery_type: "pbdr",
-      scheduled_for: target.toISOString(),
-    },
-    { onConflict: "project_id,delivery_type" }
-  );
-
-  if (error) {
-    console.error(`[expediteDelivery] failed to reschedule delivery for ${projectId}:`, error);
-    throw error;
-  }
-
-  return { delivered: false, scheduledFor: target.toISOString() };
+  const result = await deliverPbdr(projectId, actorId, actorEmail);
+  return { delivered: result.success, scheduledFor: null, reason: result.reason };
 }
 
 // #170: bring a staged (normal/extended) PBDB dispatch forward. Unlike the

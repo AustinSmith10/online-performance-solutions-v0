@@ -8,12 +8,13 @@ vi.mock("@/lib/settings/delivery-delay");
 vi.mock("@/lib/documents/delivery");
 vi.mock("@/lib/stakeholders/dispatch");
 
-import { scheduleOrDeliverPbdb, expeditePbdbDispatch } from "./pending-delivery";
+import { scheduleOrDeliverPbdb, scheduleOrDeliverPbdr, expeditePbdbDispatch } from "./pending-delivery";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBusinessHours } from "@/lib/settings/business-hours";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
+import { deliverPbdr } from "@/lib/documents/delivery";
 
 const PROJECT_ID = "proj-1";
 const ACTOR_ID = "actor-1";
@@ -32,6 +33,7 @@ function mockProject(preset: string) {
             data: {
               client_id: "org-1",
               pbdb_delivery_delay_preset: preset,
+              delivery_delay_preset: preset,
               clients: { state_territory: "NSW" },
             },
             error: null,
@@ -60,6 +62,7 @@ beforeEach(() => {
     extended: { unit: "workingDays", value: 3 },
   });
   vi.mocked(dispatchPbdb).mockResolvedValue({ stakeholderNames: ["Planner"] });
+  vi.mocked(deliverPbdr).mockResolvedValue({ success: true } as never);
 });
 
 describe("scheduleOrDeliverPbdb", () => {
@@ -86,6 +89,36 @@ describe("scheduleOrDeliverPbdb", () => {
     const result = await scheduleOrDeliverPbdb(PROJECT_ID, ACTOR_ID);
 
     expect(dispatchPbdb).not.toHaveBeenCalled();
+    expect(upsert).toHaveBeenCalledOnce();
+    expect(result.delivered).toBe(false);
+    expect(result.scheduledFor).toBeTypeOf("string");
+  });
+});
+
+describe("scheduleOrDeliverPbdr", () => {
+  it("expedited delivers immediately even after hours — overrides the #63 gate", async () => {
+    const { client, upsert } = mockProject("expedited");
+    vi.mocked(createAdminClient).mockReturnValue(client as never);
+
+    // Force "after hours" so a business-hours gate would otherwise defer to 9am.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-01T14:00:00.000Z")); // ~midnight AEST
+
+    const result = await scheduleOrDeliverPbdr(PROJECT_ID, ACTOR_ID, "actor@example.com");
+
+    vi.useRealTimers();
+    expect(deliverPbdr).toHaveBeenCalledWith(PROJECT_ID, ACTOR_ID, "actor@example.com");
+    expect(upsert).not.toHaveBeenCalled();
+    expect(result).toEqual({ delivered: true, scheduledFor: null });
+  });
+
+  it("normal preset stages a pending_deliveries row instead of delivering", async () => {
+    const { client, upsert } = mockProject("normal");
+    vi.mocked(createAdminClient).mockReturnValue(client as never);
+
+    const result = await scheduleOrDeliverPbdr(PROJECT_ID, ACTOR_ID, "actor@example.com");
+
+    expect(deliverPbdr).not.toHaveBeenCalled();
     expect(upsert).toHaveBeenCalledOnce();
     expect(result.delivered).toBe(false);
     expect(result.scheduledFor).toBeTypeOf("string");

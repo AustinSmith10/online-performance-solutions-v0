@@ -28,9 +28,11 @@ export function formatDelayDuration(d: DelayDuration): string {
 }
 
 // Effective delivery time = max(now + preset delay, next business-hours window) (#66).
-// Expedited has no delay, so this reduces to the #63 business-hours gating alone.
-// A "working days" duration lands exactly on a business day's opening time, so
-// it's already within business hours by construction — no extra rolling needed.
+// Expedited means literally now — a deliberate "send it regardless" choice that
+// overrides the #63 business-hours gate for both PBDB and PBDR (the gate still
+// applies to Normal/Extended). A "working days" duration lands exactly on a
+// business day's opening time, so it's already within business hours by
+// construction — no extra rolling needed.
 export function computeEffectiveDeliveryTime(
   now: Date,
   preset: DeliveryDelayPreset,
@@ -39,9 +41,7 @@ export function computeEffectiveDeliveryTime(
   holidays: Set<string>
 ): Date {
   if (preset === "expedited") {
-    return isWithinBusinessHours(now, businessHours, holidays)
-      ? now
-      : nextBusinessHoursStart(now, businessHours, holidays);
+    return now;
   }
 
   const duration = durations[preset];

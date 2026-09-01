@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { getPbdrPreviewUrl } from "@/app/actions/conversion";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { useProjectProgress } from "@/hooks/useProjectProgress";
@@ -40,16 +41,22 @@ export function PbdrPreviewButton({ projectId }: { projectId: string }) {
         Preview PBDR
       </button>
 
-      {open && (
+      {open && typeof document !== "undefined" &&
+        createPortal(
+          // Portalled to <body>: rendered inline, a transformed/contained
+          // ancestor on the consultant project page becomes the containing
+          // block for this `fixed` overlay, so the scrim stops at that box and
+          // the 100dvh panel is offset past the viewport (same trap as #177 for
+          // DocumentPreviewModal).
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
           onClick={() => setOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+            className="flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
               <p className="truncate text-sm font-medium text-zinc-900">
                 {state.status === "ready" ? state.filename : "PBDR preview"}
               </p>
@@ -61,7 +68,7 @@ export function PbdrPreviewButton({ projectId }: { projectId: string }) {
                 Close
               </button>
             </div>
-            <div className="overflow-auto">
+            <div className="flex min-h-0 flex-1 flex-col overflow-auto">
               {state.status === "loading" && (
                 <div className="px-6 py-12 text-center">
                   <p className="text-sm text-zinc-500">Generating preview…</p>
@@ -76,11 +83,14 @@ export function PbdrPreviewButton({ projectId }: { projectId: string }) {
               {state.status === "error" && (
                 <p className="px-6 py-12 text-center text-sm text-red-600">{state.message}</p>
               )}
-              {state.status === "ready" && <DocumentViewer src={state.url} filename={state.filename} />}
+              {state.status === "ready" && (
+                <DocumentViewer src={state.url} filename={state.filename} fill />
+              )}
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </>
   );
 }

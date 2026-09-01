@@ -48,11 +48,15 @@ export function DocumentPreviewModal({
   const overlay = open && typeof document !== "undefined" ? (
     createPortal(
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/80 p-4"
+        // The overlay IS the viewport (`fixed inset-0`); the panel is a
+        // `flex-1 min-h-0` child so the box model — not a `vh`/`dvh` height —
+        // bounds it. It fills the padded overlay and shrinks to fit, so its
+        // header/toolbar and the page-scroll area can never spill off-screen.
+        className="fixed inset-0 z-[100] flex flex-col items-center bg-zinc-900/80 p-4"
         onClick={() => setOpen(false)}
       >
           <div
-            className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+            className="flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
@@ -65,7 +69,7 @@ export function DocumentPreviewModal({
                 Close
               </button>
             </div>
-            <DocumentViewer src={href} filename={filename} />
+            <DocumentViewer src={href} filename={filename} fill />
           </div>
       </div>,
       document.body

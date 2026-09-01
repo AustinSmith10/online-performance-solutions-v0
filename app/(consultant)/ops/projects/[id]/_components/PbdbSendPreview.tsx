@@ -86,11 +86,11 @@ export function PbdbSendPreview({ projectId, fileId, findings, acknowledged }: P
           // rendered inline it inherits the drawer's narrow containing block
           // and the document is unreadable. z above every other layer.
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/80 p-4"
+            className="fixed inset-0 z-[100] flex flex-col items-center bg-zinc-900/80 p-4"
             onClick={() => setPreviewOpen(false)}
           >
             <div
-              className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+              className="flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
@@ -112,7 +112,7 @@ export function PbdbSendPreview({ projectId, fileId, findings, acknowledged }: P
                 <p className="px-6 py-12 text-center text-sm text-red-600">{previewState.message}</p>
               )}
               {previewState.status === "ready" && (
-                <DocumentViewer src={previewState.url} filename={previewState.filename} />
+                <DocumentViewer src={previewState.url} filename={previewState.filename} fill />
               )}
             </div>
           </div>,
