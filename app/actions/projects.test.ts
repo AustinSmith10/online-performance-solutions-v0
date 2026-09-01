@@ -10,13 +10,16 @@ vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/stakeholders/dispatch");
 vi.mock("@/lib/documents/pending-delivery");
 vi.mock("@/lib/documents/generator");
+vi.mock("@/lib/jobs/queue-client", () => ({
+  enqueueGeneratePbdb: vi.fn().mockResolvedValue("job-1"),
+}));
 
 import { uploadQaPbdb, adminDeleteProject, confirmProjectFileType, generatePbdbForProject } from "./projects";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { auditLog } from "@/lib/audit/log";
-import { generatePbdb } from "@/lib/documents/generator";
+import { enqueueGeneratePbdb } from "@/lib/jobs/queue-client";
 
 const PROJECT_ID = "proj-1";
 const CLIENT_ID = "org-1";
@@ -356,14 +359,15 @@ describe("confirmProjectFileType", () => {
   });
 });
 
-describe("generatePbdbForProject — progress_pct clears on failure (#127)", () => {
-  function buildGenerateMock() {
+describe("generatePbdbForProject — enqueues to the worker (#172)", () => {
+  function buildGenerateMock(progressPct: number | null = null) {
     const progressUpdateFn = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) });
     const project = {
       id: PROJECT_ID,
       client_id: CLIENT_ID,
       project_number: "OPS-1",
       status: "in_progress",
+      progress_pct: progressPct,
     };
     const from = vi.fn((table: string) => {
       if (table === "projects") {
@@ -398,25 +402,40 @@ describe("generatePbdbForProject — progress_pct clears on failure (#127)", () 
     vi.mocked(requireRole).mockResolvedValue({ id: ACTOR_ID, role: "consultant", email: "c@ddeg.com.au" } as never);
   });
 
-  it("clears progress_pct to null when generatePbdb throws", async () => {
-    const mock = buildGenerateMock();
-    vi.mocked(createAdminClient).mockReturnValue(mock as never);
-    vi.mocked(generatePbdb).mockRejectedValue(new Error("template rendering failed"));
-
-    const result = await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData());
-
-    expect(result.error).toBeTruthy();
-    expect(mock.progressUpdateFn).toHaveBeenCalledWith({ progress_pct: null });
+  beforeEach(() => {
+    vi.mocked(enqueueGeneratePbdb).mockResolvedValue("job-1");
   });
 
-  it("does not touch progress_pct on success (generatePbdb itself sets it to 100)", async () => {
-    const mock = buildGenerateMock();
+  it("enqueues a generation job and marks progress in-flight, returning immediately", async () => {
+    const mock = buildGenerateMock(null);
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
-    vi.mocked(generatePbdb).mockResolvedValue(undefined);
 
     const result = await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData());
 
     expect(result.success).toBe(true);
-    expect(mock.progressUpdateFn).not.toHaveBeenCalled();
+    expect(enqueueGeneratePbdb).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: PROJECT_ID })
+    );
+    expect(mock.progressUpdateFn).toHaveBeenCalledWith({ progress_pct: 5 });
+  });
+
+  it("refuses when another document operation is already in flight for the project", async () => {
+    const mock = buildGenerateMock(40);
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData());
+
+    expect(result.error).toMatch(/already being generated/i);
+    expect(enqueueGeneratePbdb).not.toHaveBeenCalled();
+  });
+
+  it("refuses on a singleton-key collision (a job is already queued/active)", async () => {
+    const mock = buildGenerateMock(null);
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    vi.mocked(enqueueGeneratePbdb).mockResolvedValue(null);
+
+    const result = await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData());
+
+    expect(result.error).toMatch(/already being generated/i);
   });
 });

@@ -5,12 +5,14 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/supabase/admin");
 vi.mock("@/lib/auth/session");
-vi.mock("@/lib/documents/generator", () => ({ generatePbdb: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/jobs/queue-client", () => ({
+  enqueueGeneratePbdb: vi.fn().mockResolvedValue("job-1"),
+}));
 
 import { generatePbdbForProject } from "./projects";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
-import { generatePbdb } from "@/lib/documents/generator";
+import { enqueueGeneratePbdb } from "@/lib/jobs/queue-client";
 
 const PROJECT_ID = "proj-1";
 
@@ -51,7 +53,7 @@ describe("generatePbdbForProject — flag acknowledgment gate (#114)", () => {
     const result = await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData());
 
     expect(result.error).toMatch(/acknowledge all flagged fields/i);
-    expect(generatePbdb).not.toHaveBeenCalled();
+    expect(enqueueGeneratePbdb).not.toHaveBeenCalled();
   });
 
   it("proceeds once every flag is acknowledged", async () => {
@@ -59,6 +61,6 @@ describe("generatePbdbForProject — flag acknowledgment gate (#114)", () => {
 
     await generatePbdbForProject(PROJECT_ID, "/ops/projects", {}, new FormData()).catch(() => {});
 
-    expect(generatePbdb).toHaveBeenCalled();
+    expect(enqueueGeneratePbdb).toHaveBeenCalled();
   });
 });

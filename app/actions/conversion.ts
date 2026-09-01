@@ -30,7 +30,7 @@ export async function getPbdrPreviewUrl(projectId: string): Promise<PbdrPreviewR
   let query = supabase
     .from("projects")
     .select(
-      "id, client_id, review_cycle, strip_token_color, project_number, extracted_fields, assigned_consultant_id"
+      "id, client_id, review_cycle, strip_token_color, project_number, extracted_fields, assigned_consultant_id, progress_pct"
     )
     .eq("id", projectId)
     .is("deleted_at", null);
@@ -39,6 +39,10 @@ export async function getPbdrPreviewUrl(projectId: string): Promise<PbdrPreviewR
   }
   const { data: project } = await query.maybeSingle();
   if (!project) return { error: "Project not found or access denied." };
+  // #172: one heavy document operation per project at a time.
+  if (project.progress_pct !== null && project.progress_pct !== undefined) {
+    return { error: "A document is already being generated for this project — try again once it finishes." };
+  }
 
   let preview;
   try {
@@ -71,15 +75,19 @@ export async function triggerPbdrConversion(
 ): Promise<ConvertState> {
   const actor = await requireRole("consultant", "super_admin", "admin");
 
-  if (actor.role === "consultant") {
+  {
     const supabase = createAdminClient();
     const { data: project } = await supabase
       .from("projects")
-      .select("assigned_consultant_id")
+      .select("assigned_consultant_id, progress_pct")
       .eq("id", projectId)
       .maybeSingle();
-    if (project?.assigned_consultant_id !== actor.id) {
+    if (actor.role === "consultant" && project?.assigned_consultant_id !== actor.id) {
       return { error: "You are not assigned to this project." };
+    }
+    // #172: one heavy document operation per project at a time.
+    if (project?.progress_pct !== null && project?.progress_pct !== undefined) {
+      return { error: "A document is already being generated for this project — try again once it finishes." };
     }
   }
 

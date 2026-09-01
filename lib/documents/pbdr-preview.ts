@@ -42,7 +42,11 @@ export async function buildPbdrPreview(
   await writeProgress(supabase, project.id, PROGRESS_MILESTONES[0]); // 20
 
   try {
-    return await buildPbdrPreviewInner(supabase, project);
+    const result = await buildPbdrPreviewInner(supabase, project);
+    // #172: clear the in-flight marker on success too — generate / convert
+    // gate on `progress_pct IS NOT NULL` for this project.
+    await writeProgress(supabase, project.id, null);
+    return result;
   } catch (err) {
     await writeProgress(supabase, project.id, null);
     throw err;

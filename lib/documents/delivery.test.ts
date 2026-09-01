@@ -177,7 +177,7 @@ describe("deliverPbdr — progress_pct (#127)", () => {
     const result = await deliverPbdr(PROJECT_ID, ADMIN_ID, "admin@ddeg.com.au");
 
     expect(result.success).toBe(true);
-    expect(mock.progressWrites).toEqual([20, 40, 70, 90, 100]);
+    expect(mock.progressWrites).toEqual([20, 40, 70, 90, 100, null]);
   });
 
   it("resets progress to null when conversion fails", async () => {

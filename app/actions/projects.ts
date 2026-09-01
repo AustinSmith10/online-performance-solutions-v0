@@ -8,7 +8,7 @@ import { requireProjectAccess } from "@/lib/auth/project-access";
 import { auditLog } from "@/lib/audit/log";
 import { performAssignment } from "@/lib/projects/assign";
 import { validateProjectNumber, findDuplicateProjectNumber } from "@/lib/projects/project-number";
-import { generatePbdb } from "@/lib/documents/generator";
+import { enqueueGeneratePbdb } from "@/lib/jobs/queue-client";
 import { formatAddress } from "@/lib/documents/formatters";
 import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
@@ -841,7 +841,9 @@ export type GeneratePbdbState = { error?: string; success?: boolean };
 
 export async function generatePbdbForProject(
   projectId: string,
-  redirectBasePath: string,
+  // Kept for call-site compatibility (bound as the 2nd arg by the buttons) —
+  // unused since #172 made generation async with no "it's done" redirect.
+  _redirectBasePath: string,
   _prev: GeneratePbdbState,
   _formData: FormData
 ): Promise<GeneratePbdbState> {
@@ -850,7 +852,7 @@ export async function generatePbdbForProject(
 
   let query = supabase
     .from("projects")
-    .select("id, client_id, project_number, status")
+    .select("id, client_id, project_number, status, progress_pct")
     .eq("id", projectId)
     .is("deleted_at", null);
 
@@ -889,12 +891,32 @@ export async function generatePbdbForProject(
     return { error: "The PBDB can no longer be regenerated once it has been dispatched to stakeholders." };
   }
 
-  try {
-    await generatePbdb(projectId, actor.id);
-  } catch (err) {
-    await writeProgress(supabase, projectId, null);
-    return { error: err instanceof Error ? err.message : "PBDB generation failed. Please try again." };
+  // #172: one heavy document operation per project at a time. progress_pct is
+  // non-null whenever a generation / PBDR conversion / PBDR preview is in
+  // flight for this project (every one of those pipelines writes it), so this
+  // one check covers all three.
+  if (project.progress_pct !== null && project.progress_pct !== undefined) {
+    return { error: "A document is already being generated for this project — wait for it to finish, then try again." };
   }
+
+  // #172: generation runs in the worker so a platform/proxy timeout can't
+  // lose the response and hang the spinner. The action enqueues and returns;
+  // the Focus card advances off server state (the new project_files row) and
+  // the button polls progress_pct until the worker clears it.
+  let jobId: string | null;
+  try {
+    jobId = await enqueueGeneratePbdb({ projectId, actorId: actor.id, isRegenerate });
+  } catch (err) {
+    console.error(`[generatePbdbForProject] enqueue failed for ${projectId}:`, err);
+    return { error: "Couldn't start PBDB generation. Please try again in a moment." };
+  }
+  if (!jobId) {
+    // singletonKey collision — a generation job is already queued/active.
+    return { error: "A document is already being generated for this project — wait for it to finish, then try again." };
+  }
+  // Mark in-flight immediately so the card shows progress and the per-project
+  // lock above engages before the worker picks the job up.
+  await writeProgress(supabase, projectId, 5);
 
   if (!isRegenerate && (status === "submitted" || status === "assigned")) {
     await supabase
@@ -906,21 +928,16 @@ export async function generatePbdbForProject(
   await auditLog(isRegenerate ? "project.pbdb_regenerated" : "project.pbdb_generated", actor.id, actor.email as string, {
     projectId,
     orgId: project.client_id as string,
-    metadata: { actor: actor.role },
+    metadata: { actor: actor.role, queued_job: jobId },
   });
 
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
 
-  // Consultant workspace: no redirect/banner. The "Right now" Focus card now
-  // shows a durable, server-state-driven "Download the generated PBDB" step
-  // (gated on projects.pbdb_downloaded_at) that RealtimeRefresh reconciles into
-  // place — replacing the old ?pbdb_generated=1 toast/spotlight that raced the
-  // revalidatePath() above. The admin project page has no Focus card, so it
-  // keeps the first-generation banner via the redirect below.
-  if (!isRegenerate && redirectBasePath.startsWith("/admin")) {
-    redirect(`${redirectBasePath}?pbdb_generated=1`);
-  }
+  // #172: generation is now async (worker), so there's no "it's done"
+  // moment to redirect on. Both surfaces poll progress_pct and re-render
+  // off the new project_files row when it lands (RealtimeRefresh); the
+  // admin ?pbdb_generated=1 banner was removed with the inline path.
   return { success: true };
 }
 

@@ -239,6 +239,24 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
 
   await writeProgress(supabase, projectId, PROGRESS_MILESTONES[3]); // 90
 
+  // #172: re-check project status as close to the write as possible. A
+  // dispatch (or revert/convert) may have landed while this job was running
+  // — generating a PBDB for anything past the pre-dispatch phase would write
+  // a version that desyncs the review-cycle matching.
+  const { data: freshProject } = await supabase
+    .from("projects")
+    .select("status")
+    .eq("id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  const freshStatus = freshProject?.status as string | undefined;
+  if (freshStatus !== "submitted" && freshStatus !== "assigned" && freshStatus !== "in_progress") {
+    await supabase.storage.from("documents").remove([storagePath]);
+    throw new Error(
+      `Project is no longer in a state where the PBDB can be generated (status: ${freshStatus ?? "deleted"}).`
+    );
+  }
+
   const { error: insertError } = await supabase.from("project_files").insert({
     project_id: projectId,
     file_type: "pbdb",
@@ -252,6 +270,14 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   if (insertError) {
     // Clean up the uploaded file if the DB record can't be written
     await supabase.storage.from("documents").remove([storagePath]);
+    // 23505 = unique_violation on project_files (project_id, file_type,
+    // version) — a concurrent generate raced us to this version and won.
+    // Its file is already durably stored, so this run just aborts (#172).
+    if (insertError.code === "23505") {
+      throw new Error(
+        "Another PBDB generation for this project finished first — nothing to do."
+      );
+    }
     throw new Error(`Failed to record PBDB in database: ${insertError.message}`);
   }
 
@@ -264,5 +290,10 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   }
 
   await writeProgress(supabase, projectId, PROGRESS_MILESTONES[4]); // 100
+  // #172: clear the in-flight marker. NULL means "no heavy document
+  // operation running for this project" — the convert / preview paths gate
+  // on it too, and the Focus card advances off the new project_files row via
+  // RealtimeRefresh, not off a progress_pct pinned at 100.
+  await writeProgress(supabase, projectId, null);
 }
 

@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/node";
-import { PgBoss, type Job } from "pg-boss";
+import { PgBoss, type Job, type WorkOptions } from "pg-boss";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertSchemaCurrentOrExit } from "@/lib/schema/drift-guard";
 import { purgeRecoveryBin } from "@/lib/jobs/purge-recovery-bin";
@@ -10,6 +10,9 @@ import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { addWorkingDays } from "@/lib/delivery/working-days";
 import { notify } from "@/lib/notifications/notify";
 import { deliverPbdr } from "@/lib/documents/delivery";
+import { generatePbdb } from "@/lib/documents/generator";
+import { writeProgress } from "@/lib/documents/progress";
+import { GENERATE_PBDB_QUEUE, type GeneratePbdbJob } from "@/lib/jobs/queue-client";
 import { sendAvailableRequestsDigest } from "@/lib/jobs/available-requests-digest";
 import {
   reconcileDigestSchedule,
@@ -42,9 +45,10 @@ async function main() {
   // unchanged.
   function work<T extends object = object>(
     queueName: string,
-    handler: (jobs: Job<T>[]) => Promise<void>
+    handler: (jobs: Job<T>[]) => Promise<void>,
+    options?: WorkOptions
   ) {
-    return boss.work<T>(queueName, async (jobs) => {
+    const wrapped = async (jobs: Job<T>[]) => {
       try {
         await handler(jobs);
       } catch (err) {
@@ -53,7 +57,10 @@ async function main() {
         });
         throw err;
       }
-    });
+    };
+    return options
+      ? boss.work<T>(queueName, options, wrapped)
+      : boss.work<T>(queueName, wrapped);
   }
 
   boss.on("error", (error: Error) => {
@@ -82,6 +89,17 @@ async function main() {
   ]) {
     await boss.createQueue(queue, { retryBackoff: true });
   }
+
+  // #172: heavy document generation runs here instead of inline in the
+  // server action, where a platform/proxy timeout lost the HTTP response and
+  // hung the button spinner forever even though the file was written.
+  //
+  // `policy: 'singleton'` + a per-project singletonKey means a second
+  // enqueue while one is queued/active is a no-op (send() returns null) —
+  // the action turns that into "a document is already being generated for
+  // this project". retryLimit 0: a failed generation surfaces a retriable
+  // error on the card rather than silently retrying.
+  await boss.createQueue(GENERATE_PBDB_QUEUE, { policy: "singleton", retryLimit: 0 });
 
   // Purge soft-deleted projects older than 30 days. Runs daily at midnight.
   await boss.schedule("purge-recovery-bin", "0 0 * * *", {});
@@ -321,6 +339,59 @@ async function main() {
       console.log(`[release-pending-deliveries] released PBDR delivery for ${projectId}`);
     }
   });
+
+  // #172: PBDB generation. `batchSize: 2` bounds concurrency so a burst of
+  // generate clicks can't monopolise the worker and starve the cron jobs
+  // above (release-pending-deliveries, digests). Each job re-checks project
+  // status before doing the work — a regenerate is only valid while the
+  // project is still in {assigned, in_progress}.
+  await work<GeneratePbdbJob>(
+    GENERATE_PBDB_QUEUE,
+    async (jobs) => {
+      for (const job of jobs) {
+        const { projectId, actorId, isRegenerate } = job.data;
+        const supabase = createAdminClient();
+
+        try {
+          if (isRegenerate) {
+            const { data: proj } = await supabase
+              .from("projects")
+              .select("status")
+              .eq("id", projectId)
+              .is("deleted_at", null)
+              .maybeSingle();
+            const status = proj?.status as string | undefined;
+            if (status !== "assigned" && status !== "in_progress") {
+              console.warn(
+                `[generate-pbdb] skipping regenerate for ${projectId} — status is ${status ?? "gone"}, not assigned/in_progress`
+              );
+              await writeProgress(supabase, projectId, null);
+              continue;
+            }
+          }
+
+          await generatePbdb(projectId, actorId);
+          console.log(`[generate-pbdb] generated PBDB for ${projectId} (regenerate=${isRegenerate})`);
+        } catch (err) {
+          console.error(`[generate-pbdb] generation failed for ${projectId}:`, err);
+          // Clear the in-flight marker so the card stops spinning and the
+          // Generate button comes back, and tell the actor it failed.
+          await writeProgress(supabase, projectId, null);
+          await notify({
+            recipientId: actorId,
+            type: "pbdb_generation_failed",
+            message: "PBDB generation failed. Open the project and try generating it again.",
+            projectId,
+            emailSubject: "PBDB generation failed",
+            emailHtml:
+              '<p style="font-family:sans-serif">PBDB generation failed for a project you triggered. Open the project in OPS and click Generate again. If it keeps failing, contact an administrator.</p>',
+          }).catch(() => {});
+          throw err; // let work() report it to Sentry and mark the job failed
+        }
+      }
+    },
+    { batchSize: 2 }
+  );
 
   // Twice-daily digest of available (submitted, unassigned) projects, sent to
   // consultants/admins/super_admins. Send times are admin-configurable — see

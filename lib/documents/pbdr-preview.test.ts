@@ -111,7 +111,7 @@ describe("buildPbdrPreview — progress_pct (#126)", () => {
     const result = await buildPbdrPreview(supabase as never, project);
 
     expect(result).not.toBeNull();
-    expect((supabase as unknown as { progressWrites: (number | null)[] }).progressWrites).toEqual([20, 40, 70, 100]);
+    expect((supabase as unknown as { progressWrites: (number | null)[] }).progressWrites).toEqual([20, 40, 70, 100, null]);
   });
 
   it("clears progress to null when no QA'd PBDB exists for the cycle", async () => {
@@ -120,7 +120,7 @@ describe("buildPbdrPreview — progress_pct (#126)", () => {
     const result = await buildPbdrPreview(supabase as never, project);
 
     expect(result).toBeNull();
-    expect((supabase as unknown as { progressWrites: (number | null)[] }).progressWrites).toEqual([20, null]);
+    expect((supabase as unknown as { progressWrites: (number | null)[] }).progressWrites).toEqual([20, null, null]);
   });
 
   it("clears progress to null when rendering fails", async () => {

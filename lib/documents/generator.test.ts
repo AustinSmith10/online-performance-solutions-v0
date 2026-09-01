@@ -39,6 +39,8 @@ const project = {
   review_cycle: 1,
   submitted_by: "sub-1",
   assigned_consultant_id: "consultant-1",
+  // #172: generatePbdb re-checks status right before the insert.
+  status: "in_progress",
 };
 
 /** A minimal chainable query builder that actually filters an in-memory row
@@ -277,7 +279,9 @@ describe("generatePbdb — progress_pct (#127)", () => {
 
     await generatePbdb(PROJECT_ID, ACTOR_ID);
 
-    expect(mock.progressWrites).toEqual([20, 40, 70, 90, 100]);
+    // #172: generatePbdb now clears progress_pct to null on completion
+    // (previously it stayed pinned at 100).
+    expect(mock.progressWrites).toEqual([20, 40, 70, 90, 100, null]);
   });
 
   it("resets progress to null when generation fails", async () => {

@@ -101,6 +101,11 @@ function buildMock({
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireRole).mockResolvedValue(ADMIN as never);
+  // triggerPbdrConversion always reads the project now (#172 progress_pct
+  // guard) — default to a clean project; buildMock() tests override this.
+  vi.mocked(createAdminClient).mockReturnValue({
+    from: vi.fn(() => queryable([{ id: PROJECT_ID, assigned_consultant_id: "consultant-1", progress_pct: null }])),
+  } as never);
   vi.mocked(auditLog).mockResolvedValue(undefined as never);
   vi.mocked(notify).mockResolvedValue(undefined as never);
   vi.mocked(sendEmail).mockResolvedValue(true as never);

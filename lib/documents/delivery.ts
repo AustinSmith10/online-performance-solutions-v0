@@ -360,6 +360,11 @@ export async function deliverPbdr(
       )
     );
 
+    // #172: clear the in-flight marker on success too (the failure path
+    // already does). NULL = no heavy document operation running for this
+    // project; generate / preview gate on it.
+    await writeProgress(supabase, projectId, null);
+
     console.log(`[deliver-pbdr] project ${projectId} delivered (${actorId ? "manual" : "auto"})`);
     return { success: true };
   } catch (err) {
