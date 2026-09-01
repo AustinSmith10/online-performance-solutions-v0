@@ -170,7 +170,7 @@ function ProjectsLayout({
             type="text"
             name="q"
             defaultValue={params.q ?? ""}
-            placeholder="Search address or PO number…"
+            placeholder="Search project number, address, or PO number…"
             className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
           />
           <select

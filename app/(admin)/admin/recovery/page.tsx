@@ -259,7 +259,7 @@ function RecoveryLayout({
             type="text"
             name="q"
             defaultValue={params.q ?? ""}
-            placeholder="Search address or PO number…"
+            placeholder="Search project number, address, or PO number…"
             className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <input
