@@ -451,27 +451,31 @@ export default async function ConsultantProjectDetailPage({
   ]);
   const pbdbSendPreviewIso = pbdbSendPreview ? pbdbSendPreview.toISOString() : undefined;
   const pbdrSendPreviewIso = pbdrSendPreview ? pbdrSendPreview.toISOString() : undefined;
-  const sysValues: { label: string; value: string }[] = [
+  // #176: the explanation for each value lives in a hover hint on the row,
+  // not trailing the value inline.
+  const sysValues: { label: string; value: string; hint?: string }[] = [
     {
       label: "Project number",
       value: project.project_number ? `${project.project_number}-S` : "Not yet set",
+      hint: "The DDEG project number. It isn't unique across projects — check the site address to confirm this is the right job.",
     },
     {
       label: "Submission date",
-      value: `${fmtDMY(new Date(project.created_at))} — when the client submitted this project`,
+      value: fmtDMY(new Date(project.created_at)),
+      hint: "When the client submitted this project.",
     },
     {
       label: "Generation date",
-      value: latestGenDate
-        ? `${fmtDMY(latestGenDate)} — when the current PBDB file was last generated`
-        : "Not yet generated",
+      value: latestGenDate ? fmtDMY(latestGenDate) : "Not yet generated",
+      hint: "When the current PBDB file was last generated.",
     },
     {
       label: "Revision",
       value:
         latestVersion !== null
-          ? `Rev ${currentRevNumber} · generation ${latestVersion} — the Rev only bumps on a stakeholder rejection, not on a regenerate`
+          ? `Rev ${currentRevNumber} · generation ${latestVersion}`
           : `Rev ${currentRevNumber}`,
+      hint: "The Rev only bumps on a stakeholder rejection, not on a regenerate. Regenerating within a cycle only increases the generation count.",
     },
   ];
 
@@ -545,8 +549,8 @@ export default async function ConsultantProjectDetailPage({
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-x-7 gap-y-1.5 border-t border-zinc-100 pt-3 text-sm">
         <span
-          className="inline-flex items-center gap-1 text-zinc-500"
-          title={`Review cycle ${project.review_cycle}`}
+          className="inline-flex items-center gap-1 cursor-help text-zinc-500"
+          title={`Review cycle ${project.review_cycle} — increases by one each time a stakeholder rejects the PBDB and a corrected revision is sent out.`}
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 002.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0112.888 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
@@ -556,18 +560,22 @@ export default async function ConsultantProjectDetailPage({
         <HeaderStatInline
           label="Submitted"
           value={fmtDMY(new Date(project.created_at))}
-          title="When the client submitted this project"
+          title="When the client submitted this project."
           noLeftBorder
         />
         <HeaderStatInline
           label="Due"
           value={project.expected_delivery_date ? fmtDMY(new Date(project.expected_delivery_date)) : "—"}
           valueClassName={isOverdue ? "text-red-600" : undefined}
-          title="The PBDR's contractual due date — not the same as the PBDB/PBDR send date, which is set by the delivery-timing control"
+          title="The PBDR's contractual due date — separate from the PBDB/PBDR send date, which the delivery-timing control sets."
         />
         <HeaderStatInline
           value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"}
-          title={project.project_number ? "Project numbers aren't unique — check the site address to confirm this is the right job" : undefined}
+          title={
+            project.project_number
+              ? "The DDEG project number. It isn't unique across projects — check the site address to confirm this is the right job."
+              : "The DDEG project number — not assigned yet."
+          }
         />
       </div>
     </div>
@@ -1076,8 +1084,8 @@ export default async function ConsultantProjectDetailPage({
       </CollapsibleSection>
       <CollapsibleSection title="System values" defaultOpen={false}>
         <div className="divide-y divide-zinc-100">
-          {sysValues.map(({ label, value }) => (
-            <Row key={label} label={label} value={value} />
+          {sysValues.map(({ label, value, hint }) => (
+            <Row key={label} label={label} value={value} hint={hint} />
           ))}
         </div>
       </CollapsibleSection>
@@ -1421,9 +1429,19 @@ export default async function ConsultantProjectDetailPage({
   );
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: React.ReactNode;
+  /** Hover hint (#176) — the explanation sits in a tooltip on the row rather
+   *  than trailing the value inline. */
+  hint?: string;
+}) {
   return (
-    <div className="flex items-baseline gap-4 px-5 py-3">
+    <div className={`flex items-baseline gap-4 px-5 py-3 ${hint ? "cursor-help" : ""}`} title={hint}>
       <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
       <span className="min-w-0 flex-1 truncate text-sm text-zinc-900">{value}</span>
     </div>

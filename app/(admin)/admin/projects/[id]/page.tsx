@@ -668,7 +668,10 @@ export default async function ProjectDetailPage({
         )}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-x-7 gap-y-1.5 border-t border-zinc-100 pt-3 text-sm">
-        <span className="inline-flex items-center gap-1 text-zinc-500" title={`Review cycle ${project.review_cycle}`}>
+        <span
+          className="inline-flex items-center gap-1 cursor-help text-zinc-500"
+          title={`Review cycle ${project.review_cycle} — increases by one each time a stakeholder rejects the PBDB and a corrected revision is sent out.`}
+        >
           <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 002.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0112.888 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
           </svg>
@@ -683,17 +686,21 @@ export default async function ProjectDetailPage({
         <HeaderStatInline
           label="Submitted"
           value={new Date(project.created_at).toLocaleDateString("en-AU")}
-          title="When the client submitted this project"
+          title="When the client submitted this project."
         />
         <HeaderStatInline
           label="Due"
           value={project.expected_delivery_date ? new Date(project.expected_delivery_date).toLocaleDateString("en-AU") : "—"}
           valueClassName={isOverdue ? "text-red-600" : undefined}
-          title="The PBDR's contractual due date — not the same as the PBDB/PBDR send date, which the delivery-timing control sets"
+          title="The PBDR's contractual due date — separate from the PBDB/PBDR send date, which the delivery-timing control sets."
         />
         <HeaderStatInline
           value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"}
-          title={project.project_number ? "Project numbers aren't unique — check the site address to confirm this is the right job" : undefined}
+          title={
+            project.project_number
+              ? "The DDEG project number. It isn't unique across projects — check the site address to confirm this is the right job."
+              : "The DDEG project number — not assigned yet."
+          }
         />
       </div>
     </div>
