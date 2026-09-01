@@ -30,13 +30,11 @@ export function GeneratedPbdbDownload({
   projectId,
   fileId,
   filename,
-  version,
   generatedDate,
 }: {
   projectId: string;
   fileId: string;
   filename: string;
-  version: number;
   generatedDate: string;
 }) {
   const router = useRouter();
@@ -59,7 +57,7 @@ export function GeneratedPbdbDownload({
           {filename}
         </p>
         <p className="mt-0.5 text-xs text-zinc-500">
-          v{version} · {new Date(generatedDate).toLocaleDateString("en-AU")}
+          Generated {new Date(generatedDate).toLocaleDateString("en-AU")}
         </p>
       </div>
       {downloaded ? (

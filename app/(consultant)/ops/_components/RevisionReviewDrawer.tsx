@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Drawer } from "./Drawer";
 import { PbdbQaUploadForm } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbQaUploadForm";
 import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
-import { DispatchButton } from "@/app/(admin)/admin/projects/[id]/_components/DispatchButton";
+import { DrawerRedispatchPanel } from "./DrawerRedispatchPanel";
 import { DownloadCard } from "@/components/DownloadCard";
 import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
 
@@ -22,6 +22,7 @@ export interface PbdbFile {
   id: string;
   original_filename: string | null;
   version: number;
+  created_at: string;
 }
 
 export interface ReviewRow {
@@ -88,10 +89,10 @@ function DrawerContent({
           {" · "}
           {awaitingRedispatch ? (
             <span className="font-medium text-green-700">
-              Revised PBDB uploaded — ready to redispatch (cycle {project.review_cycle})
+              Revised PBDB uploaded — ready to redispatch (Rev {project.review_cycle - 1})
             </span>
           ) : (
-            <span className="font-medium text-red-600">Revision required — cycle {project.review_cycle}</span>
+            <span className="font-medium text-red-600">Revision required — Rev {project.review_cycle - 1}</span>
           )}
         </p>
       </div>
@@ -103,7 +104,7 @@ function DrawerContent({
           {priorFeedback.length > 0 && (
             <div>
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
-                What the previous version was rejected for
+                What Rev {project.review_cycle - 2} was rejected for
               </p>
               <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
                 {priorFeedback.map((r) => (
@@ -118,14 +119,11 @@ function DrawerContent({
 
           <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-4">
             <p className="text-sm font-medium text-green-900">The revised PBDB is uploaded</p>
-            <p className="mt-1 text-xs text-green-800">
-              {pbdbFile ? `Generation ${pbdbFile.version} is ready. ` : ""}
-              Resend it to every stakeholder for this project, including anyone who already
-              approved. Open the full project to choose the delivery timing.
+            <p className="mt-1 mb-3 text-xs text-green-800">
+              Preview it, set the delivery timing, then resend to every stakeholder for this
+              project — including anyone who already approved.
             </p>
-            <div className="mt-3">
-              <DispatchButton projectId={project.id} />
-            </div>
+            <DrawerRedispatchPanel projectId={project.id} />
           </div>
         </>
       )}
@@ -137,7 +135,7 @@ function DrawerContent({
       {currentReviews.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
-            Stakeholder feedback — cycle {project.review_cycle}
+            Stakeholder feedback — Rev {project.review_cycle - 1}
           </p>
           <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
             {currentReviews.map((r) => {
@@ -190,7 +188,9 @@ function DrawerContent({
             wrapperClassName="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 hover:bg-zinc-50"
           >
             <p className="truncate text-sm font-medium text-zinc-900">PBDB document</p>
-            <p className="text-xs text-zinc-500">Version {pbdbFile.version}</p>
+            <p className="text-xs text-zinc-500">
+              Sent {new Date(pbdbFile.created_at).toLocaleDateString("en-AU")}
+            </p>
           </DownloadCard>
         ) : (
           <p className="text-xs text-zinc-400">No PBDB file found for this project.</p>

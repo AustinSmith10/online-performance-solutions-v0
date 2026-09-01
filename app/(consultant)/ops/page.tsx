@@ -104,7 +104,10 @@ export default async function ConsultantOpsPage({
 
   // Fetch stakeholder reviews and dispatched PBDB files for all revision-required projects
   const reviewsByProject: Record<string, ReviewRow[]> = {};
-  const pbdbFileByProject: Record<string, { id: string; original_filename: string | null; version: number }> = {};
+  const pbdbFileByProject: Record<
+    string,
+    { id: string; original_filename: string | null; version: number; created_at: string }
+  > = {};
   if (revisionRequired.length > 0) {
     const revisionIds = revisionRequired.map((p) => p.id);
 
@@ -117,7 +120,7 @@ export default async function ConsultantOpsPage({
         .order("responded_at", { ascending: true }),
       supabase
         .from("project_files")
-        .select("id, project_id, original_filename, version, review_cycle")
+        .select("id, project_id, original_filename, version, review_cycle, created_at")
         .in("project_id", revisionIds)
         .eq("file_type", "pbdb")
         .order("version", { ascending: false }),
@@ -131,10 +134,10 @@ export default async function ConsultantOpsPage({
     // Serve the docx matching each project's current review cycle — the one that
     // was just rejected — not just whichever version happens to sort highest.
     const cycleByProject = new Map(revisionRequired.map((p) => [p.id, p.review_cycle]));
-    for (const f of (rawPbdbFiles ?? []) as { id: string; project_id: string; original_filename: string | null; version: number; review_cycle: number }[]) {
+    for (const f of (rawPbdbFiles ?? []) as { id: string; project_id: string; original_filename: string | null; version: number; review_cycle: number; created_at: string }[]) {
       if (pbdbFileByProject[f.project_id]) continue;
       if (f.review_cycle !== cycleByProject.get(f.project_id)) continue;
-      pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version };
+      pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version, created_at: f.created_at };
     }
   }
   // Single source of truth for "what stage is this project really at" — every

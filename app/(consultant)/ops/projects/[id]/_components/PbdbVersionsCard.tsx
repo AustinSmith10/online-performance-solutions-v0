@@ -52,9 +52,6 @@ export function PbdbVersionsCard({
                   {f.original_filename}
                 </p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                  <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600">
-                    v{f.version}
-                  </span>
                   <span className="text-[11px] text-zinc-400">
                     {new Date(f.created_at).toLocaleDateString("en-AU")}
                   </span>
