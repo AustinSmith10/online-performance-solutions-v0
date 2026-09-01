@@ -84,6 +84,13 @@ export async function scheduleOrDeliverPbdr(
 // same pending_deliveries table, discriminated by delivery_type. This is
 // project-level/batch scheduling: every stakeholder in a single PBDB
 // dispatch shares one delayed time, never staggered per-stakeholder.
+//
+// #170: a PBDB dispatch is a *reviewer notification*, not a client
+// deliverable, so "expedited" means literally now — no business-hours gate.
+// The #63 business-hours window and the #66 preset-delay model were built
+// for PBDR-to-client delivery and don't transfer here. Normal/Extended still
+// stage (and still land on a business-hours boundary via
+// computeEffectiveDeliveryTime) so a consultant can deliberately defer.
 export async function scheduleOrDeliverPbdb(
   projectId: string,
   actorId: string,
@@ -101,7 +108,12 @@ export async function scheduleOrDeliverPbdb(
   const stateTerritory =
     (project?.clients as unknown as { state_territory: string | null } | null)
       ?.state_territory ?? null;
-  const preset = (project?.pbdb_delivery_delay_preset ?? "normal") as DeliveryDelayPreset;
+  const preset = (project?.pbdb_delivery_delay_preset ?? "expedited") as DeliveryDelayPreset;
+
+  if (preset === "expedited") {
+    const { stakeholderNames } = await dispatchPbdb(projectId, actorId);
+    return { delivered: true, scheduledFor: null, stakeholderNames };
+  }
 
   const [businessHours, durations, holidaysThisYear, holidaysNextYear] = await Promise.all([
     getBusinessHours(supabase),
@@ -204,4 +216,29 @@ export async function expediteDelivery(
   }
 
   return { delivered: false, scheduledFor: target.toISOString() };
+}
+
+// #170: bring a staged (normal/extended) PBDB dispatch forward. Unlike the
+// PBDR expedite above, a PBDB dispatch is a reviewer notification with no
+// business-hours gate, so "expedite" here means dispatch right now. Clears
+// the pending row first so the worker cron can't also fire it.
+export async function expeditePbdbDispatch(
+  projectId: string,
+  actorId: string
+): Promise<ExpediteDeliveryResult> {
+  const supabase = createAdminClient();
+
+  const { error: deleteError } = await supabase
+    .from("pending_deliveries")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("delivery_type", "pbdb");
+
+  if (deleteError) {
+    console.error(`[expeditePbdbDispatch] failed to clear pending row for ${projectId}:`, deleteError);
+    throw deleteError;
+  }
+
+  await dispatchPbdb(projectId, actorId);
+  return { delivered: true, scheduledFor: null };
 }

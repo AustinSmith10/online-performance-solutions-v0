@@ -140,24 +140,28 @@ async function seed() {
   const { data: existingAuth } = await supabase.auth.admin.listUsers();
 
   for (const u of testUsers) {
-    const alreadyExists = existingAuth?.users.find((a) => a.email === u.email);
+    // Lowercase is the canonical stored form for email (#169, migration
+    // 00000000000128 CHECK). The UAT specs above keep their original
+    // mixed-case spelling as documentation, but every write here normalises.
+    const email = u.email.toLowerCase();
+    const alreadyExists = existingAuth?.users.find((a) => a.email === email);
 
     let userId: string;
 
     if (alreadyExists) {
-      console.log(`Auth user already exists: ${u.email}`);
+      console.log(`Auth user already exists: ${email}`);
       userId = alreadyExists.id;
 
       if (u.totpExempt && alreadyExists.app_metadata?.totp_exempt !== true) {
         await supabase.auth.admin.updateUserById(userId, {
           app_metadata: { ...alreadyExists.app_metadata, totp_exempt: true },
         });
-        console.log(`  set totp_exempt for ${u.email}`);
+        console.log(`  set totp_exempt for ${email}`);
       }
     } else {
       const { data: authUser, error: authError } =
         await supabase.auth.admin.createUser({
-          email: u.email,
+          email: email,
           password: "Ops@TestPass1!",
           email_confirm: true,
           app_metadata: {
@@ -169,7 +173,7 @@ async function seed() {
         });
 
       if (authError || !authUser.user) {
-        console.error(`Failed to create auth user ${u.email}:`, authError?.message);
+        console.error(`Failed to create auth user ${email}:`, authError?.message);
         continue;
       }
       userId = authUser.user.id;
@@ -178,7 +182,7 @@ async function seed() {
     const { error: dbError } = await supabase.from("users").upsert(
       {
         id: userId,
-        email: u.email,
+        email: email,
         first_name: u.firstName,
         last_name: u.lastName,
         phone: "0400000000",
@@ -195,9 +199,9 @@ async function seed() {
     );
 
     if (dbError) {
-      console.error(`Failed to upsert users row for ${u.email}:`, dbError.message);
+      console.error(`Failed to upsert users row for ${email}:`, dbError.message);
     } else {
-      console.log(`Ready: ${u.email} (${u.role})`);
+      console.log(`Ready: ${email} (${u.role})`);
     }
   }
 

@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { inviteLateStakeholder } from "@/lib/stakeholders/late-add";
+import { getPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 import {
   generateTokenString,
@@ -483,24 +484,18 @@ export async function dispatchToStakeholders(
     return { error: "You are not assigned to this project." };
   }
 
-  const readyForInitialDispatch = project.status === "in_progress" && !!project.qa_completed_by;
-
-  let readyForRedispatch = false;
-  if (project.status === "revision_required") {
-    // A revised PBDB was uploaded (bumping review_cycle) but no
-    // stakeholder_reviews rows exist for that cycle yet — i.e. redispatch
-    // hasn't happened. If rows already exist, this cycle was already sent
-    // and the project is genuinely mid-review, not ready to redispatch.
-    const { count } = await supabase
-      .from("stakeholder_reviews")
-      .select("id", { count: "exact", head: true })
-      .eq("project_id", projectId)
-      .eq("review_cycle", project.review_cycle as number);
-    readyForRedispatch = (count ?? 0) === 0;
-  }
-
-  if (!readyForInitialDispatch && !readyForRedispatch) {
-    return { error: "Project is not ready for dispatch." };
+  // Shared readiness rule (#168) — also recognises `dispatched` /
+  // `revision_required` with zero current-cycle rows as re-dispatchable, so
+  // a project stranded by the #166 outage can be recovered through this
+  // button instead of hitting "Project is not ready for dispatch".
+  const readiness = await getPbdbDispatchReadiness(supabase, {
+    id: projectId,
+    status: project.status as string,
+    qa_completed_by: project.qa_completed_by as string | null,
+    review_cycle: project.review_cycle as number,
+  });
+  if (readiness.kind === "not_ready") {
+    return { error: readiness.reason };
   }
 
   // Soft-block gate (#112): any structure-scan finding on the current
@@ -679,7 +674,10 @@ export async function resendFreshToken(
     year: "numeric",
   });
 
-  await supabase
+  // The token must be persisted before we email a link built from it —
+  // swallowing this error was the #166 failure mode (email sent, token never
+  // written → dead link).
+  const { error: tokenWriteError } = await supabase
     .from("stakeholder_reviews")
     .update({
       token,
@@ -688,6 +686,14 @@ export async function resendFreshToken(
       fresh_token_sent_at: new Date().toISOString(),
     })
     .eq("id", reviewId);
+
+  if (tokenWriteError) {
+    logger.error(
+      { event: "resend-token.token_write_failed", reviewId, err: tokenWriteError },
+      "Resend-token DB write failed"
+    );
+    return { error: "Couldn't reissue the approval link. Please try again." };
+  }
 
   const approvalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
 
@@ -849,10 +855,18 @@ export async function updateStakeholderEmail(
     return { error: "Review not found or not pending." };
   }
 
-  await supabase
+  const { error: emailWriteError } = await supabase
     .from("stakeholder_reviews")
     .update({ stakeholder_email: newEmail })
     .eq("id", reviewId);
+
+  if (emailWriteError) {
+    logger.error(
+      { event: "update-stakeholder-email.write_failed", reviewId, err: emailWriteError },
+      "Stakeholder email update failed"
+    );
+    return { error: "Couldn't update the reviewer's email. Please try again." };
+  }
 
   await auditLog("stakeholder.email_updated", actor.id, actor.email as string, {
     projectId,
@@ -878,7 +892,8 @@ export async function updateStakeholderEmail(
     year: "numeric",
   });
 
-  await supabase
+  // Persist the token before emailing a link built from it (see #166).
+  const { error: tokenWriteError } = await supabase
     .from("stakeholder_reviews")
     .update({
       token,
@@ -887,6 +902,14 @@ export async function updateStakeholderEmail(
       fresh_token_sent_at: new Date().toISOString(),
     })
     .eq("id", reviewId);
+
+  if (tokenWriteError) {
+    logger.error(
+      { event: "update-stakeholder-email.token_write_failed", reviewId, err: tokenWriteError },
+      "Stakeholder email update — token write failed"
+    );
+    return { error: "The email was updated, but the new approval link couldn't be issued. Please resend the token." };
+  }
 
   const approvalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
 

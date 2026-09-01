@@ -4,7 +4,6 @@ import { generateTokenString, computeTokenExpiry, hashToken, computeSignedUrlExp
 import { checkDispatchGate } from "@/lib/payments/gate";
 import { deductCredit, debitDeferred, logUpfront } from "@/lib/payments/ledger";
 import { notify } from "@/lib/notifications/notify";
-import { auditLog } from "@/lib/audit/log";
 import { sendEmail } from "@/lib/email/sender";
 import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
@@ -164,9 +163,65 @@ export async function dispatchPbdb(
     }
   }
 
-  // Create one stakeholder_reviews row per stakeholder (token embedded)
-  for (const stakeholder of stakeholders) {
+  // Pre-generate one token per stakeholder so the transactional RPC gets the
+  // whole review set in a single call (#168). The plaintext token stays in
+  // memory here for the post-commit email; the DB only ever stores/queries
+  // the hash.
+  const reviews = stakeholders.map((stakeholder) => {
     const token = generateTokenString();
+    return {
+      stakeholder,
+      token,
+      payload: {
+        email: stakeholder.email.toLowerCase(),
+        name: stakeholder.name,
+        token,
+        token_hash: hashToken(token),
+        expires_at: expiresAt.toISOString(),
+      },
+    };
+  });
+
+  const auditMetadata = {
+    review_cycle: reviewCycle,
+    stakeholder_count: stakeholders.length,
+    stakeholders: stakeholders.map((s) => ({ name: s.name, email: s.email })),
+  };
+
+  // Atomic side-effect: review rows + status → 'dispatched' + audit, all in
+  // one transaction, with a post-write row-count assertion inside it. A
+  // partial failure rolls the whole thing back and the project stays
+  // un-advanced — the exact failure mode (#166) that stranded ~50 dispatches
+  // when this was ~5 un-checked sequential writes.
+  const { data: rpcData, error: rpcError } = await supabase.rpc("dispatch_pbdb_reviews", {
+    p_project_id: projectId,
+    p_review_cycle: reviewCycle,
+    p_reviews: reviews.map((r) => r.payload),
+    p_actor_id: actorId,
+    p_org_id: orgId,
+    p_audit_metadata: auditMetadata,
+  });
+
+  if (rpcError) {
+    console.error("[dispatch-pbdb] transactional dispatch failed, rolled back:", rpcError);
+    throw new Error(`Dispatch failed: ${rpcError.message}`);
+  }
+
+  // Belt-and-braces post-commit assertion. The RPC already RAISEs and rolls
+  // back on a short count; this is the JS-side guarantee the issue's
+  // acceptance criteria asks for — dispatchPbdb returns an error, never
+  // success, if the committed row count doesn't cover the stakeholder list.
+  const committedCount =
+    (rpcData as { review_row_count: number }[] | null)?.[0]?.review_row_count ?? 0;
+  if (committedCount < stakeholders.length) {
+    throw new Error(
+      `Dispatch verification failed: ${committedCount} review row(s) for ${stakeholders.length} stakeholder(s) on project ${projectId} cycle ${reviewCycle}.`
+    );
+  }
+
+  // Transaction committed — send the notifications. An email failure here
+  // must not undo the dispatch, so each is caught and logged.
+  for (const { stakeholder, token } of reviews) {
     const portalUser = portalUserMap.get(stakeholder.email.toLowerCase());
 
     // Clients with portal accounts go to the inline approval form; everyone else uses the token URL
@@ -174,24 +229,6 @@ export async function dispatchPbdb(
       portalUser?.role === "stakeholder"
         ? `${process.env.NEXT_PUBLIC_APP_URL}/portal/projects/${projectId}`
         : `${process.env.NEXT_PUBLIC_APP_URL}/approve/${token}`;
-
-    await supabase.from("stakeholder_reviews").upsert(
-      {
-        project_id: projectId,
-        review_cycle: reviewCycle,
-        stakeholder_email: stakeholder.email.toLowerCase(),
-        stakeholder_name: stakeholder.name,
-        token,
-        token_hash: hashToken(token),
-        dispatched_at: now.toISOString(),
-        expires_at: expiresAt.toISOString(),
-        fresh_token_sent_at: null,
-        status: "pending",
-        comments: null,
-        responded_at: null,
-      },
-      { onConflict: "project_id,review_cycle,stakeholder_email" }
-    );
 
     const emailHtml = renderApprovalRequestEmail({
       stakeholderName: stakeholder.name,
@@ -231,22 +268,6 @@ export async function dispatchPbdb(
       });
     }
   }
-
-  // Transition project to dispatched
-  await supabase
-    .from("projects")
-    .update({ status: "dispatched", updated_at: now.toISOString() })
-    .eq("id", projectId);
-
-  await auditLog("project.pbdb_dispatched", actorId, null, {
-    projectId,
-    orgId,
-    metadata: {
-      review_cycle: reviewCycle,
-      stakeholder_count: stakeholders.length,
-      stakeholders: stakeholders.map((s) => ({ name: s.name, email: s.email })),
-    },
-  });
 
   console.log(
     `[dispatch-pbdb] project ${projectId} cycle ${reviewCycle} → ${stakeholders.length} stakeholder(s)`

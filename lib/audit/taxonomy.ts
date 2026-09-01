@@ -191,6 +191,8 @@ export const EVENT_LABELS: Record<string, string> = {
   "pbdr.delivered": "PBDR delivered to client",
   "pbdr.redelivered": "PBDR re-delivered to client",
   "pbdr.conversion_failed": "PBDR conversion failed",
+  "pbdr.delivery_expedited": "PBDR delivery expedited",
+  "pbdb.dispatch_expedited": "PBDB dispatch expedited",
   "project.complete": "Project marked complete",
   "project.pbdr_downloaded": "PBDR downloaded",
   "project.pbdb_downloaded": "PBDB downloaded",

@@ -39,6 +39,58 @@ jobs:
       - name: Test
         run: npm run test
 
+  schema-drift:
+    name: Schema/type drift
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # EXPECTED_SCHEMA_MIGRATION must equal the highest migration filename
+      # prefix — the boot-time drift guard and the deploy depend on it.
+      - name: Expected-migration pin matches latest migration file
+        run: |
+          latest_file=$(ls supabase/migrations/*.sql | sort | tail -1 | xargs basename | cut -d_ -f1)
+          pinned=$(grep -oE '"[0-9]{12,}"' lib/schema/expected-migration.ts | tr -d '"')
+          echo "latest migration file: $latest_file"
+          echo "EXPECTED_SCHEMA_MIGRATION: $pinned"
+          if [ "$latest_file" != "$pinned" ]; then
+            echo "::error::EXPECTED_SCHEMA_MIGRATION ($pinned) != latest migration ($latest_file). Bump lib/schema/expected-migration.ts."
+            exit 1
+          fi
+
+      - name: Start Supabase local dev stack
+        run: npx supabase start
+
+      # Applies every migration in order to a throwaway DB, then regenerates
+      # types from it. A dirty types/supabase.ts means code references a
+      # column/table/function no migration creates (or a migration changed a
+      # shape without the types being regenerated).
+      - name: Apply all migrations to a throwaway DB
+        run: npx supabase db reset --no-seed
+
+      - name: Regenerate types
+        run: npx supabase gen types typescript --local > types/supabase.ts
+
+      - name: Fail if types/supabase.ts is stale
+        run: |
+          if ! git diff --exit-code types/supabase.ts; then
+            echo "::error::types/supabase.ts is out of date. Run 'npm run db:generate' and commit the result."
+            exit 1
+          fi
+
+      - name: Stop Supabase
+        if: always()
+        run: npx supabase stop
+
   concurrency:
     name: Ledger concurrency (real Postgres)
     runs-on: ubuntu-latest

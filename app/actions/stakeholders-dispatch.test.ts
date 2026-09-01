@@ -75,7 +75,7 @@ describe("dispatchToStakeholders — readiness gate", () => {
 
     const result = await dispatchToStakeholders(PROJECT_ID, {}, new FormData());
 
-    expect(result.error).toBe("Project is not ready for dispatch.");
+    expect(result.error).toBe("Upload and QA the PBDB before dispatching.");
     expect(scheduleOrDeliverPbdb).not.toHaveBeenCalled();
   });
 
@@ -95,17 +95,27 @@ describe("dispatchToStakeholders — readiness gate", () => {
 
     const result = await dispatchToStakeholders(PROJECT_ID, {}, new FormData());
 
-    expect(result.error).toBe("Project is not ready for dispatch.");
+    expect(result.error).toBe("This review cycle has already been dispatched.");
     expect(scheduleOrDeliverPbdb).not.toHaveBeenCalled();
   });
 
-  it("blocks a genuinely closed status (e.g. dispatched, no revision in play)", async () => {
+  it("recovers a project stranded by the #166 outage: dispatched + zero current-cycle rows is re-dispatchable", async () => {
     const project = { status: "dispatched", qa_completed_by: null, assigned_consultant_id: "consultant-1", review_cycle: 1 };
-    vi.mocked(createAdminClient).mockReturnValue(buildMock(project) as never);
+    vi.mocked(createAdminClient).mockReturnValue(buildMock(project, 0) as never);
 
     const result = await dispatchToStakeholders(PROJECT_ID, {}, new FormData());
 
-    expect(result.error).toBe("Project is not ready for dispatch.");
+    expect(result.success).toBe(true);
+    expect(scheduleOrDeliverPbdb).toHaveBeenCalledWith(PROJECT_ID, "consultant-1", "c@x.com");
+  });
+
+  it("blocks a dispatched project that already has current-cycle rows (genuinely mid-review)", async () => {
+    const project = { status: "dispatched", qa_completed_by: null, assigned_consultant_id: "consultant-1", review_cycle: 1 };
+    vi.mocked(createAdminClient).mockReturnValue(buildMock(project, 3) as never);
+
+    const result = await dispatchToStakeholders(PROJECT_ID, {}, new FormData());
+
+    expect(result.error).toBe("This review cycle has already been dispatched.");
     expect(scheduleOrDeliverPbdb).not.toHaveBeenCalled();
   });
 

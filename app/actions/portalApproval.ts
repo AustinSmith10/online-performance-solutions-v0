@@ -87,11 +87,15 @@ export async function submitPortalApproval(
     return { error: "You have already submitted a response for this review." };
   }
 
-  await supabase
+  const { error: firstResponseError } = await supabase
     .from("projects")
     .update({ first_response_at: now, updated_at: now })
     .eq("id", review.project_id)
     .is("first_response_at", null);
+  if (firstResponseError) {
+    // Non-critical (approval-buffer reminder timing only); log, don't swallow.
+    console.error(`[submitPortalApproval] first_response_at write failed for ${review.project_id}:`, firstResponseError);
+  }
 
   await auditLog("stakeholder.responded_via_portal", user.id as string, user.email as string, {
     projectId: review.project_id as string,
@@ -114,10 +118,14 @@ export async function submitPortalApproval(
   const cycle = project.review_cycle as number;
 
   if (response === "rejected") {
-    await supabase
+    const { error: statusError } = await supabase
       .from("projects")
       .update({ status: "revision_required", updated_at: now })
       .eq("id", review.project_id);
+    if (statusError) {
+      console.error(`[submitPortalApproval] status→revision_required failed for ${review.project_id}:`, statusError);
+      return { error: "Your response was recorded, but the project status couldn't be updated. Please notify DDEG." };
+    }
 
     // Bumps the PBDB revision_history counter (#108) — matches the equivalent
     // call in approval.ts and stakeholders.ts for the other two rejection paths.

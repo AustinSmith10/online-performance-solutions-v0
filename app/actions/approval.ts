@@ -87,11 +87,16 @@ export async function submitApproval(
     return { error: "This approval link is no longer valid — a response has already been recorded." };
   }
 
-  await supabase
+  const { error: firstResponseError } = await supabase
     .from("projects")
     .update({ first_response_at: now, updated_at: now })
     .eq("id", review.project_id)
     .is("first_response_at", null);
+  if (firstResponseError) {
+    // Non-critical (only affects the approval-buffer reminder timing) — the
+    // response itself is already recorded — but log rather than swallow.
+    console.error(`[submitApproval] first_response_at write failed for ${review.project_id}:`, firstResponseError);
+  }
 
   await auditLog("stakeholder.responded", null, review.stakeholder_email, {
     projectId: review.project_id,
@@ -114,10 +119,17 @@ export async function submitApproval(
   const cycle = project.review_cycle as number;
 
   if (response === "rejected") {
-    await supabase
+    const { error: statusError } = await supabase
       .from("projects")
       .update({ status: "revision_required", updated_at: now })
       .eq("id", review.project_id);
+    if (statusError) {
+      // The review row is already marked rejected; if the project status
+      // can't follow, surface it loudly rather than leaving the project
+      // reading as "dispatched" with a rejected review under it (#168).
+      console.error(`[submitApproval] status→revision_required failed for ${review.project_id}:`, statusError);
+      return { error: "Your response was recorded, but the project status couldn't be updated. Please notify DDEG." };
+    }
 
     // Bumps the PBDB revision_history counter (#108) — the corrected reupload
     // later derives its Rev{n} filename from this row, not review_cycle. Only

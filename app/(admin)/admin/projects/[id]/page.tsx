@@ -12,6 +12,8 @@ import { ConvertButton } from "./_components/ConvertButton";
 import { PbdrPreviewButton } from "./_components/PbdrPreviewButton";
 import { RevertButton } from "./_components/RevertButton";
 import { DispatchButton } from "./_components/DispatchButton";
+import { PbdbDispatchSchedule } from "./_components/PbdbDispatchSchedule";
+import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
 import { ResendPbdrButton } from "./_components/ResendPbdrButton";
 import { PauseForm } from "./_components/PauseForm";
 import { ResumeButton } from "./_components/ResumeButton";
@@ -178,7 +180,7 @@ export default async function ProjectDetailPage({
 
   const supabase = createAdminClient();
 
-  const [projectResult, consultantsResult, pendingDeliveryResult] = await Promise.all([
+  const [projectResult, consultantsResult, pendingDeliveryResult, pendingPbdbDeliveryResult] = await Promise.all([
     supabase
       .from("projects")
       .select(`
@@ -216,12 +218,14 @@ export default async function ProjectDetailPage({
       .eq("is_locked", false)
       .order("first_name"),
     supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).eq("delivery_type", "pbdr").maybeSingle(),
+    supabase.from("pending_deliveries").select("scheduled_for").eq("project_id", id).eq("delivery_type", "pbdb").maybeSingle(),
   ]);
 
   if (projectResult.error) console.error(`[admin/projects/${id}] project query failed:`, projectResult.error);
   if (!projectResult.data) notFound();
 
   const pendingDelivery = pendingDeliveryResult.data as { scheduled_for: string } | null;
+  const pendingPbdbDelivery = pendingPbdbDeliveryResult.data as { scheduled_for: string } | null;
   const deliveryDurations = await getDeliveryDelayDurations(supabase);
 
   type ProjectDetail = {
@@ -533,6 +537,15 @@ export default async function ProjectDetailPage({
   const effectiveStatus = resolveEffectiveStatus(project.status, currentCycleReviews);
   const allCurrentAcknowledged = effectiveStatus === "converting";
 
+  // Shared dispatch-readiness rule (#168), identical to the consultant card
+  // and the `dispatchToStakeholders` action. "redispatch" also covers
+  // `dispatched` / `revision_required` + 0 current-cycle rows.
+  const dispatchReadiness = classifyPbdbDispatchReadiness({
+    status: effectiveStatus,
+    qaCompletedBy: project.qa_completed_by,
+    currentCycleReviewCount: currentCycleReviews.length,
+  });
+
   const pendingReviews = currentCycleReviews.filter((r) => r.status === "pending");
 
   const reviewsByCycle = new Map<number, StakeholderReview[]>();
@@ -784,7 +797,7 @@ export default async function ProjectDetailPage({
         <PbdbQaUploadForm projectId={id} />
       </FocusCard>
     );
-  } else if (project.status === "in_progress" && !!project.qa_completed_by) {
+  } else if (dispatchReadiness.kind === "initial") {
     focusCard = (
       <FocusCard tone="green" title="Ready to dispatch" subtitle="QA complete — send it out for stakeholder review.">
         <div className="space-y-4">
@@ -797,34 +810,39 @@ export default async function ProjectDetailPage({
             />
           )}
           {pbdbReadyToSend && (
-            <>
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
-                <ProjectDeliveryDelayPresetSelect
-                  projectId={id}
-                  initialValue={project.pbdb_delivery_delay_preset}
-                  durations={deliveryDurations}
-                  docType="pbdb"
-                />
-              </div>
-              <DispatchButton projectId={id} />
-            </>
+            pendingPbdbDelivery ? (
+              <PbdbDispatchSchedule
+                projectId={id}
+                scheduledFor={pendingPbdbDelivery.scheduled_for}
+              />
+            ) : (
+              <>
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+                  <ProjectDeliveryDelayPresetSelect
+                    projectId={id}
+                    initialValue={project.pbdb_delivery_delay_preset}
+                    durations={deliveryDurations}
+                    docType="pbdb"
+                  />
+                </div>
+                <DispatchButton projectId={id} />
+              </>
+            )
           )}
           <PbdbReuploadToggle projectId={id} />
         </div>
       </FocusCard>
     );
-  } else if (
-    (project.status === "dispatched" || project.status === "revision_required") &&
-    currentCycleReviews.length === 0
-  ) {
+  } else if (dispatchReadiness.kind === "redispatch") {
     // A revised PBDB was just uploaded (bumping review_cycle) — either an
     // early reissue while status is still "dispatched" (consultant acting on
     // one stakeholder's feedback before everyone's responded), or a
     // correction after "revision_required" — and no stakeholder_reviews rows
-    // exist for the new cycle yet, so redispatch hasn't happened. Checked
-    // ahead of the "dispatched"/"revision_required" branches below, which
-    // only apply once this cycle's rows actually exist.
+    // exist for the new cycle yet, so redispatch hasn't happened. Also covers
+    // the #166 outage signature (status advanced, rows never written).
+    // Checked ahead of the "dispatched"/"revision_required" branches below,
+    // which only apply once this cycle's rows actually exist.
     focusCard = (
       <FocusCard tone="green" title="Ready to redispatch" subtitle="Revised PBDB uploaded — resend it to every stakeholder, including anyone who already approved.">
         <div className="space-y-4">
@@ -837,18 +855,25 @@ export default async function ProjectDetailPage({
             />
           )}
           {pbdbReadyToSend && (
-            <>
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
-                <ProjectDeliveryDelayPresetSelect
-                  projectId={id}
-                  initialValue={project.pbdb_delivery_delay_preset}
-                  durations={deliveryDurations}
-                  docType="pbdb"
-                />
-              </div>
-              <DispatchButton projectId={id} />
-            </>
+            pendingPbdbDelivery ? (
+              <PbdbDispatchSchedule
+                projectId={id}
+                scheduledFor={pendingPbdbDelivery.scheduled_for}
+              />
+            ) : (
+              <>
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+                  <ProjectDeliveryDelayPresetSelect
+                    projectId={id}
+                    initialValue={project.pbdb_delivery_delay_preset}
+                    durations={deliveryDurations}
+                    docType="pbdb"
+                  />
+                </div>
+                <DispatchButton projectId={id} />
+              </>
+            )
           )}
         </div>
       </FocusCard>

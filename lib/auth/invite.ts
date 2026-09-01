@@ -49,13 +49,17 @@ export async function sendWelcomeEmail(
 }
 
 export async function createAccount(
-  email: string,
+  rawEmail: string,
   role: UserRole,
   firstName: string,
   lastName: string,
   orgId?: string
 ) {
   const supabase = createAdminClient();
+
+  // Lowercase is the canonical stored form for every email column (#169) —
+  // normalise here too as defence in depth, independent of caller validation.
+  const email = rawEmail.trim().toLowerCase();
 
   const { data, error } = await supabase.auth.admin.createUser({
     email,

@@ -244,15 +244,18 @@ function SetNumberAndAssignDrawerContent({
               <input
                 name="project_number"
                 type="text"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
                 value={projectNumber}
                 onChange={(e) => setProjectNumber(e.target.value)}
-                placeholder="e.g. 25-001"
+                placeholder="e.g. 250001"
                 required
                 disabled={pending}
                 className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-50"
               />
               <p className="mt-1 text-xs text-zinc-400">
-                The suffix <span className="font-mono">-S</span> is appended automatically.
+                Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically.
               </p>
             </div>
             {state.error && (
@@ -275,6 +278,11 @@ function SetNumberAndAssignDrawerContent({
               Generate the PBDB from the project&apos;s PBDB step once a consultant is assigned.
             </p>
           </div>
+          {state.warning && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs text-amber-800">{state.warning}</p>
+            </div>
+          )}
           <div>
             <p className="mb-3 text-sm font-medium text-zinc-700">Assign a consultant</p>
             <AssignForm

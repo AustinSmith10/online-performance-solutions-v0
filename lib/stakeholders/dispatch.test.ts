@@ -27,7 +27,6 @@ import { sendEmail } from "@/lib/email/sender";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { makeDocxConversionSafe } from "@/lib/documents/converter";
-import { auditLog } from "@/lib/audit/log";
 
 const PROJECT_ID = "proj-abc";
 const ORG_ID = "org-xyz";
@@ -79,6 +78,17 @@ function buildSupabaseMock() {
     }),
   };
 
+  // The transactional dispatch RPC (#168). Echoes back a row count equal to
+  // the number of reviews it was handed, so the caller's post-commit
+  // assertion passes.
+  const rpcFn = vi.fn((...rpcArgs: unknown[]) => {
+    const args = rpcArgs[1] as { p_reviews: unknown[] };
+    return Promise.resolve({
+      data: [{ review_row_count: args.p_reviews.length }] as { review_row_count: number }[] | null,
+      error: null as { message: string } | null,
+    });
+  });
+
   return {
     from: vi.fn((table: string) => {
       calls[table] = (calls[table] ?? 0) + 1;
@@ -103,8 +113,10 @@ function buildSupabaseMock() {
 
       return chain(null);
     }),
+    rpc: rpcFn,
     storage,
     upsertFn,
+    rpcFn,
   };
 }
 
@@ -182,14 +194,41 @@ describe("dispatchPbdb — submitting client inclusion", () => {
     await expect(dispatchPbdb(PROJECT_ID, ACTOR_ID)).rejects.toThrow("No stakeholders");
   });
 
-  it("creates a stakeholder_reviews row for each dispatched stakeholder", async () => {
+  it("writes all review rows + status + audit in one transactional RPC call", async () => {
     const mock = buildSupabaseMock();
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
 
     await dispatchPbdb(PROJECT_ID, ACTOR_ID);
 
-    // client + 1 org stakeholder = 2 upsert calls
-    expect(mock.upsertFn).toHaveBeenCalledTimes(2);
+    // One RPC, not a per-stakeholder loop of un-transacted writes.
+    expect(mock.rpcFn).toHaveBeenCalledTimes(1);
+    const [fnName, args] = mock.rpcFn.mock.calls[0] as unknown as [string, { p_reviews: unknown[]; p_project_id: string; p_review_cycle: number }];
+    expect(fnName).toBe("dispatch_pbdb_reviews");
+    // client + 1 org stakeholder = 2 review rows
+    expect(args.p_reviews).toHaveLength(2);
+    expect(args.p_project_id).toBe(PROJECT_ID);
+    expect(args.p_review_cycle).toBe(1);
+    // The legacy per-row upsert path is gone.
+    expect(mock.upsertFn).not.toHaveBeenCalled();
+  });
+
+  it("throws (never returns success) when the RPC rolls back", async () => {
+    const mock = buildSupabaseMock();
+    mock.rpcFn.mockResolvedValueOnce({ data: null, error: { message: "expected >= 2 review rows, found 0" } });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await expect(dispatchPbdb(PROJECT_ID, ACTOR_ID)).rejects.toThrow("Dispatch failed");
+    // No emails sent when the transaction didn't commit.
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+  });
+
+  it("throws when the committed row count is short of the stakeholder list", async () => {
+    const mock = buildSupabaseMock();
+    mock.rpcFn.mockResolvedValueOnce({ data: [{ review_row_count: 1 }], error: null });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await expect(dispatchPbdb(PROJECT_ID, ACTOR_ID)).rejects.toThrow("verification failed");
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
   });
 });
 
@@ -242,6 +281,9 @@ describe("dispatchPbdb — stakeholder-facing artifact is a PDF, never the docx"
         if (table === "stakeholder_reviews") return { upsert: upsertFn };
         return chain(null);
       }),
+      rpc: vi.fn((_name: string, args: { p_reviews: unknown[] }) =>
+        Promise.resolve({ data: [{ review_row_count: args.p_reviews.length }], error: null })
+      ),
       storage: {
         from: vi.fn().mockReturnValue({
           download: downloadFn,
@@ -330,24 +372,23 @@ describe("dispatchPbdb — payment gate", () => {
 });
 
 describe("dispatchPbdb — audit trail records who the review was sent to", () => {
-  it("logs project.pbdb_dispatched with the name and email of every recipient, including the prepended client", async () => {
-    vi.mocked(createAdminClient).mockReturnValue(buildSupabaseMock() as never);
+  it("passes the recipient list to the transactional RPC for in-txn audit logging", async () => {
+    const mock = buildSupabaseMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
 
     await dispatchPbdb(PROJECT_ID, ACTOR_ID);
 
-    expect(vi.mocked(auditLog)).toHaveBeenCalledWith(
-      "project.pbdb_dispatched",
-      ACTOR_ID,
-      null,
-      expect.objectContaining({
-        metadata: expect.objectContaining({
-          stakeholder_count: 2,
-          stakeholders: expect.arrayContaining([
-            { name: "Planner", email: "planner@council.gov" },
-            { name: "John Doe", email: "client@acme.com" },
-          ]),
-        }),
-      })
+    const [, args] = mock.rpcFn.mock.calls[0] as unknown as [
+      string,
+      { p_actor_id: string; p_audit_metadata: { stakeholder_count: number; stakeholders: { name: string; email: string }[] } },
+    ];
+    expect(args.p_actor_id).toBe(ACTOR_ID);
+    expect(args.p_audit_metadata.stakeholder_count).toBe(2);
+    expect(args.p_audit_metadata.stakeholders).toEqual(
+      expect.arrayContaining([
+        { name: "Planner", email: "planner@council.gov" },
+        { name: "John Doe", email: "client@acme.com" },
+      ])
     );
   });
 });
