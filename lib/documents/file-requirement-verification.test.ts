@@ -61,28 +61,38 @@ describe("runAiJudgeCheck", () => {
     expect(runTextCompletion).not.toHaveBeenCalled();
   });
 
-  it("passes when the judge says it matches", async () => {
-    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "reason": ""}');
+  it("passes cleanly when the judge says it matches with high confidence", async () => {
+    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "confidence": "high", "reason": ""}');
     const result = await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "text");
     expect(result).toEqual({ ok: true });
   });
 
   it("flags when the judge says it doesn't match", async () => {
-    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": false, "reason": "This looks like a drawing, not a PO."}');
+    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": false, "confidence": "high", "reason": "This looks like a drawing, not a PO."}');
     const result = await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "text");
     expect(result).toEqual({ ok: false, reason: "This looks like a drawing, not a PO." });
   });
 
-  it("fails open (passes) when the judge call throws", async () => {
-    vi.mocked(runTextCompletion).mockRejectedValue(new Error("API down"));
-    const result = await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "text");
-    expect(result).toEqual({ ok: true });
+  it("surfaces a soft 'couldn't confirm' gate on a low-confidence match (#174)", async () => {
+    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "confidence": "low", "reason": "text is garbled"}');
+    const result = await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order", name: "Purchase Order" }, "text");
+    expect(result?.ok).toBe(true);
+    expect(result?.unverified).toBe(true);
+    expect(result?.reason).toContain("Purchase Order");
   });
 
-  it("fails open when the response isn't parseable JSON", async () => {
+  it("is non-blocking but not silent when the judge call throws (#174)", async () => {
+    vi.mocked(runTextCompletion).mockRejectedValue(new Error("API down"));
+    const result = await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "text");
+    expect(result?.ok).toBe(true);
+    expect(result?.unverified).toBe(true);
+  });
+
+  it("is non-blocking but not silent when the response isn't parseable JSON (#174)", async () => {
     vi.mocked(runTextCompletion).mockResolvedValue("not json");
     const result = await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "text");
-    expect(result).toEqual({ ok: true });
+    expect(result?.ok).toBe(true);
+    expect(result?.unverified).toBe(true);
   });
 });
 
@@ -90,31 +100,32 @@ describe("runAiJudgeCheck — sample-aware prompt construction (#115)", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("omits any sample grounding from the prompt when no sample text is passed", async () => {
-    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "reason": ""}');
+    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "confidence": "high", "reason": ""}');
     await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "doc text");
     const prompt = vi.mocked(runTextCompletion).mock.calls[0][0];
     expect(prompt).not.toContain("reference sample");
   });
 
   it("omits any sample grounding from the prompt when sample text is explicitly null", async () => {
-    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "reason": ""}');
+    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "confidence": "high", "reason": ""}');
     await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "doc text", null);
     const prompt = vi.mocked(runTextCompletion).mock.calls[0][0];
     expect(prompt).not.toContain("reference sample");
   });
 
   it("includes the sample text as grounding when present", async () => {
-    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "reason": ""}');
+    vi.mocked(runTextCompletion).mockResolvedValue('{"matches": true, "confidence": "high", "reason": ""}');
     await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "doc text", "SAMPLE PO CONTENT");
     const prompt = vi.mocked(runTextCompletion).mock.calls[0][0];
     expect(prompt).toContain("reference sample");
     expect(prompt).toContain("SAMPLE PO CONTENT");
   });
 
-  it("still fails open on error with a sample present", async () => {
+  it("stays non-blocking (but marks unverified) on error with a sample present", async () => {
     vi.mocked(runTextCompletion).mockRejectedValue(new Error("API down"));
     const result = await runAiJudgeCheck({ aiJudgeHint: "A Purchase Order" }, "doc text", "SAMPLE PO CONTENT");
-    expect(result).toEqual({ ok: true });
+    expect(result?.ok).toBe(true);
+    expect(result?.unverified).toBe(true);
   });
 });
 

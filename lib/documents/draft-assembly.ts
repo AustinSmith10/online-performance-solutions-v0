@@ -11,6 +11,12 @@ import { buildFieldFlagPlan, type FieldFlagPlan } from "@/lib/documents/field-fl
 import type { ComparisonMode } from "@/lib/documents/compare-candidates";
 import { resolveMetricsAutofill, type MetricsAutofillConfig } from "@/lib/documents/metrics-autofill";
 
+// #174: the token that identifies which real-world project a document
+// belongs to. Its cross-document agreement is checked deterministically
+// (see below) so "a PO from project A + a drawing from project B" always
+// raises the same soft flag, instead of flickering with LLM non-determinism.
+const IDENTITY_TOKEN = "EXTRACT_ADDRESS";
+
 export interface DraftAssemblyInput {
   projectId: string;
   orgId: string;
@@ -54,7 +60,15 @@ export async function assembleAndPersistDraftFields(
       ...c,
       value: normalizeExtractedFields({ [token]: c.value })[token],
     }));
-    const plan = await buildFieldFlagPlan(normalizedCandidates, comparisonModeByToken.get(token) ?? "exact");
+    // The identity token always compares in "semantic" (canonicalised) mode,
+    // regardless of its admin-configured comparison_mode: street-type
+    // abbreviations ("St" vs "Street") on the same real address must not
+    // false-flag, and a genuine cross-project mismatch must always flag —
+    // deterministically, on every run (#174). groupCandidates is pure, so
+    // once extraction is temperature-0 this verdict is stable across retries.
+    const mode: ComparisonMode =
+      token === IDENTITY_TOKEN ? "semantic" : comparisonModeByToken.get(token) ?? "exact";
+    const plan = await buildFieldFlagPlan(normalizedCandidates, mode);
     flagPlans.set(token, plan);
   }
 

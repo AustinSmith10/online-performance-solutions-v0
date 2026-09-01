@@ -6,8 +6,15 @@ const JUDGE_SCHEMA: JsonOutputSchema = {
   name: "judge_result",
   schema: {
     type: "object",
-    properties: { matches: { type: "boolean" }, reason: { type: "string" } },
-    required: ["matches", "reason"],
+    properties: {
+      matches: { type: "boolean" },
+      // #174: an explicit self-reported confidence. A confident "matches" is a
+      // clean pass; a low-confidence one is treated the same as a judge error
+      // — a soft "couldn't confirm" gate, never a hard block.
+      confidence: { type: "string", enum: ["high", "low"] },
+      reason: { type: "string" },
+    },
+    required: ["matches", "confidence", "reason"],
     additionalProperties: false,
   },
 };
@@ -95,27 +102,48 @@ ${sampleSection}
 Document text:
 ${docText.slice(0, docTextCap)}
 
-Does this document match the expected description? Return ONLY a JSON object: { "matches": true|false, "reason": "one short sentence if false, empty string if true" }`;
+Does this document match the expected description? Return ONLY a JSON object: { "matches": true|false, "confidence": "high"|"low", "reason": "one short sentence explaining your answer; empty string only if matches is true and confidence is high" }
+
+Use "low" confidence if the document text is too short, garbled, or ambiguous to tell.`;
 }
 
 /**
  * AI-judge layer (#113): reuses the extraction pipeline's hint-grounded
- * judge pattern (runTextCompletion) rather than a bespoke AI call. Fails
- * open on any error or unparseable response — a broken checker must never
- * block an otherwise-valid upload. `sampleText` (#115) is optional extra
- * grounding extracted from an admin-uploaded reference sample; absent, the
- * judge behaves exactly as it did in #113. `docTextCap` defaults to the
+ * judge pattern (runTextCompletion) rather than a bespoke AI call.
+ *
+ * #174: still never hard-blocks an upload, but a judge error / unparseable
+ * response / self-reported low confidence is no longer silently swallowed as
+ * a clean pass. It comes back as `{ ok: true, unverified: true }` so the
+ * caller can surface the same soft "couldn't confirm this is a {X}" friction
+ * the explicit-mismatch path already shows. `sampleText` (#115) is optional
+ * extra grounding extracted from an admin-uploaded reference sample; absent,
+ * the judge behaves exactly as it did in #113. `docTextCap` defaults to the
  * settings-module default so existing call sites (and tests) don't need to
  * pass it explicitly — production callers should fetch the admin-configured
  * value via getJudgeDocumentTextCharCap and pass it through.
  */
+export interface AiJudgeResult {
+  ok: boolean;
+  reason?: string;
+  /** Judge couldn't give a confident verdict (error, bad JSON, or low
+   *  self-reported confidence). Non-blocking — a soft "please check" gate. */
+  unverified?: boolean;
+}
+
 export async function runAiJudgeCheck(
-  requirement: { aiJudgeHint: string | null },
+  requirement: { aiJudgeHint: string | null; name?: string },
   docText: string,
   sampleText?: string | null,
   docTextCap: number = DEFAULT_JUDGE_DOCUMENT_TEXT_CHAR_CAP
-): Promise<{ ok: boolean; reason?: string } | null> {
+): Promise<AiJudgeResult | null> {
   if (!requirement.aiJudgeHint) return null;
+
+  const what = requirement.name ? `this is ${requirement.name}` : "this is the expected document";
+  const unverified = (): AiJudgeResult => ({
+    ok: true,
+    unverified: true,
+    reason: `Couldn't automatically confirm ${what} — please check it's the right document.`,
+  });
 
   try {
     const raw = await runTextCompletion(
@@ -124,15 +152,22 @@ export async function runAiJudgeCheck(
       JUDGE_SCHEMA
     );
     const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) return { ok: true };
-    const parsed = JSON.parse(match[0]) as { matches?: unknown; reason?: unknown };
+    if (!match) return unverified();
+    const parsed = JSON.parse(match[0]) as { matches?: unknown; confidence?: unknown; reason?: unknown };
     if (parsed.matches === false) {
-      return { ok: false, reason: typeof parsed.reason === "string" && parsed.reason ? parsed.reason : "Document may not match the expected type." };
+      return {
+        ok: false,
+        reason:
+          typeof parsed.reason === "string" && parsed.reason
+            ? parsed.reason
+            : "Document may not match the expected type.",
+      };
     }
+    if (parsed.confidence === "low") return unverified();
     return { ok: true };
   } catch (err) {
-    console.error("[file-requirement-verification] AI judge check failed, failing open:", err);
-    return { ok: true };
+    console.error("[file-requirement-verification] AI judge check errored — surfacing as unverified:", err);
+    return unverified();
   }
 }
 
@@ -174,6 +209,10 @@ export async function verifyUploadAgainstRequirement(
   const judged = await runAiJudgeCheck(requirement, doc.text, sampleText, docTextCap);
   if (judged && !judged.ok) {
     reasons.push(judged.reason ?? `May not be ${requirement.name}.`);
+  } else if (judged?.unverified) {
+    // #174: judge couldn't confirm — same soft "needs review" friction as an
+    // explicit mismatch, never a hard block.
+    reasons.push(judged.reason ?? `Couldn't confirm this is ${requirement.name} — please check it.`);
   }
 
   return reasons;

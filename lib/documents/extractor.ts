@@ -304,6 +304,11 @@ async function extractWithAnthropic(
     // to a dated ID once one exists.
     model: "claude-sonnet-5",
     max_tokens: 1024,
+    // #174: pin determinism. Identity-critical tokens (EXTRACT_ADDRESS) were
+    // extracted differently across retries, so the cross-document identity
+    // flag fired inconsistently. temperature 0 makes a given document+prompt
+    // yield the same candidates every run.
+    temperature: 0,
     messages: [{ role: "user", content: prompt }],
     output_config: { format: { type: "json_schema", schema: schema.schema } },
   });
@@ -467,6 +472,9 @@ export async function runTextCompletion(
         // (2026-08-20, #154).
         model: "claude-haiku-4-5-20251001",
         max_tokens: 512,
+        // #174: deterministic judgments — a wrong-type document should get
+        // the same verdict on every retry, not flicker between runs.
+        temperature: 0,
         messages: [{ role: "user", content: prompt }],
         ...(outputSchema
           ? { output_config: { format: { type: "json_schema" as const, schema: outputSchema.schema } } }
