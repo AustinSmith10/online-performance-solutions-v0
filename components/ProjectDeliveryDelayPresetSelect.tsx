@@ -22,6 +22,7 @@ export function ProjectDeliveryDelayPresetSelect({
   initialValue,
   durations,
   docType = "pbdr",
+  projectedSendDate,
 }: {
   projectId: string;
   initialValue: DeliveryDelayPreset;
@@ -31,6 +32,11 @@ export function ProjectDeliveryDelayPresetSelect({
   /** Which doc type's independent delay preset this controls (#110). Defaults
    *  to "pbdr" for existing callers (the final-report delivery-delay setting). */
   docType?: "pbdb" | "pbdr";
+  /** ISO date-time this doc would actually be sent if triggered now with the
+   *  currently-saved preset (#176). Shown as a caption so the send date is
+   *  never confused with the project's contractual due date. Recomputed
+   *  server-side on save, so it reflects `initialValue`, not the local draft. */
+  projectedSendDate?: string;
 }) {
   const [saved, setSaved] = useState<DeliveryDelayPreset>(initialValue);
   const [draft, setDraft] = useState<DeliveryDelayPreset>(initialValue);
@@ -91,6 +97,20 @@ export function ProjectDeliveryDelayPresetSelect({
         {!dirty && justSaved && <span className="text-xs text-green-700">Saved ✓</span>}
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
+      {projectedSendDate && (
+        <p className="text-xs text-zinc-500">
+          {dirty ? "Currently saved setting sends" : "With this setting, sends"} on{" "}
+          <span className="font-medium text-zinc-700">
+            {new Date(projectedSendDate).toLocaleDateString("en-AU", {
+              weekday: "short",
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+          {" "}— this is the send date, not the project due date.
+        </p>
+      )}
     </div>
   );
 }

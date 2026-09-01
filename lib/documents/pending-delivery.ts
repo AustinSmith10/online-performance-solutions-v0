@@ -153,6 +153,46 @@ export async function scheduleOrDeliverPbdb(
   return { delivered: false, scheduledFor: effectiveDeliveryTime.toISOString() };
 }
 
+// Read-only projection of when a PBDB dispatch / PBDR delivery would actually
+// go out if it were triggered right now with the project's currently-saved
+// delay preset. Stages nothing — purely for showing the consultant a
+// concrete "send date" next to the delivery-timing control (#176), so the
+// contractual due date and the send date are never conflated. Mirrors the
+// gating logic of scheduleOrDeliverPbdb / scheduleOrDeliverPbdr exactly.
+export async function previewNextSendTime(
+  projectId: string,
+  docType: "pbdb" | "pbdr"
+): Promise<Date> {
+  const supabase = createAdminClient();
+  const now = new Date();
+
+  const presetColumn = docType === "pbdb" ? "pbdb_delivery_delay_preset" : "delivery_delay_preset";
+  const { data: project } = await supabase
+    .from("projects")
+    .select(`client_id, ${presetColumn}, clients(state_territory)`)
+    .eq("id", projectId)
+    .single();
+
+  const stateTerritory =
+    (project?.clients as unknown as { state_territory: string | null } | null)?.state_territory ?? null;
+  const defaultPreset = docType === "pbdb" ? "expedited" : "normal";
+  const preset = ((project as Record<string, unknown> | null)?.[presetColumn] ??
+    defaultPreset) as DeliveryDelayPreset;
+
+  // #170: a PBDB "expedited" dispatch is a reviewer notification — literally now.
+  if (docType === "pbdb" && preset === "expedited") return now;
+
+  const [businessHours, durations, holidaysThisYear, holidaysNextYear] = await Promise.all([
+    getBusinessHours(supabase),
+    getDeliveryDelayDurations(supabase),
+    getPublicHolidays(stateTerritory, now.getUTCFullYear()),
+    getPublicHolidays(stateTerritory, now.getUTCFullYear() + 1),
+  ]);
+  const holidays = new Set([...holidaysThisYear, ...holidaysNextYear]);
+
+  return computeEffectiveDeliveryTime(now, preset, durations, businessHours, holidays);
+}
+
 export interface ExpediteDeliveryResult {
   delivered: boolean;
   scheduledFor: string | null;

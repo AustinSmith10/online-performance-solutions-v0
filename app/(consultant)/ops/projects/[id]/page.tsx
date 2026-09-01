@@ -30,6 +30,8 @@ import { ProjectAuditTrail, type ProjectAuditRow } from "./_components/ProjectAu
 import { LogStakeholderResponseForm } from "./_components/LogStakeholderResponseForm";
 import { PendingReviewCard } from "./_components/PendingReviewCard";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
+import { getCurrentRevNumber } from "@/lib/documents/revision-history";
+import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import type { ProjectStatus } from "@/types";
 import { HeaderStatInline } from "./_components/HeaderStatInline";
 import { FocusCard } from "@/components/workspace/FocusCard";
@@ -435,19 +437,41 @@ export default async function ConsultantProjectDetailPage({
     `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
   const latestGenDate = latestPbdb ? new Date(latestPbdb.created_at as string) : null;
   const latestVersion = latestPbdb ? (latestPbdb.version as number) : null;
+  // Rev number is owned by revision_history (#175) — an `initial` row is
+  // Rev 0, each `rejected` cycle bumps it. `project_files.version` counts
+  // regenerations within a cycle and must NOT be used to derive the Rev
+  // (the old `latestPbdb.version - 1` formula drifted every regenerate).
+  const [currentRevNumber, pbdbSendPreview, pbdrSendPreview] = await Promise.all([
+    getCurrentRevNumber(supabase, id, "pbdb"),
+    // Projected "send date" beside the delivery-timing controls (#176) — the
+    // contractual due date (project.expected_delivery_date) is a different
+    // thing and testers were reading the two as one.
+    previewNextSendTime(id, "pbdb").catch(() => null),
+    previewNextSendTime(id, "pbdr").catch(() => null),
+  ]);
+  const pbdbSendPreviewIso = pbdbSendPreview ? pbdbSendPreview.toISOString() : undefined;
+  const pbdrSendPreviewIso = pbdrSendPreview ? pbdrSendPreview.toISOString() : undefined;
   const sysValues: { label: string; value: string }[] = [
     {
       label: "Project number",
       value: project.project_number ? `${project.project_number}-S` : "Not yet set",
     },
-    { label: "Submission date", value: fmtDMY(new Date(project.created_at)) },
     {
-      label: "Generation date",
-      value: latestGenDate ? fmtDMY(latestGenDate) : "Not yet generated",
+      label: "Submission date",
+      value: `${fmtDMY(new Date(project.created_at))} — when the client submitted this project`,
     },
     {
-      label: "Revision number",
-      value: latestVersion !== null ? String(latestVersion - 1) : "0",
+      label: "Generation date",
+      value: latestGenDate
+        ? `${fmtDMY(latestGenDate)} — when the current PBDB file was last generated`
+        : "Not yet generated",
+    },
+    {
+      label: "Revision",
+      value:
+        latestVersion !== null
+          ? `Rev ${currentRevNumber} · generation ${latestVersion} — the Rev only bumps on a stakeholder rejection, not on a regenerate`
+          : `Rev ${currentRevNumber}`,
     },
   ];
 
@@ -529,11 +553,17 @@ export default async function ConsultantProjectDetailPage({
           </svg>
           <span className="font-medium text-zinc-900">{project.review_cycle}</span>
         </span>
-        <HeaderStatInline label="Submitted" value={fmtDMY(new Date(project.created_at))} noLeftBorder />
+        <HeaderStatInline
+          label="Submitted"
+          value={fmtDMY(new Date(project.created_at))}
+          title="When the client submitted this project"
+          noLeftBorder
+        />
         <HeaderStatInline
           label="Due"
           value={project.expected_delivery_date ? fmtDMY(new Date(project.expected_delivery_date)) : "—"}
           valueClassName={isOverdue ? "text-red-600" : undefined}
+          title="The PBDR's contractual due date — not the same as the PBDB/PBDR send date, which is set by the delivery-timing control"
         />
         <HeaderStatInline
           value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"}
@@ -692,7 +722,7 @@ export default async function ConsultantProjectDetailPage({
     );
   } else if (pbdbCardState === "upload") {
     focusCard = (
-      <FocusCard tone="neutral" title="Upload QA'd PBDB" subtitle="Once uploaded, you'll pick the delivery timing and dispatch it yourself.">
+      <FocusCard tone="neutral" title="Upload QA'd PBDB — this marks QA complete" subtitle="Uploading the QA'd copy is how you mark QA done. Then you'll pick the delivery timing and dispatch it yourself.">
         <PbdbQaUploadForm projectId={id} />
       </FocusCard>
     );
@@ -723,6 +753,7 @@ export default async function ConsultantProjectDetailPage({
                     initialValue={project.pbdb_delivery_delay_preset}
                     durations={deliveryDurations}
                     docType="pbdb"
+                    projectedSendDate={pbdbSendPreviewIso}
                   />
                 </div>
                 <DispatchButton projectId={id} />
@@ -877,6 +908,7 @@ export default async function ConsultantProjectDetailPage({
                     initialValue={project.pbdb_delivery_delay_preset}
                     durations={deliveryDurations}
                     docType="pbdb"
+                    projectedSendDate={pbdbSendPreviewIso}
                   />
                 </div>
                 <DispatchButton projectId={id} />
@@ -929,12 +961,21 @@ export default async function ConsultantProjectDetailPage({
         <div className="space-y-4">
           <PbdrPreviewButton projectId={id} />
           <div>
-            <p className="mb-1.5 text-xs font-medium text-zinc-500">Delivery timing</p>
+            <p className="mb-1.5 text-xs font-medium text-zinc-500">
+              Delivery timing — when the PBDR is sent to the client
+            </p>
             <ProjectDeliveryDelayPresetSelect
               projectId={id}
               initialValue={project.delivery_delay_preset}
               durations={deliveryDurations}
+              projectedSendDate={pbdrSendPreviewIso}
             />
+            {project.expected_delivery_date && (
+              <p className="mt-1 text-xs text-zinc-400">
+                Project due date (contractual):{" "}
+                {fmtDMY(new Date(project.expected_delivery_date))}
+              </p>
+            )}
           </div>
           <ConvertButton projectId={id} />
         </div>
@@ -1267,6 +1308,7 @@ export default async function ConsultantProjectDetailPage({
           initialValue={project.pbdb_delivery_delay_preset}
           durations={deliveryDurations}
           docType="pbdb"
+          projectedSendDate={pbdbSendPreviewIso}
         />
       </div>
       <div className="border-t border-zinc-100 pt-3">
@@ -1280,7 +1322,14 @@ export default async function ConsultantProjectDetailPage({
           initialValue={project.delivery_delay_preset}
           durations={deliveryDurations}
           docType="pbdr"
+          projectedSendDate={pbdrSendPreviewIso}
         />
+        {project.expected_delivery_date && (
+          <p className="mt-1 text-xs text-zinc-400">
+            Project due date (contractual): {fmtDMY(new Date(project.expected_delivery_date))} — the
+            send date above is separate.
+          </p>
+        )}
         {deliveryLocked ? (
           <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-500">
             All stakeholders already approved, so this delivery is using whatever was set
