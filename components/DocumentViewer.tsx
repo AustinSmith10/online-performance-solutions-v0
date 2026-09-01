@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ProgressTrack } from "@/components/ProgressTrack";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type PreviewKind = "pdf" | "image" | "unsupported";
 
@@ -93,10 +92,8 @@ export function DocumentViewer({ src, filename, className = "" }: DocumentViewer
   );
 }
 
-// PDF pages render at 1.6× so text on a shrunk-to-fit A3 sheet stays sharp
-// when the reader zooms back in, without the multi-second-per-page canvas
-// cost that 2× incurs on a 27-sheet A3 drawing set. Display size is
-// controlled separately via CSS.
+// PDF pages rasterize at 1.6× natural size so text stays sharp when the
+// reader zooms in, without the cost that 2× incurs. Display size is CSS.
 const RENDER_SCALE = 1.6;
 
 function ZoomBar({
@@ -175,25 +172,107 @@ function ImageViewer({ src, filename, className }: { src: string; filename?: str
   );
 }
 
+interface PageDim {
+  num: number;
+  /** Page width/height in CSS px at 100% zoom (PDF user units == CSS px). */
+  w: number;
+  h: number;
+}
+
+/**
+ * One page. Renders a real <canvas> (React-owned, so a parent re-render for
+ * zoom doesn't wipe it) into a box whose size is reserved up front via
+ * aspect-ratio — so the scrollbar is correct from the first paint and pages
+ * filling in below never shift what you're reading. Rasterization only runs
+ * once `shouldRender` flips true, which the parent gates one page at a time.
+ */
+function PdfPage({
+  num,
+  doc,
+  widthPx,
+  aspect,
+  shouldRender,
+  onSettled,
+}: {
+  num: number;
+  doc: PdfDoc;
+  widthPx: number;
+  aspect: string;
+  shouldRender: boolean;
+  onSettled: (num: number) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    if (!shouldRender || doneRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let task: { promise: Promise<void>; cancel: () => void } | null = null;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const page = await doc.getPage(num);
+        if (cancelled) return;
+        const vp = page.getViewport({ scale: RENDER_SCALE });
+        canvas.width = vp.width;
+        canvas.height = vp.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        task = page.render({ canvasContext: ctx, viewport: vp });
+        await task.promise;
+      } catch {
+        /* cancelled or failed — leave the reserved blank box */
+      } finally {
+        if (!cancelled) {
+          doneRef.current = true;
+          onSettled(num);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      try {
+        task?.cancel();
+      } catch {
+        /* already settled */
+      }
+    };
+  }, [shouldRender, doc, num, onSettled]);
+
+  return (
+    <div
+      data-page={num}
+      style={{ width: widthPx > 0 ? `${widthPx}px` : undefined, aspectRatio: aspect }}
+      className="mx-auto mb-3 bg-white shadow-sm"
+    >
+      <canvas ref={canvasRef} className="block h-full w-full" />
+    </div>
+  );
+}
+
 function PdfCanvasViewer({ src, className }: { src: string; className: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [pagesRendered, setPagesRendered] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  // Width of one page in CSS px at 100% (natural size, RENDER_SCALE divided out).
-  const [pageCssWidth, setPageCssWidth] = useState(0);
+  const [doc, setDoc] = useState<PdfDoc | null>(null);
+  const [pages, setPages] = useState<PageDim[]>([]);
   // null until the first fit calculation; then an explicit multiplier.
   const [zoom, setZoom] = useState<number | null>(null);
-  // Latest zoom, readable synchronously from inside the async render loop so
-  // each canvas is born at its final display size (see the loop below).
-  const zoomRef = useRef<number | null>(null);
-  useEffect(() => {
-    zoomRef.current = zoom;
-  }, [zoom]);
-  // Once the reader zooms by hand, stop auto-fitting on resize — until they
-  // press "Fit width" again.
+  // Once the reader zooms by hand, stop auto-fitting on resize.
   const userZoomed = useRef(false);
+
+  // Lazy-render machinery. `allowed` only ever grows — a page, once cleared to
+  // rasterize, keeps its bitmap. `inView`/`done` are refs (no re-render needed)
+  // and `pumping` guards so exactly one page rasterizes at a time — that's what
+  // keeps the main thread free enough to scroll a 24-page document.
+  const [allowed, setAllowed] = useState<Set<number>>(() => new Set());
+  const inView = useRef<Set<number>>(new Set());
+  const done = useRef<Set<number>>(new Set());
+  const pumping = useRef(false);
+
+  const pageCssWidth = pages[0]?.w ?? 0;
 
   const fit = useCallback(() => {
     const w = scrollRef.current?.clientWidth ?? 0;
@@ -208,10 +287,122 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
     setZoom((z) => clampZoom(typeof next === "function" ? next(z ?? 1) : next));
   }, []);
 
-  // Re-fit whenever the pane resizes (or first gets a real width) as long as
-  // the reader hasn't taken manual control. A ResizeObserver fires once on
-  // observe with the settled layout size, which is what fixes the "fit ran
-  // before the modal was laid out → clamped to 25%" case.
+  // Advance the one-at-a-time rasterize queue: the lowest-numbered in-view page
+  // that hasn't rendered yet. One page at a time is what keeps the main thread
+  // free enough to scroll a 24-page document.
+  const pump = useCallback(() => {
+    if (pumping.current) return;
+    let next: number | null = null;
+    for (const n of inView.current) {
+      if (!done.current.has(n) && (next === null || n < next)) next = n;
+    }
+    if (next === null) return;
+    pumping.current = true;
+    const target = next;
+    setAllowed((prev) => (prev.has(target) ? prev : new Set(prev).add(target)));
+  }, []);
+
+  const handleSettled = useCallback(
+    (num: number) => {
+      done.current.add(num);
+      pumping.current = false;
+      // Hand the main thread back for a beat before the next page so a burst
+      // of queued scroll/wheel events gets processed.
+      setTimeout(pump, 16);
+    },
+    [pump]
+  );
+
+  // Which page boxes sit within ~2 screens of the current scroll position.
+  // Driven by scroll events (which always fire) + an initial call — no
+  // IntersectionObserver, whose callbacks are suspended for background tabs.
+  const evaluateVisible = useCallback(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const buffer = root.clientHeight * 2;
+    const rootTop = root.getBoundingClientRect().top;
+    let changed = false;
+    root.querySelectorAll<HTMLElement>("[data-page]").forEach((box) => {
+      const r = box.getBoundingClientRect();
+      const relTop = r.top - rootTop;
+      const relBottom = r.bottom - rootTop;
+      const near = relBottom >= -buffer && relTop <= root.clientHeight + buffer;
+      const n = Number(box.dataset.page);
+      if (near) {
+        if (!inView.current.has(n)) {
+          inView.current.add(n);
+          changed = true;
+        }
+      } else {
+        inView.current.delete(n);
+      }
+    });
+    if (changed) pump();
+  }, [pump]);
+
+  // ── Load the document + every page's natural size ──────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    let loadingTask: { promise: Promise<PdfDoc>; destroy: () => Promise<void> } | null = null;
+
+    async function load() {
+      setStatus("loading");
+      setDoc(null);
+      setPages([]);
+      setAllowed(new Set());
+      setZoom(null);
+      inView.current = new Set();
+      done.current = new Set();
+      pumping.current = false;
+      try {
+        const pdfjs = await import("pdfjs-dist");
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          "pdfjs-dist/build/pdf.worker.min.mjs",
+          import.meta.url
+        ).toString();
+
+        loadingTask = pdfjs.getDocument(src);
+        const d = await loadingTask.promise;
+        if (cancelled) return;
+
+        // Size every placeholder from page 1 — cheap, and these documents
+        // (PBDB / PBDR / drawing sets) are page-uniform in practice.
+        const first = await d.getPage(1);
+        if (cancelled) return;
+        const vp = first.getViewport({ scale: 1 });
+        const dims: PageDim[] = Array.from({ length: d.numPages }, (_, i) => ({
+          num: i + 1,
+          w: vp.width,
+          h: vp.height,
+        }));
+        setDoc(d);
+        setPages(dims);
+        setStatus("ready");
+      } catch {
+        if (!cancelled) setStatus("error");
+      }
+    }
+
+    void load();
+
+    return () => {
+      cancelled = true;
+      loadingTask?.destroy().catch(() => {});
+    };
+  }, [src]);
+
+  // ── Render pages near the scroll position; re-evaluate as the user scrolls ──
+  useEffect(() => {
+    if (status !== "ready" || pages.length === 0) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const onScroll = () => evaluateVisible();
+    root.addEventListener("scroll", onScroll, { passive: true });
+    evaluateVisible();
+    return () => root.removeEventListener("scroll", onScroll);
+  }, [status, pages, evaluateVisible]);
+
+  // ── Fit-to-width on first layout and on resize ──────────────────────
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -223,104 +414,15 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
   }, [fit]);
 
   useEffect(() => {
-    let cancelled = false;
-    const container = containerRef.current;
-    // Track the loading task and the in-flight page render so cleanup can tear
-    // them down. Without this, React StrictMode's double-invoke in dev (and any
-    // real src change) leaves the first pdf.js worker job running and the
-    // second getDocument() deadlocks behind it — the viewer sticks on
-    // "Rendering page 0".
-    let loadingTask: { promise: Promise<PdfDoc>; destroy: () => Promise<void> } | null = null;
-    let renderTask: { promise: Promise<void>; cancel: () => void } | null = null;
-
-    async function render() {
-      setStatus("loading");
-      setPagesRendered(0);
-      setTotalPages(0);
-      setPageCssWidth(0);
-      setZoom(null);
-      try {
-        const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-          "pdfjs-dist/build/pdf.worker.min.mjs",
-          import.meta.url
-        ).toString();
-
-        loadingTask = pdfjs.getDocument(src);
-        const doc = await loadingTask.promise;
-        if (cancelled || !container) return;
-        setTotalPages(doc.numPages);
-
-        container.innerHTML = "";
-        for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
-          const page = await doc.getPage(pageNum);
-          if (cancelled) return;
-          const viewport = page.getViewport({ scale: RENDER_SCALE });
-          const base = viewport.width / RENDER_SCALE;
-          if (pageNum === 1) setPageCssWidth(base);
-          const canvas = document.createElement("canvas");
-          canvas.className = "mx-auto mb-3 block max-w-none shadow-sm";
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          canvas.dataset.baseWidth = String(base);
-          // Fix the display size *before* the canvas is painted. Without this
-          // the canvas shows at its bitmap width (~1900px) until the layout
-          // effect below shrinks it — 24 pages of that thrash the container
-          // width and yank the scroll position around as you read.
-          const clientW = scrollRef.current?.clientWidth ?? 0;
-          const dz = zoomRef.current ?? (clientW > 0 ? computeFitZoom(clientW, base) : 1);
-          canvas.style.width = `${Math.round(base * dz)}px`;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) continue;
-          container.appendChild(canvas);
-          renderTask = page.render({ canvasContext: ctx, viewport });
-          await renderTask.promise;
-          renderTask = null;
-          if (cancelled) return;
-          setPagesRendered(pageNum);
-          // Show the document as soon as the first page is on screen — the
-          // reader can scroll and zoom while the rest of a big drawing set
-          // fills in behind the sticky "rendering page N" note. Yield to the
-          // event loop between pages so scrolling/clicks stay responsive.
-          if (pageNum === 1) setStatus("ready");
-          await new Promise((r) => setTimeout(r, 0));
-        }
-        if (!cancelled) setStatus("ready");
-      } catch {
-        if (!cancelled) setStatus("error");
-      }
-    }
-
-    render();
-    return () => {
-      cancelled = true;
-      try {
-        renderTask?.cancel();
-      } catch {
-        /* already settled */
-      }
-      loadingTask?.destroy().catch(() => {});
-    };
-  }, [src]);
-
-  // First fit once we know the page width and the container is laid out.
-  useEffect(() => {
     if (zoom === null && pageCssWidth > 0) fit();
   }, [zoom, pageCssWidth, fit]);
 
-  // Re-apply zoom to every canvas when it *changes* (toolbar / keyboard / fit).
-  // Freshly streamed-in canvases are already sized in the render loop, so this
-  // only needs to run on an actual zoom change, not on every page.
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container || zoom === null) return;
-    container.querySelectorAll<HTMLCanvasElement>("canvas").forEach((canvas) => {
-      const base = Number(canvas.dataset.baseWidth) || 0;
-      canvas.style.width = base > 0 ? `${Math.round(base * zoom)}px` : "";
-    });
-  }, [zoom]);
+  // Re-check which pages are near the viewport after a zoom (box heights change).
+  useEffect(() => {
+    if (status === "ready") evaluateVisible();
+  }, [zoom, status, evaluateVisible]);
 
-  // Keyboard zoom while the scroll area has focus.
+  // ── Keyboard zoom while the scroll area has focus ───────────────────
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -349,38 +451,32 @@ function PdfCanvasViewer({ src, className }: { src: string; className: string })
     );
   }
 
-  const pct = computeRenderProgress(pagesRendered, totalPages);
-  const stillRendering = totalPages > 0 && pagesRendered < totalPages;
-  const note = stillRendering
-    ? `Rendering ${pagesRendered}/${totalPages}…`
-    : totalPages > 1
-      ? `${totalPages} pages`
-      : undefined;
+  const dz = zoom ?? 1;
+  const note = pages.length > 1 ? `${pages.length} pages` : undefined;
 
   return (
     <div className={`flex h-[78vh] flex-col ${className}`}>
-      <ZoomBar zoom={zoom ?? 1} onZoom={zoomTo} onFit={fit} note={note} />
+      <ZoomBar zoom={dz} onZoom={zoomTo} onFit={fit} note={note} />
       <div
         ref={scrollRef}
         tabIndex={0}
         className="flex-1 overflow-auto bg-zinc-100 p-3 outline-none"
       >
         {status === "loading" && (
-          <div className="px-3 py-8">
-            {totalPages > 0 ? (
-              <div className="mx-auto max-w-xs">
-                <div className="mb-1 flex justify-between text-xs text-zinc-500">
-                  <span>{`Rendering page ${pagesRendered} of ${totalPages}`}</span>
-                  <span>{pct}%</span>
-                </div>
-                <ProgressTrack pct={pct} />
-              </div>
-            ) : (
-              <p className="text-center text-sm text-zinc-400">Loading preview…</p>
-            )}
-          </div>
+          <p className="py-10 text-center text-sm text-zinc-400">Loading preview…</p>
         )}
-        <div ref={containerRef} className="min-w-min" />
+        {doc &&
+          pages.map((p) => (
+            <PdfPage
+              key={p.num}
+              num={p.num}
+              doc={doc}
+              widthPx={Math.round(p.w * dz)}
+              aspect={`${p.w} / ${p.h}`}
+              shouldRender={allowed.has(p.num)}
+              onSettled={handleSettled}
+            />
+          ))}
       </div>
     </div>
   );
