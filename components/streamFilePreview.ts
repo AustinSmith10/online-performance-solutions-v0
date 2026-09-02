@@ -13,16 +13,19 @@ export type { PreviewProgressEvent };
 export async function streamFilePreview(
   projectId: string,
   fileId: string,
-  onEvent: (event: PreviewProgressEvent) => void
+  onEvent: (event: PreviewProgressEvent) => void,
+  signal?: AbortSignal
 ): Promise<void> {
   let res: Response;
   try {
     res = await fetch(
       `/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileId)}/preview-stream`,
-      { headers: { Accept: "text/event-stream" } }
+      { headers: { Accept: "text/event-stream" }, signal }
     );
   } catch {
-    onEvent({ type: "error", message: "Lost connection while rendering the preview." });
+    // AbortError (caller closed the modal / unmounted) is not a failure worth
+    // reporting — the stream just stops.
+    if (!signal?.aborted) onEvent({ type: "error", message: "Lost connection while rendering the preview." });
     return;
   }
 
@@ -51,6 +54,6 @@ export async function streamFilePreview(
       }
     }
   } catch {
-    onEvent({ type: "error", message: "Lost connection while rendering the preview." });
+    if (!signal?.aborted) onEvent({ type: "error", message: "Lost connection while rendering the preview." });
   }
 }

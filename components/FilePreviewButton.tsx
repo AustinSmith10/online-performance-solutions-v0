@@ -52,6 +52,16 @@ export function FilePreviewButton({
   // Guards a stale stream (reopened before the previous closed) from writing
   // state after a newer run has started.
   const runIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Abort the in-flight SSE stream when the modal closes or the row unmounts,
+  // rather than leaving a (possibly minute-long) fetch open to reject later.
+  useEffect(() => {
+    if (open) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, [open]);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     if (!open) return;
@@ -84,6 +94,9 @@ export function FilePreviewButton({
 
   async function openPreview() {
     const runId = ++runIdRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     targetRef.current = null;
     setPct(null);
     setOpen(true);
@@ -91,7 +104,7 @@ export function FilePreviewButton({
 
     let settled = false;
     await streamFilePreview(projectId, fileId, (event) => {
-      if (runIdRef.current !== runId) return;
+      if (runIdRef.current !== runId || controller.signal.aborted) return;
       if (event.type === "step") {
         targetRef.current = Math.max(targetRef.current ?? 0, event.pct);
         setPct((p) => p ?? Math.min(event.pct, 12)); // seed the bar so it eases in from low
@@ -102,10 +115,11 @@ export function FilePreviewButton({
         settled = true;
         setState({ status: "error", message: event.message });
       }
-    });
+    }, controller.signal);
 
-    // Stream closed with no terminal event — don't spin forever.
-    if (runIdRef.current === runId && !settled) {
+    // Stream closed with no terminal event — don't spin forever (but a
+    // deliberate abort is not a failure).
+    if (runIdRef.current === runId && !settled && !controller.signal.aborted) {
       setState({ status: "error", message: "Preview failed." });
     }
   }
