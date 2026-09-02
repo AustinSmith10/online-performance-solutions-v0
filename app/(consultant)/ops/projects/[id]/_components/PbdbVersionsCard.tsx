@@ -1,4 +1,5 @@
 import { DownloadCard } from "@/components/DownloadCard";
+import { FilePreviewButton } from "@/components/FilePreviewButton";
 import { RegeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import type { ProjectStatus } from "@/types";
 
@@ -47,6 +48,13 @@ export function PbdbVersionsCard({
                 filename={f.original_filename}
                 wrapperClassName="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-2 transition-shadow duration-700"
                 buttonClassName="shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                preview={
+                  <FilePreviewButton
+                    projectId={projectId}
+                    fileId={f.id}
+                    buttonClassName="shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                  />
+                }
               >
                 <p className="truncate text-xs font-medium text-zinc-900" title={f.original_filename}>
                   {f.original_filename}

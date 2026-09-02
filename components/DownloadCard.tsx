@@ -13,6 +13,8 @@ interface DownloadCardProps {
   filenameClassName?: string;
   /** The alias/label + any secondary meta line(s) for the left side of the card. */
   children?: React.ReactNode;
+  /** Rendered in the right-side action group, just before the Download button — e.g. a <FilePreviewButton />. */
+  preview?: React.ReactNode;
   buttonLabel?: string;
   buttonClassName?: string;
   /** Opens in a new tab (used for signed URLs that aren't forced to download server-side). */
@@ -59,6 +61,7 @@ export function DownloadCard({
   originalFilename,
   filenameClassName = "",
   children,
+  preview,
   buttonLabel = "Download",
   buttonClassName = DEFAULT_BUTTON_CLASS,
   external,
@@ -204,6 +207,7 @@ export function DownloadCard({
             Downloaded ✓
           </span>
         )}
+        {preview}
         {href && (
           <a
             ref={anchorRef}

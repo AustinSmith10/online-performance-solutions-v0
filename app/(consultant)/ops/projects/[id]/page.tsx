@@ -15,7 +15,7 @@ import { PendingDeliveryPanel } from "@/components/PendingDeliveryPanel";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { DownloadCard } from "@/components/DownloadCard";
-import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
+import { FilePreviewButton } from "@/components/FilePreviewButton";
 import { ConfirmFileTypeControl } from "@/components/ConfirmFileTypeControl";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
@@ -1118,7 +1118,7 @@ export default async function ConsultantProjectDetailPage({
                     <VerificationMismatchNote reasons={f.verification_mismatch_reasons as string[]} />
                   )}
                 </div>
-                <DocumentPreviewModal href={f.signedUrl} filename={f.original_filename as string} />
+                <FilePreviewButton projectId={id} fileId={f.id as string} />
                 <DownloadCard href={f.signedUrl} wrapperClassName="flex items-center gap-2 p-0" external />
               </div>
             ))}
@@ -1143,6 +1143,7 @@ export default async function ConsultantProjectDetailPage({
                 href={f.signedUrl}
                 originalFilename={f.original_filename as string}
                 external
+                preview={<FilePreviewButton projectId={id} fileId={f.id as string} />}
               >
                 <p className="text-sm font-medium text-zinc-900">
                   {(f.reference as string | null) ?? "General correspondence"}
@@ -1169,6 +1170,7 @@ export default async function ConsultantProjectDetailPage({
                 href={`/api/download/pbdr/${id}`}
                 filename={f.original_filename as string}
                 originalFilename={f.original_filename as string}
+                preview={<FilePreviewButton projectId={id} fileId={f.id as string} />}
               >
                 <p className="text-sm font-medium text-zinc-900">PBDR</p>
                 <p className="mt-0.5 text-xs text-zinc-500">

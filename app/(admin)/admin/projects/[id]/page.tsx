@@ -29,6 +29,7 @@ import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
 import { DownloadCard } from "@/components/DownloadCard";
+import { FilePreviewButton } from "@/components/FilePreviewButton";
 import { ConfirmFileTypeControl } from "@/components/ConfirmFileTypeControl";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
@@ -1188,7 +1189,13 @@ export default async function ProjectDetailPage({
         ) : (
           <div className="divide-y divide-zinc-100">
             {files.map((f) => (
-              <DownloadCard key={f.id as string} href={f.signedUrl} originalFilename={f.original_filename as string} external>
+              <DownloadCard
+                key={f.id as string}
+                href={f.signedUrl}
+                originalFilename={f.original_filename as string}
+                external
+                preview={<FilePreviewButton projectId={id} fileId={f.id as string} />}
+              >
                 <p className="text-sm font-medium text-zinc-900">
                   {FILE_TYPE_LABELS[f.file_type as string] ?? (f.file_type as string)}
                 </p>
@@ -1226,7 +1233,13 @@ export default async function ProjectDetailPage({
         ) : (
           <div className="divide-y divide-zinc-100">
             {evidenceFiles.map((f) => (
-              <DownloadCard key={f.id as string} href={f.signedUrl} originalFilename={f.original_filename as string} external>
+              <DownloadCard
+                key={f.id as string}
+                href={f.signedUrl}
+                originalFilename={f.original_filename as string}
+                external
+                preview={<FilePreviewButton projectId={id} fileId={f.id as string} />}
+              >
                 <p className="text-sm font-medium text-zinc-900">
                   {(f.reference as string | null) ?? "General correspondence"}
                 </p>
@@ -1253,7 +1266,12 @@ export default async function ProjectDetailPage({
                 isLatest &&
                 (["dispatched", "revision_required"] as ProjectStatus[]).includes(project.status);
               return (
-                <DownloadCard key={f.id as string} href={`/api/download/pbdb/${f.id as string}`} filename={f.original_filename as string}>
+                <DownloadCard
+                  key={f.id as string}
+                  href={`/api/download/pbdb/${f.id as string}`}
+                  filename={f.original_filename as string}
+                  preview={<FilePreviewButton projectId={id} fileId={f.id as string} />}
+                >
                   <div className="flex items-center gap-2">
                     <p className="truncate text-sm font-medium text-zinc-900">{f.original_filename as string}</p>
                     {showDispatchedBadge && (
@@ -1281,6 +1299,7 @@ export default async function ProjectDetailPage({
                 href={`/api/download/pbdr/${id}`}
                 filename={f.original_filename as string}
                 originalFilename={f.original_filename as string}
+                preview={<FilePreviewButton projectId={id} fileId={f.id as string} />}
               >
                 <p className="truncate text-sm font-medium text-zinc-900">PBDR</p>
                 <p className="mt-0.5 text-xs text-zinc-500">
