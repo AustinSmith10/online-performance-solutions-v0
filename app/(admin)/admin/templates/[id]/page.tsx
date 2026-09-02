@@ -15,6 +15,7 @@ import { TemplateTabs } from "./_components/TemplateTabs";
 import { AddFileRequirementForm } from "./_components/AddFileRequirementForm";
 import { ClientProfileSection, type ClientProfileRow } from "./_components/ClientProfileSection";
 import { TemplateReviewersSection } from "./_components/TemplateReviewersSection";
+import { TemplateFileActions } from "./_components/TemplateFileActions";
 
 const TEMPLATE_ACCENT: Record<string, string> = {
   active: "border-l-green-500",
@@ -184,6 +185,7 @@ export default async function TemplatePage({
               <RestoreButton templateId={id} />
             ) : (
               <>
+                <TemplateFileActions templateId={id} />
                 <TemplateStatusActions templateId={id} status={template.status} canActivate={canActivate} />
                 <DeleteButton templateId={id} />
               </>

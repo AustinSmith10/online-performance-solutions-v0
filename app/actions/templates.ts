@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { extractPlaceholderTokens } from "@/lib/documents/validator";
+import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { detectSource, isKnownToken } from "@/lib/documents/field-keys";
 import type { ComparisonMode } from "@/lib/documents/compare-candidates";
 import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
@@ -844,4 +845,100 @@ export async function toggleFieldVisibility(
 
   revalidatePath(`/admin/templates/${templateId}`);
   return { success: true };
+}
+
+// ─── Download / preview the working template .docx ──────────────────────────
+
+export type TemplateFileResult = { error: string } | { url: string; filename: string };
+
+function filenameFromStoragePath(storagePath: string): string {
+  return storagePath.split("/").pop() || "template.docx";
+}
+
+/**
+ * Signed URL for the template's working .docx, with a Content-Disposition
+ * attachment so the browser saves it rather than trying to open it inline.
+ * The `templates` bucket is private, so the raw storage_path isn't fetchable
+ * from the browser — a fresh signed URL is minted per click.
+ */
+export async function getTemplateDownloadUrl(templateId: string): Promise<TemplateFileResult> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: template, error: tmplErr } = await supabase
+    .from("templates")
+    .select("client_id, name, storage_path")
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (tmplErr || !template) return { error: "Template not found." };
+
+  const filename = filenameFromStoragePath(template.storage_path as string);
+  const { data: signed, error: signErr } = await supabase.storage
+    .from("templates")
+    .createSignedUrl(template.storage_path as string, 300, { download: filename });
+
+  if (signErr || !signed?.signedUrl) return { error: "Could not generate a download link." };
+
+  await auditLog("template.downloaded", actor.id, actor.email, {
+    orgId: template.client_id as string,
+    metadata: { templateId, name: template.name, filename },
+  });
+
+  return { url: signed.signedUrl, filename };
+}
+
+/**
+ * Renders the working template .docx to PDF (same Gotenberg/LibreOffice path
+ * the PBDR preview uses) so an admin can eyeball the actual document — layout,
+ * placeholder tokens and all — without downloading it and opening Word. The
+ * PDF is written to a fixed preview-only path that's overwritten each call, so
+ * repeated previews don't accumulate files.
+ */
+export async function getTemplatePreviewUrl(templateId: string): Promise<TemplateFileResult> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const { data: template, error: tmplErr } = await supabase
+    .from("templates")
+    .select("client_id, name, storage_path")
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (tmplErr || !template) return { error: "Template not found." };
+
+  const { data: docxBlob, error: dlErr } = await supabase.storage
+    .from("templates")
+    .download(template.storage_path as string);
+
+  if (dlErr || !docxBlob) return { error: "Could not download the template file." };
+
+  let pdfBuffer: Buffer;
+  try {
+    pdfBuffer = await convertDocxToPdf(Buffer.from(await docxBlob.arrayBuffer()));
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to render the template." };
+  }
+
+  const previewPath = `${template.client_id}/${templateId}/preview.pdf`;
+  const { error: uploadErr } = await supabase.storage
+    .from("templates")
+    .upload(previewPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
+
+  if (uploadErr) return { error: `Could not store the preview: ${uploadErr.message}` };
+
+  const { data: signed, error: signErr } = await supabase.storage
+    .from("templates")
+    .createSignedUrl(previewPath, 900);
+
+  if (signErr || !signed?.signedUrl) return { error: "Could not generate a preview link." };
+
+  const filename = filenameFromStoragePath(template.storage_path as string).replace(/\.docx$/i, ".pdf");
+
+  await auditLog("template.previewed", actor.id, actor.email, {
+    orgId: template.client_id as string,
+    metadata: { templateId, name: template.name },
+  });
+
+  return { url: signed.signedUrl, filename };
 }
