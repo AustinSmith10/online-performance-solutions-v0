@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { saveProjectNumber, type ProjectNumberState } from "@/app/actions/projects";
 import { EditIconButton } from "@/components/EditIconButton";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
+import { useProjectNumberField, projectNumberInputClass } from "@/hooks/useProjectNumberField";
 
 export function ProjectNumberCard({
   projectId,
@@ -19,6 +20,7 @@ export function ProjectNumberCard({
   const [editing, setEditing] = useState(false);
   const [dismissedWarning, setDismissedWarning] = useState<string | null>(null);
   const showWarning = !!state.warning && state.warning !== dismissedWarning;
+  const field = useProjectNumberField(projectNumber ?? "", state.error);
   useUnsavedChanges("consultant-project-number-card", editing);
 
   useEffect(() => {
@@ -62,7 +64,7 @@ export function ProjectNumberCard({
           )}
         </div>
       ) : (
-        <form action={formAction} className="space-y-2.5">
+        <form action={formAction} onSubmit={field.markSubmitted} className="space-y-2.5">
           <div>
             <input
               id="project_number"
@@ -73,9 +75,9 @@ export function ProjectNumberCard({
               maxLength={6}
               required
               disabled={pending}
-              defaultValue={projectNumber ?? ""}
               placeholder="e.g. 250001"
-              className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-50"
+              {...field.inputProps}
+              className={projectNumberInputClass(field.showError)}
             />
             <p className="mt-1 text-xs text-zinc-400">
               Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically.

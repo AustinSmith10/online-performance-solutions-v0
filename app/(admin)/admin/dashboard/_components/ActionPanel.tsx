@@ -18,6 +18,7 @@ import {
   resolveSystemError,
   type ResendFailureState,
 } from "@/app/actions/admin-users";
+import { useProjectNumberField, projectNumberInputClass } from "@/hooks/useProjectNumberField";
 import type { ConsultantAvailability, ProjectStatus } from "@/types";
 
 // ── Types (serialisable — passed from server component) ──────────────────────
@@ -181,11 +182,11 @@ function SetNumberAndAssignDrawerContent({
   consultants: ConsultantOption[];
 }) {
   const [step, setStep] = useState<1 | 2>(1);
-  const [projectNumber, setProjectNumber] = useState("");
   const [state, action, pending] = useActionState<AdminProjectNumberState, FormData>(
     adminSetProjectNumberFromDashboard.bind(null, project.id),
     {}
   );
+  const field = useProjectNumberField("", state.error);
 
   useEffect(() => {
     if (!state.success) return;
@@ -236,7 +237,7 @@ function SetNumberAndAssignDrawerContent({
           <p className="mb-3 text-xs text-zinc-500">
             Set the project number to unlock PBDB generation.
           </p>
-          <form action={action} className="space-y-3">
+          <form action={action} onSubmit={field.markSubmitted} className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-zinc-700">
                 Project number
@@ -247,12 +248,11 @@ function SetNumberAndAssignDrawerContent({
                 inputMode="numeric"
                 pattern="\d{6}"
                 maxLength={6}
-                value={projectNumber}
-                onChange={(e) => setProjectNumber(e.target.value)}
                 placeholder="e.g. 250001"
                 required
                 disabled={pending}
-                className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-50"
+                {...field.inputProps}
+                className={projectNumberInputClass(field.showError)}
               />
               <p className="mt-1 text-xs text-zinc-400">
                 Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically.
@@ -263,7 +263,7 @@ function SetNumberAndAssignDrawerContent({
             )}
             <button
               type="submit"
-              disabled={pending || !projectNumber.trim()}
+              disabled={pending || !field.value.trim()}
               className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {pending ? "Saving…" : "Save"}

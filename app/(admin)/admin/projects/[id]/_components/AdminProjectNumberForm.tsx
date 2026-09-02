@@ -8,6 +8,7 @@ import {
 } from "@/app/actions/projects";
 import { EditIconButton } from "@/components/EditIconButton";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
+import { useProjectNumberField, projectNumberInputClass } from "@/hooks/useProjectNumberField";
 
 interface Props {
   projectId: string;
@@ -23,6 +24,7 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
   );
   const [editing, setEditing] = useState(!currentNumber);
   const [overlayVisible, setOverlayVisible] = useState(false);
+  const field = useProjectNumberField(currentNumber ?? "", state.error);
   useUnsavedChanges("admin-project-number", editing && !!currentNumber);
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
               <span className="text-xs text-zinc-400">→ document prefix: {currentNumber}-S</span>
             </div>
           ) : (
-            <form action={action} className="mt-3 space-y-3">
+            <form action={action} onSubmit={field.markSubmitted} className="mt-3 space-y-3">
               <div>
                 <label className="block text-xs font-medium text-zinc-700 mb-1">
                   Project number
@@ -95,10 +97,10 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
                   inputMode="numeric"
                   pattern="\d{6}"
                   maxLength={6}
-                  defaultValue={currentNumber ?? ""}
                   placeholder="e.g. 250001"
                   required
-                  className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                  {...field.inputProps}
+                  className={projectNumberInputClass(field.showError)}
                 />
                 <p className="mt-1 text-xs text-zinc-400">
                   Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically in generated documents.
