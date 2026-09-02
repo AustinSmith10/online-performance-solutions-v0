@@ -104,9 +104,18 @@ export function NotificationTray({
   const badgeCount = entries.filter((e) => e.kind !== "notification" || !e.isRead).length;
 
   const refresh = useCallback(async () => {
-    const requests: Promise<Response>[] = [fetch("/api/notifications")];
-    if (includeNeedsAttention) requests.push(fetch("/api/system-errors"));
-    const responses = await Promise.all(requests);
+    let responses: Response[];
+    try {
+      const requests: Promise<Response>[] = [fetch("/api/notifications")];
+      if (includeNeedsAttention) requests.push(fetch("/api/system-errors"));
+      responses = await Promise.all(requests);
+    } catch {
+      // Background poll — a transient network blip (e.g. the server
+      // restarting during a deploy) is not worth surfacing. The next
+      // interval tick retries. Swallowing here also keeps it from
+      // becoming an unhandled rejection in Sentry.
+      return;
+    }
 
     const merged: TrayEntry[] = [];
     if (responses[0].ok) {
