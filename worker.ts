@@ -34,7 +34,15 @@ async function main() {
   // silent PGRST204 mid-job into a red deploy.
   await assertSchemaCurrentOrExit(createAdminClient());
 
-  const boss = new PgBoss(process.env.DATABASE_URL!);
+  // `DATABASE_URL` is the Supabase Supavisor SESSION pooler (see .env.example)
+  // — one shared pool with a hard `pool_size: 15` across every client. Left at
+  // pg-boss's default `max: 10`, this worker alone nearly fills it, and a
+  // rolling deploy (old + new instance briefly overlapping) or the web dyno's
+  // own pool (lib/jobs/queue-client.ts) tips it over into
+  // `EMAXCONNSESSION: max clients reached in session mode`. Cap it low: the
+  // worker's real concurrency is `batchSize: 2` on generate-pbdb plus a
+  // handful of brief cron queries.
+  const boss = new PgBoss({ connectionString: process.env.DATABASE_URL!, max: 4 });
 
   // Wraps a queue handler so an uncaught error is reported to Sentry —
   // tagged with the queue name and pg-boss's own job id, which is what

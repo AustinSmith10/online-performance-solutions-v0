@@ -18,7 +18,11 @@ async function getBoss(): Promise<PgBoss> {
     bossPromise = (async () => {
       const boss = new PgBoss({
         connectionString: process.env.DATABASE_URL!,
-        max: 3,
+        // `DATABASE_URL` is the shared Supavisor session pool (pool_size: 15).
+        // This handle only ever calls boss.send() to insert a job row, so it
+        // needs almost nothing — keep it tiny so the worker + a rolling deploy
+        // don't collectively hit EMAXCONNSESSION.
+        max: 2,
         // This process never runs the maintenance/cron loops — the worker does.
         supervise: false,
         schedule: false,
