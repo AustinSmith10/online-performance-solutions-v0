@@ -43,10 +43,11 @@ export interface DuplicateProjectNumberMatch {
 }
 
 /**
- * Duplicate project numbers are allowed by design (the same number can span
- * disciplines/sites), so this never blocks a save — it just surfaces a
- * non-blocking warning naming the other live project that already carries
- * the number. "Live" = not soft-deleted.
+ * A project number identifies exactly one live project (enforced by the
+ * `projects_project_number_live_key` partial unique index, migration
+ * 00000000000135). This is the friendly pre-check the save actions run so
+ * they can name the conflicting project; the index is the race-safe backstop.
+ * "Live" = not soft-deleted, so a deleted project's number is free to reuse.
  */
 export async function findDuplicateProjectNumber(
   supabase: SupabaseClient,
@@ -72,4 +73,19 @@ export async function findDuplicateProjectNumber(
     id: row.id as string,
     label: address ? `${projectNumber} — ${address}` : projectNumber,
   };
+}
+
+/** Shared rejection message for a project number that's already in use. */
+export function duplicateProjectNumberError(
+  projectNumber: string,
+  match?: DuplicateProjectNumberMatch | null
+): string {
+  const where = match?.label && match.label !== projectNumber ? ` (${match.label})` : "";
+  return `Project number ${projectNumber} is already used by another live project${where}. Enter a different number.`;
+}
+
+/** True when a Supabase write failed the project-number unique index. */
+export function isDuplicateProjectNumberDbError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === "23505" || /projects_project_number_live_key/.test(error.message ?? "");
 }

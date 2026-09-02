@@ -278,11 +278,6 @@ function SetNumberAndAssignDrawerContent({
               Generate the PBDB from the project&apos;s PBDB step once a consultant is assigned.
             </p>
           </div>
-          {state.warning && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-xs text-amber-800">{state.warning}</p>
-            </div>
-          )}
           <div>
             <p className="mb-3 text-sm font-medium text-zinc-700">Assign a consultant</p>
             <AssignForm

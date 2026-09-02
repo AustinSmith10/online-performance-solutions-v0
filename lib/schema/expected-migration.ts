@@ -11,4 +11,4 @@
  * healthcheck goes red and ops-worker refuses to start, turning a silent
  * `PGRST204` into an immediately-visible failed deploy (#167).
  */
-export const EXPECTED_SCHEMA_MIGRATION = "00000000000134";
+export const EXPECTED_SCHEMA_MIGRATION = "00000000000135";
