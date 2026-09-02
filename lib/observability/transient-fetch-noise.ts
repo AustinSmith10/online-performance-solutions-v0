@@ -1,6 +1,7 @@
-// Shared by instrumentation-client.ts's Sentry beforeSend. Pure + unit-tested
-// (transient-fetch-noise.test.ts) because a too-loose match here silently
-// swallows real bugs.
+// Shared by instrumentation-client.ts's Sentry beforeSend, which uses this to
+// collapse matching events into one `warning`-level issue (not drop them).
+// Pure + unit-tested (transient-fetch-noise.test.ts) because a too-loose match
+// here would still downgrade and hide real bugs.
 
 /**
  * Browser-native messages a fetch() rejects with when the request never

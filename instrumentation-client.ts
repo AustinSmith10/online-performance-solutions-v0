@@ -10,18 +10,25 @@ Sentry.init({
   environment: process.env.NEXT_PUBLIC_RAILWAY_ENVIRONMENT_NAME ?? process.env.NODE_ENV,
   tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
 
-  // Drop only unhandled browser fetch-abort noise (see
-  // lib/observability/transient-fetch-noise.ts for the exact, narrow match).
-  // Everything a Sentry.captureException(...) call reports is always kept.
+  // Unhandled browser fetch-abort noise (navigation away, tab close, offline,
+  // a proxy killing an idle stream — see lib/observability/transient-fetch-noise.ts
+  // for the exact, narrow match) isn't dropped: it's collapsed into one issue
+  // and downgraded to `warning` so it stops escalating but stays visible if
+  // the volume ever spikes (which would mean a real broken request). Anything
+  // a Sentry.captureException(...) call reports is untouched.
   beforeSend(event, hint) {
-    return isTransientFetchNoise({
+    const isNoise = isTransientFetchNoise({
       originalException: hint?.originalException,
       exceptionValue: event.exception?.values?.[0]?.value,
       exceptionType: event.exception?.values?.[0]?.type,
       handled: event.exception?.values?.[0]?.mechanism?.handled,
-    })
-      ? null
-      : event;
+    });
+    if (!isNoise) return event;
+
+    event.level = "warning";
+    event.fingerprint = ["transient-fetch-error"];
+    event.tags = { ...event.tags, transient_fetch: "true" };
+    return event;
   },
 
   // Session Replay is off — this app renders client business/financial data
