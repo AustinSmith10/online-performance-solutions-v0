@@ -200,7 +200,7 @@ export default async function ClientProjectDetailPage({
 
   // Load template mappings, submission files, latest PBDB, latest PBDR, and
   // open field flags in parallel
-  const [{ data: mappings }, { data: rawFileRequirements }, { data: rawFiles }, { data: rawPbdbs }, { data: rawPbdrs }, { data: openFieldFlags }] =
+  const [{ data: mappings }, { data: rawFileRequirements }, { data: rawFiles }, { data: rawPbdbs }, { data: rawPbdbPdfs }, { data: rawPbdrs }, { data: openFieldFlags }] =
     await Promise.all([
       project.template_id
         ? supabase
@@ -228,6 +228,16 @@ export default async function ClientProjectDetailPage({
             .select("original_filename, created_at")
             .eq("project_id", id)
             .eq("file_type", "pbdb")
+            .order("version", { ascending: false })
+            .limit(1)
+        : Promise.resolve({ data: [] }),
+      pbdbVisible
+        ? supabase
+            .from("project_files")
+            .select("original_filename")
+            .eq("project_id", id)
+            .eq("file_type", "pbdb_pdf")
+            .eq("review_cycle", project.review_cycle)
             .order("version", { ascending: false })
             .limit(1)
         : Promise.resolve({ data: [] }),
@@ -304,6 +314,12 @@ export default async function ClientProjectDetailPage({
   // PBDB — served via the client download route (applies colour stripping if enabled)
   const latestPbdb = rawPbdbs?.[0] ?? null;
   const pbdbDownloadUrl = latestPbdb ? `/api/download/pbdb-client/${id}` : null;
+  // The stakeholder is served the converted `pbdb_pdf`, not the .docx source —
+  // its filename (regenerated at dispatch, #109) is what the previewer needs
+  // to detect a PDF and what the download actually saves as.
+  const pbdbPdfFilename =
+    (rawPbdbPdfs?.[0]?.original_filename as string | undefined) ??
+    (latestPbdb?.original_filename as string | undefined);
 
   // PBDR — latest version only, signed URL from `documents` bucket
   const latestPbdr = rawPbdrs?.[0] ?? null;
@@ -448,7 +464,7 @@ export default async function ClientProjectDetailPage({
             reviewId={clientReview.id as string}
             projectId={id}
             pbdbDownloadUrl={pbdbDownloadUrl}
-            pbdbFilename={latestPbdb?.original_filename as string | undefined}
+            pbdbFilename={pbdbPdfFilename}
             expiresAt={clientReview.expires_at as string}
             bare
           />

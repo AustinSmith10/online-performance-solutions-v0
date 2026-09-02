@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
 
 interface Props {
   href: string;
   filename?: string | null;
+  /** When set, shows a "Preview" button that renders the brief in-browser. */
+  previewHref?: string | null;
 }
 
 const CONFIRM_DELAY_MS = 1500;
 const FADE_DELAY_MS = 2000;
 
-export function ApproveDownloadLink({ href, filename }: Props) {
+export function ApproveDownloadLink({ href, filename, previewHref }: Props) {
   const [phase, setPhase] = useState<"idle" | "wash" | "confirmed">("idle");
   const [downloaded, setDownloaded] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -45,7 +48,15 @@ export function ApproveDownloadLink({ href, filename }: Props) {
         transition: "background-color 0.5s ease",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        {previewHref && (
+          <DocumentPreviewModal
+            href={previewHref}
+            filename={filename}
+            buttonLabel="Preview"
+            buttonClassName="shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1 text-[13px] font-medium text-zinc-700 hover:bg-zinc-50"
+          />
+        )}
         <a
           href={href}
           onClick={handleClick}

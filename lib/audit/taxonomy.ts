@@ -79,6 +79,7 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "stakeholder.email_updated",
       "stakeholder.token_accessed",
       "stakeholder.pbdb_downloaded",
+      "stakeholder.pbdb_previewed",
       "stakeholder.soft_deleted",
       "stakeholder.restored",
     ],
@@ -205,6 +206,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "stakeholder.email_updated": "Stakeholder email changed",
   "stakeholder.token_accessed": "Stakeholder opened approval link",
   "stakeholder.pbdb_downloaded": "Stakeholder downloaded PBDB",
+  "stakeholder.pbdb_previewed": "Stakeholder previewed PBDB",
   "stakeholder.soft_deleted": "Stakeholder deleted",
   "stakeholder.restored": "Stakeholder restored",
   "credit.top_up": "Credits added",
@@ -453,6 +455,7 @@ export function formatDetails(
       break;
 
     case "stakeholder.pbdb_downloaded":
+    case "stakeholder.pbdb_previewed":
       if (n(metadata.version) !== null) parts.push(`v${n(metadata.version)}`);
       break;
 

@@ -122,6 +122,7 @@ export default async function ApprovePage({
           <ApproveDownloadLink
             href={`/approve/${tokenString}/download`}
             filename={pbdbPdf.original_filename as string | null}
+            previewHref={`/approve/${tokenString}/preview`}
           />
         )}
 

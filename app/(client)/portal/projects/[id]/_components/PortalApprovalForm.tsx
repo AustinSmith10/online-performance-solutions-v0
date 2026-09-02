@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { submitPortalApproval, type PortalApprovalState } from "@/app/actions/portalApproval";
 import { DownloadCard } from "@/components/DownloadCard";
+import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
 
 function Spinner({ className = "" }: { className?: string }) {
   return (
@@ -33,7 +34,7 @@ interface Props {
   bare?: boolean;
 }
 
-export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownloadUrl, pbdbFilename, expiresAt, onSubmitted, bare }: Props) {
+export function PortalApprovalForm({ reviewId, projectId, pbdbDownloadUrl, pbdbFilename, expiresAt, onSubmitted, bare }: Props) {
   const router = useRouter();
   const boundAction = submitPortalApproval.bind(null, reviewId);
   const [state, formAction, pending] = useActionState<PortalApprovalState, FormData>(
@@ -115,6 +116,13 @@ export function PortalApprovalForm({ reviewId, projectId: _projectId, pbdbDownlo
             filename={pbdbFilename}
             originalFilename={pbdbFilename}
             buttonLabel="Download brief"
+            preview={
+              <DocumentPreviewModal
+                href={`/api/preview/pbdb-client/${projectId}`}
+                filename={pbdbFilename}
+                buttonLabel="Preview"
+              />
+            }
             wrapperClassName="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-4 py-3"
           >
             <p className="text-sm font-medium text-zinc-900">Brief document</p>
