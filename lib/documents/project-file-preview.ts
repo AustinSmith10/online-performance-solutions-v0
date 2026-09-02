@@ -46,6 +46,12 @@ export async function resolveProjectFilePreview(
 ): Promise<void> {
   const { projectId, fileId, actor } = opts;
 
+  // Emit immediately, before any I/O — gives the client a frame the instant
+  // the stream is flowing (so the bar always appears), and the `step`/`ready`
+  // pair still sweeps 10→100 for the fast paths (cached PBDB PDF, plain
+  // PDF/image) that do no conversion work.
+  await onEvent({ type: "step", pct: 10 });
+
   const { data: file, error: fileErr } = await supabase
     .from("project_files")
     .select("id, project_id, file_type, storage_path, original_filename, review_cycle")
@@ -87,6 +93,7 @@ export async function resolveProjectFilePreview(
       orgId: project.client_id as string,
       metadata: { fileId, fileType },
     });
+    await onEvent({ type: "step", pct: 100 });
     await onEvent({ type: "ready", url, filename });
   };
 

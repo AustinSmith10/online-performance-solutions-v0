@@ -112,7 +112,18 @@ export function FilePreviewButton({
               <div className="flex min-h-0 flex-1 flex-col overflow-auto">
                 {state.status === "loading" && (
                   <div className="px-6 py-12 text-center">
-                    <p className="text-sm text-zinc-500">Rendering preview…</p>
+                    <svg
+                      className="mx-auto h-5 w-5 animate-spin text-zinc-400"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.25" />
+                      <path
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.568 3 7.291l3-3.291z"
+                      />
+                    </svg>
+                    <p className="mt-3 text-sm text-zinc-500">Rendering preview…</p>
                     {state.pct !== null && (
                       <div className="mx-auto mt-3 w-48">
                         <ProgressTrack pct={state.pct} tone="zinc" />
