@@ -110,7 +110,7 @@ export default async function ClientsPage({
 
   const { data } = await query;
   const clients = (data ?? []) as unknown as ClientRow[];
-  const hasFilter = !!(q || org || status);
+  const hasFilter = !!(q || org || status || sort || order);
 
   const failedInviteEmails = await getFailedInviteEmails(
     supabase,
@@ -193,7 +193,7 @@ function ClientsLayout({
           </button>
           {hasFilter && (
             <Link
-              href="/admin/clients"
+              href="/admin/stakeholders"
               className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
             >
               Clear
@@ -204,7 +204,7 @@ function ClientsLayout({
 
       {clients.length === 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
-          {hasFilter ? "No clients match your filters." : "No clients yet."}
+          {hasFilter ? "No stakeholders match your filters." : "No stakeholders yet."}
         </div>
       ) : (
         <div className="space-y-2">

@@ -203,7 +203,7 @@ export default async function AdminRecoveryPage({
 
   const { data } = await query;
   const projects = (data ?? []) as unknown as DeletedProject[];
-  const hasFilter = !!(q || org || status);
+  const hasFilter = !!(q || org || status || sort || order);
 
   return (
     <RecoveryLayout

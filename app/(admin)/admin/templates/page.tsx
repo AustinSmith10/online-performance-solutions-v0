@@ -106,7 +106,7 @@ export default async function TemplatesPage({
   if (status?.trim()) query = query.eq("status", status.trim());
   if (orgIds !== null) {
     if (orgIds.length === 0) {
-      const hasFilter = !!(q || status || org);
+      const hasFilter = !!(q || status || org || sort || order);
       return <TemplatesLayout rows={[]} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} deleted={deleted} />;
     }
     query = query.in("client_id", orgIds);
@@ -114,7 +114,7 @@ export default async function TemplatesPage({
 
   const { data: templates } = await query;
   const rows = (templates ?? []) as unknown as TemplateRow[];
-  const hasFilter = !!(q || status || org);
+  const hasFilter = !!(q || status || org || sort || order);
 
   return <TemplatesLayout rows={rows} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} deleted={deleted} />;
 }

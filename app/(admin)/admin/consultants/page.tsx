@@ -64,7 +64,7 @@ export default async function ConsultantsPage({
 
   const { data } = await query;
   const consultants = (data ?? []) as unknown as ConsultantRow[];
-  const hasFilter = !!(q || availability || status);
+  const hasFilter = !!(q || availability || status || sort || order);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

@@ -77,7 +77,7 @@ export default async function OrganisationsPage({
 
   const { data: orgs } = await query;
   const rows = (orgs ?? []) as Client[];
-  const hasFilter = name || payment || status;
+  const hasFilter = name || payment || status || sort || order;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

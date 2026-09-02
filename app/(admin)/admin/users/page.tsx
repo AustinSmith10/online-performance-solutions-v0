@@ -155,7 +155,7 @@ export default async function UsersPage({
 
     const { data } = await query;
     const users = (data ?? []) as unknown as UserRow[];
-    const hasFilter = !!(q || availability || status);
+    const hasFilter = !!(q || availability || status || sort || order);
     const params = { q, availability, status, sort, order, tab };
     const failedInviteEmails = await getFailedInviteEmails(
       supabase,
@@ -287,7 +287,7 @@ export default async function UsersPage({
 
   const { data } = await query;
   const users = (data ?? []) as unknown as UserRow[];
-  const hasFilter = !!(q || role || status);
+  const hasFilter = !!(q || role || status || sort || order);
   const failedInviteEmails = await getFailedInviteEmails(
     supabase,
     users.map((u) => u.email).filter((e): e is string => !!e)

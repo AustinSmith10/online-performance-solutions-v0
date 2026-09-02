@@ -121,7 +121,7 @@ export default async function ProjectsPage({
     if (orgIds.length === 0) {
       const projects: ProjectRow[] = [];
       const todayIso = new Date().toISOString().slice(0, 10);
-      return <ProjectsLayout projects={projects} todayIso={todayIso} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={!!(q || status || org)} />;
+      return <ProjectsLayout projects={projects} todayIso={todayIso} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={!!(q || status || org || sort || order)} />;
     }
     query = query.in("client_id", orgIds);
   }
@@ -129,7 +129,7 @@ export default async function ProjectsPage({
   const { data } = await query;
   const projects = (data ?? []) as unknown as ProjectRow[];
   const todayIso = new Date().toISOString().slice(0, 10);
-  const hasFilter = !!(q || status || org);
+  const hasFilter = !!(q || status || org || sort || order);
 
   return <ProjectsLayout projects={projects} todayIso={todayIso} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} />;
 }
