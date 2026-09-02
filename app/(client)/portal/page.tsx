@@ -128,7 +128,7 @@ export default async function ClientPortalPage({
         .single(),
       supabase
         .from("stakeholder_reviews")
-        .select("id, project_id, token, expires_at")
+        .select("id, project_id, token, expires_at, review_cycle")
         .eq("stakeholder_email", user.email as string)
         .eq("status", "pending"),
     ]);
@@ -136,24 +136,30 @@ export default async function ClientPortalPage({
   const projects = (projectsData ?? []) as unknown as ProjectRow[];
   const org = orgData as OrgRow | null;
 
-  type PendingReview = { id: string; project_id: string; token: string; expires_at: string };
+  type PendingReview = { id: string; project_id: string; token: string; expires_at: string; review_cycle: number };
   const pendingReviewMap = new Map<string, PendingReview>(
     (pendingReviewsData ?? []).map((r) => [r.project_id as string, r as unknown as PendingReview])
   );
   const pendingApprovals = projects.filter((p) => pendingReviewMap.has(p.id));
 
-  // Latest PBDB original_filename per project with a pending approval
+  // Latest PBDB filename per project with a pending approval. The stakeholder
+  // is served the converted `pbdb_pdf` (not the .docx source), so use that
+  // row's name — it's what the download saves as and what the previewer needs
+  // to recognise a PDF. Match the pending review's cycle, highest version.
   const pbdbFilenameMap = new Map<string, string>();
   if (pendingApprovals.length > 0) {
     const { data: pbdbFilesData } = await supabase
       .from("project_files")
-      .select("project_id, original_filename, version")
+      .select("project_id, original_filename, version, review_cycle")
       .in("project_id", pendingApprovals.map((p) => p.id))
-      .eq("file_type", "pbdb")
+      .eq("file_type", "pbdb_pdf")
       .order("version", { ascending: false });
     for (const row of pbdbFilesData ?? []) {
       const pid = row.project_id as string;
-      if (!pbdbFilenameMap.has(pid)) pbdbFilenameMap.set(pid, row.original_filename as string);
+      if (pbdbFilenameMap.has(pid)) continue;
+      const cycle = pendingReviewMap.get(pid)?.review_cycle;
+      if (cycle != null && row.review_cycle !== cycle) continue;
+      pbdbFilenameMap.set(pid, row.original_filename as string);
     }
   }
 
