@@ -15,25 +15,22 @@ type PreviewState =
   | { status: "error"; message: string }
   | { status: "ready"; url: string; filename: string };
 
-// The bar eases toward `target` every tick; while nothing new has arrived it
-// also lets `target` creep on its own toward CREEP_CEILING so a slow
-// conversion never looks frozen. A real `step` event snaps `target` up past
-// the ceiling; `ready` takes it to 100.
-const TICK_MS = 90;
-const EASE = 0.16;
-const CREEP = 0.035;
-const CREEP_CEILING = 90;
-const START_PCT = 6;
+// When real `step` events are driving the bar, ease between them so a
+// 40 -> 70 milestone glides rather than snaps. No synthetic/auto progress:
+// with no steps (cached PBDB PDF, plain PDF/image) the UI stays an
+// indeterminate spinner until `ready`, so the number never lies.
+const TICK_MS = 60;
+const EASE = 0.2;
 
 /**
  * "Preview" trigger + modal for any project file (submission doc, evidence,
- * PBDB, PBDR). Opens an SSE stream (preview-stream route) on click: the editable
- * PBDB .docx is converted to PDF server-side and its conversion boundaries
- * arrive as `step` events; every other file type resolves to a signed URL in
- * one `ready` event. A trickling progress bar bridges the gaps so even the
- * fast paths read as motion rather than a 10→100 jump. The document then
- * renders in the shared DocumentViewer (which falls back to a download link
- * for formats it can't show inline, e.g. TIFF / .eml).
+ * PBDB, PBDR). Opens an SSE stream (preview-stream route) on click. The
+ * editable PBDB .docx is converted to PDF server-side and its four conversion
+ * boundaries arrive as `step` events that drive a real percentage bar; every
+ * other file type just resolves to a signed URL (one `ready` event) and shows
+ * a plain spinner. The document then renders in the shared DocumentViewer,
+ * which falls back to a download link for formats it can't show inline
+ * (TIFF, .eml).
  */
 export function FilePreviewButton({
   projectId,
@@ -48,10 +45,10 @@ export function FilePreviewButton({
 }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<PreviewState>({ status: "idle" });
-  const [pct, setPct] = useState(START_PCT);
-  // Where the bar is easing toward. A ref so the stream callback and the
-  // animation tick share it without re-subscribing effects.
-  const targetRef = useRef(START_PCT);
+  // null until the first real `step` event — that's what switches the UI from
+  // spinner to percentage bar.
+  const [pct, setPct] = useState<number | null>(null);
+  const targetRef = useRef<number | null>(null);
   // Guards a stale stream (reopened before the previous closed) from writing
   // state after a newer run has started.
   const runIdRef = useRef(0);
@@ -70,19 +67,15 @@ export function FilePreviewButton({
     };
   }, [open]);
 
-  // Ease + auto-creep the bar while the preview is resolving.
+  // Ease the bar toward the latest real milestone while resolving.
   useEffect(() => {
     if (state.status !== "loading") return;
     const iv = setInterval(() => {
-      if (targetRef.current < CREEP_CEILING) {
-        targetRef.current = Math.min(
-          CREEP_CEILING,
-          targetRef.current + (CREEP_CEILING - targetRef.current) * CREEP
-        );
-      }
+      const t = targetRef.current;
+      if (t === null) return;
       setPct((p) => {
-        const t = targetRef.current;
-        const next = p + (t - p) * EASE;
+        const cur = p ?? 0;
+        const next = cur + (t - cur) * EASE;
         return Math.abs(t - next) < 0.4 ? t : next;
       });
     }, TICK_MS);
@@ -91,8 +84,8 @@ export function FilePreviewButton({
 
   async function openPreview() {
     const runId = ++runIdRef.current;
-    targetRef.current = START_PCT;
-    setPct(START_PCT);
+    targetRef.current = null;
+    setPct(null);
     setOpen(true);
     setState({ status: "loading" });
 
@@ -100,11 +93,10 @@ export function FilePreviewButton({
     await streamFilePreview(projectId, fileId, (event) => {
       if (runIdRef.current !== runId) return;
       if (event.type === "step") {
-        targetRef.current = Math.max(targetRef.current, event.pct);
+        targetRef.current = Math.max(targetRef.current ?? 0, event.pct);
+        setPct((p) => p ?? Math.min(event.pct, 12)); // seed the bar so it eases in from low
       } else if (event.type === "ready") {
         settled = true;
-        targetRef.current = 100;
-        setPct(100);
         setState({ status: "ready", url: event.url, filename: event.filename });
       } else {
         settled = true;
@@ -117,6 +109,8 @@ export function FilePreviewButton({
       setState({ status: "error", message: "Preview failed." });
     }
   }
+
+  const shownPct = pct === null ? null : Math.min(100, Math.round(pct));
 
   return (
     <>
@@ -152,13 +146,25 @@ export function FilePreviewButton({
               <div className="flex min-h-0 flex-1 flex-col overflow-auto">
                 {state.status === "loading" && (
                   <div className="px-6 py-16 text-center">
-                    <p className="text-sm text-zinc-500">Rendering preview…</p>
-                    <div className="mx-auto mt-4 w-56">
-                      <ProgressTrack pct={Math.min(100, Math.round(pct))} tone="zinc" />
-                      <p className="mt-1.5 text-xs tabular-nums text-zinc-400">
-                        {Math.min(100, Math.round(pct))}%
-                      </p>
-                    </div>
+                    {shownPct === null ? (
+                      <svg
+                        className="mx-auto h-5 w-5 animate-spin text-zinc-400"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.25" />
+                        <path
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.568 3 7.291l3-3.291z"
+                        />
+                      </svg>
+                    ) : (
+                      <div className="mx-auto w-56">
+                        <ProgressTrack pct={shownPct} tone="zinc" />
+                        <p className="mt-1.5 text-xs tabular-nums text-zinc-400">{shownPct}%</p>
+                      </div>
+                    )}
+                    <p className="mt-4 text-sm text-zinc-500">Rendering preview…</p>
                   </div>
                 )}
                 {state.status === "error" && (
