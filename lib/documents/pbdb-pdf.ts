@@ -37,11 +37,18 @@ export interface DispatchPdf {
  * stakeholder-triggered self-serve action) — the generated PDF is then
  * attributed to the source docx's own `uploaded_by` instead, since
  * `project_files.uploaded_by` is NOT NULL.
+ *
+ * `onStep` is an optional progress hook fired at the same pipeline boundaries
+ * buildPbdrPreview reports (download → conversion-safe → converted → stored);
+ * a UI polling projects.progress_pct can then show a real bar for the one
+ * caller (the Documents-tab previewer) that surfaces it. Omitted everywhere
+ * else — the cached-PDF fast path never fires it at all.
  */
 export async function getOrCreateDispatchPdf(
   supabase: SupabaseClient,
   project: DispatchPdfProject,
-  actorId: string | null
+  actorId: string | null,
+  onStep?: (pct: number) => void | Promise<void>
 ): Promise<DispatchPdf | null> {
   const { data: sourceDocx } = await supabase
     .from("project_files")
@@ -76,6 +83,8 @@ export async function getOrCreateDispatchPdf(
     };
   }
 
+  await onStep?.(20);
+
   const { data: docxBlob, error: dlErr } = await supabase.storage
     .from("documents")
     .download(sourceDocx.storage_path as string);
@@ -93,7 +102,11 @@ export async function getOrCreateDispatchPdf(
   // (since #112) actually see.
   docxBuffer = makeDocxConversionSafe(docxBuffer);
 
+  await onStep?.(40);
+
   const pdfBuffer = await convertDocxToPdf(docxBuffer);
+
+  await onStep?.(70);
 
   const docxPath = sourceDocx.storage_path as string;
   const storagePath = docxPath.replace(/\.docx$/i, ".pdf");
@@ -133,6 +146,8 @@ export async function getOrCreateDispatchPdf(
     await supabase.storage.from("documents").remove([storagePath]);
     throw new Error(`Failed to record PBDB PDF: ${insertErr.message}`);
   }
+
+  await onStep?.(90);
 
   return { storagePath, originalFilename };
 }

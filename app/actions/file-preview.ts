@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { getOrCreateDispatchPdf, type DispatchPdfProject } from "@/lib/documents/pbdb-pdf";
+import { writeProgress } from "@/lib/documents/progress";
 
 export type FilePreviewResult = { error: string } | { url: string; filename: string };
 
@@ -44,7 +45,7 @@ export async function getProjectFilePreviewUrl(
   const { data: project } = await supabase
     .from("projects")
     .select(
-      "id, client_id, assigned_consultant_id, review_cycle, strip_token_color, project_number, extracted_fields"
+      "id, client_id, assigned_consultant_id, review_cycle, strip_token_color, project_number, extracted_fields, progress_pct"
     )
     .eq("id", projectId)
     .is("deleted_at", null)
@@ -71,6 +72,13 @@ export async function getProjectFilePreviewUrl(
 
   // Editable PBDB docx → the cached locked PDF for that file's own cycle.
   if (fileType === "pbdb") {
+    // #172: one heavy document operation per project at a time. The cached-PDF
+    // fast path never trips this (getOrCreateDispatchPdf returns before the
+    // first onStep), so a re-open of an already-rendered PBDB stays instant.
+    if (project.progress_pct !== null && project.progress_pct !== undefined) {
+      return { error: "A document is already being generated for this project — try again once it finishes." };
+    }
+
     let pdf;
     try {
       pdf = await getOrCreateDispatchPdf(
@@ -79,10 +87,15 @@ export async function getProjectFilePreviewUrl(
           ...(project as unknown as DispatchPdfProject),
           review_cycle: (file.review_cycle as number) ?? (project.review_cycle as number),
         },
-        actor.id
+        actor.id,
+        (pct) => writeProgress(supabase, projectId, pct)
       );
     } catch (err) {
       return { error: err instanceof Error ? err.message : "Failed to render the PBDB." };
+    } finally {
+      // Clear the in-flight marker on success and failure alike — matches
+      // buildPbdrPreview. A no-op when the fast path never wrote one.
+      await writeProgress(supabase, projectId, null);
     }
     if (!pdf) return { error: "No PBDB document found for this cycle." };
 

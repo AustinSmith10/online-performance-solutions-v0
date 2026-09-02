@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { getProjectFilePreviewUrl } from "@/app/actions/file-preview";
 import { DocumentViewer } from "@/components/DocumentViewer";
+import { ProgressTrack } from "@/components/ProgressTrack";
+import { useProjectProgress } from "@/hooks/useProjectProgress";
 
 const DEFAULT_BUTTON_CLASS =
   "shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50";
@@ -35,6 +37,10 @@ export function FilePreviewButton({
 }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<PreviewState>({ status: "idle" });
+  // Only the PBDB .docx path does real conversion work and writes
+  // projects.progress_pct (see getProjectFilePreviewUrl); for every other
+  // file type this stays null and the bar never shows.
+  const pct = useProjectProgress(projectId, state.status === "loading");
 
   useEffect(() => {
     if (!open) return;
@@ -94,7 +100,15 @@ export function FilePreviewButton({
               </div>
               <div className="flex min-h-0 flex-1 flex-col overflow-auto">
                 {state.status === "loading" && (
-                  <p className="px-6 py-12 text-center text-sm text-zinc-500">Rendering preview…</p>
+                  <div className="px-6 py-12 text-center">
+                    <p className="text-sm text-zinc-500">Rendering preview…</p>
+                    {pct !== null && (
+                      <div className="mx-auto mt-3 w-48">
+                        <ProgressTrack pct={pct} tone="zinc" />
+                        <p className="mt-1 text-xs text-zinc-400">{pct}%</p>
+                      </div>
+                    )}
+                  </div>
                 )}
                 {state.status === "error" && (
                   <p className="px-6 py-12 text-center text-sm text-red-600">{state.message}</p>
