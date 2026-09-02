@@ -36,39 +36,20 @@ export function ProjectNumberForm({
     }
   }, [state.success, router]);
 
-  // Track which warning string was dismissed, so a fresh save with a new
-  // warning shows again without an effect resetting a boolean.
-  const [dismissedWarning, setDismissedWarning] = useState<string | null>(null);
-  const showWarning = !!state.warning && state.warning !== dismissedWarning;
-
   const showForm = !completed || editing;
 
   const body = (
     <div className={bare ? "" : "px-5 py-4"}>
       {completed && !editing ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-green-700">
-                Project number set: {projectNumber}-S
-              </p>
-              <EditIconButton
-                onClick={() => setEditing(true)}
-                label="Edit project number"
-                className="text-green-700 hover:bg-green-100 hover:text-green-900"
-              />
-            </div>
-            {showWarning && (
-              <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                {state.warning}{" "}
-                <button
-                  type="button"
-                  onClick={() => setDismissedWarning(state.warning ?? null)}
-                  className="font-medium underline hover:no-underline"
-                >
-                  Dismiss
-                </button>
-              </p>
-            )}
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-green-700">
+              Project number set: {projectNumber}-S
+            </p>
+            <EditIconButton
+              onClick={() => setEditing(true)}
+              label="Edit project number"
+              className="text-green-700 hover:bg-green-100 hover:text-green-900"
+            />
           </div>
         ) : (
           <form action={formAction} onSubmit={field.markSubmitted} className="space-y-3">

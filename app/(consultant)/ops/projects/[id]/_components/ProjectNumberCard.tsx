@@ -18,8 +18,6 @@ export function ProjectNumberCard({
   const boundAction = saveProjectNumber.bind(null, projectId);
   const [state, formAction, pending] = useActionState<ProjectNumberState, FormData>(boundAction, {});
   const [editing, setEditing] = useState(false);
-  const [dismissedWarning, setDismissedWarning] = useState<string | null>(null);
-  const showWarning = !!state.warning && state.warning !== dismissedWarning;
   const field = useProjectNumberField(projectNumber ?? "", state.error);
   useUnsavedChanges("consultant-project-number-card", editing);
 
@@ -40,28 +38,14 @@ export function ProjectNumberCard({
       </div>
 
       {projectNumber && !editing ? (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5">
-              <svg className="h-3.5 w-3.5 shrink-0 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm font-medium text-zinc-900">{projectNumber}-S</span>
-            </span>
-            <EditIconButton onClick={() => setEditing(true)} label="Edit project number" />
-          </div>
-          {showWarning && (
-            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              {state.warning}{" "}
-              <button
-                type="button"
-                onClick={() => setDismissedWarning(state.warning ?? null)}
-                className="font-medium underline hover:no-underline"
-              >
-                Dismiss
-              </button>
-            </p>
-          )}
+        <div className="flex items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5">
+            <svg className="h-3.5 w-3.5 shrink-0 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+            </svg>
+            <span className="text-sm font-medium text-zinc-900">{projectNumber}-S</span>
+          </span>
+          <EditIconButton onClick={() => setEditing(true)} label="Edit project number" />
         </div>
       ) : (
         <form action={formAction} onSubmit={field.markSubmitted} className="space-y-2.5">

@@ -34,10 +34,9 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
       setOverlayVisible(true);
       router.refresh();
     }, 0);
-    // Keep the overlay up longer when it carries a duplicate warning to read.
-    const t2 = setTimeout(() => setOverlayVisible(false), state.warning ? 8000 : 3500);
+    const t2 = setTimeout(() => setOverlayVisible(false), 3500);
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [state.success, state.warning, router]);
+  }, [state.success, router]);
 
   return (
     <>
@@ -50,15 +49,9 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
               </svg>
             </div>
             <p className="text-base font-semibold text-zinc-900">Project number saved</p>
-            {state.warning ? (
-              <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-left text-xs text-amber-800">
-                {state.warning}
-              </p>
-            ) : (
-              <p className="mt-2 text-sm text-zinc-500">
-                Generate the PBDB from the PBDB step below.
-              </p>
-            )}
+            <p className="mt-2 text-sm text-zinc-500">
+              Generate the PBDB from the PBDB step below.
+            </p>
             <button
               type="button"
               onClick={() => setOverlayVisible(false)}
