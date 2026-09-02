@@ -1,28 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { getProjectFilePreviewUrl } from "@/app/actions/file-preview";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { ProgressTrack } from "@/components/ProgressTrack";
-import { useProjectProgress } from "@/hooks/useProjectProgress";
+import { streamFilePreview } from "@/components/streamFilePreview";
 
 const DEFAULT_BUTTON_CLASS =
   "shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50";
 
 type PreviewState =
   | { status: "idle" }
-  | { status: "loading" }
+  | { status: "loading"; pct: number | null }
   | { status: "error"; message: string }
   | { status: "ready"; url: string; filename: string };
 
 /**
  * "Preview" trigger + modal for any project file (submission doc, evidence,
- * PBDB, PBDR). Fetches a signed URL lazily on click via getProjectFilePreviewUrl
- * — which converts the editable PBDB .docx to PDF as needed — then renders it
- * with the shared DocumentViewer. Always renders a button so every row in the
- * Documents tab can be previewed; the viewer itself shows a graceful
- * download-only fallback for formats it can't render inline (TIFF, .eml).
+ * PBDB, PBDR). Opens an SSE stream (preview-stream route) on click: the editable
+ * PBDB .docx is converted to PDF server-side and its conversion boundaries
+ * arrive as `step` events that drive a real progress bar; every other file type
+ * resolves to a signed URL in one `ready` event. The document then renders in
+ * the shared DocumentViewer, which itself falls back to a download link for
+ * formats it can't show inline (TIFF, .eml).
  */
 export function FilePreviewButton({
   projectId,
@@ -37,10 +37,9 @@ export function FilePreviewButton({
 }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<PreviewState>({ status: "idle" });
-  // Only the PBDB .docx path does real conversion work and writes
-  // projects.progress_pct (see getProjectFilePreviewUrl); for every other
-  // file type this stays null and the bar never shows.
-  const pct = useProjectProgress(projectId, state.status === "loading");
+  // Guards against a stale stream (reopened before the previous one closed)
+  // writing state after a newer run has started.
+  const runIdRef = useRef(0);
 
   useEffect(() => {
     if (!open) return;
@@ -57,14 +56,26 @@ export function FilePreviewButton({
   }, [open]);
 
   async function openPreview() {
+    const runId = ++runIdRef.current;
     setOpen(true);
-    setState({ status: "loading" });
-    const result = await getProjectFilePreviewUrl(projectId, fileId);
-    if ("error" in result) {
-      setState({ status: "error", message: result.error });
-      return;
+    setState({ status: "loading", pct: null });
+
+    await streamFilePreview(projectId, fileId, (event) => {
+      if (runIdRef.current !== runId) return;
+      if (event.type === "step") {
+        setState({ status: "loading", pct: event.pct });
+      } else if (event.type === "ready") {
+        setState({ status: "ready", url: event.url, filename: event.filename });
+      } else {
+        setState({ status: "error", message: event.message });
+      }
+    });
+
+    // Stream closed without a terminal event — treat as a failure rather than
+    // spinning forever.
+    if (runIdRef.current === runId) {
+      setState((s) => (s.status === "loading" ? { status: "error", message: "Preview failed." } : s));
     }
-    setState({ status: "ready", url: result.url, filename: result.filename });
   }
 
   return (
@@ -102,10 +113,10 @@ export function FilePreviewButton({
                 {state.status === "loading" && (
                   <div className="px-6 py-12 text-center">
                     <p className="text-sm text-zinc-500">Rendering preview…</p>
-                    {pct !== null && (
+                    {state.pct !== null && (
                       <div className="mx-auto mt-3 w-48">
-                        <ProgressTrack pct={pct} tone="zinc" />
-                        <p className="mt-1 text-xs text-zinc-400">{pct}%</p>
+                        <ProgressTrack pct={state.pct} tone="zinc" />
+                        <p className="mt-1 text-xs text-zinc-400">{state.pct}%</p>
                       </div>
                     )}
                   </div>
