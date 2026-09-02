@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   logStakeholderResponseOnBehalf,
   extractStakeholderCommentsFromEmail,
@@ -183,8 +184,13 @@ export function LogStakeholderResponseForm({
 
   return (
     <>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30 p-4">
+      {open && typeof document !== "undefined" &&
+        createPortal(
+        // Portalled to <body> (#177): rendered inline, a transformed/stacking
+        // ancestor on the project page traps this `fixed` overlay below the
+        // Documents-tab content that renders later in the DOM. z above every
+        // other layer, matching DocumentPreviewModal / PbdrPreviewButton.
+        <div className="fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-sm bg-black/30 p-4">
           <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl">
             <p className="text-base font-semibold text-zinc-900">
               Log response for {stakeholderName}?
@@ -376,7 +382,8 @@ export function LogStakeholderResponseForm({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <button

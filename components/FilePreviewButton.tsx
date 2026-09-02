@@ -11,18 +11,29 @@ const DEFAULT_BUTTON_CLASS =
 
 type PreviewState =
   | { status: "idle" }
-  | { status: "loading"; pct: number | null }
+  | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "ready"; url: string; filename: string };
+
+// The bar eases toward `target` every tick; while nothing new has arrived it
+// also lets `target` creep on its own toward CREEP_CEILING so a slow
+// conversion never looks frozen. A real `step` event snaps `target` up past
+// the ceiling; `ready` takes it to 100.
+const TICK_MS = 90;
+const EASE = 0.16;
+const CREEP = 0.035;
+const CREEP_CEILING = 90;
+const START_PCT = 6;
 
 /**
  * "Preview" trigger + modal for any project file (submission doc, evidence,
  * PBDB, PBDR). Opens an SSE stream (preview-stream route) on click: the editable
  * PBDB .docx is converted to PDF server-side and its conversion boundaries
- * arrive as `step` events that drive a real progress bar; every other file type
- * resolves to a signed URL in one `ready` event. The document then renders in
- * the shared DocumentViewer, which itself falls back to a download link for
- * formats it can't show inline (TIFF, .eml).
+ * arrive as `step` events; every other file type resolves to a signed URL in
+ * one `ready` event. A trickling progress bar bridges the gaps so even the
+ * fast paths read as motion rather than a 10→100 jump. The document then
+ * renders in the shared DocumentViewer (which falls back to a download link
+ * for formats it can't show inline, e.g. TIFF / .eml).
  */
 export function FilePreviewButton({
   projectId,
@@ -37,8 +48,12 @@ export function FilePreviewButton({
 }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<PreviewState>({ status: "idle" });
-  // Guards against a stale stream (reopened before the previous one closed)
-  // writing state after a newer run has started.
+  const [pct, setPct] = useState(START_PCT);
+  // Where the bar is easing toward. A ref so the stream callback and the
+  // animation tick share it without re-subscribing effects.
+  const targetRef = useRef(START_PCT);
+  // Guards a stale stream (reopened before the previous closed) from writing
+  // state after a newer run has started.
   const runIdRef = useRef(0);
 
   useEffect(() => {
@@ -55,26 +70,51 @@ export function FilePreviewButton({
     };
   }, [open]);
 
+  // Ease + auto-creep the bar while the preview is resolving.
+  useEffect(() => {
+    if (state.status !== "loading") return;
+    const iv = setInterval(() => {
+      if (targetRef.current < CREEP_CEILING) {
+        targetRef.current = Math.min(
+          CREEP_CEILING,
+          targetRef.current + (CREEP_CEILING - targetRef.current) * CREEP
+        );
+      }
+      setPct((p) => {
+        const t = targetRef.current;
+        const next = p + (t - p) * EASE;
+        return Math.abs(t - next) < 0.4 ? t : next;
+      });
+    }, TICK_MS);
+    return () => clearInterval(iv);
+  }, [state.status]);
+
   async function openPreview() {
     const runId = ++runIdRef.current;
+    targetRef.current = START_PCT;
+    setPct(START_PCT);
     setOpen(true);
-    setState({ status: "loading", pct: null });
+    setState({ status: "loading" });
 
+    let settled = false;
     await streamFilePreview(projectId, fileId, (event) => {
       if (runIdRef.current !== runId) return;
       if (event.type === "step") {
-        setState({ status: "loading", pct: event.pct });
+        targetRef.current = Math.max(targetRef.current, event.pct);
       } else if (event.type === "ready") {
+        settled = true;
+        targetRef.current = 100;
+        setPct(100);
         setState({ status: "ready", url: event.url, filename: event.filename });
       } else {
+        settled = true;
         setState({ status: "error", message: event.message });
       }
     });
 
-    // Stream closed without a terminal event — treat as a failure rather than
-    // spinning forever.
-    if (runIdRef.current === runId) {
-      setState((s) => (s.status === "loading" ? { status: "error", message: "Preview failed." } : s));
+    // Stream closed with no terminal event — don't spin forever.
+    if (runIdRef.current === runId && !settled) {
+      setState({ status: "error", message: "Preview failed." });
     }
   }
 
@@ -111,25 +151,14 @@ export function FilePreviewButton({
               </div>
               <div className="flex min-h-0 flex-1 flex-col overflow-auto">
                 {state.status === "loading" && (
-                  <div className="px-6 py-12 text-center">
-                    <svg
-                      className="mx-auto h-5 w-5 animate-spin text-zinc-400"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.25" />
-                      <path
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.568 3 7.291l3-3.291z"
-                      />
-                    </svg>
-                    <p className="mt-3 text-sm text-zinc-500">Rendering preview…</p>
-                    {state.pct !== null && (
-                      <div className="mx-auto mt-3 w-48">
-                        <ProgressTrack pct={state.pct} tone="zinc" />
-                        <p className="mt-1 text-xs text-zinc-400">{state.pct}%</p>
-                      </div>
-                    )}
+                  <div className="px-6 py-16 text-center">
+                    <p className="text-sm text-zinc-500">Rendering preview…</p>
+                    <div className="mx-auto mt-4 w-56">
+                      <ProgressTrack pct={Math.min(100, Math.round(pct))} tone="zinc" />
+                      <p className="mt-1.5 text-xs tabular-nums text-zinc-400">
+                        {Math.min(100, Math.round(pct))}%
+                      </p>
+                    </div>
                   </div>
                 )}
                 {state.status === "error" && (
