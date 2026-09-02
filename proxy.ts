@@ -17,6 +17,9 @@ const PUBLIC_PATHS = [
   "/api/auth/signout",
   "/api/webhooks/email",
   "/api/health",
+  // Sentry browser tunnel (next.config.ts → tunnelRoute). Must be reachable
+  // unauthenticated — anyone hitting an error page reports through it.
+  "/monitoring",
 ];
 
 // Auth flow paths that require a valid session but skip TOTP/profile checks
