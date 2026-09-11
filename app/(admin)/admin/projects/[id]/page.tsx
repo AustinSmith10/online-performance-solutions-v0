@@ -33,6 +33,7 @@ import { FilePreviewButton } from "@/components/FilePreviewButton";
 import { ConfirmFileTypeControl } from "@/components/ConfirmFileTypeControl";
 import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
+import { GeneratedPbdbDownload } from "@/components/GeneratedPbdbDownload";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { PbdbGeneratedBanner } from "@/components/PbdbGeneratedBanner";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
@@ -208,6 +209,7 @@ export default async function ProjectDetailPage({
         delivery_delay_preset,
         pbdb_delivery_delay_preset,
         qa_completed_by,
+        pbdb_downloaded_at,
         clients(id, name, client_config, revision_notes_required),
         assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability),
         submitter:users!projects_submitted_by_fkey(id, first_name, last_name, email, company_role)
@@ -283,6 +285,7 @@ export default async function ProjectDetailPage({
     } | null;
     review_cycle: number;
     qa_completed_by: string | null;
+    pbdb_downloaded_at: string | null;
   };
 
   const project = projectResult.data as unknown as ProjectDetail;
@@ -810,6 +813,25 @@ export default async function ProjectDetailPage({
     focusCard = (
       <FocusCard id="pbdb-section" tone="neutral" title="Generate the PBDB" subtitle="Ready when you are.">
         <GeneratePbdbButton projectId={id} />
+      </FocusCard>
+    );
+  } else if (
+    (project.status === "assigned" || (project.status === "in_progress" && !project.qa_completed_by)) &&
+    !project.pbdb_downloaded_at &&
+    latestPbdb
+  ) {
+    // Mirrors the consultant page's equivalent step (app/(consultant)/ops/projects/[id]/page.tsx)
+    // — confirms generation worked and hands the file over. Advances to
+    // "Awaiting QA'd PBDB" the moment pbdb_downloaded_at is set, whether that
+    // happens from here or from the consultant's own copy of this card.
+    focusCard = (
+      <FocusCard tone="green" title="Download the PBDB" subtitle={`Fresh off generation — ${assignedName ?? "the consultant"} will QA it before uploading the corrected copy.`}>
+        <GeneratedPbdbDownload
+          projectId={id}
+          fileId={latestPbdb.id as string}
+          filename={latestPbdb.original_filename as string}
+          generatedDate={latestPbdb.created_at as string}
+        />
       </FocusCard>
     );
   } else if (project.status === "assigned" || (project.status === "in_progress" && !project.qa_completed_by)) {

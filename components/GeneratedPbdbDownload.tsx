@@ -40,6 +40,7 @@ export function GeneratedPbdbDownload({
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [downloaded, setDownloaded] = useState(false);
+  const [skipping, setSkipping] = useState(false);
 
   function handleClick() {
     setDownloaded(true);
@@ -50,29 +51,51 @@ export function GeneratedPbdbDownload({
     });
   }
 
+  // No download-bar affordance to wait on here — nothing native happens on
+  // click, so there's no need for the same REFRESH_DELAY_MS pause.
+  function handleSkip() {
+    setSkipping(true);
+    startTransition(async () => {
+      await markPbdbDownloaded(projectId, fileId);
+      router.refresh();
+    });
+  }
+
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-green-200 bg-white px-4 py-3">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-zinc-900" title={filename}>
-          {filename}
-        </p>
-        <p className="mt-0.5 text-xs text-zinc-500">
-          Generated {new Date(generatedDate).toLocaleDateString("en-AU")}
-        </p>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 rounded-md border border-green-200 bg-white px-4 py-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-zinc-900" title={filename}>
+            {filename}
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Generated {new Date(generatedDate).toLocaleDateString("en-AU")}
+          </p>
+        </div>
+        {downloaded ? (
+          <span className="shrink-0 rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white">
+            Downloaded ✓
+          </span>
+        ) : (
+          <a
+            href={`/api/download/pbdb/${fileId}`}
+            download={filename}
+            onClick={handleClick}
+            className="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
+          >
+            Download
+          </a>
+        )}
       </div>
-      {downloaded ? (
-        <span className="shrink-0 rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white">
-          Downloaded ✓
-        </span>
-      ) : (
-        <a
-          href={`/api/download/pbdb/${fileId}`}
-          download={filename}
-          onClick={handleClick}
-          className="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
+      {!downloaded && (
+        <button
+          type="button"
+          onClick={handleSkip}
+          disabled={skipping}
+          className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
         >
-          Download
-        </a>
+          {skipping ? "Skipping…" : "Skip"}
+        </button>
       )}
     </div>
   );

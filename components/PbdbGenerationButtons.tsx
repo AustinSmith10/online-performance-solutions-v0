@@ -26,18 +26,25 @@ export function GeneratePbdbButton({ projectId }: { projectId: string }) {
   const boundAction = generatePbdbForProject.bind(null, projectId, pathname);
   const [state, formAction, pending] = useActionState<GeneratePbdbState, FormData>(boundAction, {});
   const pct = useProjectProgress(projectId, pending);
+  // pending only covers the click's own round-trip (enqueue + revalidate);
+  // the worker job itself keeps running after that resolves, so the visible
+  // "in progress" state must also track pct until the worker clears it —
+  // otherwise the button springs back to idle while generation is still
+  // running in the background (#172 follow-up: button never reflected the
+  // job finishing without a manual refresh).
+  const busy = pending || pct !== null;
 
   return (
     <form action={formAction}>
       <button
         type="submit"
-        disabled={pending}
+        disabled={busy}
         className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
       >
-        {pending && <Spinner />}
-        {pending ? "Generating…" : "Generate PBDB"}
+        {busy && <Spinner />}
+        {busy ? "Generating…" : "Generate PBDB"}
       </button>
-      {pending && pct !== null && (
+      {busy && pct !== null && (
         <div className="mt-3 w-56">
           <div className="mb-1 flex justify-between text-xs text-zinc-500">
             <span>Generating…</span>
@@ -64,6 +71,7 @@ export function RegeneratePbdbButton({
   const [state, formAction, pending] = useActionState<GeneratePbdbState, FormData>(boundAction, {});
   const [confirming, setConfirming] = useState(false);
   const pct = useProjectProgress(projectId, pending);
+  const busy = pending || pct !== null;
 
   useEffect(() => {
     if (state.success) queueMicrotask(() => setConfirming(false));
@@ -92,7 +100,7 @@ export function RegeneratePbdbButton({
               This will create a new version of the PBDB. Existing versions will be kept.
             </p>
             {state.error && <p className="mt-3 text-sm text-red-600">{state.error}</p>}
-            {pending && pct !== null && (
+            {busy && pct !== null && (
               <div className="mt-4">
                 <div className="mb-1 flex justify-between text-xs text-zinc-500">
                   <span>Regenerating…</span>
@@ -105,7 +113,7 @@ export function RegeneratePbdbButton({
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                disabled={pending}
+                disabled={busy}
                 className="flex-1 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
               >
                 Cancel
@@ -113,10 +121,10 @@ export function RegeneratePbdbButton({
               <form action={formAction} className="flex-1">
                 <button
                   type="submit"
-                  disabled={pending}
+                  disabled={busy}
                   className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                 >
-                  {pending ? "Regenerating…" : "Confirm"}
+                  {busy ? "Regenerating…" : "Confirm"}
                 </button>
               </form>
             </div>
@@ -127,7 +135,7 @@ export function RegeneratePbdbButton({
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        disabled={pending}
+        disabled={busy}
         className="shrink-0 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
       >
         Regenerate
