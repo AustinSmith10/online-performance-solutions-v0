@@ -716,7 +716,7 @@ export default async function ConsultantProjectDetailPage({
     // No URL param / timers / overlay — the mechanism that used to wipe the old
     // spotlight now drives the transition.
     focusCard = (
-      <FocusCard tone="green" title="Download the generated PBDB" subtitle="Fresh off generation — QA it, then upload the QA'd copy to send to stakeholders.">
+      <FocusCard tone="green" title="Download the PBDB" subtitle="Fresh off generation — QA it, then upload the QA'd copy to send to stakeholders.">
         <GeneratedPbdbDownload
           projectId={id}
           fileId={latestPbdb.id as string}
