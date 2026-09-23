@@ -103,11 +103,21 @@ function usersQuery() {
   return obj;
 }
 
-function mockSupabase(fileRows: FileRow[]) {
+function revisionNotesQuery(note: string | null) {
+  const obj = {
+    select: () => obj,
+    eq: () => obj,
+    maybeSingle: () => Promise.resolve({ data: note ? { note } : null, error: null }),
+  };
+  return obj;
+}
+
+function mockSupabase(fileRows: FileRow[], revisionNote: string | null = null) {
   createAdminClientMock.mockReturnValue({
     from: vi.fn((table: string) => {
       if (table === "project_files") return projectFilesQuery(fileRows);
       if (table === "users") return usersQuery();
+      if (table === "revision_notes") return revisionNotesQuery(revisionNote);
       throw new Error(`Unexpected table: ${table}`);
     }),
   } as unknown as ReturnType<typeof createAdminClient>);
@@ -178,5 +188,24 @@ describe("ApprovePage download button visibility", () => {
 
     expect(html).toContain('data-testid="download-link"');
     expect(html).toContain("OPS-1-S PBDB Rev1 1 Test St 2026 09 23.pdf");
+  });
+
+  it("shows the consultant's revision note for the review's cycle (#59)", async () => {
+    validateTokenMock.mockResolvedValue({ review: REVIEW, isExpired: false });
+    auditLogMock.mockResolvedValue(undefined);
+    mockSupabase([], "Updated the head flashing detail per your comments.");
+
+    const html = await renderApprovePage();
+
+    expect(html).toContain('data-testid="revision-note"');
+    expect(html).toContain("Updated the head flashing detail per your comments.");
+  });
+
+  it("shows no note block when the cycle has no revision note", async () => {
+    validateTokenMock.mockResolvedValue({ review: REVIEW, isExpired: false });
+    auditLogMock.mockResolvedValue(undefined);
+    mockSupabase([]);
+
+    expect(await renderApprovePage()).not.toContain('data-testid="revision-note"');
   });
 });
