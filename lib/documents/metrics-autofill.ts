@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import type { createAdminClient } from "@/lib/supabase/admin";
 
 // Generalizes the hardcoded halcyon_developments mechanism in
 // app/actions/submission.ts: an admin-configured client_metrics_table can be
@@ -104,8 +104,95 @@ export function buildMetricsPickRows(
   };
 }
 
-// Case-insensitive exact-then-substring match, mirroring today's dev_name
-// matching logic. No match found is a graceful no-op — same as today.
+// ─── Development-name matching (#189) ───────────────────────────────────────
+// The one shared matcher for keying an extracted/entered development name
+// against a client metrics table's match column — used server-side by
+// resolveMetricsAutofill and client-side for the trustee dropdown's default.
+// Pure (no server-only imports) so the submission form can call it directly.
+
+/** Case, dash-variant (-, –, —) and whitespace-insensitive form of a name. */
+export function normalizeDevelopmentName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[\u2010-\u2015\u2212-]/g, " - ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export type DevelopmentNameMatch =
+  | { status: "matched"; name: string; via: "exact" | "prefix" }
+  | { status: "none" }
+  | { status: "ambiguous"; names: string[] };
+
+/**
+ * Exact (normalized) match first; otherwise the longest table name that is a
+ * whole-word prefix of the extracted name — "Halcyon Promenade – West" →
+ * "Halcyon Promenade", since a trailing "West"/"Stage 2" never denotes a
+ * different development with different values. No match, or a tie between
+ * equally-long candidates, is unresolved rather than guessed.
+ */
+export function matchDevelopmentName(extracted: string, names: string[]): DevelopmentNameMatch {
+  const needle = normalizeDevelopmentName(extracted);
+  if (!needle) return { status: "none" };
+
+  const candidates = names
+    .map((name) => ({ name, norm: normalizeDevelopmentName(name) }))
+    .filter((c) => c.norm !== "");
+
+  const exact = candidates.filter((c) => c.norm === needle);
+  if (exact.length === 1) return { status: "matched", name: exact[0].name, via: "exact" };
+  if (exact.length > 1) return { status: "ambiguous", names: exact.map((c) => c.name) };
+
+  const prefixes = candidates.filter((c) => needle.startsWith(`${c.norm} `));
+  if (prefixes.length === 0) return { status: "none" };
+  const longest = Math.max(...prefixes.map((c) => c.norm.length));
+  const best = prefixes.filter((c) => c.norm.length === longest);
+  if (best.length > 1) return { status: "ambiguous", names: best.map((c) => c.name) };
+  return { status: "matched", name: best[0].name, via: "prefix" };
+}
+
+function words(value: string): Set<string> {
+  return new Set(
+    normalizeDevelopmentName(value)
+      .split(" ")
+      .filter((w) => w !== "" && w !== "-")
+  );
+}
+
+/**
+ * Closest table name by word overlap (Jaccard) — a *suggestion* only, for a
+ * reviewer to confirm when matchDevelopmentName couldn't resolve. Never
+ * applied automatically. Null when nothing shares a single word.
+ */
+export function suggestDevelopmentName(extracted: string, names: string[]): string | null {
+  const target = words(extracted);
+  if (target.size === 0) return null;
+  let best: { name: string; score: number } | null = null;
+  for (const name of names) {
+    const candidate = words(name);
+    if (candidate.size === 0) continue;
+    const shared = [...candidate].filter((w) => target.has(w)).length;
+    if (shared === 0) continue;
+    const score = shared / new Set([...candidate, ...target]).size;
+    if (!best || score > best.score) best = { name, score };
+  }
+  return best?.name ?? null;
+}
+
+/** The table row a development name resolves to, via matchDevelopmentName. */
+export function findMetricsRow(
+  config: MetricsAutofillConfig,
+  matchValue: string
+): { data: Record<string, string | number | null> } | null {
+  const cell = (row: { data: Record<string, string | number | null> }) =>
+    String(row.data[config.matchColumnId] ?? "");
+  const result = matchDevelopmentName(matchValue, config.rows.map(cell));
+  if (result.status !== "matched") return null;
+  return config.rows.find((r) => cell(r) === result.name) ?? null;
+}
+
+// No match found (or an ambiguous one) is a graceful no-op — the output
+// tokens are simply left unset.
 export function resolveMetricsAutofill(
   configs: MetricsAutofillConfig[],
   fields: Record<string, { value: string; confidence: string }>
@@ -113,18 +200,8 @@ export function resolveMetricsAutofill(
   for (const config of configs) {
     const matchValue = fields[config.matchToken]?.value?.trim() ?? "";
     if (!matchValue) continue;
-    const needle = matchValue.toLowerCase();
 
-    const cellText = (row: { data: Record<string, string | number | null> }) =>
-      String(row.data[config.matchColumnId] ?? "").toLowerCase();
-
-    const matchedRow =
-      config.rows.find((r) => cellText(r) === needle) ??
-      config.rows.find((r) => {
-        const cell = cellText(r);
-        return cell !== "" && (cell.includes(needle) || needle.includes(cell));
-      });
-
+    const matchedRow = findMetricsRow(config, matchValue);
     if (!matchedRow) continue;
 
     for (const output of config.outputs) {

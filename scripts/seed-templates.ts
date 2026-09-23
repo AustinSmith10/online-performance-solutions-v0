@@ -62,7 +62,7 @@ const SHARED_TOKENS: TokenDef[] = [
     placeholder_token: "EXTRACT_DEV_NAME",
     field_key: "extract",
     display_label: "Development name",
-    extraction_hint: "The name of the Halcyon development (e.g. Halcyon Promenade, Halcyon Rise). Usually appears in the header of the purchase order.",
+    extraction_hint: "The name of the Halcyon development (e.g. Halcyon Promenade, Halcyon Rise). On the construction drawings it is the \"Halcyon Community\" value in the drawing title block — return that value exactly as printed, including any suffix such as \"– West\" or \"Stage 2\".",
     is_required: true,
     sort_order: 40,
     in_template: true,
