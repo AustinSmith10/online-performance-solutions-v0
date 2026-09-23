@@ -214,6 +214,8 @@ function DrawerContent({
         <PbdbQaUploadForm
           projectId={project.id}
           submitLabel="Upload revised PBDB and re-submit to stakeholders"
+          context="post_dispatch_revision"
+          reviewers={currentReviews.map((r) => ({ name: r.stakeholder_name, status: r.status }))}
         >
           <RevisionNoteField
             reviewerNames={currentReviews.map((r) => r.stakeholder_name)}

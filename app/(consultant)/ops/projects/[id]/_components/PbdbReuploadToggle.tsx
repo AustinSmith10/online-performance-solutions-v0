@@ -40,7 +40,7 @@ export function PbdbReuploadToggle({ projectId }: { projectId: string }) {
           Cancel
         </button>
       </div>
-      <PbdbQaUploadForm projectId={projectId} submitLabel="Replace PBDB" />
+      <PbdbQaUploadForm projectId={projectId} submitLabel="Replace PBDB" context="pre_dispatch_replace" />
     </div>
   );
 }

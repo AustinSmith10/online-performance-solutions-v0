@@ -135,8 +135,6 @@ const LIVE_STATUSES: readonly ProjectStatus[] = [
   "submitted", "assigned", "in_progress", "dispatched", "revision_required",
 ];
 
-const UPLOAD_NEW_VERSION_COPY =
-  "Uploading a new version will reset all stakeholder approvals for this cycle. The assigned consultant will pick the delivery timing and redispatch to everyone (including anyone who already approved) as a separate step after this.";
 
 function overdueInfo(
   deliveryDate: string | null,
@@ -586,6 +584,19 @@ export default async function ProjectDetailPage({
   }
   const reviewCycles = [...reviewsByCycle.keys()].sort((a, b) => b - a);
 
+  // #193: on a redispatch, the current cycle's rows don't exist yet (they're
+  // created on send) — the reviewers being reset are the previous cycle's.
+  const previousCycleReviews = reviewsByCycle.get(project.review_cycle - 1) ?? [];
+  const redispatchResetWarning =
+    previousCycleReviews.length > 0
+      ? {
+          totalStakeholders: previousCycleReviews.length,
+          previouslyApprovedCount: previousCycleReviews.filter(
+            (r) => r.status === "approved_without_comments" || r.status === "approved_with_comments"
+          ).length,
+        }
+      : undefined;
+
   const { isOverdue, daysOverdue } = overdueInfo(project.expected_delivery_date, project.status, isDeleted);
   const daysPaused = calcDaysPaused(pauseData.paused_at);
 
@@ -937,7 +948,7 @@ export default async function ProjectDetailPage({
                     projectedSendDate={pbdbSendPreviewIso}
                   />
                 </div>
-                <DispatchButton projectId={id} />
+                <DispatchButton projectId={id} resetWarning={redispatchResetWarning} />
               </>
             )
           )}
@@ -1015,8 +1026,8 @@ export default async function ProjectDetailPage({
             <PbdbQaUploadForm
               projectId={id}
               submitLabel="Upload new version"
-              requireConfirmation
-              confirmCopy={UPLOAD_NEW_VERSION_COPY}
+              context="post_dispatch_revision"
+              reviewers={currentCycleReviews.map((r) => ({ name: r.stakeholder_name, status: r.status }))}
             >
               <RevisionNoteField
                 reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
@@ -1045,8 +1056,8 @@ export default async function ProjectDetailPage({
           <PbdbQaUploadForm
             projectId={id}
             submitLabel="Upload revised PBDB"
-            requireConfirmation
-            confirmCopy={UPLOAD_NEW_VERSION_COPY}
+            context="post_dispatch_revision"
+            reviewers={currentCycleReviews.map((r) => ({ name: r.stakeholder_name, status: r.status }))}
           >
             <RevisionNoteField
               reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
