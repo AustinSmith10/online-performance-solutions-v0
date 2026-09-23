@@ -19,6 +19,7 @@ import { setJudgeDocumentTextCharCap } from "@/lib/settings/judge-document-text-
 import { setAiExtractionEnabled } from "@/lib/settings/ai-extraction-enabled";
 import { setExtractionDailyLimit } from "@/lib/settings/extraction-budget";
 import { getBusinessTimezone, setBusinessTimezone } from "@/lib/settings/timezone";
+import { setExtractionDocumentTextCharCap } from "@/lib/settings/extraction-document-text-cap";
 
 const DigestScheduleSchema = z.object({
   morning: z.string().refine(isValidTime, { error: "Enter a valid time (HH:MM)" }),
@@ -378,6 +379,49 @@ export async function updateBusinessTimezoneAction(
   await auditLog("settings.business_timezone_updated", actor.id as string, actor.email as string, {
     metadata: { from: previous, to: timeZone },
   });
+
+  revalidatePath("/admin/settings");
+  return { saved: true };
+}
+
+const ExtractionDocumentTextCapSchema = z.object({
+  cap: z.coerce.number({ error: "Enter a number" }).int({ error: "Enter a whole number" }).positive(),
+});
+
+export type UpdateExtractionDocumentTextCapState = {
+  saved?: boolean;
+  errors?: {
+    cap?: string[];
+    form?: string[];
+  };
+};
+
+export async function updateExtractionDocumentTextCapAction(
+  _prev: UpdateExtractionDocumentTextCapState,
+  formData: FormData
+): Promise<UpdateExtractionDocumentTextCapState> {
+  const actor = await requireRole("super_admin", "admin");
+
+  const validated = ExtractionDocumentTextCapSchema.safeParse({
+    cap: formData.get("cap"),
+  });
+
+  if (!validated.success) {
+    const fieldErrors = validated.error.flatten().fieldErrors;
+    return { errors: { cap: fieldErrors.cap } };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await setExtractionDocumentTextCharCap(supabase, validated.data.cap, actor.id as string);
+
+  if (error) return { errors: { cap: [error] } };
+
+  await auditLog(
+    "settings.extraction_document_text_cap_updated",
+    actor.id as string,
+    actor.email as string,
+    { metadata: { cap: validated.data.cap } }
+  );
 
   revalidatePath("/admin/settings");
   return { saved: true };

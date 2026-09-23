@@ -2,24 +2,28 @@
 
 import { useActionState } from "react";
 import {
-  updateJudgeDocumentTextCapAction,
-  type UpdateJudgeDocumentTextCapState,
+  updateExtractionDocumentTextCapAction,
+  type UpdateExtractionDocumentTextCapState,
 } from "@/app/actions/settings";
+import {
+  MAX_EXTRACTION_DOCUMENT_TEXT_CHAR_CAP,
+  MIN_EXTRACTION_DOCUMENT_TEXT_CHAR_CAP,
+} from "@/lib/settings/extraction-document-text-cap";
 
-export function JudgeDocumentTextCapForm({ cap }: { cap: number }) {
-  const [state, action, pending] = useActionState<UpdateJudgeDocumentTextCapState, FormData>(
-    updateJudgeDocumentTextCapAction,
+export function ExtractionDocumentTextCapForm({ cap }: { cap: number }) {
+  const [state, action, pending] = useActionState<UpdateExtractionDocumentTextCapState, FormData>(
+    updateExtractionDocumentTextCapAction,
     {}
   );
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-zinc-900">Upload-check document cap</h2>
+      <h2 className="text-sm font-semibold text-zinc-900">Field extraction document cap</h2>
       <p className="mt-0.5 text-xs text-zinc-500">
-        How many characters of an uploaded document&apos;s text are sent to the AI check that
-        confirms a file matches its upload slot (e.g. that a PO is really a PO). Only affects that
-        check — field extraction has its own cap above. Raise this if long documents are being
-        judged on an incomplete excerpt; lower it to reduce cost.
+        How many characters of each document&apos;s text are sent to the AI that extracts project
+        fields — the largest AI cost per submission. Text beyond this is not read. Can be lowered to
+        reduce cost; the maximum is {MAX_EXTRACTION_DOCUMENT_TEXT_CHAR_CAP.toLocaleString("en-AU")}{" "}
+        (the extraction timeout is sized for that).
       </p>
 
       {state.errors?.form?.map((e) => (
@@ -38,7 +42,8 @@ export function JudgeDocumentTextCapForm({ cap }: { cap: number }) {
           <input
             name="cap"
             type="number"
-            min={1}
+            min={MIN_EXTRACTION_DOCUMENT_TEXT_CHAR_CAP}
+            max={MAX_EXTRACTION_DOCUMENT_TEXT_CHAR_CAP}
             step={1}
             defaultValue={cap}
             required

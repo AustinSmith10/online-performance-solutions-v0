@@ -8,11 +8,15 @@ const { mockSendEmail, mockAuditLog, mockNotify, mockExtractDocumentFields, mock
   mockResolveStakeholders: vi.fn().mockResolvedValue([]),
 }));
 
+const { mockClaimExtractionSlots } = vi.hoisted(() => ({
+  mockClaimExtractionSlots: vi.fn(async (_s: unknown, _u: string, count: number) => ({ granted: count, limit: 30 })),
+}));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/email/sender", () => ({ sendEmail: mockSendEmail }));
 vi.mock("@/lib/audit/log", () => ({ auditLog: mockAuditLog }));
 vi.mock("@/lib/notifications/notify", () => ({ notify: mockNotify }));
 vi.mock("@/lib/documents/extractor", () => ({ extractDocumentFields: mockExtractDocumentFields }));
+vi.mock("@/lib/documents/extraction-budget", () => ({ claimExtractionSlots: mockClaimExtractionSlots }));
 vi.mock("@/lib/stakeholders/resolver", () => ({ resolveStakeholders: mockResolveStakeholders }));
 
 import { executeQueueRowResolution, type QueueRowForExecution } from "./execute-resolution";
@@ -281,6 +285,18 @@ describe("executeQueueRowResolution", () => {
       expect(supabase.insertFiles).toHaveBeenCalledWith(
         expect.objectContaining({ file_type: "purchase_order", file_type_confirmed: false })
       );
+    });
+
+    it("charges the submitter's extraction budget and skips extraction once it's used up (#152)", async () => {
+      mockClaimExtractionSlots.mockResolvedValueOnce({ granted: 0, limit: 30 });
+      mockExtractDocumentFields.mockResolvedValue({ po_number: { value: "", confidence: "low" }, fields: {}, candidates: {}, poCandidates: [] });
+      const supabase = makeSupabase({ id: "proj-1", client_id: "org-1", status: "draft", template_id: null, submitted_by: "user-1" });
+
+      const result = await executeQueueRowResolution(ROW_WITH_ATTACHMENT, { category: "thread_reply", projectId: "proj-1" }, supabase as never);
+
+      expect(result.ok).toBe(true);
+      expect(mockClaimExtractionSlots).toHaveBeenCalledWith(supabase, "user-1", 1);
+      expect(mockExtractDocumentFields).toHaveBeenCalledWith([], expect.anything());
     });
 
     it("is a no-op success when the row has no attachments", async () => {

@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // judge (lib/documents/file-requirement-verification.ts). Admin-configurable
 // rather than a fixed constant, since it directly trades off judge-call cost
 // against how much of a long document the judge actually sees. Independent of
-// the extraction pipeline's own DOC_TEXT_CHAR_CAP (lib/documents/extractor.ts).
+// the extraction pipeline's own cap (lib/settings/extraction-document-text-cap.ts).
 export const DEFAULT_JUDGE_DOCUMENT_TEXT_CHAR_CAP = 150_000;
 
 export const JUDGE_DOCUMENT_TEXT_CHAR_CAP_KEY = "judge_document_text_char_cap";

@@ -17,8 +17,9 @@ export function ExtractionDailyLimitForm({ limit }: { limit: number }) {
       <h2 className="text-sm font-semibold text-zinc-900">AI extraction budget</h2>
       <p className="mt-0.5 text-xs text-zinc-500">
         Maximum number of AI document extractions a single user can trigger in a rolling 24-hour
-        window. Bounds spend from a compromised or careless account — raise this if legitimate
-        users are hitting the limit during normal use.
+        window — one per document, counted across uploads, &quot;Re-extract from documents&quot;, and
+        emailed attachments (charged to the sender). Bounds spend from a compromised or careless
+        account — raise this if legitimate users are hitting the limit during normal use.
       </p>
 
       {state.errors?.form?.map((e) => (
