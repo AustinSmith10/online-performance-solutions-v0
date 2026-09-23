@@ -105,7 +105,31 @@ function applyTextReplacements(xml: string): string {
 }
 
 /**
- * Strips watermark shapes from a header XML string.
+ * Keeps the header logo visible under LibreOffice. Non-watermark
+ * <mc:AlternateContent> blocks (DDEG logo + connector group) are patched:
+ * behindDoc="1" prevents Gotenberg's LibreOffice from clipping the inline
+ * Building Solutions logo — the anchor is positioned at page y=0, above the
+ * header content area, and rendering it in front (behindDoc="0") causes
+ * Gotenberg to treat its bounding box as a foreground clip over the logo in
+ * Para[0]. Behind-text shapes remain visible because header paragraphs have
+ * no background fill. The VML fallback z-index is mirrored to negative.
+ *
+ * Blocks carrying <v:textpath> (WordArt watermarks) are left untouched — this
+ * runs for every docx→PDF path, and a PBDB PDF must keep its watermark (#185).
+ */
+function patchHeaderLogoZOrder(xml: string): string {
+  return xml.replace(/<mc:AlternateContent[\s\S]*?<\/mc:AlternateContent>/g, (block) => {
+    if (/<v:textpath/i.test(block)) return block;
+    return block
+      .replace(/\bbehindDoc="0"/g, 'behindDoc="1"')
+      .replace(/\bz-index:251742208\b/g, "z-index:-251742208");
+  });
+}
+
+/**
+ * Strips watermark shapes from a header XML string. PBDR-only (#185): the
+ * "NOT FOR CONSTRUCTION" watermark must survive on every PBDB PDF, so this is
+ * called from convertPbdbToPbdr and never from makeDocxConversionSafe.
  * Watermarks in Word headers are stored as floating shapes — either old-style
  * <w:pict>/<v:shape> blocks or modern <mc:AlternateContent> (DrawingML + VML
  * fallback). Removing these elements is safe; it leaves the header structure
@@ -116,19 +140,9 @@ function removeWatermarks(xml: string): string {
   // Checked FIRST so <v:textpath> detection fires on the original block before
   // the <w:pict> pass below strips it from the VML fallback.
   // Blocks with <v:textpath> are WordArt text watermarks — strip entirely.
-  // Non-watermark blocks (DDEG logo + connector group) are kept but patched:
-  // behindDoc="1" prevents Gotenberg's LibreOffice from clipping the inline
-  // Building Solutions logo — the anchor is positioned at page y=0, above the
-  // header content area, and rendering it in front (behindDoc="0") causes
-  // Gotenberg to treat its bounding box as a foreground clip over the logo in
-  // Para[0]. Behind-text shapes remain visible because header paragraphs have
-  // no background fill. The VML fallback z-index is mirrored to negative.
-  let result = xml.replace(/<mc:AlternateContent[\s\S]*?<\/mc:AlternateContent>/g, (block) => {
-    if (/<v:textpath/i.test(block)) return "";
-    return block
-      .replace(/\bbehindDoc="0"/g, 'behindDoc="1"')
-      .replace(/\bz-index:251742208\b/g, "z-index:-251742208");
-  });
+  let result = xml.replace(/<mc:AlternateContent[\s\S]*?<\/mc:AlternateContent>/g, (block) =>
+    /<v:textpath/i.test(block) ? "" : block
+  );
   // Remove <w:pict> blocks that contain <v:textpath> (VML WordArt watermarks).
   // Instead of deleting the entire <w:pict> block, surgically remove only the
   // watermark-specific content: the <v:textpath> shapetype and the <v:shape>
@@ -263,7 +277,9 @@ function freezeOneTocField(xml: string): string {
  *      renders the existing styled/cached entries rather than regenerating
  *      them (dot-leader defaults for TOC, near-empty output for Bibliography,
  *      since LibreOffice can't recompute Word's Citations & Bibliography data).
- *   2. Strips watermark shapes from header XML.
+ *   2. Patches the header logo's z-order (patchHeaderLogoZOrder). Watermarks
+ *      are deliberately NOT stripped here — a PBDB PDF must always keep its
+ *      "NOT FOR CONSTRUCTION" watermark; only convertPbdbToPbdr strips it (#185).
  *   3. Patches the Header paragraph style's w:lineRule so LibreOffice doesn't
  *      clip the inline header logo to an ~8pt computed line height.
  *
@@ -288,7 +304,7 @@ export function makeDocxConversionSafe(docxBuffer: Buffer): Buffer {
   for (const key of headerKeys) {
     const file = zip.files[key];
     if (!file) continue;
-    zip.file(key, removeWatermarks(file.asText()));
+    zip.file(key, patchHeaderLogoZOrder(file.asText()));
   }
 
   // The Header paragraph style uses w:lineRule="auto" at 85% (204/240), which
@@ -324,8 +340,8 @@ export function makeDocxConversionSafe(docxBuffer: Buffer): Buffer {
 
 /**
  * Transforms a QA'd PBDB .docx buffer into a PBDR .docx buffer: applies the
- * shared conversion-safety pass above, then 8 PBDR-specific text
- * replacements to the document body and headers.
+ * shared conversion-safety pass above, then strips header watermarks and
+ * applies 8 PBDR-specific text replacements to the document body and headers.
  *
  * The returned buffer is a valid .docx ready to be sent to Gotenberg for PDF
  * rendering. No storage I/O happens here — callers handle that.
@@ -344,7 +360,7 @@ export function convertPbdbToPbdr(docxBuffer: Buffer): Buffer {
   for (const key of headerKeys) {
     const file = zip.files[key];
     if (!file) continue;
-    zip.file(key, applyTextReplacements(file.asText()));
+    zip.file(key, applyTextReplacements(removeWatermarks(file.asText())));
   }
 
   return zip.generate({ type: "nodebuffer" }) as Buffer;

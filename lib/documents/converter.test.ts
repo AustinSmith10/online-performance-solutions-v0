@@ -244,13 +244,27 @@ describe("makeDocxConversionSafe — shared pre-conversion protections (#118)", 
     expect(xml).not.toContain("w:instrText");
   });
 
-  it("strips header watermarks", () => {
-    const watermark = `<w:pict><v:textpath string="DRAFT"/></w:pict>`;
+  it("keeps header watermarks — a PBDB PDF must retain NOT FOR CONSTRUCTION (#185)", () => {
+    const vml = `<w:pict><v:textpath string="NOT FOR CONSTRUCTION"/></w:pict>`;
+    const drawingMl = `<mc:AlternateContent><mc:Choice><p>DrawingML watermark</p></mc:Choice><mc:Fallback><w:pict><v:shape><v:textpath string="NOT FOR CONSTRUCTION"/></v:shape></w:pict></mc:Fallback></mc:AlternateContent>`;
     const input = makeDocxBuffer(`<root>${p("body")}</root>`, {
-      "word/header1.xml": `<root><w:p>${watermark}</w:p></root>`,
+      "word/header1.xml": `<root><w:p>${vml}</w:p></root>`,
+      "word/header2.xml": `<root>${drawingMl}</root>`,
+    });
+    const out = makeDocxConversionSafe(input);
+    expect(readXml(out, "word/header1.xml")).toContain('v:textpath string="NOT FOR CONSTRUCTION"');
+    expect(readXml(out, "word/header2.xml")).toContain("DrawingML watermark");
+    expect(readXml(out, "word/header2.xml")).toContain("v:textpath");
+  });
+
+  it("still patches the non-watermark header logo z-order", () => {
+    const logo = `<mc:AlternateContent><mc:Choice><wp:anchor behindDoc="0"/></mc:Choice><mc:Fallback><v:group style="z-index:251742208"/></mc:Fallback></mc:AlternateContent>`;
+    const input = makeDocxBuffer(`<root>${p("body")}</root>`, {
+      "word/header1.xml": `<root>${logo}</root>`,
     });
     const output = readXml(makeDocxConversionSafe(input), "word/header1.xml");
-    expect(output).not.toContain("v:textpath");
+    expect(output).toContain('behindDoc="1"');
+    expect(output).toContain("z-index:-251742208");
   });
 
   it("patches the Header style's w:lineRule from auto to atLeast", () => {

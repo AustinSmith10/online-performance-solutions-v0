@@ -99,7 +99,8 @@ export async function getOrCreateDispatchPdf(
   }
   // Same header-logo/TOC/Bibliography field protections as the PBDR path
   // (#118) — this PDF is what both the consultant's preview and stakeholders
-  // (since #112) actually see.
+  // (since #112) actually see. It deliberately keeps the "NOT FOR
+  // CONSTRUCTION" watermark; only PBDR conversion strips it (#185).
   docxBuffer = makeDocxConversionSafe(docxBuffer);
 
   await onStep?.(40);
