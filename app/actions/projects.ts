@@ -20,7 +20,7 @@ import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { expediteDelivery, expeditePbdbDispatch, scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
-import { getCurrentRevNumber, peekNextRevNumber } from "@/lib/documents/revision-history";
+import { getCurrentRevNumber, peekNextRevNumber, getLatestRevisionHistoryRow } from "@/lib/documents/revision-history";
 import { forceCloseRound, forcedCloseWouldBump } from "@/lib/stakeholders/review-round";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { appendRevisionHistoryRow, setCoverRevisionNumber } from "@/lib/documents/revision-table";
@@ -1030,6 +1030,50 @@ export async function markPbdbDownloaded(
     .is("pbdb_downloaded_at", null);
 
   revalidatePath(`/ops/projects/${projectId}`);
+  return {};
+}
+
+// ─── Consultant: mark the revision-populated working PBDB downloaded (#195) ──
+//
+// Distinct from markPbdbDownloaded above (projects.pbdb_downloaded_at, the
+// *first* generated copy) — this tracks, per revision, whether the
+// consultant has grabbed the copy the #194 download route patches with the
+// new revision-history row/cover number once a round closes rejected.
+// Scoped to revision_history's latest pbdb row rather than a projects
+// column so it needs no explicit reset on the next redispatch cycle: the
+// next rejection writes a fresh row with this column null again.
+
+export type MarkWorkingPbdbDownloadedState = { error?: string };
+
+export async function markWorkingPbdbDownloaded(projectId: string): Promise<MarkWorkingPbdbDownloadedState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
+
+  const latestRow = await getLatestRevisionHistoryRow(supabase, projectId, "pbdb");
+  if (!latestRow) return { error: "No revision history found for this project." };
+
+  if (!latestRow.working_pbdb_downloaded_at) {
+    await supabase
+      .from("revision_history")
+      .update({ working_pbdb_downloaded_at: new Date().toISOString() })
+      .eq("id", latestRow.id)
+      .is("working_pbdb_downloaded_at", null);
+  }
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
   return {};
 }
 

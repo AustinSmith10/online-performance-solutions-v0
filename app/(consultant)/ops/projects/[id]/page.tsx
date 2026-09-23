@@ -30,7 +30,8 @@ import { ReExtractButton } from "@/components/ReExtractButton";
 import { ProjectAuditTrail, type ProjectAuditRow } from "./_components/ProjectAuditTrail";
 import { PendingReviewCard } from "./_components/PendingReviewCard";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
-import { getCurrentRevNumber } from "@/lib/documents/revision-history";
+import { getCurrentRevNumber, getLatestRevisionHistoryRow } from "@/lib/documents/revision-history";
+import { DownloadRevisedPbdbButton } from "@/components/DownloadRevisedPbdbButton";
 import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
 import { ReviewResponseControl } from "./_components/ReviewResponseControl";
 import { previewNextSendTime } from "@/lib/documents/pending-delivery";
@@ -446,8 +447,11 @@ export default async function ConsultantProjectDetailPage({
   // (the old `latestPbdb.version - 1` formula drifted every regenerate).
   // That regeneration counter is deliberately not surfaced anywhere in the
   // UI — Rev is the only version number a user should ever see.
-  const [currentRevNumber, pbdbSendPreview, pbdrSendPreview] = await Promise.all([
+  const [currentRevNumber, latestPbdbRevisionRow, pbdbSendPreview, pbdrSendPreview] = await Promise.all([
     getCurrentRevNumber(supabase, id, "pbdb"),
+    // #195: whether the consultant has downloaded the revision-populated
+    // working copy for the *current* revision yet.
+    getLatestRevisionHistoryRow(supabase, id, "pbdb"),
     // Projected "send date" beside the delivery-timing controls (#176) — the
     // contractual due date (project.expected_delivery_date) is a different
     // thing and testers were reading the two as one.
@@ -497,6 +501,12 @@ export default async function ConsultantProjectDetailPage({
   const pendingCount = pendingReviews.length;
   // #191/#192: the current round's status gates correcting a logged response.
   const currentRoundStatus = deriveRoundStatus(currentCycleReviews);
+  // #195: once the round has actually closed rejected (not just "someone
+  // rejected, others still pending" — that's the pendingReviews branch
+  // above), the #194 download route serves a revision-populated copy. Show
+  // the download step first, ahead of the upload form, until it's grabbed.
+  const workingPbdbNeedsDownload =
+    currentRoundStatus === "closed_rejected" && !latestPbdbRevisionRow?.working_pbdb_downloaded_at;
   // Who logged each review's latest response on the stakeholder's behalf —
   // shown when a consultant opens it to replace it (#192).
   const loggedByByReviewId = new Map<string, string | null>();
@@ -889,17 +899,29 @@ export default async function ConsultantProjectDetailPage({
               ))}
             </div>
           )}
-          <PbdbQaUploadForm
-            projectId={id}
-            submitLabel="Upload revised PBDB"
-            requireConfirmation
-            confirmCopy={UPLOAD_NEW_VERSION_COPY}
-          >
-            <RevisionNoteField
-              reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
-              required={project.clients?.revision_notes_required ?? false}
+          {workingPbdbNeedsDownload && latestPbdb ? (
+            // #195: the round has closed rejected — the #194 download route
+            // now serves a copy with the new revision row/cover patched in.
+            // Prompt for that download before the upload form, so the
+            // consultant doesn't keep correcting a stale pre-patch copy.
+            <DownloadRevisedPbdbButton
+              projectId={id}
+              fileId={latestPbdb.id as string}
+              filename={latestPbdb.original_filename as string}
             />
-          </PbdbQaUploadForm>
+          ) : (
+            <PbdbQaUploadForm
+              projectId={id}
+              submitLabel="Upload revised PBDB"
+              requireConfirmation
+              confirmCopy={UPLOAD_NEW_VERSION_COPY}
+            >
+              <RevisionNoteField
+                reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
+                required={project.clients?.revision_notes_required ?? false}
+              />
+            </PbdbQaUploadForm>
+          )}
         </div>
       </FocusCard>
     );

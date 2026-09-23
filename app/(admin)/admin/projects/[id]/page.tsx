@@ -28,7 +28,8 @@ import { PendingDeliveryPanel } from "@/components/PendingDeliveryPanel";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { previewNextSendTime } from "@/lib/documents/pending-delivery";
-import { getCurrentRevNumber } from "@/lib/documents/revision-history";
+import { getCurrentRevNumber, getLatestRevisionHistoryRow } from "@/lib/documents/revision-history";
+import { DownloadRevisedPbdbButton } from "@/components/DownloadRevisedPbdbButton";
 import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
 import { ReviewResponseControl } from "@/app/(consultant)/ops/projects/[id]/_components/ReviewResponseControl";
 import { DownloadCard } from "@/components/DownloadCard";
@@ -239,10 +240,13 @@ export default async function ProjectDetailPage({
   // #176: projected send date shown beside every delivery-timing control, so
   // it's never conflated with the contractual due date; currentRevNumber is
   // the revision_history-owned Rev (0-based) shown on the header chip.
-  const [pbdbSendPreview, pbdrSendPreview, currentRevNumber] = await Promise.all([
+  const [pbdbSendPreview, pbdrSendPreview, currentRevNumber, latestPbdbRevisionRow] = await Promise.all([
     previewNextSendTime(id, "pbdb").catch(() => null),
     previewNextSendTime(id, "pbdr").catch(() => null),
     getCurrentRevNumber(supabase, id, "pbdb"),
+    // #195: whether the consultant has downloaded the revision-populated
+    // working copy for the *current* revision yet.
+    getLatestRevisionHistoryRow(supabase, id, "pbdb"),
   ]);
   const pbdbSendPreviewIso = pbdbSendPreview ? pbdbSendPreview.toISOString() : undefined;
   const pbdrSendPreviewIso = pbdrSendPreview ? pbdrSendPreview.toISOString() : undefined;
@@ -572,6 +576,11 @@ export default async function ProjectDetailPage({
   const pendingReviews = currentCycleReviews.filter((r) => r.status === "pending");
   // #191/#192: the current round's status gates correcting a logged response.
   const currentRoundStatus = deriveRoundStatus(currentCycleReviews);
+  // #195: once the round has actually closed rejected, the #194 download
+  // route serves a revision-populated copy — prompt for that download
+  // ahead of the upload form until it's been grabbed.
+  const workingPbdbNeedsDownload =
+    currentRoundStatus === "closed_rejected" && !latestPbdbRevisionRow?.working_pbdb_downloaded_at;
   const loggedByByReviewId = new Map<string, string | null>();
   for (const e of auditEntries) {
     if (e.event_type !== "stakeholder.responded_on_behalf" && e.event_type !== "stakeholder.response_replaced") continue;
@@ -1042,17 +1051,27 @@ export default async function ProjectDetailPage({
               ))}
             </div>
           )}
-          <PbdbQaUploadForm
-            projectId={id}
-            submitLabel="Upload revised PBDB"
-            requireConfirmation
-            confirmCopy={UPLOAD_NEW_VERSION_COPY}
-          >
-            <RevisionNoteField
-              reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
-              required={project.clients?.revision_notes_required ?? false}
+          {workingPbdbNeedsDownload && latestPbdb ? (
+            // #195: the round has closed rejected — the #194 download route
+            // now serves a copy with the new revision row/cover patched in.
+            <DownloadRevisedPbdbButton
+              projectId={id}
+              fileId={latestPbdb.id as string}
+              filename={latestPbdb.original_filename as string}
             />
-          </PbdbQaUploadForm>
+          ) : (
+            <PbdbQaUploadForm
+              projectId={id}
+              submitLabel="Upload revised PBDB"
+              requireConfirmation
+              confirmCopy={UPLOAD_NEW_VERSION_COPY}
+            >
+              <RevisionNoteField
+                reviewerNames={currentCycleReviews.map((r) => r.stakeholder_name)}
+                required={project.clients?.revision_notes_required ?? false}
+              />
+            </PbdbQaUploadForm>
+          )}
         </div>
       </FocusCard>
     );
