@@ -6,6 +6,7 @@ import { prettifyToken } from "@/lib/tokens/prettify";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import { getCurrentRevNumber, getLatestRevisionHistoryRow } from "@/lib/documents/revision-history";
+import { groupPbdbVersions, type PbdbRevisionRow } from "@/lib/documents/pbdb-versions";
 import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
 import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
@@ -609,7 +610,7 @@ export async function ProjectWorkspace({
   // (the old `latestPbdb.version - 1` formula drifted every regenerate).
   // That regeneration counter is deliberately not surfaced anywhere in the
   // UI — Rev is the only version number a user should ever see.
-  const [currentRevNumber, latestPbdbRevisionRow, pbdbSendPreview, pbdrSendPreview] = await Promise.all([
+  const [currentRevNumber, latestPbdbRevisionRow, pbdbSendPreview, pbdrSendPreview, { data: rawPbdbRevisionRows }] = await Promise.all([
     getCurrentRevNumber(supabase, id, "pbdb"),
     // #195: whether the consultant has downloaded the revision-populated
     // working copy for the *current* revision yet.
@@ -619,7 +620,24 @@ export async function ProjectWorkspace({
     // thing and testers were reading the two as one.
     previewNextSendTime(id, "pbdb").catch(() => null),
     previewNextSendTime(id, "pbdr").catch(() => null),
+    supabase
+      .from("revision_history")
+      .select("event, rev_number, review_cycle, created_at")
+      .eq("project_id", id)
+      .eq("doc_type", "pbdb"),
   ]);
+  const pbdbGrouping = groupPbdbVersions({
+    files: pbdbFiles as {
+      id: string;
+      original_filename: string;
+      version: number;
+      review_cycle: number;
+      created_at: string;
+    }[],
+    reviews: allReviews,
+    revisionHistory: (rawPbdbRevisionRows ?? []) as PbdbRevisionRow[],
+    revisionNotesByCycle,
+  });
   const pbdbSendPreviewIso = pbdbSendPreview ? pbdbSendPreview.toISOString() : undefined;
   const pbdrSendPreviewIso = pbdrSendPreview ? pbdrSendPreview.toISOString() : undefined;
   // #176: the explanation for each value lives in a hover hint on the row,
@@ -1271,20 +1289,11 @@ export async function ProjectWorkspace({
           assignmentHistory={assignmentHistory}
         />
       )}
-      {pbdbFiles.length > 0 && (
+      {pbdbGrouping && (
         <PbdbVersionsCard
           id="pbdb-section"
           projectId={id}
-          files={(
-            pbdbFiles as {
-              id: string;
-              original_filename: string;
-              version: number;
-              review_cycle: number;
-              created_at: string;
-            }[]
-          ).map((f) => ({ ...f, revisionNote: revisionNotesByCycle.get(f.review_cycle) ?? null }))}
-          projectStatus={project.status}
+          grouping={pbdbGrouping}
           canRegenerate={canRegeneratePbdb}
         />
       )}

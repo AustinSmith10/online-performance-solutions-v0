@@ -1,26 +1,15 @@
-import { DownloadCard } from "@/components/DownloadCard";
-import { FilePreviewButton } from "@/components/FilePreviewButton";
 import { RegeneratePbdbButton } from "@/components/PbdbGenerationButtons";
-import type { ProjectStatus } from "@/types";
-
-type PbdbFile = {
-  id: string;
-  original_filename: string;
-  version: number;
-  created_at: string;
-  revisionNote?: string | null;
-};
+import { VersionTiers } from "@/app/_shared/project-detail/VersionTiers";
+import type { PbdbVersionGrouping } from "@/lib/documents/pbdb-versions";
 
 export function PbdbVersionsCard({
   projectId,
-  files,
-  projectStatus,
+  grouping,
   canRegenerate,
   id,
 }: {
   projectId: string;
-  files: PbdbFile[];
-  projectStatus: ProjectStatus;
+  grouping: PbdbVersionGrouping;
   canRegenerate: boolean;
   id?: string;
 }) {
@@ -35,48 +24,15 @@ export function PbdbVersionsCard({
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">PBDB</p>
       </div>
 
-      <div className="space-y-1.5">
-        {files.map((f, i) => {
-          const isLatest = i === files.length - 1;
-          const showDispatchedBadge =
-            isLatest && (["dispatched", "revision_required"] as ProjectStatus[]).includes(projectStatus);
-          return (
-            <div key={f.id} className="space-y-1">
-              <DownloadCard
-                id={showDispatchedBadge ? "qa-pbdb-row" : undefined}
-                href={`/api/download/pbdb/${f.id}`}
-                filename={f.original_filename}
-                wrapperClassName="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-2 transition-shadow duration-700"
-                buttonClassName="shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
-                preview={
-                  <FilePreviewButton
-                    projectId={projectId}
-                    fileId={f.id}
-                    buttonClassName="shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
-                  />
-                }
-              >
-                <p className="truncate text-xs font-medium text-zinc-900" title={f.original_filename}>
-                  {f.original_filename}
-                </p>
-                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] text-zinc-400">
-                    {new Date(f.created_at).toLocaleDateString("en-AU")}
-                  </span>
-                  {showDispatchedBadge && (
-                    <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
-                      Dispatched
-                    </span>
-                  )}
-                </div>
-              </DownloadCard>
-              {f.revisionNote && (
-                <p className="px-3 text-[11px] leading-relaxed text-zinc-500">{f.revisionNote}</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <VersionTiers
+        projectId={projectId}
+        active={grouping.active}
+        historical={grouping.historical}
+        drafts={grouping.drafts}
+        hrefFor={(fileId) => `/api/download/pbdb/${fileId}`}
+        // QaUploadedBanner scrolls to / highlights this row after a QA upload.
+        activeRowId={grouping.active.badge === "none" ? undefined : "qa-pbdb-row"}
+      />
 
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-zinc-100 pt-3">
         {canRegenerate && (

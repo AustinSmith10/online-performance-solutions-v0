@@ -2,6 +2,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { auditLog } from "@/lib/audit/log";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
+import { REJECTED_STATUSES, deriveRoundStatus, type RoundStatus } from "./round-status";
+
+export { deriveRoundStatus };
+export type { RoundStatus };
 
 // A stakeholder review round (= review cycle, #191): every dispatch or
 // redispatch needs *all* stakeholders to approve. One rejection sends the
@@ -19,23 +23,9 @@ import { recordRevisionEvent } from "@/lib/documents/revision-history";
 // conditional `open → closed_*` update, so of two responses racing to close
 // the same round exactly one wins and bumps.
 
-export type RoundStatus = "open" | "closed_approved" | "closed_rejected" | "superseded";
-
-const REJECTED_STATUSES = new Set(["rejected_with_comments", "rejected_without_comments"]);
-
 interface RoundRow {
   status: string;
   round_status: string;
-}
-
-/** A round's status from its rows (a forced close leaves a mix of `superseded` and `closed_rejected`). */
-export function deriveRoundStatus(rows: { round_status: string }[]): RoundStatus | null {
-  if (rows.length === 0) return null;
-  const statuses = new Set(rows.map((r) => r.round_status));
-  if (statuses.has("open")) return "open";
-  if (statuses.has("closed_rejected")) return "closed_rejected";
-  if (statuses.has("closed_approved")) return "closed_approved";
-  return "superseded";
 }
 
 export async function getRoundStatus(
