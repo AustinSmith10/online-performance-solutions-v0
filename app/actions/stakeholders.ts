@@ -30,6 +30,8 @@ import { attachEvidence } from "@/app/actions/evidence";
 import { parseEmlBody } from "@/lib/email/parseEml";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
 import { runTextCompletion } from "@/lib/documents/extractor";
+import { formatLongDateAU } from "@/lib/time";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -668,11 +670,7 @@ export async function resendFreshToken(
 
   const token = generateTokenString();
   const expiresAt = await computeTokenExpiry(new Date(), stateTerritory);
-  const expiresFormatted = expiresAt.toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const expiresFormatted = formatLongDateAU(expiresAt, await getBusinessTimezone(supabase));
 
   // The token must be persisted before we email a link built from it —
   // swallowing this error was the #166 failure mode (email sent, token never
@@ -886,11 +884,7 @@ export async function updateStakeholderEmail(
 
   const token = generateTokenString();
   const expiresAt = await computeTokenExpiry(new Date(), stateTerritory);
-  const expiresFormatted = expiresAt.toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const expiresFormatted = formatLongDateAU(expiresAt, await getBusinessTimezone(supabase));
 
   // Persist the token before emailing a link built from it (see #166).
   const { error: tokenWriteError } = await supabase

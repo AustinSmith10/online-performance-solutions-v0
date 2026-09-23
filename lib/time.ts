@@ -59,3 +59,41 @@ export function formatDateAU(date: Date, timeZone: string): string {
   const { year, month, day } = zonedParts(date, timeZone);
   return `${day}/${month}/${year}`;
 }
+
+/** `D Month YYYY` (e.g. "5 April 2026") in `timeZone` — the long form used in email copy. */
+export function formatLongDateAU(date: Date, timeZone: string): string {
+  return date.toLocaleDateString("en-AU", {
+    timeZone,
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+// ─── Calendar dates (YYYY-MM-DD, no time of day) ─────────────────────────────
+//
+// Due dates are stored as plain calendar dates. lib/delivery/working-days.ts
+// walks them as UTC-midnight Dates, so these convert between the two without
+// ever touching the server's own zone.
+
+/** UTC-midnight Date for a `YYYY-MM-DD` calendar date (the working-days.ts representation). */
+export function calendarDateAsUtc(isoDate: string): Date {
+  return new Date(`${isoDate}T00:00:00.000Z`);
+}
+
+/** `YYYY-MM-DD` for a UTC-midnight calendar Date (inverse of calendarDateAsUtc). */
+export function calendarDateOf(utcMidnight: Date): string {
+  return isoDateInTz(utcMidnight, "UTC");
+}
+
+/** Calendar-date arithmetic: `isoDate` plus `days` whole days, DST-proof. */
+export function addCalendarDays(isoDate: string, days: number): string {
+  const d = calendarDateAsUtc(isoDate);
+  d.setUTCDate(d.getUTCDate() + days);
+  return calendarDateOf(d);
+}
+
+/** `DD/MM/YYYY` for a stored `YYYY-MM-DD` calendar date. */
+export function formatCalendarDateAU(isoDate: string): string {
+  return formatDateAU(calendarDateAsUtc(isoDate), "UTC");
+}

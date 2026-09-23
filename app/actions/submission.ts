@@ -13,8 +13,8 @@ import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import { assembleAndPersistDraftFields } from "@/lib/documents/draft-assembly";
 import { resolveOrgId, loadFileRequirements, loadExtractTokens } from "@/lib/documents/submission-shared";
 import type { ComparisonMode } from "@/lib/documents/compare-candidates";
-import { getPublicHolidays } from "@/lib/delivery/public-holidays";
-import { addWorkingDays } from "@/lib/delivery/working-days";
+import { computeExpectedDeliveryDate } from "@/lib/delivery/expected-delivery-date";
+import { formatCalendarDateAU } from "@/lib/time";
 import { performAssignment } from "@/lib/projects/assign";
 import { AcknowledgementEmail } from "@/lib/email/templates/AcknowledgementEmail";
 import { buildMetricsPickRows, type MetricsPickRow } from "@/lib/documents/metrics-autofill";
@@ -496,16 +496,7 @@ export async function submitProject(
   try {
     const deliveryDays = orgData?.delivery_working_days ?? 5;
     const stateTerritory = (orgData?.state_territory as string | null) ?? null;
-    const now = new Date();
-    const yearA = now.getUTCFullYear();
-    const yearB = yearA + 1;
-    const [holidaysA, holidaysB] = await Promise.all([
-      getPublicHolidays(stateTerritory, yearA),
-      getPublicHolidays(stateTerritory, yearB),
-    ]);
-    const holidays = new Set([...holidaysA, ...holidaysB]);
-    const dueDate = addWorkingDays(now, deliveryDays, holidays);
-    expectedDeliveryDate = dueDate.toISOString().slice(0, 10);
+    expectedDeliveryDate = await computeExpectedDeliveryDate(supabase, deliveryDays, stateTerritory);
   } catch (err) {
     console.error("[submitProject] delivery date calculation failed:", err);
   }
@@ -615,7 +606,7 @@ export async function submitProject(
           recipientName,
           projectId: siteAddress ?? projectId.slice(0, 8),
           expectedDeliveryDate: expectedDeliveryDate
-            ? new Date(expectedDeliveryDate).toLocaleDateString("en-AU")
+            ? formatCalendarDateAU(expectedDeliveryDate)
             : "To be confirmed",
           portalUrl: `${process.env.NEXT_PUBLIC_APP_URL}/portal/projects/${projectId}`,
           poNumber,

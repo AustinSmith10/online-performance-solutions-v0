@@ -5,6 +5,7 @@ import { makeDocxConversionSafe } from "@/lib/documents/converter";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { formatAddress } from "@/lib/documents/formatters";
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 
 export interface DispatchPdfProject {
   id: string;
@@ -115,6 +116,7 @@ export async function getOrCreateDispatchPdf(
   // Dispatch-time filename regenerates: drops the "For QA" suffix and uses
   // today's date instead of the original generation/QA-upload date (#109).
   const revision = await getCurrentRevNumber(supabase, project.id, "pbdb");
+  const timeZone = await getBusinessTimezone(supabase);
   const rawAddress = (project.extracted_fields?.["EXTRACT_ADDRESS"] ?? "").trim();
   const address = formatAddress(rawAddress);
   const originalFilename = buildPbdbFilename(
@@ -122,6 +124,7 @@ export async function getOrCreateDispatchPdf(
     revision,
     address,
     new Date(),
+    timeZone,
     { forQa: false }
   ).replace(/\.docx$/i, ".pdf");
 

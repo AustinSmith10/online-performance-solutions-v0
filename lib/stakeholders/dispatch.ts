@@ -8,6 +8,8 @@ import { sendEmail } from "@/lib/email/sender";
 import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
+import { formatLongDateAU } from "@/lib/time";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 
 function e(s: string): string {
   return s
@@ -104,11 +106,7 @@ export async function dispatchPbdb(
 
   const now = new Date();
   const expiresAt = await computeTokenExpiry(now, stateTerritory);
-  const expiresFormatted = expiresAt.toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const expiresFormatted = formatLongDateAU(expiresAt, await getBusinessTimezone(supabase));
 
   // Fetch the stakeholder-facing locked PDF (never the editable docx) and the
   // portal user map in parallel.

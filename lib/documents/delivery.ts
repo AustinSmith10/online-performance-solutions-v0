@@ -18,6 +18,8 @@ import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
 import { renderEmailShell, e, paragraph, strong, noticeBox } from "@/lib/email/templates/shell";
 import { computeSignedUrlExpirySeconds } from "@/lib/stakeholders/tokens";
 import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
+import { formatLongDateAU } from "@/lib/time";
 
 export interface DeliverPbdrResult {
   success: boolean;
@@ -109,6 +111,10 @@ export async function deliverPbdr(
     return { success: false, reason };
   }
 
+  // Revision-table DATE, PBDR filename and the email link-expiry date are all
+  // calendar days in the business timezone, not the server's (#188).
+  const timeZone = await getBusinessTimezone(supabase);
+
   // Claim the project atomically — concurrent calls will skip if already converting
   const conversionStart = new Date();
   const { error: statusErr, count } = await supabase
@@ -183,7 +189,7 @@ export async function deliverPbdr(
         event: "approved_conversion",
         created_at: conversionStart.toISOString(),
       },
-    ]);
+    ], timeZone);
     transformedDocx = setRevisionHistoryRows(
       transformedDocx,
       pbdrHistoryForDoc.map((row) => ({
@@ -221,7 +227,8 @@ export async function deliverPbdr(
       projectRef,
       revisionIndex,
       address,
-      conversionStart
+      conversionStart,
+      timeZone
     );
 
     pdfStoragePath = `${project.client_id as string}/${projectId}/pbdr/${pbdrFilename}`;
@@ -266,13 +273,7 @@ export async function deliverPbdr(
       .from("documents")
       .createSignedUrl(pdfStoragePath, signedUrlExpirySeconds);
     const downloadUrl = signed?.signedUrl ?? null;
-    const expiresAt = new Date(
-      Date.now() + signedUrlExpirySeconds * 1000
-    ).toLocaleDateString("en-AU", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+    const expiresAt = formatLongDateAU(new Date(Date.now() + signedUrlExpirySeconds * 1000), timeZone);
 
     if (downloadUrl) {
       await deliverPbdrEmails({

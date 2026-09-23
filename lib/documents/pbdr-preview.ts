@@ -7,6 +7,7 @@ import { buildPbdrFilename } from "@/lib/documents/naming";
 import { peekNextRevNumber, getRevisionHistory, formatRevisionHistoryRows } from "@/lib/documents/revision-history";
 import { formatAddress } from "@/lib/documents/formatters";
 import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 
 export interface PbdrPreviewProject {
   id: string;
@@ -91,6 +92,8 @@ async function buildPbdrPreviewInner(
   const existingPbdrHistory = (await getRevisionHistory(supabase, project.id)).filter(
     (row) => row.doc_type === "pbdr"
   );
+  // Same business-timezone dates deliverPbdr() stamps (#188).
+  const timeZone = await getBusinessTimezone(supabase);
   const pbdrHistoryForDoc = await formatRevisionHistoryRows(supabase, [
     ...existingPbdrHistory,
     {
@@ -100,7 +103,7 @@ async function buildPbdrPreviewInner(
       event: "approved_conversion",
       created_at: new Date().toISOString(),
     },
-  ]);
+  ], timeZone);
   transformedDocx = setRevisionHistoryRows(
     transformedDocx,
     pbdrHistoryForDoc.map((row) => ({
@@ -130,7 +133,8 @@ async function buildPbdrPreviewInner(
     project.project_number ?? project.id.slice(0, 8),
     revisionIndex,
     address,
-    new Date()
+    new Date(),
+    timeZone
   );
 
   const storagePath = `${project.client_id}/${project.id}/pbdr/preview.pdf`;

@@ -5,6 +5,8 @@ import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { notify } from "@/lib/notifications/notify";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
+import { formatLongDateAU } from "@/lib/time";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 
 // A reviewer added to a project *after* the current review cycle has already
 // been dispatched is a "late add": they must be invited immediately (own
@@ -46,11 +48,7 @@ export async function inviteLateStakeholder(
 
   const token = generateTokenString();
   const expiresAt = await computeTokenExpiry(new Date(), stateTerritory);
-  const expiresFormatted = expiresAt.toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const expiresFormatted = formatLongDateAU(expiresAt, await getBusinessTimezone(supabase));
 
   const { data: portalUser } = await supabase
     .from("users")

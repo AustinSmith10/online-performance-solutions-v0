@@ -12,6 +12,7 @@ import { checkPbdrGate } from "@/lib/payments/gate";
 import { convertPbdbToPbdr } from "@/lib/documents/converter";
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
 import { buildPbdrFilename } from "@/lib/documents/naming";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 import { formatAddress } from "@/lib/documents/formatters";
 import { auditLog } from "@/lib/audit/log";
 import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
@@ -143,7 +144,8 @@ async function main() {
       (project.project_number as string | null) ?? projectId.slice(0, 8),
       revisionIndex,
       address,
-      conversionStart
+      conversionStart,
+      await getBusinessTimezone(supabase)
     );
     pdfStoragePath = `${project.org_id as string}/${projectId}/pbdr/${pbdrFilename}`;
     console.log(`[deliver-pbdr] uploading as ${pbdrFilename}…`);

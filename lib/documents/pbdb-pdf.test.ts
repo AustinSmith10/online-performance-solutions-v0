@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+vi.mock("@/lib/settings/timezone", () => ({ getBusinessTimezone: vi.fn().mockResolvedValue("Australia/Brisbane") }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/documents/pdf");
 vi.mock("@/lib/documents/color-strip");
@@ -170,6 +171,7 @@ describe("getOrCreateDispatchPdf", () => {
       2,
       formatAddress("123 Main St"),
       new Date(2024, 2, 15),
+      "Australia/Brisbane",
       { forQa: false }
     ).replace(/\.docx$/i, ".pdf");
     const expectedStoragePath = "org-1/proj-1/pbdb/v3_OPS-1-S PBDB Rev2 For QA.pdf";

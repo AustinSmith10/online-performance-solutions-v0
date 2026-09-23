@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+const { renderFn } = vi.hoisted(() => ({ renderFn: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin");
@@ -16,7 +18,7 @@ vi.mock("pizzip", () => ({
 vi.mock("docxtemplater", () => ({
   default: vi.fn().mockImplementation(function DocxtemplaterStub() {
     return {
-      render: vi.fn(),
+      render: renderFn,
       getZip: () => ({ generate: () => Buffer.from("docx-bytes") }),
     };
   }),
@@ -295,5 +297,26 @@ describe("generatePbdb — progress_pct (#127)", () => {
     // thrown error, not generatePbdb itself — see app/actions/projects.test.ts
     // for that coverage.
     expect(mock.progressWrites).toEqual([20, 40, 70, 90]);
+  });
+});
+
+describe("generatePbdb — document dates use the business timezone (#188)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("stamps SYS_GEN_DATE and the filename with the Brisbane day, not the UTC day", async () => {
+    // 23:30 UTC on 14 Jul = 09:30 AEST on 15 Jul — the "generated before 10am" UAT case.
+    vi.useFakeTimers({ now: new Date("2026-07-14T23:30:00.000Z"), toFake: ["Date"] });
+    const mock = buildMock({});
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await generatePbdb(PROJECT_ID, ACTOR_ID);
+
+    const context = renderFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(context.SYS_GEN_DATE).toBe("15/07/2026");
+    // created_at 2026-01-01T00:00Z = 10:00 AEST 1 Jan.
+    expect(context.SYS_SUB_DATE).toBe("01/01/2026");
+    expect(mock.projectFileRows[0].original_filename).toContain("2026 07 15");
   });
 });

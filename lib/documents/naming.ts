@@ -1,3 +1,5 @@
+import { isoDateInTz } from "@/lib/time";
+
 /**
  * Builds the PBDR filename per the naming convention:
  *   <<ProjectNo>>-S_PBDR_R<<n>>_<<address>>_<<YYYY_MM_DD>>.pdf
@@ -20,17 +22,19 @@
  * consultant-facing pre-dispatch draft; dropped once dispatched to the
  * stakeholder, at which point `date` should be the dispatch date, not the
  * original generation date.
+ *
+ * `timeZone` is the business timezone setting (getBusinessTimezone) — the
+ * date segment is the calendar day in that zone, never the server's (#188).
  */
 export function buildPbdbFilename(
   projectNumber: string,
   revisionIndex: number,
   address: string,
   date: Date,
+  timeZone: string,
   opts: { forQa?: boolean } = {}
 ): string {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
+  const [yyyy, mm, dd] = isoDateInTz(date, timeZone).split("-");
 
   const parts = [
     `${projectNumber}-S PBDB Rev${revisionIndex}`,
@@ -46,11 +50,10 @@ export function buildPbdrFilename(
   projectNumber: string,
   revisionIndex: number,
   address: string,
-  date: Date
+  date: Date,
+  timeZone: string
 ): string {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
+  const [yyyy, mm, dd] = isoDateInTz(date, timeZone).split("-");
 
   function sanitize(s: string, maxLen?: number): string {
     const r = s

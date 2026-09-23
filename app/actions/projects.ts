@@ -28,6 +28,8 @@ import { getOrCreateDispatchPdf, type DispatchPdfProject } from "@/lib/documents
 import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
 import { writeProgress } from "@/lib/documents/progress";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
+import { addCalendarDays, formatDateAU } from "@/lib/time";
 
 async function notifyAdminsQaComplete(
   supabase: SupabaseClient,
@@ -1105,6 +1107,9 @@ export async function uploadQaPbdb(
   const rawAddress = ((project.extracted_fields as Record<string, string> | null)?.["EXTRACT_ADDRESS"] ?? "").trim();
   const address = formatAddress(rawAddress);
   const uploadDate = new Date();
+  // Revision-table DATE and the stored filename's date are calendar days in
+  // the business timezone, not the server's (#188).
+  const timeZone = await getBusinessTimezone(supabase);
 
   // Rev{n} derives from revision_history's PBDB counter (#108/#109), not
   // review_cycle. A genuine post-rejection reupload already has its new
@@ -1148,7 +1153,7 @@ export async function uploadQaPbdb(
       appendRevisionHistoryRow(fileBuffer, {
         docType: "PBDB",
         revNumber: String(expectedRev),
-        date: rowDate.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        date: formatDateAU(rowDate, timeZone),
         purpose: "Stakeholder Review",
         preparedBy: preparedByName,
       })
@@ -1162,7 +1167,7 @@ export async function uploadQaPbdb(
     fileBuffer = Buffer.from(setCoverRevisionNumber(fileBuffer, String(expectedRev)));
   }
 
-  const storedFilename = buildPbdbFilename(projectNum, expectedRev, address, uploadDate, {
+  const storedFilename = buildPbdbFilename(projectNum, expectedRev, address, uploadDate, timeZone, {
     forQa: true,
   });
 
@@ -1568,9 +1573,7 @@ export async function resumeProject(
   if (newDeliveryDate && project.paused_at) {
     const pausedMs = Date.now() - new Date(project.paused_at as string).getTime();
     const pausedDays = Math.ceil(pausedMs / (1000 * 60 * 60 * 24));
-    const current = new Date(newDeliveryDate);
-    current.setDate(current.getDate() + pausedDays);
-    newDeliveryDate = current.toISOString().slice(0, 10);
+    newDeliveryDate = addCalendarDays(newDeliveryDate, pausedDays);
   }
 
   const { error } = await supabase

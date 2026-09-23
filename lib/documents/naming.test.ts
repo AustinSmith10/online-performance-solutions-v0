@@ -1,142 +1,144 @@
 import { describe, it, expect } from "vitest";
 import { buildPbdrFilename, buildPbdbFilename } from "./naming";
 
-const DATE_MAR_15 = new Date(2024, 2, 15);
+const TZ = "Australia/Brisbane";
+// Midday 15 Mar 2024 in Brisbane.
+const DATE_MAR_15 = new Date("2024-03-15T02:00:00.000Z");
 
 describe("buildPbdbFilename", () => {
   it("follows the <<ProjectNo>>-S PBDB Rev<<n>> <<address>> <<YYYY MM DD>>.docx pattern", () => {
-    expect(buildPbdbFilename("OPS-001", 0, "123 Main St", DATE_MAR_15)).toBe(
+    expect(buildPbdbFilename("OPS-001", 0, "123 Main St", DATE_MAR_15, TZ)).toBe(
       "OPS-001-S PBDB Rev0 123 Main St 2024 03 15.docx"
     );
   });
 
   it("appends ' For QA' at the end when forQa is set", () => {
-    expect(buildPbdbFilename("OPS-001", 2, "123 Main St", DATE_MAR_15, { forQa: true })).toBe(
+    expect(buildPbdbFilename("OPS-001", 2, "123 Main St", DATE_MAR_15, TZ, { forQa: true })).toBe(
       "OPS-001-S PBDB Rev2 123 Main St 2024 03 15 For QA.docx"
     );
   });
 
   it("omits the For QA suffix by default", () => {
-    const result = buildPbdbFilename("OPS-001", 0, "addr", DATE_MAR_15);
+    const result = buildPbdbFilename("OPS-001", 0, "addr", DATE_MAR_15, TZ);
     expect(result).not.toContain("For QA");
   });
 
   it("ends with .docx", () => {
-    expect(buildPbdbFilename("OPS-001", 0, "addr", DATE_MAR_15)).toMatch(/\.docx$/);
+    expect(buildPbdbFilename("OPS-001", 0, "addr", DATE_MAR_15, TZ)).toMatch(/\.docx$/);
   });
 
   it("embeds the revision index as Rev<n>", () => {
-    expect(buildPbdbFilename("OPS-001", 3, "addr", DATE_MAR_15)).toContain("Rev3");
+    expect(buildPbdbFilename("OPS-001", 3, "addr", DATE_MAR_15, TZ)).toContain("Rev3");
   });
 
   it("zero-pads single-digit month and day", () => {
-    expect(buildPbdbFilename("OPS-001", 0, "addr", new Date(2024, 0, 5))).toContain("2024 01 05");
+    expect(buildPbdbFilename("OPS-001", 0, "addr", new Date("2024-01-05T02:00:00.000Z"), TZ)).toContain("2024 01 05");
   });
 });
 
 describe("buildPbdrFilename", () => {
   describe("output structure", () => {
     it("follows the <<ProjectNo>>-S_PBDR_R<<n>>_<<address>>_<<YYYY_MM_DD>>.pdf pattern", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "123 Main St", DATE_MAR_15)).toBe(
+      expect(buildPbdrFilename("OPS-001", 0, "123 Main St", DATE_MAR_15, TZ)).toBe(
         "OPS-001-S_PBDR_R0_123_Main_St_2024_03_15.pdf"
       );
     });
 
     it("ends with .pdf", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "addr", DATE_MAR_15)).toMatch(/\.pdf$/);
+      expect(buildPbdrFilename("OPS-001", 0, "addr", DATE_MAR_15, TZ)).toMatch(/\.pdf$/);
     });
 
     it("embeds the revision index", () => {
-      expect(buildPbdrFilename("OPS-001", 3, "addr", DATE_MAR_15)).toContain("_R3_");
+      expect(buildPbdrFilename("OPS-001", 3, "addr", DATE_MAR_15, TZ)).toContain("_R3_");
     });
 
     it("revision index 0 is the first issue", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "addr", DATE_MAR_15)).toContain("_R0_");
+      expect(buildPbdrFilename("OPS-001", 0, "addr", DATE_MAR_15, TZ)).toContain("_R0_");
     });
   });
 
   describe("date formatting", () => {
     it("formats date as YYYY_MM_DD", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "addr", DATE_MAR_15)).toContain("2024_03_15");
+      expect(buildPbdrFilename("OPS-001", 0, "addr", DATE_MAR_15, TZ)).toContain("2024_03_15");
     });
 
     it("zero-pads single-digit month and day", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "addr", new Date(2024, 0, 5))).toContain("2024_01_05");
+      expect(buildPbdrFilename("OPS-001", 0, "addr", new Date("2024-01-05T02:00:00.000Z"), TZ)).toContain("2024_01_05");
     });
 
     it("handles end-of-year dates", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "addr", new Date(2024, 11, 31))).toContain("2024_12_31");
+      expect(buildPbdrFilename("OPS-001", 0, "addr", new Date("2024-12-31T02:00:00.000Z"), TZ)).toContain("2024_12_31");
     });
   });
 
   describe("sanitisation — spaces → underscores", () => {
     it("replaces spaces in the address", () => {
-      const result = buildPbdrFilename("OPS-001", 0, "123 Main Street", DATE_MAR_15);
+      const result = buildPbdrFilename("OPS-001", 0, "123 Main Street", DATE_MAR_15, TZ);
       expect(result).toContain("123_Main_Street");
     });
 
     it("collapses multiple consecutive spaces into a single underscore", () => {
       // \s+ regex: multiple spaces collapse to ONE underscore, not one per space
-      const result = buildPbdrFilename("OPS-001", 0, "1  2", DATE_MAR_15);
+      const result = buildPbdrFilename("OPS-001", 0, "1  2", DATE_MAR_15, TZ);
       expect(result).toContain("1_2");
     });
   });
 
   describe("sanitisation — commas/periods/apostrophes/quotes removed", () => {
     it("removes commas", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "St, George", DATE_MAR_15)).not.toContain(",");
+      expect(buildPbdrFilename("OPS-001", 0, "St, George", DATE_MAR_15, TZ)).not.toContain(",");
     });
 
     it("removes periods from the address segment", () => {
       // The .pdf extension retains its dot; only the sanitised segments are checked
-      const result = buildPbdrFilename("OPS-001", 0, "St. George", DATE_MAR_15);
+      const result = buildPbdrFilename("OPS-001", 0, "St. George", DATE_MAR_15, TZ);
       const withoutExt = result.replace(/\.pdf$/, "");
       expect(withoutExt).not.toContain(".");
     });
 
     it("removes apostrophes", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "O'Brien Rd", DATE_MAR_15)).not.toContain("'");
+      expect(buildPbdrFilename("OPS-001", 0, "O'Brien Rd", DATE_MAR_15, TZ)).not.toContain("'");
     });
 
     it("removes straight double quotes", () => {
-      expect(buildPbdrFilename("OPS-001", 0, `"quoted"`, DATE_MAR_15)).not.toContain('"');
+      expect(buildPbdrFilename("OPS-001", 0, `"quoted"`, DATE_MAR_15, TZ)).not.toContain('"');
     });
   });
 
   describe("sanitisation — slashes → hyphens", () => {
     it("converts forward slash to hyphen", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "Lot 5/12 Elm Ave", DATE_MAR_15)).toContain("5-12");
+      expect(buildPbdrFilename("OPS-001", 0, "Lot 5/12 Elm Ave", DATE_MAR_15, TZ)).toContain("5-12");
     });
   });
 
   describe("sanitisation — non-alphanumeric removal", () => {
     it("removes hash symbols", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "Unit #4", DATE_MAR_15)).not.toContain("#");
+      expect(buildPbdrFilename("OPS-001", 0, "Unit #4", DATE_MAR_15, TZ)).not.toContain("#");
     });
 
     it("removes ampersands", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "Lot 4 & 5", DATE_MAR_15)).not.toContain("&");
+      expect(buildPbdrFilename("OPS-001", 0, "Lot 4 & 5", DATE_MAR_15, TZ)).not.toContain("&");
     });
 
     it("preserves underscores", () => {
-      expect(buildPbdrFilename("OPS_001", 0, "addr", DATE_MAR_15)).toContain("OPS_001");
+      expect(buildPbdrFilename("OPS_001", 0, "addr", DATE_MAR_15, TZ)).toContain("OPS_001");
     });
 
     it("preserves hyphens", () => {
-      expect(buildPbdrFilename("OPS-001", 0, "addr", DATE_MAR_15)).toContain("OPS-001");
+      expect(buildPbdrFilename("OPS-001", 0, "addr", DATE_MAR_15, TZ)).toContain("OPS-001");
     });
   });
 
   describe("sanitisation — uppercase", () => {
     it("uppercases the project number", () => {
       // Only the sanitised segments are uppercased; the .pdf extension stays lowercase
-      const result = buildPbdrFilename("ops-001", 0, "addr", DATE_MAR_15);
+      const result = buildPbdrFilename("ops-001", 0, "addr", DATE_MAR_15, TZ);
       expect(result).toContain("OPS-001");
       expect(result).not.toContain("ops-001");
     });
 
     it("preserves address casing from formatAddress", () => {
-      const result = buildPbdrFilename("OPS-001", 0, "Elm Street", DATE_MAR_15);
+      const result = buildPbdrFilename("OPS-001", 0, "Elm Street", DATE_MAR_15, TZ);
       expect(result).toContain("Elm_Street");
     });
   });
@@ -144,7 +146,7 @@ describe("buildPbdrFilename", () => {
   describe("length limits", () => {
     it("caps the address segment at 80 characters", () => {
       const longAddr = "A".repeat(100);
-      const result = buildPbdrFilename("OPS-001", 0, longAddr, DATE_MAR_15);
+      const result = buildPbdrFilename("OPS-001", 0, longAddr, DATE_MAR_15, TZ);
       // Extract the address portion: after "OPS-001-S_PBDR_R0_" and before "_2024_03_15.pdf"
       const prefix = "OPS-001-S_PBDR_R0_";
       const suffix = "_2024_03_15.pdf";
@@ -157,14 +159,27 @@ describe("buildPbdrFilename", () => {
         "OPS-001",
         0,
         "VERY LONG ADDRESS ".repeat(20),
-        DATE_MAR_15
+        DATE_MAR_15, TZ
       );
       expect(result.length).toBeLessThanOrEqual(200);
     });
 
     it("returns a short filename under 200 chars normally", () => {
-      const result = buildPbdrFilename("OPS-001", 0, "123 Main St", DATE_MAR_15);
+      const result = buildPbdrFilename("OPS-001", 0, "123 Main St", DATE_MAR_15, TZ);
       expect(result.length).toBeLessThan(200);
     });
+  });
+});
+
+describe("filename dates use the business timezone, not server-local time (#188)", () => {
+  // 23:30 UTC 14 Mar = 09:30 AEST 15 Mar.
+  const earlyMorningBrisbane = new Date("2024-03-14T23:30:00.000Z");
+
+  it("stamps the Brisbane calendar day on a PBDB filename", () => {
+    expect(buildPbdbFilename("OPS-001", 0, "addr", earlyMorningBrisbane, TZ)).toContain("2024 03 15");
+  });
+
+  it("stamps the Brisbane calendar day on a PBDR filename", () => {
+    expect(buildPbdrFilename("OPS-001", 0, "addr", earlyMorningBrisbane, TZ)).toContain("2024_03_15");
   });
 });
