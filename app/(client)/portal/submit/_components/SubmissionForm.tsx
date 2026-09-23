@@ -17,7 +17,7 @@ import {
 import { streamUploadedFile, reducePipelineFile } from "./streamUpload";
 import { createClient } from "@/lib/supabase/client";
 import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
-import type { MetricsPickRow } from "@/lib/documents/metrics-autofill";
+import { matchDevelopmentName, type MetricsPickRow } from "@/lib/documents/metrics-autofill";
 import { ClientWorkspace } from "../../_components/ClientWorkspace";
 import { ClientHeaderCard } from "../../_components/ClientHeaderCard";
 import { FocusCard } from "@/components/workspace/FocusCard";
@@ -187,38 +187,24 @@ function TokenInput({
   );
 }
 
+// The trustee dropdown's default row — the same shared matcher (#189) the
+// server uses, so the pre-selected row can never disagree with it.
 function resolveDefaultMatchValue(extractedValue: string, pickRows: MetricsPickRow[]): string {
-  const needle = extractedValue.trim().toLowerCase();
-  if (!needle) return "";
-  return (
-    pickRows.find((r) => r.matchValue.toLowerCase() === needle)?.matchValue ??
-    pickRows.find(
-      (r) =>
-        r.matchValue.toLowerCase().includes(needle) ||
-        needle.includes(r.matchValue.toLowerCase())
-    )?.matchValue ??
-    ""
-  );
+  const result = matchDevelopmentName(extractedValue, pickRows.map((r) => r.matchValue));
+  return result.status === "matched" ? result.name : "";
 }
 
-// Client-side mirror of resolveMetricsAutofill's exact-then-substring match —
-// lets a metrics-table output (e.g. rainfall intensity) be re-derived live as
-// the stakeholder edits the field it's keyed on, rather than staying frozen
-// at whatever the initial server-side extraction pass produced.
+// Client-side re-derivation of a metrics-table output (e.g. rainfall
+// intensity) as the stakeholder edits the field it's keyed on — via the
+// same shared matcher as resolveMetricsAutofill.
 function resolveAutofillOutput(
   matchValue: string,
   pickRows: MetricsPickRow[],
   outputToken: string
 ): string | null {
-  const needle = matchValue.trim().toLowerCase();
-  if (!needle) return null;
-  const row =
-    pickRows.find((r) => r.matchValue.toLowerCase() === needle) ??
-    pickRows.find((r) => {
-      const cell = r.matchValue.toLowerCase();
-      return cell !== "" && (cell.includes(needle) || needle.includes(cell));
-    });
-  return row ? row.outputs[outputToken] ?? null : null;
+  const result = matchDevelopmentName(matchValue, pickRows.map((r) => r.matchValue));
+  if (result.status !== "matched") return null;
+  return pickRows.find((r) => r.matchValue === result.name)?.outputs[outputToken] ?? null;
 }
 
 interface ReviewStepProps {

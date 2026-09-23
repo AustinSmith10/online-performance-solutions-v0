@@ -1,7 +1,38 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import { readFileSync, writeFileSync } from "fs";
+
+// Version-skew protection: with a deploymentId set, a browser still holding a
+// page from the previous deploy does a full reload on its next navigation or
+// server action, instead of calling a server action ID the new build no
+// longer has ("Failed to find Server Action" → error page).
+//
+// The value must be identical at build time and when `next start` re-reads
+// this config, or every request looks like a mismatch and pages keep
+// reloading. So the build records Railway's commit SHA in a file that ships
+// with the build output, and the server falls back to that file if the env
+// var isn't present at runtime. No SHA at build (local dev) → undefined →
+// feature off, same as before.
+const DEPLOYMENT_ID_FILE = ".deployment-id";
+function resolveDeploymentId(): string | undefined {
+  const fromEnv = process.env.RAILWAY_GIT_COMMIT_SHA?.trim();
+  if (fromEnv) {
+    try {
+      writeFileSync(DEPLOYMENT_ID_FILE, fromEnv);
+    } catch {
+      // Read-only filesystem at runtime — the build already wrote it.
+    }
+    return fromEnv;
+  }
+  try {
+    return readFileSync(DEPLOYMENT_ID_FILE, "utf8").trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const nextConfig: NextConfig = {
+  deploymentId: resolveDeploymentId(),
   experimental: {
     serverActions: {
       // Must be >= the largest file-size limit any server action itself
