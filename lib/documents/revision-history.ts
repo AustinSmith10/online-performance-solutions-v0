@@ -48,7 +48,10 @@ export async function recordRevisionEvent(
   supabase: SupabaseClient,
   projectId: string,
   docType: RevisionDocType,
-  event: RevisionEvent
+  event: RevisionEvent,
+  // The stakeholder review round this event closed, for a "rejected" bump
+  // (#191) — lets the once-per-round rule be checked against the table.
+  reviewCycle: number | null = null
 ): Promise<number> {
   const [{ data: project }, nextRev] = await Promise.all([
     supabase.from("projects").select("assigned_consultant_id").eq("id", projectId).maybeSingle(),
@@ -61,6 +64,7 @@ export async function recordRevisionEvent(
     rev_number: nextRev,
     prepared_by: (project?.assigned_consultant_id as string | null) ?? null,
     event,
+    review_cycle: reviewCycle,
   });
 
   if (error) throw new Error(`Failed to record revision history: ${error.message}`);

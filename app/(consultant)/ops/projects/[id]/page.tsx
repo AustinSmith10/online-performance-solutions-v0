@@ -1227,6 +1227,8 @@ export default async function ConsultantProjectDetailPage({
                     approved_with_comments: { label: "Approved with notes", cls: "bg-green-100 text-green-700" },
                     rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
                     waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
+                    // Internal only (#191): still pending when a revised PBDB force-closed the round.
+                    superseded: { label: "Superseded", cls: "bg-zinc-100 text-zinc-400" },
                   }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
                   const canLogOnBehalf =
                     isCurrent && r.status === "pending" && project.status === "dispatched";

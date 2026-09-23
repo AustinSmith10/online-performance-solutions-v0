@@ -28,7 +28,7 @@ import { sendStakeholderBufferUpdate } from "@/lib/stakeholders/buffer-update";
 import { logger } from "@/lib/observability/logger";
 import { attachEvidence } from "@/app/actions/evidence";
 import { parseEmlBody } from "@/lib/email/parseEml";
-import { recordRevisionEvent } from "@/lib/documents/revision-history";
+import { closeRoundIfComplete } from "@/lib/stakeholders/review-round";
 import { runTextCompletion } from "@/lib/documents/extractor";
 import { formatLongDateAU } from "@/lib/time";
 import { getBusinessTimezone } from "@/lib/settings/timezone";
@@ -615,6 +615,8 @@ export async function waiveStakeholderResponse(
 
   if (project) {
     await notifyIfFullyApproved(supabase, projectId, project.review_cycle as number, "[waiveStakeholderResponse]");
+    // A waiver can be what empties the round of pending reviews (#191).
+    await closeRoundIfComplete(supabase, projectId, project.review_cycle as number);
   }
 
   redirect(
@@ -1125,14 +1127,6 @@ export async function logStakeholderResponseOnBehalf(
         .update({ status: "revision_required", updated_at: now })
         .eq("id", projectId);
 
-      // Bumps the PBDB revision_history counter (#108) — the corrected reupload
-      // later derives its Rev{n} filename from this row, not review_cycle. Only
-      // the cycle's first rejection bumps it — see the matching guard in
-      // approval.ts and portalApproval.ts.
-      if (project.status !== "revision_required") {
-        await recordRevisionEvent(supabase, projectId, "pbdb", "rejected");
-      }
-
       await notifyModificationsRequested({
         supabase,
         projectId,
@@ -1148,6 +1142,9 @@ export async function logStakeholderResponseOnBehalf(
     } else {
       await notifyIfFullyApproved(supabase, projectId, cycle, "[logStakeholderResponseOnBehalf]");
     }
+
+    // Revision bump happens at round close, not per rejection (#191).
+    await closeRoundIfComplete(supabase, projectId, cycle);
   }
 
   revalidatePath(`/ops/projects/${projectId}`);

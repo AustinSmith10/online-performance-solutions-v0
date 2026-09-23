@@ -10,7 +10,7 @@ import {
   notifyModificationsRequested,
   notifyIfFullyApproved,
 } from "@/lib/stakeholders/review-outcome";
-import { recordRevisionEvent } from "@/lib/documents/revision-history";
+import { closeRoundIfComplete } from "@/lib/stakeholders/review-round";
 import { getOrCreateDispatchPdf, type DispatchPdfProject } from "@/lib/documents/pbdb-pdf";
 import { formatLongDateAU } from "@/lib/time";
 import { getBusinessTimezone } from "@/lib/settings/timezone";
@@ -133,16 +133,6 @@ export async function submitApproval(
       return { error: "Your response was recorded, but the project status couldn't be updated. Please notify DDEG." };
     }
 
-    // Bumps the PBDB revision_history counter (#108) — the corrected reupload
-    // later derives its Rev{n} filename from this row, not review_cycle. Only
-    // the cycle's first rejection bumps it: if another stakeholder already
-    // rejected this same cycle (status is already "revision_required"), the
-    // counter was already advanced for this cycle and must not be bumped
-    // again per additional rejecting stakeholder.
-    if (projectForGuard.status !== "revision_required") {
-      await recordRevisionEvent(supabase, review.project_id, "pbdb", "rejected");
-    }
-
     await notifyModificationsRequested({
       supabase,
       projectId: review.project_id,
@@ -158,6 +148,10 @@ export async function submitApproval(
   } else {
     await notifyIfFullyApproved(supabase, review.project_id, cycle, "[submitApproval]");
   }
+
+  // The PBDB revision number bumps when the round closes rejected, not at
+  // this individual rejection (#191) — see lib/stakeholders/review-round.ts.
+  await closeRoundIfComplete(supabase, review.project_id, cycle);
 
   return { submitted: true, response };
 }

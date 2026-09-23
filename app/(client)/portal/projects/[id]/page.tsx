@@ -188,6 +188,8 @@ export default async function ClientProjectDetailPage({
       .select("id, token, expires_at, review_cycle, status, comments, responded_at")
       .eq("project_id", id)
       .eq("stakeholder_email", user.email as string)
+      // A superseded review (#191) is internal/audit-only — never shown here.
+      .neq("status", "superseded")
       .order("review_cycle", { ascending: false })
       .limit(1)
       .maybeSingle(),

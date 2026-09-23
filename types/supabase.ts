@@ -1358,6 +1358,7 @@ export type Database = {
           prepared_by: string | null
           project_id: string
           rev_number: number
+          review_cycle: number | null
         }
         Insert: {
           created_at?: string
@@ -1367,6 +1368,7 @@ export type Database = {
           prepared_by?: string | null
           project_id: string
           rev_number: number
+          review_cycle?: number | null
         }
         Update: {
           created_at?: string
@@ -1376,6 +1378,7 @@ export type Database = {
           prepared_by?: string | null
           project_id?: string
           rev_number?: number
+          review_cycle?: number | null
         }
         Relationships: [
           {
@@ -1452,6 +1455,7 @@ export type Database = {
           respondent_name: string | null
           response_mode: string | null
           review_cycle: number
+          round_status: string
           stakeholder_email: string
           stakeholder_name: string
           status: string
@@ -1476,6 +1480,7 @@ export type Database = {
           respondent_name?: string | null
           response_mode?: string | null
           review_cycle?: number
+          round_status?: string
           stakeholder_email: string
           stakeholder_name: string
           status?: string
@@ -1500,6 +1505,7 @@ export type Database = {
           respondent_name?: string | null
           response_mode?: string | null
           review_cycle?: number
+          round_status?: string
           stakeholder_email?: string
           stakeholder_name?: string
           status?: string

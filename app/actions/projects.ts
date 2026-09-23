@@ -20,7 +20,8 @@ import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { expediteDelivery, expeditePbdbDispatch, scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
-import { getCurrentRevNumber } from "@/lib/documents/revision-history";
+import { getCurrentRevNumber, peekNextRevNumber } from "@/lib/documents/revision-history";
+import { forceCloseRound, forcedCloseWouldBump } from "@/lib/stakeholders/review-round";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { appendRevisionHistoryRow, setCoverRevisionNumber } from "@/lib/documents/revision-table";
 import { scanDocxStructure } from "@/lib/documents/docx-structure-scan";
@@ -1112,12 +1113,17 @@ export async function uploadQaPbdb(
   const timeZone = await getBusinessTimezone(supabase);
 
   // Rev{n} derives from revision_history's PBDB counter (#108/#109), not
-  // review_cycle. A genuine post-rejection reupload already has its new
-  // "rejected" row recorded at rejection time (see submitApproval /
-  // logStakeholderResponseOnBehalf), so the counter here is already current;
-  // a forced resend (isReupload with no rejection) or a plain QA correction
-  // leaves the counter untouched, matching the file it's replacing.
-  const expectedRev = await getCurrentRevNumber(supabase, projectId, "pbdb");
+  // review_cycle. The counter bumps when a review round closes rejected
+  // (#191): a round that already closed naturally has its row recorded, so
+  // the counter is current. A reupload into a still-open round force-closes
+  // it (after the upload succeeds, below) — bumping only if a rejection had
+  // already come in — so the filename uses the number that close will
+  // record. A pre-emptive correction with no rejection, or a plain QA
+  // correction, leaves the counter untouched.
+  const forcedCloseBumps = isReupload && (await forcedCloseWouldBump(supabase, projectId, cycle));
+  const expectedRev = forcedCloseBumps
+    ? await peekNextRevNumber(supabase, projectId, "pbdb")
+    : await getCurrentRevNumber(supabase, projectId, "pbdb");
 
   // Re-uploads are never re-rendered through docxtemplater (that would wipe
   // the consultant's manual edits), so the Revision History table baked in
@@ -1133,12 +1139,24 @@ export async function uploadQaPbdb(
       .eq("rev_number", expectedRev)
       .maybeSingle();
 
+    // A forced-close bump isn't recorded until the upload succeeds —
+    // recordRevisionEvent will credit the assigned consultant, so use theirs.
+    let preparedById = (revHistoryRow?.prepared_by as string | null | undefined) ?? null;
+    if (forcedCloseBumps && !revHistoryRow) {
+      const { data: assigned } = await supabase
+        .from("projects")
+        .select("assigned_consultant_id")
+        .eq("id", projectId)
+        .maybeSingle();
+      preparedById = (assigned?.assigned_consultant_id as string | null) ?? null;
+    }
+
     let preparedByName = "";
-    if (revHistoryRow?.prepared_by) {
+    if (preparedById) {
       const { data: preparedByUser } = await supabase
         .from("users")
         .select("first_name, last_name")
-        .eq("id", revHistoryRow.prepared_by as string)
+        .eq("id", preparedById)
         .maybeSingle();
       preparedByName = [preparedByUser?.first_name as string | null, preparedByUser?.last_name as string | null]
         .filter(Boolean)
@@ -1227,6 +1245,12 @@ export async function uploadQaPbdb(
   const now = new Date().toISOString();
 
   if (isReupload) {
+    // Forced close (#191): a revised PBDB uploaded while reviews are still
+    // pending ends the round — still-pending reviews become superseded, and
+    // the revision number bumps only if a rejection was already recorded.
+    // A no-op when the round had already closed naturally.
+    await forceCloseRound(supabase, projectId, cycle, { id: actor.id, email: actor.email as string });
+
     await supabase
       .from("projects")
       .update({
