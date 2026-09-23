@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getDispatchPdfForCycle, type DispatchPdf } from "@/lib/documents/pbdb-pdf";
 import { getSessionUser } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
 import { getStakeholderReviewedProjectIds, stakeholderAccessFilter } from "@/lib/portal/access";
@@ -33,28 +34,28 @@ export async function GET(
 
   if (!project) return new NextResponse("Not found", { status: 404 });
 
-  const { data: pbdbPdf } = await supabase
-    .from("project_files")
-    .select("storage_path, original_filename, version")
-    .eq("project_id", projectId)
-    .eq("file_type", "pbdb_pdf")
-    .eq("review_cycle", project.review_cycle as number)
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Cached PDF, or regenerated from the cycle's source docx on a cache miss
+  // (#186) — never 404 just because the pbdb_pdf row is missing.
+  let pbdbPdf: DispatchPdf | null;
+  try {
+    pbdbPdf = await getDispatchPdfForCycle(supabase, projectId, project.review_cycle as number);
+  } catch (err) {
+    console.error("[pbdb-pdf] on-demand render failed:", err);
+    return new NextResponse("Could not prepare the document", { status: 500 });
+  }
 
   if (!pbdbPdf) return new NextResponse("File not found", { status: 404 });
 
   await auditLog("project.pbdb_downloaded", user.id as string, user.email as string, {
     projectId,
     orgId: user.client_id as string,
-    metadata: { version: pbdbPdf.version, filename: pbdbPdf.original_filename },
+    metadata: { version: pbdbPdf.version, filename: pbdbPdf.originalFilename },
   });
 
   const { data: signed } = await supabase.storage
     .from("documents")
-    .createSignedUrl(pbdbPdf.storage_path as string, 300, {
-      download: (pbdbPdf.original_filename as string) || true,
+    .createSignedUrl(pbdbPdf.storagePath, 300, {
+      download: pbdbPdf.originalFilename || true,
     });
 
   if (!signed?.signedUrl) {

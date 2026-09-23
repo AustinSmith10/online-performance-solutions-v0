@@ -23,6 +23,7 @@ import { FocusCard } from "@/components/workspace/FocusCard";
 import type { Stage } from "@/components/workspace/StageRail";
 import type { ProjectStatus } from "@/types";
 import { RealtimeSubscriptionRefresher } from "@/components/RealtimeSubscriptionRefresher";
+import { dispatchPdfFilenameFor } from "@/lib/documents/naming";
 
 const STAGE_ICON: Record<StepperStageKey, Stage["icon"]> = {
   submitted: "document",
@@ -317,9 +318,13 @@ export default async function ClientProjectDetailPage({
   // The stakeholder is served the converted `pbdb_pdf`, not the .docx source —
   // its filename (regenerated at dispatch, #109) is what the previewer needs
   // to detect a PDF and what the download actually saves as.
+  // No cached PDF yet? The routes regenerate it on demand (#186) — derive the
+  // name it will carry so the previewer still recognises a PDF.
   const pbdbPdfFilename =
     (rawPbdbPdfs?.[0]?.original_filename as string | undefined) ??
-    (latestPbdb?.original_filename as string | undefined);
+    (latestPbdb?.original_filename
+      ? dispatchPdfFilenameFor(latestPbdb.original_filename as string)
+      : undefined);
 
   // PBDR — latest version only, signed URL from `documents` bucket
   const latestPbdr = rawPbdrs?.[0] ?? null;

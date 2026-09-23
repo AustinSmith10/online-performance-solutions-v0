@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getDispatchPdfForCycle, type DispatchPdf } from "@/lib/documents/pbdb-pdf";
 import { validateToken } from "@/lib/stakeholders/tokens";
 import { auditLog } from "@/lib/audit/log";
 
@@ -17,15 +18,15 @@ export async function GET(
   const { review } = result;
   const supabase = createAdminClient();
 
-  const { data: pbdbPdf } = await supabase
-    .from("project_files")
-    .select("storage_path, original_filename, version")
-    .eq("project_id", review.project_id)
-    .eq("file_type", "pbdb_pdf")
-    .eq("review_cycle", review.review_cycle)
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Cached PDF, or regenerated from the cycle's source docx on a cache miss
+  // (#186) — never 404 just because the pbdb_pdf row is missing.
+  let pbdbPdf: DispatchPdf | null;
+  try {
+    pbdbPdf = await getDispatchPdfForCycle(supabase, review.project_id, review.review_cycle);
+  } catch (err) {
+    console.error("[pbdb-pdf] on-demand render failed:", err);
+    return new NextResponse("Could not prepare the document", { status: 500 });
+  }
 
   if (!pbdbPdf) {
     return new NextResponse("File not found", { status: 404 });
@@ -38,7 +39,7 @@ export async function GET(
 
   const { data: signed } = await supabase.storage
     .from("documents")
-    .createSignedUrl(pbdbPdf.storage_path as string, 300);
+    .createSignedUrl(pbdbPdf.storagePath, 300);
 
   if (!signed?.signedUrl) {
     return new NextResponse("Could not generate download link", { status: 500 });

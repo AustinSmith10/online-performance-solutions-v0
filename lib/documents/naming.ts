@@ -71,3 +71,13 @@ export function buildPbdrFilename(
   const raw = `${projPart}-S_PBDR_R${revisionIndex}_${addrPart}_${datePart}.pdf`;
   return raw.slice(0, 200);
 }
+
+/**
+ * The name a stakeholder-facing PBDB PDF will carry, derived from its source
+ * docx name — for showing a download/preview link before the cached
+ * `pbdb_pdf` row exists (the routes regenerate it on demand, #186). Drops the
+ * "For QA" suffix like the real dispatch-time name does (#109).
+ */
+export function dispatchPdfFilenameFor(docxFilename: string): string {
+  return docxFilename.replace(/\s*For QA(?=\.docx$)/i, "").replace(/\.docx$/i, ".pdf");
+}

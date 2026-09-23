@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPbdrFilename, buildPbdbFilename } from "./naming";
+import { buildPbdrFilename, buildPbdbFilename, dispatchPdfFilenameFor } from "./naming";
 
 const TZ = "Australia/Brisbane";
 // Midday 15 Mar 2024 in Brisbane.
@@ -181,5 +181,14 @@ describe("filename dates use the business timezone, not server-local time (#188)
 
   it("stamps the Brisbane calendar day on a PBDR filename", () => {
     expect(buildPbdrFilename("OPS-001", 0, "addr", earlyMorningBrisbane, TZ)).toContain("2024_03_15");
+  });
+});
+
+describe("dispatchPdfFilenameFor", () => {
+  it("drops For QA and swaps the extension", () => {
+    expect(dispatchPdfFilenameFor("OPS-1-S PBDB Rev1 addr 2026 09 23 For QA.docx")).toBe(
+      "OPS-1-S PBDB Rev1 addr 2026 09 23.pdf"
+    );
+    expect(dispatchPdfFilenameFor("plain.docx")).toBe("plain.pdf");
   });
 });

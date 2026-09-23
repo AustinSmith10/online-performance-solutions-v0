@@ -117,7 +117,7 @@ describe("getOrCreateDispatchPdf", () => {
   });
 
   it("reuses a cached PDF for the cycle instead of converting again", async () => {
-    const cached = { storage_path: "org-1/proj-1/pbdb/v2_file.pdf", original_filename: "file.pdf" };
+    const cached = { storage_path: "org-1/proj-1/pbdb/v2_file.pdf", original_filename: "file.pdf", version: 2 };
     const sourceDocx = { storage_path: "org-1/proj-1/pbdb/v2_file.docx", original_filename: "file.docx", version: 2 };
     const mock = buildSupabaseMock({ cachedPdf: cached, sourceDocx });
 
@@ -127,7 +127,11 @@ describe("getOrCreateDispatchPdf", () => {
       ACTOR_ID
     );
 
-    expect(result).toEqual({ storagePath: cached.storage_path, originalFilename: cached.original_filename });
+    expect(result).toEqual({
+      storagePath: cached.storage_path,
+      originalFilename: cached.original_filename,
+      version: cached.version,
+    });
     expect(vi.mocked(convertDocxToPdf)).not.toHaveBeenCalled();
     expect(mock.uploadFn).not.toHaveBeenCalled();
   });

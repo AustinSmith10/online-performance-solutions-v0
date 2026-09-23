@@ -10,6 +10,7 @@ import { resolveStepperState, type StepperResult } from "@/lib/delivery/stepper"
 import { resolveEffectiveStatus, OUTSTANDING_STATUSES } from "@/lib/delivery/effective-status";
 import type { ProjectStatus, PaymentMethod } from "@/types";
 import type { DashboardData } from "./_components/dashboardTypes";
+import { dispatchPdfFilenameFor } from "@/lib/documents/naming";
 
 // Kept in sync with stepperBadge()'s SHORT_BADGE_LABELS (components/delivery/StepperVisuals.tsx)
 // so the Filters panel's status list matches the wording actually shown on each row's pill —
@@ -150,16 +151,22 @@ export default async function ClientPortalPage({
   if (pendingApprovals.length > 0) {
     const { data: pbdbFilesData } = await supabase
       .from("project_files")
-      .select("project_id, original_filename, version, review_cycle")
+      .select("project_id, file_type, original_filename, version, review_cycle")
       .in("project_id", pendingApprovals.map((p) => p.id))
-      .eq("file_type", "pbdb_pdf")
+      .in("file_type", ["pbdb_pdf", "pbdb"])
       .order("version", { ascending: false });
-    for (const row of pbdbFilesData ?? []) {
+    // Prefer the cached PDF's name; with no cached PDF yet (the routes
+    // regenerate it on demand, #186) fall back to the name it will carry.
+    const rows = [...(pbdbFilesData ?? [])].sort(
+      (a, b) => Number(a.file_type !== "pbdb_pdf") - Number(b.file_type !== "pbdb_pdf")
+    );
+    for (const row of rows) {
       const pid = row.project_id as string;
       if (pbdbFilenameMap.has(pid)) continue;
       const cycle = pendingReviewMap.get(pid)?.review_cycle;
       if (cycle != null && row.review_cycle !== cycle) continue;
-      pbdbFilenameMap.set(pid, row.original_filename as string);
+      const name = row.original_filename as string;
+      pbdbFilenameMap.set(pid, row.file_type === "pbdb_pdf" ? name : dispatchPdfFilenameFor(name));
     }
   }
 
