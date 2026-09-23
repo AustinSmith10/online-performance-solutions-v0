@@ -261,3 +261,121 @@ describe("submitProject — auto-resolving no-extraction-evidence flags", () => 
     );
   });
 });
+
+// ─── #190: rainfall intensity is server-authoritative ────────────────────────
+
+describe("submitProject — server-side metrics outputs (#190)", () => {
+  const METRICS_ROWS = [
+    { table_id: "t1", data: { dev: "Halcyon Promenade", trustee: "Promenade Pty Ltd", aep: 63.2 } },
+    { table_id: "t1", data: { dev: "Halcyon Rise", trustee: "Rise Pty Ltd", aep: 58.1 } },
+  ];
+
+  function buildMetricsMock() {
+    const mappings = [
+      { placeholder_token: "EXTRACT_DEV_NAME", display_label: "Development name" },
+      { placeholder_token: "EXTRACT_TRUSTEE", display_label: "Trustee" },
+      { placeholder_token: "EXTRACT_RAINFALL_INTENSITY", display_label: "Rainfall intensity" },
+    ];
+    const updateResultChain: Record<string, unknown> = {};
+    updateResultChain.eq = vi.fn().mockReturnValue(updateResultChain);
+    updateResultChain.then = (fn: (v: unknown) => unknown) =>
+      Promise.resolve({ error: null, count: 1 }).then(fn);
+    const projectUpdateFn = vi.fn().mockReturnValue(updateResultChain);
+    const flagInsertFn = vi.fn().mockResolvedValue({ error: null });
+    const flagDeleteFn = vi.fn().mockReturnValue(chain(null));
+
+    const calls: Record<string, number> = {};
+    const from = vi.fn((table: string) => {
+      calls[table] = (calls[table] ?? 0) + 1;
+      const n = calls[table];
+      if (table === "template_field_mappings") return chain(mappings);
+      if (table === "clients") return chain({ name: "Acme", delivery_working_days: 5, state_territory: "NSW" });
+      if (table === "client_metrics_tables") return chain([{ id: "t1", match_token: "EXTRACT_DEV_NAME", match_column_id: "dev" }]);
+      if (table === "client_metrics_output_mappings") {
+        return chain([
+          { table_id: "t1", output_token: "EXTRACT_TRUSTEE", output_column_id: "trustee" },
+          { table_id: "t1", output_token: "EXTRACT_RAINFALL_INTENSITY", output_column_id: "aep" },
+        ]);
+      }
+      if (table === "client_metrics_rows") return chain(METRICS_ROWS);
+      if (table === "projects") {
+        if (n === 1) return chain({ extracted_fields: {}, po_number: null });
+        return { update: projectUpdateFn };
+      }
+      if (table === "project_files") return chain(null);
+      if (table === "users") return chain([]);
+      if (table === "field_flags") {
+        if (n === 1) return chain([]);
+        return { delete: flagDeleteFn, insert: flagInsertFn };
+      }
+      return chain(null);
+    });
+    return { from, projectUpdateFn, flagInsertFn, flagDeleteFn };
+  }
+
+  function submittedFields(mock: ReturnType<typeof buildMetricsMock>) {
+    return (mock.projectUpdateFn.mock.calls[0][0] as { extracted_fields: Record<string, string> }).extracted_fields;
+  }
+
+  it("resolves rainfall from the confirmed development name", async () => {
+    const mock = buildMetricsMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    const result = await submitProject(
+      {},
+      makeSubmitFormData({ EXTRACT_DEV_NAME: "Halcyon Promenade – West", EXTRACT_TRUSTEE: "Promenade Pty Ltd" })
+    );
+    expect(result?.error).toBeUndefined();
+    expect(submittedFields(mock).EXTRACT_RAINFALL_INTENSITY).toBe("63.2");
+    expect(mock.flagInsertFn).not.toHaveBeenCalled();
+  });
+
+  it("uses the stakeholder's chosen trustee-dropdown row as the confirmed development", async () => {
+    const mock = buildMetricsMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    await submitProject(
+      {},
+      makeSubmitFormData({
+        EXTRACT_DEV_NAME: "Something Unrecognisable",
+        EXTRACT_TRUSTEE: "Rise Pty Ltd",
+        metrics_match_value: "Halcyon Rise",
+      })
+    );
+    expect(submittedFields(mock).EXTRACT_RAINFALL_INTENSITY).toBe("58.1");
+    expect(mock.flagInsertFn).not.toHaveBeenCalled();
+  });
+
+  it("ignores a client-submitted rainfall value", async () => {
+    const mock = buildMetricsMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    await submitProject(
+      {},
+      makeSubmitFormData({ EXTRACT_DEV_NAME: "Halcyon Rise", EXTRACT_TRUSTEE: "Rise Pty Ltd", EXTRACT_RAINFALL_INTENSITY: "999" })
+    );
+    expect(submittedFields(mock).EXTRACT_RAINFALL_INTENSITY).toBe("58.1");
+  });
+
+  it("raises a consultant flag with a suggested (not applied) match when unresolved", async () => {
+    const mock = buildMetricsMock();
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+    const result = await submitProject(
+      {},
+      makeSubmitFormData({ EXTRACT_DEV_NAME: "Promenade Estate", EXTRACT_TRUSTEE: "Promenade Pty Ltd", EXTRACT_RAINFALL_INTENSITY: "999" })
+    );
+    // Unresolved server-owned output never blocks the stakeholder's submit.
+    expect(result?.error).toBeUndefined();
+    expect(submittedFields(mock).EXTRACT_RAINFALL_INTENSITY).toBe("");
+
+    expect(mock.flagInsertFn).toHaveBeenCalledTimes(1);
+    const [row] = mock.flagInsertFn.mock.calls[0][0] as Record<string, unknown>[];
+    expect(row).toMatchObject({
+      field_key: "EXTRACT_RAINFALL_INTENSITY",
+      type: "confidence",
+      status: "open",
+      current_value: "",
+    });
+    const candidates = row.candidate_values as { development: string; value: string; suggested?: boolean; source_document: string }[];
+    expect(candidates.map((c) => c.development)).toEqual(["Halcyon Promenade", "Halcyon Rise"]);
+    expect(candidates[0]).toMatchObject({ suggested: true, value: "63.2", source_document: "metrics_table" });
+    expect(candidates[1].suggested).toBeUndefined();
+  });
+});

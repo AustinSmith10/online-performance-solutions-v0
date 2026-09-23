@@ -107,17 +107,12 @@ function TokenInput({
   modified,
   onMark,
   disabled,
-  onValueChange,
   isExtractField,
 }: {
   field: TokenField;
   modified: Set<string>;
   onMark: (k: string) => void;
   disabled?: boolean;
-  // Lets a parent re-derive dependent fields (e.g. a metrics-table autofill
-  // lookup keyed on this token) as the user types, instead of only seeing
-  // the value at submit time via the form's own name-based field.
-  onValueChange?: (token: string, value: string) => void;
   // True only for tokenGroups.extract fields. Org/client fields are never
   // AI-extracted and must never show the "not found" marker.
   isExtractField?: boolean;
@@ -147,7 +142,6 @@ function TokenInput({
         onChange={(e) => {
           setValue(e.target.value);
           onMark(field.token);
-          onValueChange?.(field.token, e.target.value);
         }}
         className={`w-full rounded-md border px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${fieldClass(modified, field.token, hasCandidates, isNotFound)}`}
       />
@@ -169,7 +163,6 @@ function TokenInput({
                 onChange={() => {
                   setValue(c.value);
                   onMark(field.token);
-                  onValueChange?.(field.token, c.value);
                 }}
                 className="mt-0.5"
               />
@@ -194,19 +187,6 @@ function resolveDefaultMatchValue(extractedValue: string, pickRows: MetricsPickR
   return result.status === "matched" ? result.name : "";
 }
 
-// Client-side re-derivation of a metrics-table output (e.g. rainfall
-// intensity) as the stakeholder edits the field it's keyed on — via the
-// same shared matcher as resolveMetricsAutofill.
-function resolveAutofillOutput(
-  matchValue: string,
-  pickRows: MetricsPickRow[],
-  outputToken: string
-): string | null {
-  const result = matchDevelopmentName(matchValue, pickRows.map((r) => r.matchValue));
-  if (result.status !== "matched") return null;
-  return pickRows.find((r) => r.matchValue === result.name)?.outputs[outputToken] ?? null;
-}
-
 interface ReviewStepProps {
   state: Extract<ExtractState, { step: 2 }>;
   submitAction: (payload: FormData) => void;
@@ -228,8 +208,6 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
     rainfallToken,
     matchToken,
     pickRows,
-    rainfallMatchToken,
-    rainfallPickRows,
     projectId,
     templateId,
     documents,
@@ -237,16 +215,6 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
 
   const [modified, setModified] = useState<Set<string>>(new Set());
   const mark = (key: string) => setModified((prev) => new Set(prev).add(key));
-
-  // Live-tracks every extract-field value as the user types, so a
-  // metrics-table autofill output (rainfall intensity) keyed on one of these
-  // fields (e.g. Development Name) can be re-resolved without waiting for a
-  // form submit round-trip.
-  const [liveExtractValues, setLiveExtractValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(tokenGroups.extract.map((f) => [f.token, f.value]))
-  );
-  const handleExtractValueChange = (token: string, value: string) =>
-    setLiveExtractValues((prev) => ({ ...prev, [token]: value }));
 
   const [reviewedConfirmed, setReviewedConfirmed] = useState(false);
 
@@ -266,22 +234,8 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
   const selectedTrusteeEntity =
     pickRows.find((r) => r.matchValue === selectedMatchValue)?.outputs["EXTRACT_TRUSTEE"] ?? "";
 
-  const rainfallField = rainfallToken
-    ? tokenGroups.extract.find((t) => t.token === rainfallToken)
-    : null;
-  // Re-run the same match the server used to originally populate rainfall
-  // intensity, but against the field's *current* value — so correcting a
-  // failed Development Name extraction re-derives rainfall intensity instead
-  // of submitting whatever (possibly empty) value the initial pass left.
-  const rainfallMatchValue = rainfallMatchToken ? liveExtractValues[rainfallMatchToken] ?? "" : "";
-  const rainfallResolvedValue =
-    rainfallMatchToken && rainfallToken
-      ? resolveAutofillOutput(rainfallMatchValue, rainfallPickRows, rainfallToken)
-      : null;
-  const rainfallValue = rainfallResolvedValue ?? rainfallField?.value ?? "";
-  const rainfallUnresolved =
-    Boolean(rainfallMatchToken) && rainfallMatchValue.trim() !== "" && rainfallResolvedValue === null;
-
+  // Rainfall intensity is resolved server-side from the confirmed
+  // development name at submit (#190) — never shown, computed, or posted here.
   const halcyonTokens = new Set(["EXTRACT_TRUSTEE", rainfallToken].filter(Boolean));
   const extractFieldsList = tokenGroups.extract.filter((t) => !halcyonTokens.has(t.token));
 
@@ -350,10 +304,10 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
         {adminOrgId && <input type="hidden" name="admin_org_id" value={adminOrgId} />}
         {adminClientId && <input type="hidden" name="admin_client_id" value={adminClientId} />}
         {hasTrustee && (
-          <input type="hidden" name="EXTRACT_TRUSTEE" value={selectedTrusteeEntity} />
-        )}
-        {rainfallToken && rainfallField && (
-          <input type="hidden" name={rainfallToken} value={rainfallValue} />
+          <>
+            <input type="hidden" name="EXTRACT_TRUSTEE" value={selectedTrusteeEntity} />
+            <input type="hidden" name="metrics_match_value" value={selectedMatchValue} />
+          </>
         )}
 
         <ClientWorkspace
@@ -451,22 +405,14 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                   </p>
                   <div className="space-y-4">
                     {extractFieldsList.map((field) => (
-                      <div key={field.token}>
-                        <TokenInput
-                          field={field}
-                          modified={modified}
-                          onMark={mark}
-                          disabled={submitPending}
-                          onValueChange={handleExtractValueChange}
-                          isExtractField
-                        />
-                        {field.token === rainfallMatchToken && rainfallUnresolved && (
-                          <p className="mt-1 text-xs text-red-600">
-                            No rainfall intensity match found for this value — check the spelling
-                            against the lookup table before submitting.
-                          </p>
-                        )}
-                      </div>
+                      <TokenInput
+                        key={field.token}
+                        field={field}
+                        modified={modified}
+                        onMark={mark}
+                        disabled={submitPending}
+                        isExtractField
+                      />
                     ))}
                   </div>
                 </div>

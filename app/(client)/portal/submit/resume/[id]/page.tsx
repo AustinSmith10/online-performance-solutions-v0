@@ -149,7 +149,6 @@ export default async function ResumeDraftPage({
   }
 
   const trusteePick = hasTrustee ? buildMetricsPickRows(metricsAutofillConfigs, TRUSTEE_TOKEN) : null;
-  const rainfallPick = rainfallToken ? buildMetricsPickRows(metricsAutofillConfigs, RAINFALL_TOKEN) : null;
 
   function makeField(
     m: { placeholder_token: string; display_label: string | null; field_key: string | null; is_required: boolean },
@@ -216,8 +215,6 @@ export default async function ResumeDraftPage({
     rainfallToken,
     matchToken: trusteePick?.matchToken ?? null,
     pickRows: trusteePick?.rows ?? [],
-    rainfallMatchToken: rainfallPick?.matchToken ?? null,
-    rainfallPickRows: rainfallPick?.rows ?? [],
     projectId: id,
     templateId,
     fileVerificationWarnings,

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isMetricsLookupFlag } from "@/lib/documents/metrics-autofill";
 import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -255,7 +256,9 @@ export default async function ClientProjectDetailPage({
         .eq("project_id", id),
     ]);
 
-  const allFieldFlags = openFieldFlags ?? [];
+  // A metrics-lookup flag (#190 — e.g. rainfall intensity that couldn't be
+  // resolved from the development name) is consultant-facing only.
+  const allFieldFlags = (openFieldFlags ?? []).filter((f) => !isMetricsLookupFlag(f.candidate_values));
 
   const flagResolverIds = [
     ...new Set(allFieldFlags.map((f) => f.resolved_by as string | null).filter((v): v is string => !!v)),

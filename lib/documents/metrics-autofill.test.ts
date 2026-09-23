@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   getAutofillExclusionTokens,
   matchDevelopmentName,
+  isMetricsLookupFlag,
   normalizeDevelopmentName,
   resolveMetricsAutofill,
+  resolveServerMetricsOutputs,
   suggestDevelopmentName,
   type MetricsAutofillConfig,
 } from "./metrics-autofill";
@@ -189,5 +191,45 @@ describe("suggestDevelopmentName", () => {
 
   it("returns null when no row shares a word", () => {
     expect(suggestDevelopmentName("Northgate", ["Halcyon Promenade"])).toBeNull();
+  });
+});
+
+describe("resolveServerMetricsOutputs", () => {
+  const serverTokens = new Set(["EXTRACT_RAINFALL_INTENSITY"]);
+
+  it("resolves only server-owned outputs, leaving stakeholder-selected ones alone", () => {
+    const result = resolveServerMetricsOutputs([makeConfig()], { EXTRACT_DEV_NAME: "Northgate Stage 2" }, { serverTokens });
+    expect(result).toEqual({ values: { EXTRACT_RAINFALL_INTENSITY: "58.1" }, unresolved: [] });
+  });
+
+  it("flags an ambiguous tie instead of guessing, with every development as a candidate", () => {
+    const config = makeConfig({
+      rows: [
+        { data: { "col-dev-name": "Northgate", "col-aep": 1 } },
+        { data: { "col-dev-name": "NORTHGATE", "col-aep": 2 } },
+      ],
+    });
+    const result = resolveServerMetricsOutputs([config], { EXTRACT_DEV_NAME: "Northgate West" }, { serverTokens });
+    expect(result.values).toEqual({});
+    expect(result.unresolved).toHaveLength(1);
+    expect(result.unresolved[0].candidates.map((c) => c.development)).toEqual(["Northgate", "NORTHGATE"]);
+    expect(isMetricsLookupFlag(result.unresolved[0].candidates)).toBe(true);
+  });
+
+  it("prefers the stakeholder's selected row when the config is linked to one", () => {
+    const result = resolveServerMetricsOutputs([makeConfig()], { EXTRACT_DEV_NAME: "Riverside Estate" }, {
+      serverTokens,
+      selectedMatchValue: "Northgate",
+      stakeholderSelectedTokens: new Set(["EXTRACT_TRUSTEE"]),
+    });
+    expect(result.values).toEqual({ EXTRACT_RAINFALL_INTENSITY: "58.1" });
+  });
+});
+
+describe("isMetricsLookupFlag", () => {
+  it("is false for ordinary extraction candidates", () => {
+    expect(isMetricsLookupFlag([{ value: "x", source_document: "po.pdf" }])).toBe(false);
+    expect(isMetricsLookupFlag([])).toBe(false);
+    expect(isMetricsLookupFlag(null)).toBe(false);
   });
 });
