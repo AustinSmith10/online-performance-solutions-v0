@@ -2,9 +2,9 @@ import { DownloadCard } from "@/components/DownloadCard";
 import { FilePreviewButton } from "@/components/FilePreviewButton";
 import {
   rejectedByLabel,
-  type ActivePbdbVersion,
+  type ActiveVersion,
   type HistoricalOutcome,
-  type HistoricalPbdbVersion,
+  type HistoricalVersion,
   type VersionEntry,
 } from "@/lib/documents/pbdb-versions";
 
@@ -19,7 +19,7 @@ const OUTCOME_LABEL: Record<HistoricalOutcome, string> = {
   replaced: "replaced by a newer revision",
 };
 
-function historicalNote(entry: HistoricalPbdbVersion): string {
+function historicalNote(entry: HistoricalVersion): string {
   return rejectedByLabel(entry.rejectedBy) ?? OUTCOME_LABEL[entry.outcome];
 }
 
@@ -34,7 +34,7 @@ function Row({
 }: {
   entry: VersionEntry;
   projectId: string;
-  href: string;
+  href: string | null;
   rowId?: string;
   badge?: React.ReactNode;
   detail?: string;
@@ -98,32 +98,36 @@ export function VersionTiers({
   activeRowId,
 }: {
   projectId: string;
-  active: ActivePbdbVersion;
-  historical: HistoricalPbdbVersion[];
+  /** null when nothing is current — e.g. a delivered PBDR that has been reverted. */
+  active: ActiveVersion | null;
+  historical: HistoricalVersion[];
   drafts?: VersionEntry[];
-  hrefFor: (fileId: string) => string;
+  /** null renders the row without a download button (preview only). */
+  hrefFor: (fileId: string, tier: "active" | "historical" | "draft") => string | null;
   activeRowId?: string;
 }) {
   return (
     <div className="space-y-1.5">
-      <Row
-        entry={active}
-        projectId={projectId}
-        href={hrefFor(active.fileId)}
-        rowId={activeRowId}
-        cta={active.ctaCopy}
-        badge={
-          active.badge === "dispatched" ? (
-            <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
-              Dispatched
-            </span>
-          ) : active.badge === "draft" ? (
-            <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-              Draft
-            </span>
-          ) : undefined
-        }
-      />
+      {active && (
+        <Row
+          entry={active}
+          projectId={projectId}
+          href={hrefFor(active.fileId, "active")}
+          rowId={activeRowId}
+          cta={active.ctaCopy}
+          badge={
+            active.badge === "dispatched" ? (
+              <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                Dispatched
+              </span>
+            ) : active.badge === "draft" ? (
+              <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                Draft
+              </span>
+            ) : undefined
+          }
+        />
+      )}
       {historical.length > 0 && (
         <CollapsedGroup summary={`Revision history (${historical.length})`}>
           {historical.map((h) => (
@@ -131,7 +135,7 @@ export function VersionTiers({
               key={h.fileId}
               entry={h}
               projectId={projectId}
-              href={hrefFor(h.fileId)}
+              href={hrefFor(h.fileId, "historical")}
               detail={historicalNote(h)}
             />
           ))}
@@ -140,7 +144,7 @@ export function VersionTiers({
       {drafts.length > 0 && (
         <CollapsedGroup summary={`${drafts.length} earlier draft${drafts.length === 1 ? "" : "s"}`}>
           {drafts.map((d) => (
-            <Row key={d.fileId} entry={d} projectId={projectId} href={hrefFor(d.fileId)} />
+            <Row key={d.fileId} entry={d} projectId={projectId} href={hrefFor(d.fileId, "draft")} />
           ))}
         </CollapsedGroup>
       )}

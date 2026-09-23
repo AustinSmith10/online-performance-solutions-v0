@@ -6,7 +6,8 @@ import { prettifyToken } from "@/lib/tokens/prettify";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import { getCurrentRevNumber, getLatestRevisionHistoryRow } from "@/lib/documents/revision-history";
-import { groupPbdbVersions, type PbdbRevisionRow } from "@/lib/documents/pbdb-versions";
+import { groupPbdbVersions } from "@/lib/documents/pbdb-versions";
+import { groupPbdrVersions } from "@/lib/documents/pbdr-versions";
 import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
 import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
@@ -52,6 +53,7 @@ import { AltWorkspace } from "@/app/(consultant)/ops/projects/[id]/_components/A
 import { RevisionNoteField } from "@/app/(consultant)/ops/projects/[id]/_components/RevisionNoteField";
 import { ProjectNumberCard } from "@/app/(consultant)/ops/projects/[id]/_components/ProjectNumberCard";
 import { PbdbVersionsCard } from "@/app/(consultant)/ops/projects/[id]/_components/PbdbVersionsCard";
+import { VersionTiers } from "@/app/_shared/project-detail/VersionTiers";
 import { ResendBufferUpdateButton } from "@/app/(consultant)/ops/projects/[id]/_components/ResendBufferUpdateButton";
 
 import { ResendPbdrButton } from "@/app/(admin)/admin/projects/[id]/_components/ResendPbdrButton";
@@ -610,7 +612,7 @@ export async function ProjectWorkspace({
   // (the old `latestPbdb.version - 1` formula drifted every regenerate).
   // That regeneration counter is deliberately not surfaced anywhere in the
   // UI — Rev is the only version number a user should ever see.
-  const [currentRevNumber, latestPbdbRevisionRow, pbdbSendPreview, pbdrSendPreview, { data: rawPbdbRevisionRows }] = await Promise.all([
+  const [currentRevNumber, latestPbdbRevisionRow, pbdbSendPreview, pbdrSendPreview, { data: rawRevisionRows }] = await Promise.all([
     getCurrentRevNumber(supabase, id, "pbdb"),
     // #195: whether the consultant has downloaded the revision-populated
     // working copy for the *current* revision yet.
@@ -622,10 +624,16 @@ export async function ProjectWorkspace({
     previewNextSendTime(id, "pbdr").catch(() => null),
     supabase
       .from("revision_history")
-      .select("event, rev_number, review_cycle, created_at")
-      .eq("project_id", id)
-      .eq("doc_type", "pbdb"),
+      .select("doc_type, event, rev_number, review_cycle, created_at")
+      .eq("project_id", id),
   ]);
+  const revisionRows = (rawRevisionRows ?? []) as {
+    doc_type: string;
+    event: string;
+    rev_number: number;
+    review_cycle: number | null;
+    created_at: string;
+  }[];
   const pbdbGrouping = groupPbdbVersions({
     files: pbdbFiles as {
       id: string;
@@ -635,8 +643,12 @@ export async function ProjectWorkspace({
       created_at: string;
     }[],
     reviews: allReviews,
-    revisionHistory: (rawPbdbRevisionRows ?? []) as PbdbRevisionRow[],
+    revisionHistory: revisionRows.filter((r) => r.doc_type === "pbdb"),
     revisionNotesByCycle,
+  });
+  const pbdrGrouping = groupPbdrVersions({
+    files: pbdrFiles as { id: string; original_filename: string; version: number; created_at: string }[],
+    revisionHistory: revisionRows,
   });
   const pbdbSendPreviewIso = pbdbSendPreview ? pbdbSendPreview.toISOString() : undefined;
   const pbdrSendPreviewIso = pbdrSendPreview ? pbdrSendPreview.toISOString() : undefined;
@@ -1197,21 +1209,20 @@ export async function ProjectWorkspace({
     focusCard = (
       <FocusCard tone="green" title="Delivery ready" subtitle="Approved and converted — download or hand off below.">
         <div className="space-y-3">
-          {pbdrFiles.map((f) => (
+          {pbdrGrouping?.active && (
             <DownloadCard
-              key={f.id as string}
               href={`/api/download/pbdr/${id}`}
-              filename={f.original_filename as string}
-              originalFilename={f.original_filename as string}
+              filename={pbdrGrouping.active.originalFilename}
+              originalFilename={pbdrGrouping.active.originalFilename}
               wrapperClassName="flex items-center justify-between rounded-md border border-green-200 bg-white px-4 py-3"
               buttonClassName="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
             >
               <p className="text-sm font-medium text-zinc-900">PBDR</p>
               <p className="mt-0.5 text-xs text-zinc-500">
-                v{f.version as number} · {new Date(f.created_at as string).toLocaleDateString("en-AU")}
+                Rev {pbdrGrouping.active.revNumber} · {new Date(pbdrGrouping.active.createdAt).toLocaleDateString("en-AU")}
               </p>
             </DownloadCard>
-          ))}
+          )}
           <p className="text-xs text-zinc-500">
             Resends a fresh 30-day download link to the submitter
             {project.delivery_recipient_email ? " and the delivery recipient" : ""}.
@@ -1481,24 +1492,17 @@ export async function ProjectWorkspace({
       </CollapsibleSection>
       {/* PBDB versions + regenerate live in the left rail (leftRailExtras above) —
           always visible there, not tucked behind this tab, for every role. */}
-      {pbdrFiles.length > 0 && (
+      {pbdrGrouping && (
         <CollapsibleSection title="PBDR" subtitle="Final converted document delivered to the client." defaultOpen>
-          <div className="divide-y divide-zinc-100">
-            {pbdrFiles.map((f) => (
-              <DownloadCard
-                key={f.id as string}
-                href={`/api/download/pbdr/${id}`}
-                filename={f.original_filename as string}
-                originalFilename={f.original_filename as string}
-                preview={<FilePreviewButton projectId={id} fileId={f.id as string} />}
-              >
-                <p className="text-sm font-medium text-zinc-900">PBDR</p>
-                <p className="mt-0.5 text-xs text-zinc-500">
-                  Version {f.version as number} ·{" "}
-                  {new Date(f.created_at as string).toLocaleDateString("en-AU")}
-                </p>
-              </DownloadCard>
-            ))}
+          <div className="p-3">
+            <VersionTiers
+              projectId={id}
+              active={pbdrGrouping.active}
+              historical={pbdrGrouping.historical}
+              // The PBDR download route only serves the latest file, so older
+              // revisions are listed (and previewable) but not downloadable.
+              hrefFor={(_fileId, tier) => (tier === "active" ? `/api/download/pbdr/${id}` : null)}
+            />
           </div>
         </CollapsibleSection>
       )}

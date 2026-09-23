@@ -43,11 +43,12 @@ export interface VersionEntry {
   originalFilename: string;
   createdAt: string;
   revNumber: number;
-  reviewCycle: number;
+  /** null for PBDR, which has no review cycle of its own. */
+  reviewCycle: number | null;
   revisionNote: string | null;
 }
 
-export interface ActivePbdbVersion extends VersionEntry {
+export interface ActiveVersion extends VersionEntry {
   /**
    * none       nothing has been sent yet and nothing has been rejected
    * dispatched this file is the one sent to stakeholders
@@ -62,14 +63,14 @@ export interface ActivePbdbVersion extends VersionEntry {
 
 export type HistoricalOutcome = "rejected" | "reverted" | "replaced";
 
-export interface HistoricalPbdbVersion extends VersionEntry {
+export interface HistoricalVersion extends VersionEntry {
   outcome: HistoricalOutcome;
   rejectedBy: { names: string[]; count: number };
 }
 
 export interface PbdbVersionGrouping {
-  active: ActivePbdbVersion;
-  historical: HistoricalPbdbVersion[];
+  active: ActiveVersion;
+  historical: HistoricalVersion[];
   drafts: VersionEntry[];
 }
 
@@ -172,7 +173,7 @@ export function groupPbdbVersions(input: {
   const historicalCycles = cycles.filter(
     (c) => wasDispatched(c) && (c !== latestCycle || latestIsSuperseded)
   );
-  const historical: HistoricalPbdbVersion[] = historicalCycles
+  const historical: HistoricalVersion[] = historicalCycles
     .map((c) => {
       const names = rejectersOf(c);
       return {
@@ -183,13 +184,13 @@ export function groupPbdbVersions(input: {
     })
     .reverse();
 
-  let active: ActivePbdbVersion;
+  let active: ActiveVersion;
   if (latestIsSuperseded) {
     active = { ...entryFor(latestFile, currentRev), badge: "draft", ctaCopy: DRAFT_CTA_COPY };
   } else {
     const previousDispatched = [...cycles].reverse().find((c) => c < latestCycle && wasDispatched(c));
     const previousOutcome = previousDispatched === undefined ? null : outcomeOf(previousDispatched);
-    const badge: ActivePbdbVersion["badge"] = wasDispatched(latestCycle)
+    const badge: ActiveVersion["badge"] = wasDispatched(latestCycle)
       ? "dispatched"
       : previousOutcome === "rejected" || previousOutcome === "reverted"
       ? "draft"
