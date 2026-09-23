@@ -49,6 +49,8 @@ interface DownloadStatusResponse {
   bytesServed: number;
   totalBytes: number | null;
   done: boolean;
+  /** #194: set when the PBDB's revision table/cover couldn't be patched at download time. */
+  warning?: string | null;
 }
 
 const DEFAULT_BUTTON_CLASS =
@@ -71,6 +73,7 @@ export function DownloadCard({
   const [phase, setPhase] = useState<"idle" | "wash" | "confirmed">("idle");
   const [downloaded, setDownloaded] = useState(false);
   const [pct, setPct] = useState<number | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const anchorRef = useRef<HTMLAnchorElement | null>(null);
@@ -110,6 +113,7 @@ export function DownloadCard({
         }
         if (data.done) {
           setPct(100);
+          if (data.warning) setWarning(data.warning);
           finishWash();
         }
       } catch {
@@ -157,6 +161,7 @@ export function DownloadCard({
   }
 
   return (
+    <div className="space-y-2">
     <div id={id} className={`relative overflow-hidden rounded-md ${wrapperClassName}`}>
       {href && phase !== "idle" && (
         <div
@@ -222,6 +227,12 @@ export function DownloadCard({
           </a>
         )}
       </div>
+    </div>
+    {warning && (
+      <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <span className="font-semibold">Revision table couldn&apos;t be updated:</span> {warning}
+      </p>
+    )}
     </div>
   );
 }

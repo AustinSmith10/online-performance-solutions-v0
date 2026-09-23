@@ -1035,7 +1035,7 @@ export async function markPbdbDownloaded(
 
 // ─── Consultant: re-upload corrected PBDB after QA ───────────────────────────
 
-export type UploadQaPbdbState = { error?: string; success?: boolean };
+export type UploadQaPbdbState = { error?: string; success?: boolean; warning?: string };
 
 export async function uploadQaPbdb(
   projectId: string,
@@ -1120,6 +1120,7 @@ export async function uploadQaPbdb(
   // already come in — so the filename uses the number that close will
   // record. A pre-emptive correction with no rejection, or a plain QA
   // correction, leaves the counter untouched.
+  let revisionTablePatchWarning: string | null = null;
   const forcedCloseBumps = isReupload && (await forcedCloseWouldBump(supabase, projectId, cycle));
   const expectedRev = forcedCloseBumps
     ? await peekNextRevNumber(supabase, projectId, "pbdb")
@@ -1167,22 +1168,33 @@ export async function uploadQaPbdb(
       ? new Date(revHistoryRow.created_at as string)
       : uploadDate;
 
-    fileBuffer = Buffer.from(
-      appendRevisionHistoryRow(fileBuffer, {
-        docType: "PBDB",
-        revNumber: String(expectedRev),
-        date: formatDateAU(rowDate, timeZone),
-        purpose: "Stakeholder Review",
-        preparedBy: preparedByName,
-      })
-    );
+    const appendResult = appendRevisionHistoryRow(fileBuffer, {
+      docType: "PBDB",
+      revNumber: String(expectedRev),
+      date: formatDateAU(rowDate, timeZone),
+      purpose: "Stakeholder Review",
+      preparedBy: preparedByName,
+    });
+    fileBuffer = Buffer.from(appendResult.buffer);
 
     // The cover page's scalar Revision value (SYS_REV_NO) is subject to the
     // same frozen-at-initial-generation problem as the table above — patch
     // it to match. Always safe to re-run: it unconditionally sets the cell
     // to expectedRev rather than appending, so a forced resend with an
     // unchanged rev just writes the same value again.
-    fileBuffer = Buffer.from(setCoverRevisionNumber(fileBuffer, String(expectedRev)));
+    const coverResult = setCoverRevisionNumber(fileBuffer, String(expectedRev));
+    fileBuffer = Buffer.from(coverResult.buffer);
+
+    // #194: never silently swallow a patch failure — audit-log it and hand
+    // the warning back so the consultant sees it, instead of a server-only
+    // console.warn nobody reads.
+    revisionTablePatchWarning = appendResult.warning ?? coverResult.warning ?? null;
+    if (revisionTablePatchWarning) {
+      await auditLog("project.revision_table_patch_failed", actor.id as string, actor.email as string, {
+        projectId,
+        metadata: { warning: revisionTablePatchWarning, revNumber: expectedRev },
+      });
+    }
   }
 
   const storedFilename = buildPbdbFilename(projectNum, expectedRev, address, uploadDate, timeZone, {
@@ -1313,7 +1325,10 @@ export async function uploadQaPbdb(
   }
 
   revalidatePath(`/admin/projects/${projectId}`);
-  redirect(`/ops/projects/${projectId}?qa_uploaded=1`);
+  const warningParam = revisionTablePatchWarning
+    ? `&revision_table_warning=${encodeURIComponent(revisionTablePatchWarning)}`
+    : "";
+  redirect(`/ops/projects/${projectId}?qa_uploaded=1${warningParam}`);
 }
 
 // ─── Consultant: acknowledge PBDB QA flags before send (#112) ───────────────

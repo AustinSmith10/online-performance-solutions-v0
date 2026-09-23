@@ -55,7 +55,7 @@ describe("appendRevisionHistoryRow", () => {
     const buf = makeDocxBuffer(table);
 
     const out = appendRevisionHistoryRow(buf, NEW_ROW);
-    const rows = tableRowTexts(extractDocumentXml(out));
+    const rows = tableRowTexts(extractDocumentXml(out.buffer));
 
     expect(rows).toHaveLength(3); // header + original row + new row
     expect(rows[2]).toEqual(["PBDB", "1", "05/08/2026", "Stakeholder Review", "John Snow", "Kieran Doherty"]);
@@ -66,7 +66,7 @@ describe("appendRevisionHistoryRow", () => {
     const buf = makeDocxBuffer(table);
 
     const out = appendRevisionHistoryRow(buf, NEW_ROW);
-    const rows = tableRowTexts(extractDocumentXml(out));
+    const rows = tableRowTexts(extractDocumentXml(out.buffer));
 
     expect(rows[2][5]).toBe("Someone Else");
   });
@@ -85,7 +85,7 @@ describe("appendRevisionHistoryRow", () => {
       purpose: "For Construction",
       preparedBy: "John Snow",
     });
-    const rows = tableRowTexts(extractDocumentXml(out));
+    const rows = tableRowTexts(extractDocumentXml(out.buffer));
 
     expect(rows).toHaveLength(4);
     expect(rows[3]).toEqual(["PBDR", "0", "06/08/2026", "For Construction", "John Snow", "Kieran Doherty"]);
@@ -99,9 +99,10 @@ describe("appendRevisionHistoryRow", () => {
       ...NEW_ROW,
       revNumber: "1", // same rev as the existing last row
     });
-    const rows = tableRowTexts(extractDocumentXml(out));
+    const rows = tableRowTexts(extractDocumentXml(out.buffer));
 
     expect(rows).toHaveLength(2); // unchanged — header + the one existing row
+    expect(out.warning).toBeNull();
   });
 
   it("only touches cells within the identified revision-history table, not other tables", () => {
@@ -110,7 +111,7 @@ describe("appendRevisionHistoryRow", () => {
     const buf = makeDocxBuffer(unrelatedTable + table);
 
     const out = appendRevisionHistoryRow(buf, NEW_ROW);
-    const xml = extractDocumentXml(out);
+    const xml = extractDocumentXml(out.buffer);
 
     // Unrelated table untouched
     expect(xml).toContain("<w:t>Foo</w:t>");
@@ -119,17 +120,19 @@ describe("appendRevisionHistoryRow", () => {
     expect(rows[2]).toEqual(["PBDB", "1", "05/08/2026", "Stakeholder Review", "John Snow", "Kieran Doherty"]);
   });
 
-  it("returns the buffer unchanged when no revision-history table is found", () => {
+  it("returns the buffer unchanged, with a warning, when no revision-history table is found", () => {
     const buf = makeDocxBuffer(`<w:p><w:r><w:t>No tables here.</w:t></w:r></w:p>`);
     const out = appendRevisionHistoryRow(buf, NEW_ROW);
-    expect(out.equals(buf)).toBe(true);
+    expect(out.buffer.equals(buf)).toBe(true);
+    expect(out.warning).toMatch(/could not locate/i);
   });
 
-  it("returns the buffer unchanged (never throws) on a malformed/non-docx buffer", () => {
+  it("returns the buffer unchanged, with a warning (never throws), on a malformed/non-docx buffer", () => {
     const bogus = Buffer.from("not a zip file at all");
     expect(() => appendRevisionHistoryRow(bogus, NEW_ROW)).not.toThrow();
     const out = appendRevisionHistoryRow(bogus, NEW_ROW);
-    expect(out.equals(bogus)).toBe(true);
+    expect(out.buffer.equals(bogus)).toBe(true);
+    expect(out.warning).toBeTruthy();
   });
 });
 
@@ -220,13 +223,14 @@ describe("setCoverRevisionNumber", () => {
     const buf = makeDocxBuffer(table);
 
     const out = setCoverRevisionNumber(buf, "2");
-    const xml = extractDocumentXml(out);
+    const xml = extractDocumentXml(out.buffer);
 
     expect(xml).toContain("<w:t xml:space=\"preserve\">2</w:t>");
     // Unrelated rows are untouched
     expect(xml).toContain("123 Main St");
     expect(xml).toContain("789-S");
     expect(xml).toContain("04/08/2026");
+    expect(out.warning).toBeNull();
   });
 
   it("does not touch a 'Revision history' heading row, only an exact 'Revision' label", () => {
@@ -234,23 +238,26 @@ describe("setCoverRevisionNumber", () => {
     const buf = makeDocxBuffer(table);
 
     const out = setCoverRevisionNumber(buf, "3");
-    const xml = extractDocumentXml(out);
+    const xml = extractDocumentXml(out.buffer);
 
     expect(xml).toContain("n/a"); // "Revision history" row's value cell untouched
     expect(xml).toContain("<w:t xml:space=\"preserve\">3</w:t>");
     expect(xml).not.toContain("<w:t xml:space=\"preserve\">0</w:t>");
   });
 
-  it("returns the buffer unchanged when no 'Revision' row is found", () => {
+  it("returns the buffer unchanged, with a warning, when no 'Revision' row is found", () => {
     const table = `<w:tbl>${coverLabelRow("Address", "123 Main St")}</w:tbl>`;
     const buf = makeDocxBuffer(table);
     const out = setCoverRevisionNumber(buf, "1");
-    expect(out.equals(buf)).toBe(true);
+    expect(out.buffer.equals(buf)).toBe(true);
+    expect(out.warning).toMatch(/could not locate/i);
   });
 
-  it("returns the buffer unchanged (never throws) on a malformed/non-docx buffer", () => {
+  it("returns the buffer unchanged, with a warning (never throws), on a malformed/non-docx buffer", () => {
     const bogus = Buffer.from("not a zip file at all");
     expect(() => setCoverRevisionNumber(bogus, "1")).not.toThrow();
-    expect(setCoverRevisionNumber(bogus, "1").equals(bogus)).toBe(true);
+    const out = setCoverRevisionNumber(bogus, "1");
+    expect(out.buffer.equals(bogus)).toBe(true);
+    expect(out.warning).toBeTruthy();
   });
 });
