@@ -28,7 +28,7 @@ import { sendStakeholderBufferUpdate } from "@/lib/stakeholders/buffer-update";
 import { logger } from "@/lib/observability/logger";
 import { attachEvidence } from "@/app/actions/evidence";
 import { parseEmlBody } from "@/lib/email/parseEml";
-import { recordRevisionEvent } from "@/lib/documents/revision-history";
+import { closeRoundIfComplete, getRoundStatus } from "@/lib/stakeholders/review-round";
 import { runTextCompletion } from "@/lib/documents/extractor";
 import { formatLongDateAU } from "@/lib/time";
 import { getBusinessTimezone } from "@/lib/settings/timezone";
@@ -615,6 +615,8 @@ export async function waiveStakeholderResponse(
 
   if (project) {
     await notifyIfFullyApproved(supabase, projectId, project.review_cycle as number, "[waiveStakeholderResponse]");
+    // A waiver can be what empties the round of pending reviews (#191).
+    await closeRoundIfComplete(supabase, projectId, project.review_cycle as number);
   }
 
   redirect(
@@ -972,6 +974,11 @@ export interface LogResponseState {
 
 export type ResponseMode = "email" | "teams" | "call" | "sms";
 
+// Replacing an already-recorded response (#192) — including a stakeholder's
+// own portal/link response — is allowed only while the review round is still
+// open, and only with an explicit confirmation naming the response being
+// replaced: `replace.previousStatus` must match what's recorded now, so a
+// response that changed after the dialog opened is never overwritten blind.
 export async function logStakeholderResponseOnBehalf(
   reviewId: string,
   projectId: string,
@@ -980,7 +987,8 @@ export async function logStakeholderResponseOnBehalf(
   evidence: { storagePath: string; filename: string } | null,
   mode: ResponseMode,
   respondentName: string,
-  respondedAt: string
+  respondedAt: string,
+  replace: { previousStatus: string } | null = null
 ): Promise<LogResponseState> {
   const actor = await requireRole("consultant", "admin", "super_admin");
   const supabase = createAdminClient();
@@ -1019,17 +1027,31 @@ export async function logStakeholderResponseOnBehalf(
 
   const { data: review } = await supabase
     .from("stakeholder_reviews")
-    .select("id, project_id, stakeholder_name, stakeholder_email, status, review_cycle")
+    .select(
+      "id, project_id, stakeholder_name, stakeholder_email, status, review_cycle, comments, responded_at, response_mode, respondent_name"
+    )
     .eq("id", reviewId)
     .eq("project_id", projectId)
     .maybeSingle();
 
   if (!review) return { error: "Review not found." };
-  if ((review.status as string) !== "pending") {
-    return { error: "This review has already been responded to." };
-  }
   if ((review.review_cycle as number) !== (project.review_cycle as number)) {
     return { error: "This review is no longer valid — the project has moved to a new review cycle." };
+  }
+  const previousStatus = review.status as string;
+  const isReplace = previousStatus !== "pending";
+  if (isReplace) {
+    if (!replace) return { error: "This review has already been responded to." };
+    if (previousStatus === "superseded") {
+      return { error: "This review was superseded by a revised PBDB and can't be changed." };
+    }
+    if (replace.previousStatus !== previousStatus) {
+      return { error: "This response changed since you opened it — reload to see the latest before replacing it." };
+    }
+    const roundStatus = await getRoundStatus(supabase, projectId, project.review_cycle as number);
+    if (roundStatus !== "open") {
+      return { error: "This review round has closed — its responses can no longer be changed." };
+    }
   }
   // "revision_required" is allowed alongside "dispatched" — see the matching
   // comment in app/actions/approval.ts. It only means another stakeholder in
@@ -1070,7 +1092,7 @@ export async function logStakeholderResponseOnBehalf(
         : "approved_without_comments"
       : "rejected_with_comments";
 
-  const { error: updateErr, count } = await supabase
+  let reviewUpdate = supabase
     .from("stakeholder_reviews")
     .update(
       {
@@ -1079,29 +1101,69 @@ export async function logStakeholderResponseOnBehalf(
         responded_at: respondedAtDate.toISOString(),
         response_mode: mode,
         respondent_name: trimmedRespondent,
+        // A replaced waiver is no longer a waiver.
+        ...(previousStatus === "waived" ? { waived_by: null, waived_at: null, waive_reason: null } : {}),
       },
       { count: "exact" }
     )
     .eq("id", reviewId)
-    .eq("status", "pending");
+    .eq("status", previousStatus);
+  if (isReplace) reviewUpdate = reviewUpdate.eq("round_status", "open");
+  const { error: updateErr, count } = await reviewUpdate;
 
   if (updateErr) return { error: "Failed to record the response. Please try again." };
-  if (count === 0) return { error: "This review has already been responded to." };
+  if (count === 0) {
+    return {
+      error: isReplace
+        ? "This response changed since you opened it — reload to see the latest before replacing it."
+        : "This review has already been responded to.",
+    };
+  }
 
-  await auditLog("stakeholder.responded_on_behalf", actor.id, actor.email as string, {
-    projectId,
-    metadata: {
-      review_id: reviewId,
-      response: newStatus,
-      stakeholder_email: review.stakeholder_email,
-      stakeholder_name: review.stakeholder_name,
-      evidence_file_id: evidenceFileId,
-      response_mode: mode,
-      respondent_name: trimmedRespondent,
-      responded_at: respondedAtDate.toISOString(),
-      reference: `stakeholder_review:${reviewId}`,
-    },
-  });
+  if (isReplace) {
+    await auditLog("stakeholder.response_replaced", actor.id, actor.email as string, {
+      projectId,
+      metadata: {
+        review_id: reviewId,
+        review_cycle: review.review_cycle,
+        stakeholder_email: review.stakeholder_email,
+        stakeholder_name: review.stakeholder_name,
+        old: {
+          status: previousStatus,
+          comments: (review.comments as string | null) ?? null,
+          response_mode: (review.response_mode as string | null) ?? null,
+          respondent_name: (review.respondent_name as string | null) ?? null,
+          responded_at: (review.responded_at as string | null) ?? null,
+        },
+        new: {
+          status: newStatus,
+          comments: trimmedComments,
+          response_mode: mode,
+          respondent_name: trimmedRespondent,
+          responded_at: respondedAtDate.toISOString(),
+        },
+        evidence_file_id: evidenceFileId,
+        reference: `stakeholder_review:${reviewId}`,
+      },
+    });
+  }
+
+  if (!isReplace) {
+    await auditLog("stakeholder.responded_on_behalf", actor.id, actor.email as string, {
+      projectId,
+      metadata: {
+        review_id: reviewId,
+        response: newStatus,
+        stakeholder_email: review.stakeholder_email,
+        stakeholder_name: review.stakeholder_name,
+        evidence_file_id: evidenceFileId,
+        response_mode: mode,
+        respondent_name: trimmedRespondent,
+        responded_at: respondedAtDate.toISOString(),
+        reference: `stakeholder_review:${reviewId}`,
+      },
+    });
+  }
 
   await supabase
     .from("projects")
@@ -1119,20 +1181,28 @@ export async function logStakeholderResponseOnBehalf(
     const cycle = projectDetail.review_cycle as number;
     const projectRef = resolveProjectRef(projectDetail, projectId);
 
-    if (response === "rejected") {
+    // Re-derive the project's review status from the round as it now
+    // stands (#192): a replace can remove the round's only rejection, which
+    // returns the project from revision_required to dispatched.
+    const { data: cycleReviews } = await supabase
+      .from("stakeholder_reviews")
+      .select("status")
+      .eq("project_id", projectId)
+      .eq("review_cycle", cycle);
+    const roundHasRejection = (cycleReviews ?? []).some((r) =>
+      ["rejected_with_comments", "rejected_without_comments"].includes(r.status as string)
+    );
+    const derivedStatus = roundHasRejection ? "revision_required" : "dispatched";
+    if (derivedStatus !== (project.status as string)) {
       await supabase
         .from("projects")
-        .update({ status: "revision_required", updated_at: now })
-        .eq("id", projectId);
+        .update({ status: derivedStatus, updated_at: now })
+        .eq("id", projectId)
+        .in("status", ["dispatched", "revision_required"]);
+    }
 
-      // Bumps the PBDB revision_history counter (#108) — the corrected reupload
-      // later derives its Rev{n} filename from this row, not review_cycle. Only
-      // the cycle's first rejection bumps it — see the matching guard in
-      // approval.ts and portalApproval.ts.
-      if (project.status !== "revision_required") {
-        await recordRevisionEvent(supabase, projectId, "pbdb", "rejected");
-      }
-
+    const wasRejection = ["rejected_with_comments", "rejected_without_comments"].includes(previousStatus);
+    if (response === "rejected" && !wasRejection) {
       await notifyModificationsRequested({
         supabase,
         projectId,
@@ -1145,9 +1215,12 @@ export async function logStakeholderResponseOnBehalf(
         messageVerb: "requested changes to",
         subjectLabel: "Changes requested",
       });
-    } else {
+    } else if (response === "approved") {
       await notifyIfFullyApproved(supabase, projectId, cycle, "[logStakeholderResponseOnBehalf]");
     }
+
+    // Revision bump happens at round close, not per rejection (#191).
+    await closeRoundIfComplete(supabase, projectId, cycle);
   }
 
   revalidatePath(`/ops/projects/${projectId}`);

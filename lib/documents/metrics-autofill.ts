@@ -211,3 +211,111 @@ export function resolveMetricsAutofill(
     }
   }
 }
+
+// ─── Server-authoritative outputs at submit time (#190) ─────────────────────
+// Outputs like rainfall intensity are never taken from the browser: they're
+// re-resolved here from the confirmed development name. When that fails, the
+// caller raises a consultant-facing field flag whose candidates are every
+// development row in the table (a dropdown), with the closest one by word
+// overlap marked `suggested` — pre-selected in the UI, never auto-applied.
+
+/** `source_document` marker on a metrics-lookup flag's candidates. */
+export const METRICS_LOOKUP_SOURCE = "metrics_table";
+
+export interface MetricsLookupCandidate {
+  value: string;
+  confidence: "low" | "medium";
+  source_document: typeof METRICS_LOOKUP_SOURCE;
+  development: string;
+  suggested?: boolean;
+  reason?: string;
+}
+
+/** True for a flag raised by resolveServerMetricsOutputs — consultant-only, never shown to stakeholders. */
+export function isMetricsLookupFlag(candidates: unknown): boolean {
+  return (
+    Array.isArray(candidates) &&
+    candidates.length > 0 &&
+    candidates.every(
+      (c) => (c as { source_document?: unknown } | null)?.source_document === METRICS_LOOKUP_SOURCE
+    )
+  );
+}
+
+export interface UnresolvedMetricsOutput {
+  token: string;
+  matchValue: string;
+  candidates: MetricsLookupCandidate[];
+}
+
+export interface ServerMetricsResolution {
+  values: Record<string, string>;
+  unresolved: UnresolvedMetricsOutput[];
+}
+
+export function resolveServerMetricsOutputs(
+  configs: MetricsAutofillConfig[],
+  fields: Record<string, string>,
+  opts: {
+    // Output tokens the server owns — anything else (e.g. the trustee,
+    // which the stakeholder picks from a dropdown) is left alone.
+    serverTokens: Set<string>;
+    // The stakeholder's chosen dropdown row (its match-column value), when
+    // one of this config's outputs is stakeholder-selected — that choice is
+    // the confirmed development, ahead of re-matching the typed name.
+    selectedMatchValue?: string | null;
+    stakeholderSelectedTokens?: Set<string>;
+  }
+): ServerMetricsResolution {
+  const values: Record<string, string> = {};
+  const unresolved: UnresolvedMetricsOutput[] = [];
+
+  for (const config of configs) {
+    const outputs = config.outputs.filter((o) => opts.serverTokens.has(o.outputToken));
+    if (outputs.length === 0) continue;
+
+    const cell = (row: { data: Record<string, string | number | null> }) =>
+      String(row.data[config.matchColumnId] ?? "");
+    const linkedToSelection = config.outputs.some((o) => opts.stakeholderSelectedTokens?.has(o.outputToken));
+    const selected = opts.selectedMatchValue?.trim() ?? "";
+
+    const matchValue = fields[config.matchToken]?.trim() ?? "";
+    const row =
+      (linkedToSelection && selected ? config.rows.find((r) => cell(r) === selected) : undefined) ??
+      findMetricsRow(config, matchValue);
+
+    const namedRows = config.rows.filter((r) => cell(r).trim() !== "");
+    const suggestion = row ? null : suggestDevelopmentName(matchValue, namedRows.map(cell));
+
+    for (const output of outputs) {
+      const resolved = row?.data[output.outputColumnId];
+      if (resolved !== null && resolved !== undefined && String(resolved).trim() !== "") {
+        values[output.outputToken] = String(resolved);
+        continue;
+      }
+
+      const candidates: MetricsLookupCandidate[] = namedRows
+        .filter((r) => {
+          const v = r.data[output.outputColumnId];
+          return v !== null && v !== undefined && String(v).trim() !== "";
+        })
+        .map((r) => {
+          const suggested = cell(r) === suggestion;
+          return {
+            value: String(r.data[output.outputColumnId]),
+            confidence: suggested ? "medium" : "low",
+            source_document: METRICS_LOOKUP_SOURCE,
+            development: cell(r),
+            ...(suggested
+              ? { suggested: true, reason: `Closest match to "${matchValue}" — confirm before applying.` }
+              : {}),
+          } satisfies MetricsLookupCandidate;
+        })
+        .sort((a, b) => Number(!!b.suggested) - Number(!!a.suggested));
+
+      if (candidates.length > 0) unresolved.push({ token: output.outputToken, matchValue, candidates });
+    }
+  }
+
+  return { values, unresolved };
+}

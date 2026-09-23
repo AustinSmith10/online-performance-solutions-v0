@@ -8,6 +8,7 @@ vi.mock("@/lib/audit/log");
 vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/documents/revision-history");
 vi.mock("@/lib/stakeholders/review-outcome");
+vi.mock("@/lib/stakeholders/review-round");
 vi.mock("@/lib/email/templates/ReviewResponseConfirmationEmail");
 
 import { submitPortalApproval } from "./portalApproval";
@@ -16,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
+import { closeRoundIfComplete } from "@/lib/stakeholders/review-round";
 import {
   resolveProjectRef,
   notifyModificationsRequested,
@@ -95,14 +97,15 @@ beforeEach(() => {
   vi.mocked(auditLog).mockResolvedValue(undefined as never);
   vi.mocked(notify).mockResolvedValue(undefined as never);
   vi.mocked(recordRevisionEvent).mockResolvedValue(1 as never);
+  vi.mocked(closeRoundIfComplete).mockResolvedValue({ closed: null, revisionBumped: false });
   vi.mocked(resolveProjectRef).mockReturnValue("OPS-001" as never);
   vi.mocked(notifyModificationsRequested).mockResolvedValue(undefined as never);
   vi.mocked(notifyIfFullyApproved).mockResolvedValue(undefined as never);
   vi.mocked(renderReviewResponseConfirmationEmail).mockReturnValue("<html></html>");
 });
 
-describe("submitPortalApproval — rejection records revision_history", () => {
-  it("calls recordRevisionEvent(pbdb, rejected) when a stakeholder rejects via the portal", async () => {
+describe("submitPortalApproval — revision bump happens at round close (#191)", () => {
+  it("does not bump the revision number at an individual rejection, and asks the round to close", async () => {
     const mock = buildMock();
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
 
@@ -114,33 +117,17 @@ describe("submitPortalApproval — rejection records revision_history", () => {
 
     expect(result.submitted).toBe(true);
     expect(result.response).toBe("rejected");
-    expect(recordRevisionEvent).toHaveBeenCalledWith(mock, "proj-1", "pbdb", "rejected");
+    expect(recordRevisionEvent).not.toHaveBeenCalled();
+    expect(closeRoundIfComplete).toHaveBeenCalledWith(mock, "proj-1", 1);
   });
 
-  it("does not call recordRevisionEvent on approval", async () => {
+  it("asks the round to close on approval too", async () => {
     const mock = buildMock();
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
 
     await submitPortalApproval("review-1", {}, makeFormData({ response: "approved" }));
 
     expect(recordRevisionEvent).not.toHaveBeenCalled();
-  });
-
-  // A second stakeholder rejecting the same cycle (project.status already
-  // "revision_required" from an earlier rejection) must not bump the PBDB
-  // revision_history counter again — otherwise Rev numbers skip ahead of the
-  // actual cycle count.
-  it("does not call recordRevisionEvent when another stakeholder already rejected this cycle", async () => {
-    const mock = buildMock({ guardProject: { status: "revision_required", review_cycle: 1 } });
-    vi.mocked(createAdminClient).mockReturnValue(mock as never);
-
-    const result = await submitPortalApproval(
-      "review-1",
-      {},
-      makeFormData({ response: "rejected", comments: "Also fix page 5." })
-    );
-
-    expect(result.submitted).toBe(true);
-    expect(recordRevisionEvent).not.toHaveBeenCalled();
+    expect(closeRoundIfComplete).toHaveBeenCalledWith(mock, "proj-1", 1);
   });
 });

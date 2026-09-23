@@ -11,6 +11,7 @@ import { isPreviewable } from "@/components/DocumentViewer";
 import { FlagAcknowledgeControl } from "@/app/(consultant)/ops/projects/[id]/_components/FlagAcknowledgeControl";
 import type { Confidence } from "@/lib/documents/extractor";
 import type { FlagType } from "@/lib/documents/field-flags";
+import { isMetricsLookupFlag } from "@/lib/documents/metrics-autofill";
 
 export interface FieldFlagCandidate {
   value: string;
@@ -20,6 +21,14 @@ export interface FieldFlagCandidate {
   // self-graded confidence — shown as a caption, descriptive metadata only,
   // never a second resolvable thing (extraction-verification-layer-decisions #8a).
   reason?: string;
+  // Metrics-lookup flags only (#190): the client development this candidate
+  // value belongs to, and whether it's the closest-match suggestion.
+  development?: string;
+  suggested?: boolean;
+}
+
+function candidateLabel(c: FieldFlagCandidate): string {
+  return c.development ? `${c.development} — ${c.value}` : `${c.value || "(empty)"} · ${c.source_document}`;
 }
 
 interface Props {
@@ -129,6 +138,11 @@ export function FieldFlagReview({
   flagType = "confidence",
 }: Props) {
   const isConflict = flagType === "inconsistency" || flagType === "both";
+  // #190: a server-owned output (e.g. rainfall intensity) that couldn't be
+  // resolved from the development name — candidates are the client's
+  // developments, the closest match pre-selected but never auto-applied.
+  const isLookup = isMetricsLookupFlag(candidates);
+  const suggestedCandidate = isLookup ? candidates.find((c) => c.suggested) : undefined;
   // The conflict flow forces the full picker open even for an already-
   // "resolved" flag — that's the one case where a resolved flag still needs
   // this component's editor rather than the plain pencil edit.
@@ -169,7 +183,10 @@ export function FieldFlagReview({
       />
     )
   ) : null;
-  const [value, setValue] = useState(currentValue);
+  const [value, setValue] = useState(currentValue || suggestedCandidate?.value || "");
+  const [selectedDevelopment, setSelectedDevelopment] = useState(
+    (currentValue ? undefined : suggestedCandidate?.development) ?? ""
+  );
   const [reason, setReason] = useState<ResolutionReason>("self_resolved");
   const [note, setNote] = useState("");
   const [pending, setPending] = useState(false);
@@ -247,7 +264,7 @@ export function FieldFlagReview({
           >
             {candidates.map((c, i) => (
               <option key={`${c.value}-${i}`} value={c.value}>
-                {c.value || "(empty)"} · {c.source_document}
+                {candidateLabel(c)}
               </option>
             ))}
           </select>
@@ -348,61 +365,102 @@ export function FieldFlagReview({
         </div>
       )}
 
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium text-zinc-700">{label} — candidates found:</p>
-        {!requiresAcknowledgment && ackBlock}
-      </div>
-
-      <div className="space-y-1">
-        {candidates.map((c, i) => (
-          <label
-            key={`${c.value}-${i}`}
-            className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
+      {isLookup ? (
+        <div className="space-y-1.5">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-medium text-zinc-700">
+              {label} — couldn&apos;t be matched from the development name. Pick the development:
+            </p>
+            {!requiresAcknowledgment && ackBlock}
+          </div>
+          <select
+            value={selectedDevelopment}
+            aria-label={`${label} — development`}
+            onChange={(e) => {
+              setSelectedDevelopment(e.target.value);
+              const picked = candidates.find((c) => c.development === e.target.value);
+              setValue(picked?.value ?? "");
+            }}
+            disabled={pending}
+            className="w-full rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:opacity-60"
           >
-            <input
-              type="radio"
-              checked={value === c.value}
-              onChange={() => setValue(c.value)}
-              className="mt-0.5"
-            />
-            <span>
-              <span className="font-medium text-zinc-900">{c.value || "(empty)"}</span>{" "}
-              <span className="text-zinc-400">
-                ({c.source_document})
-              </span>
-              {/* The value that came in on the submission for this field —
-                  either the submitter picked this candidate on the review
-                  step, or it was the auto-selected value they left in place.
-                  Either way it's what the submission asserts, not a system
-                  "default" (#105) — label it as the submitter's choice so the
-                  consultant knows what they're verifying against the source. */}
-              {c.value === currentValue && (
-                <span className="ml-1 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
-                  Submitter&apos;s choice
+            <option value="">— select development —</option>
+            {candidates.map((c, i) => (
+              <option key={`${c.development}-${i}`} value={c.development}>
+                {candidateLabel(c)}
+                {c.suggested ? " (suggested)" : ""}
+              </option>
+            ))}
+          </select>
+          {suggestedCandidate?.reason && (
+            <p className="text-[11px] italic text-orange-700">{suggestedCandidate.reason}</p>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-medium text-zinc-700">{label} — candidates found:</p>
+            {!requiresAcknowledgment && ackBlock}
+          </div>
+
+          <div className="space-y-1">
+            {candidates.map((c, i) => (
+              <label
+                key={`${c.value}-${i}`}
+                className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
+              >
+                <input
+                  type="radio"
+                  checked={value === c.value}
+                  onChange={() => setValue(c.value)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium text-zinc-900">{c.value || "(empty)"}</span>{" "}
+                  <span className="text-zinc-400">
+                    ({c.source_document})
+                  </span>
+                  {/* The value that came in on the submission for this field —
+                      either the submitter picked this candidate on the review
+                      step, or it was the auto-selected value they left in place.
+                      Either way it's what the submission asserts, not a system
+                      "default" (#105) — label it as the submitter's choice so the
+                      consultant knows what they're verifying against the source. */}
+                  {c.value === currentValue && (
+                    <span className="ml-1 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                      Submitter&apos;s choice
+                    </span>
+                  )}
+                  <CandidatePreviewButton
+                    filename={c.source_document}
+                    sourceUrlsByFilename={sourceUrlsByFilename}
+                  />
+                  {c.reason && <span className="block text-[11px] italic text-orange-700">{c.reason}</span>}
                 </span>
-              )}
-              <CandidatePreviewButton
-                filename={c.source_document}
-                sourceUrlsByFilename={sourceUrlsByFilename}
-              />
-              {c.reason && <span className="block text-[11px] italic text-orange-700">{c.reason}</span>}
-            </span>
-          </label>
-        ))}
-      </div>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
 
       <div>
         <label className="mb-1 block text-xs font-medium text-zinc-700">Or enter the correct value</label>
         <input
           type="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (isLookup) {
+              const match = candidates.find((c) => c.development === selectedDevelopment);
+              if (match && match.value !== e.target.value) setSelectedDevelopment("");
+            }
+          }}
           disabled={pending}
           className="w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:opacity-60"
         />
       </div>
 
-      {requiresAcknowledgment && (
+      {requiresAcknowledgment && !isLookup && (
         <div className="flex items-center gap-2">
           <label className="text-xs font-medium text-zinc-700">Source document</label>
           {selectedPreviewAvailable ? (
@@ -456,7 +514,9 @@ export function FieldFlagReview({
             onChange={(e) => setConfirmed(e.target.checked)}
             className="mt-0.5"
           />
-          I&apos;ve reviewed this field and its source document.
+          {isLookup
+            ? "I've confirmed this value against the client's development table."
+            : "I've reviewed this field and its source document."}
         </label>
       )}
 

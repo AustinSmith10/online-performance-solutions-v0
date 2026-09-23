@@ -44,6 +44,7 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "project.pbdb_qa_uploaded",
       "project.qa_complete",
       "project.revision_complete",
+      "project.round_force_closed",
       "project.pbdb_dispatched",
       "project.dispatched", // legacy name for project.pbdb_dispatched — kept so pre-rename rows still render
       "project.purged",
@@ -74,6 +75,7 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "stakeholder.responded",
       "stakeholder.responded_via_portal",
       "stakeholder.waived",
+      "stakeholder.response_replaced",
       "stakeholder.token_resent",
       "stakeholder.token_self_reissued",
       "stakeholder.email_updated",
@@ -175,6 +177,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "project.pbdb_qa_uploaded": "QA document uploaded",
   "project.qa_complete": "QA marked complete",
   "project.revision_complete": "Revision complete",
+  "project.round_force_closed": "Review round closed by a revised PBDB",
   "project.pbdb_dispatched": "PBDB dispatched to stakeholders",
   "project.dispatched": "PBDB dispatched to stakeholders",
   "project.purged": "Project permanently deleted",
@@ -201,6 +204,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "stakeholder.responded": "Stakeholder responded",
   "stakeholder.responded_via_portal": "Stakeholder responded via portal",
   "stakeholder.waived": "Stakeholder review waived",
+  "stakeholder.response_replaced": "Stakeholder response replaced",
   "stakeholder.token_resent": "Access link resent",
   "stakeholder.token_self_reissued": "Stakeholder self-served a new access link",
   "stakeholder.email_updated": "Stakeholder email changed",
@@ -440,6 +444,27 @@ export function formatDetails(
     case "stakeholder.waived":
       if (s(metadata.reason)) parts.push(s(metadata.reason));
       break;
+
+    case "stakeholder.response_replaced": {
+      const oldResp = (metadata.old ?? {}) as Record<string, unknown>;
+      const newResp = (metadata.new ?? {}) as Record<string, unknown>;
+      if (s(metadata.stakeholder_name)) parts.push(s(metadata.stakeholder_name));
+      if (s(oldResp.status) || s(newResp.status)) {
+        parts.push(`${s(oldResp.status).replace(/_/g, " ")} → ${s(newResp.status).replace(/_/g, " ")}`);
+      }
+      break;
+    }
+
+    case "project.round_force_closed": {
+      const stillPending = Array.isArray(metadata.still_pending) ? metadata.still_pending : [];
+      const names = stillPending
+        .map((p) => s((p as Record<string, unknown>)?.name))
+        .filter(Boolean);
+      if (n(metadata.review_cycle) !== null) parts.push(`Cycle ${n(metadata.review_cycle)}`);
+      if (names.length > 0) parts.push(`Still pending: ${names.join(", ")}`);
+      if (metadata.revision_bumped === true) parts.push("Revision bumped");
+      break;
+    }
 
     case "stakeholder.token_resent":
     case "stakeholder.token_self_reissued":

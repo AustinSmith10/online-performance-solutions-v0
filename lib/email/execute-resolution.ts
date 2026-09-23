@@ -11,6 +11,7 @@ import {
   getMetricsAutofillConfigs,
   getAutofillExclusionTokens,
   resolveMetricsAutofill,
+  resolveServerMetricsOutputs,
 } from "@/lib/documents/metrics-autofill";
 import { buildFieldFlagPlan } from "@/lib/documents/field-flags";
 import type { ComparisonMode } from "@/lib/documents/compare-candidates";
@@ -309,6 +310,7 @@ async function executeNewSubmission(
     let extractTokens: { token: string; label: string; hint: string }[] = [];
     let comparisonModeByToken = new Map<string, ComparisonMode>();
     let metricsAutofillConfigs: Awaited<ReturnType<typeof getMetricsAutofillConfigs>> = [];
+    let templateExtractTokens = new Set<string>();
 
     try {
       metricsAutofillConfigs = await getMetricsAutofillConfigs(supabase, org.id as string);
@@ -321,6 +323,7 @@ async function executeNewSubmission(
           .eq("field_key", "extract")
           .order("sort_order")
           .order("placeholder_token");
+        templateExtractTokens = new Set((mappings ?? []).map((m) => m.placeholder_token as string));
         extractTokens = (mappings ?? [])
           .filter((m) => !metricsExclusionTokens.has(m.placeholder_token as string))
           .map((m) => ({
@@ -371,6 +374,21 @@ async function executeNewSubmission(
           Object.fromEntries(Object.entries(extracted.fields).map(([k, v]) => [k, v.value]))
         );
 
+        // #190: a server-owned metrics output (rainfall intensity) that the
+        // development name couldn't resolve becomes a consultant flag, not a
+        // silent blank — same as the portal submit path. The trustee is left
+        // to the consultant's normal review here (no stakeholder dropdown).
+        const serverMetricsTokens = new Set(
+          [...getAutofillExclusionTokens(metricsAutofillConfigs)].filter(
+            (t) => t !== "EXTRACT_TRUSTEE" && templateExtractTokens.has(t)
+          )
+        );
+        const metricsResolution = resolveServerMetricsOutputs(metricsAutofillConfigs, fieldValues, {
+          serverTokens: serverMetricsTokens,
+        });
+        Object.assign(fieldValues, metricsResolution.values);
+        for (const u of metricsResolution.unresolved) fieldValues[u.token] = "";
+
         const flagRows: {
           project_id: string;
           type: string;
@@ -393,6 +411,17 @@ async function executeNewSubmission(
             status: "open",
             current_value: fieldValues[token] ?? plan.finalValue,
             candidate_values: plan.candidateRecords,
+          });
+        }
+
+        for (const u of metricsResolution.unresolved) {
+          flagRows.push({
+            project_id: projectId,
+            type: "confidence",
+            field_key: u.token,
+            status: "open",
+            current_value: "",
+            candidate_values: u.candidates,
           });
         }
 

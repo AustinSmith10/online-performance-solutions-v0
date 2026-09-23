@@ -17,11 +17,18 @@ import { computeExpectedDeliveryDate } from "@/lib/delivery/expected-delivery-da
 import { formatCalendarDateAU } from "@/lib/time";
 import { performAssignment } from "@/lib/projects/assign";
 import { AcknowledgementEmail } from "@/lib/email/templates/AcknowledgementEmail";
-import { buildMetricsPickRows, type MetricsPickRow } from "@/lib/documents/metrics-autofill";
+import {
+  buildMetricsPickRows,
+  getAutofillExclusionTokens,
+  getMetricsAutofillConfigs,
+  resolveServerMetricsOutputs,
+  type MetricsPickRow,
+} from "@/lib/documents/metrics-autofill";
 
 // A client's metrics-table autofill config may resolve these — the review UI
-// shows the trustee as a correctable dropdown and rainfall intensity as a
-// plain extracted field, regardless of which table resolved them.
+// shows the trustee as a correctable dropdown the stakeholder picks from;
+// rainfall intensity is never shown to or submitted by the client at all —
+// it's resolved server-side at submit time (#190).
 const TRUSTEE_TOKEN = "EXTRACT_TRUSTEE";
 const RAINFALL_TOKEN = "EXTRACT_RAINFALL_INTENSITY";
 
@@ -63,11 +70,6 @@ export type ExtractState =
       rainfallToken: string | null;
       matchToken: string | null;
       pickRows: MetricsPickRow[];
-      // Lets the review UI re-resolve rainfall intensity live if the
-      // stakeholder edits the field that drives its lookup, instead of
-      // freezing it at whatever the initial extraction pass produced.
-      rainfallMatchToken: string | null;
-      rainfallPickRows: MetricsPickRow[];
       projectId: string;
       templateId: string;
       // #113: uploads whose deterministic/AI-judge check flagged a possible
@@ -288,7 +290,6 @@ export async function finalizeSubmission(
   };
 
   const trusteePick = hasTrustee ? buildMetricsPickRows(metricsAutofillConfigs, TRUSTEE_TOKEN) : null;
-  const rainfallPick = rainfallToken ? buildMetricsPickRows(metricsAutofillConfigs, RAINFALL_TOKEN) : null;
 
   return {
     step: 2,
@@ -299,8 +300,6 @@ export async function finalizeSubmission(
     rainfallToken,
     matchToken: trusteePick?.matchToken ?? null,
     pickRows: trusteePick?.rows ?? [],
-    rainfallMatchToken: rainfallPick?.matchToken ?? null,
-    rainfallPickRows: rainfallPick?.rows ?? [],
     projectId,
     templateId,
     fileVerificationWarnings,
@@ -377,6 +376,9 @@ export async function submitProject(
     }
   }
   const extractedFields = normalizeExtractedFields(rawFields);
+  // The stakeholder's chosen trustee-dropdown row — the confirmed
+  // development for any metrics output linked to the trustee's table.
+  const selectedMatchValue = (formData.get("metrics_match_value") as string | null)?.trim() || null;
 
   const siteAddress = (extractedFields["EXTRACT_ADDRESS"] ?? "").trim() || null;
 
@@ -389,6 +391,7 @@ export async function submitProject(
     { data: draftBefore },
     { data: openFlags },
     { data: flagLabelMappings },
+    metricsAutofillConfigs,
   ] = await Promise.all([
     supabase
       .from("template_field_mappings")
@@ -425,15 +428,40 @@ export async function submitProject(
       .from("template_field_mappings")
       .select("placeholder_token, display_label")
       .eq("template_id", templateId),
+    getMetricsAutofillConfigs(supabase, orgId),
   ]);
+
+  // #190: server-owned metrics outputs (rainfall intensity) are never read
+  // from the form — drop whatever the browser posted and re-resolve from
+  // the confirmed development name. The trustee stays stakeholder-chosen.
+  const templateTokens = new Set((flagLabelMappings ?? []).map((m) => m.placeholder_token as string));
+  const serverMetricsTokens = new Set(
+    [...getAutofillExclusionTokens(metricsAutofillConfigs)].filter(
+      (t) => t !== TRUSTEE_TOKEN && templateTokens.has(t)
+    )
+  );
+  for (const token of serverMetricsTokens) delete extractedFields[token];
+  const metricsResolution = resolveServerMetricsOutputs(metricsAutofillConfigs, extractedFields, {
+    serverTokens: serverMetricsTokens,
+    selectedMatchValue,
+    stakeholderSelectedTokens: new Set([TRUSTEE_TOKEN]),
+  });
+  Object.assign(extractedFields, metricsResolution.values);
+  // Present-but-blank (not absent) so the consultant's Submitted details
+  // still renders the row its flag attaches to.
+  for (const u of metricsResolution.unresolved) extractedFields[u.token] = "";
 
   const draftFieldsBefore = (draftBefore?.extracted_fields as Record<string, string> | null) ?? {};
   const correctedFields = [
     ...new Set([...Object.keys(draftFieldsBefore), ...Object.keys(extractedFields)]),
   ].filter((k) => (draftFieldsBefore[k] ?? "") !== (extractedFields[k] ?? ""));
 
+  // A server-owned output that couldn't be resolved isn't the stakeholder's
+  // to fill in — it becomes a consultant flag below instead of blocking.
   const missingRequired = (requiredMappings ?? []).filter(
-    (m) => !extractedFields[m.placeholder_token as string]?.trim()
+    (m) =>
+      !serverMetricsTokens.has(m.placeholder_token as string) &&
+      !extractedFields[m.placeholder_token as string]?.trim()
   );
   if (missingRequired.length > 0) {
     const labels = missingRequired
@@ -579,6 +607,35 @@ export async function submitProject(
       );
     } catch (err) {
       console.error("[submitProject] auto-resolving no-extraction-evidence flags failed:", err);
+    }
+  }
+
+  // #190: an unresolved server-owned output (no match, or an ambiguous one)
+  // is a consultant-facing flag — never silently blank. Candidates are the
+  // client's developments, the closest one marked `suggested` for the
+  // consultant to confirm; nothing is applied until they resolve it.
+  if (metricsResolution.unresolved.length > 0) {
+    try {
+      const tokens = metricsResolution.unresolved.map((u) => u.token);
+      await supabase
+        .from("field_flags")
+        .delete()
+        .eq("project_id", projectId)
+        .eq("status", "open")
+        .in("field_key", tokens);
+      const { error: flagError } = await supabase.from("field_flags").insert(
+        metricsResolution.unresolved.map((u) => ({
+          project_id: projectId,
+          type: "confidence",
+          field_key: u.token,
+          status: "open",
+          current_value: "",
+          candidate_values: u.candidates,
+        }))
+      );
+      if (flagError) throw flagError;
+    } catch (err) {
+      console.error("[submitProject] raising metrics-lookup flags failed:", err);
     }
   }
 

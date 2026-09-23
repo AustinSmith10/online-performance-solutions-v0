@@ -10,6 +10,7 @@ vi.mock("@/lib/email/templates/ApprovalRequestEmail");
 vi.mock("@/lib/email/sender", () => ({ sendEmail: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/documents/pbdb-pdf");
+vi.mock("@/lib/stakeholders/review-round");
 
 import { submitApproval, requestNewApprovalLink } from "./approval";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -25,6 +26,7 @@ import { renderModificationsRequestedEmail } from "@/lib/email/templates/Modific
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { sendEmail } from "@/lib/email/sender";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
+import { closeRoundIfComplete } from "@/lib/stakeholders/review-round";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -110,7 +112,6 @@ function buildMock({
       if (table === "projects") {
         // Call order in submitApproval: 1) replay guard select, 2) first_response_at
         // update, 3) select for downstream fields, 4) rejected-path status update,
-        // 5) recordRevisionEvent's assigned_consultant_id lookup (rejected path only).
         if (n === 1) return { select: selectGuard };
         if (n === 2) return { update: updateProject };
         if (n === 3) return { select: selectProject };
@@ -265,27 +266,16 @@ describe("submitApproval — rejected", () => {
     expect(rejCalls.length).toBeGreaterThan(0);
   });
 
-  // A second stakeholder rejecting the same cycle must not bump the PBDB
-  // revision_history counter a second time — otherwise Rev numbers skip
-  // ahead of the actual cycle count (e.g. Rev0 -> Rev2 after only one real
-  // reupload cycle) whenever more than one stakeholder rejects before the
-  // consultant re-uploads.
-  it("does not record a second revision_history row when another stakeholder already rejected this cycle", async () => {
-    const mock = buildMock({ guardProject: { status: "revision_required", review_cycle: 1 } });
-    vi.mocked(createAdminClient).mockReturnValue(mock as never);
-    const result = await submitApproval("tok", null, {}, makeFormData({
-      response: "rejected",
-      comments: "Also fix page 5.",
-    }));
-    expect(result.submitted).toBe(true);
-    expect(mock.from).not.toHaveBeenCalledWith("revision_history");
-  });
-
-  it("records a revision_history row on the cycle's first rejection", async () => {
+  // #191: the PBDB revision number bumps once when the round closes
+  // rejected (lib/stakeholders/review-round.ts), never at an individual
+  // rejection while other stakeholders may still be pending.
+  it("does not touch revision_history at an individual rejection, and asks the round to close", async () => {
     const mock = buildMock({ guardProject: { status: "dispatched", review_cycle: 1 } });
     vi.mocked(createAdminClient).mockReturnValue(mock as never);
-    await submitApproval("tok", null, {}, makeFormData({ response: "rejected", comments: "Fix page 3." }));
-    expect(mock.from).toHaveBeenCalledWith("revision_history");
+    const result = await submitApproval("tok", null, {}, makeFormData({ response: "rejected", comments: "Fix page 3." }));
+    expect(result.submitted).toBe(true);
+    expect(mock.from).not.toHaveBeenCalledWith("revision_history");
+    expect(closeRoundIfComplete).toHaveBeenCalledWith(mock, "proj-1", 1);
   });
 
   it("renders the aggregated modifications email when rejections have comments", async () => {

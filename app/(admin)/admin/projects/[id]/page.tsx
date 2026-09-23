@@ -29,6 +29,8 @@ import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
+import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
+import { ReviewResponseControl } from "@/app/(consultant)/ops/projects/[id]/_components/ReviewResponseControl";
 import { DownloadCard } from "@/components/DownloadCard";
 import { FilePreviewButton } from "@/components/FilePreviewButton";
 import { ConfirmFileTypeControl } from "@/components/ConfirmFileTypeControl";
@@ -360,7 +362,7 @@ export default async function ProjectDetailPage({
     supabase
       .from("stakeholder_reviews")
       .select(
-        "id, review_cycle, stakeholder_email, stakeholder_name, status, comments, responded_at, waive_reason, waived_at, email_reply_text, email_reply_received_at, email_reply_sender_verified"
+        "id, review_cycle, stakeholder_email, stakeholder_name, status, comments, responded_at, waive_reason, waived_at, email_reply_text, email_reply_received_at, email_reply_sender_verified, round_status, response_mode, respondent_name"
       )
       .eq("project_id", id)
       .order("review_cycle", { ascending: false })
@@ -492,7 +494,10 @@ export default async function ProjectDetailPage({
   const pbdbFlagsAcknowledged = !!latestPbdb?.qa_flags_acknowledged_at;
   const pbdbReadyToSend = pbdbSendFindings.length === 0 || pbdbFlagsAcknowledged;
 
-  const reviews = (rawReviews ?? []) as StakeholderReview[];
+  const reviews = (rawReviews ?? []) as (StakeholderReview & {
+    response_mode: string | null;
+    respondent_name: string | null;
+  })[];
   // Known stakeholder roster for the Respondent dropdown (#111).
   const stakeholderRoster = [
     ...new Map(
@@ -565,8 +570,16 @@ export default async function ProjectDetailPage({
   });
 
   const pendingReviews = currentCycleReviews.filter((r) => r.status === "pending");
+  // #191/#192: the current round's status gates correcting a logged response.
+  const currentRoundStatus = deriveRoundStatus(currentCycleReviews);
+  const loggedByByReviewId = new Map<string, string | null>();
+  for (const e of auditEntries) {
+    if (e.event_type !== "stakeholder.responded_on_behalf" && e.event_type !== "stakeholder.response_replaced") continue;
+    const reviewId = (e.metadata as { review_id?: string } | null)?.review_id;
+    if (reviewId) loggedByByReviewId.set(reviewId, (e.actor_email as string | null) ?? null);
+  }
 
-  const reviewsByCycle = new Map<number, StakeholderReview[]>();
+  const reviewsByCycle = new Map<number, typeof reviews>();
   for (const r of reviews) {
     if (!reviewsByCycle.has(r.review_cycle)) reviewsByCycle.set(r.review_cycle, []);
     reviewsByCycle.get(r.review_cycle)!.push(r);
@@ -981,6 +994,7 @@ export default async function ProjectDetailPage({
                           : undefined
                       }
                       prefilledComments={r.email_reply_text ?? undefined}
+                      closesRound={pendingReviews.length === 1}
                     />
                     <UpdateEmailReveal reviewId={r.id} projectId={id} currentEmail={r.stakeholder_email} />
                     <WaiveForm reviewId={r.id} projectId={id} stakeholderName={r.stakeholder_name} />
@@ -1394,6 +1408,8 @@ export default async function ProjectDetailPage({
                       approved_with_comments: { label: "Approved with comments", cls: "bg-green-100 text-green-700" },
                       rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
                       waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
+                      // Internal only (#191): still pending when a revised PBDB force-closed the round.
+                      superseded: { label: "Superseded", cls: "bg-zinc-100 text-zinc-400" },
                     }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
                     return (
                       <div key={r.id} className="px-5 py-4">
@@ -1410,16 +1426,35 @@ export default async function ProjectDetailPage({
                               <p className="mt-1 text-xs text-zinc-400">Waive reason: {r.waive_reason}</p>
                             )}
                           </div>
-                          <div className="shrink-0 text-right">
-                            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}>
-                              {statusConfig.label}
-                            </span>
-                            {r.responded_at && (
-                              <p className="mt-0.5 text-xs text-zinc-400">
-                                {new Date(r.responded_at).toLocaleDateString("en-AU", {
-                                  day: "numeric", month: "short", year: "numeric",
-                                })}
-                              </p>
+                          <div className="flex shrink-0 items-start gap-2">
+                            <div className="text-right">
+                              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.cls}`}>
+                                {statusConfig.label}
+                              </span>
+                              {r.responded_at && (
+                                <p className="mt-0.5 text-xs text-zinc-400">
+                                  {new Date(r.responded_at).toLocaleDateString("en-AU", {
+                                    day: "numeric", month: "short", year: "numeric",
+                                  })}
+                                </p>
+                              )}
+                            </div>
+                            {isCurrent && (
+                              <ReviewResponseControl
+                                review={r}
+                                projectId={id}
+                                roundStatus={currentRoundStatus}
+                                revisionNumber={currentRevNumber}
+                                pendingCount={pendingReviews.length}
+                                roster={stakeholderRoster}
+                                evidence={(() => {
+                                  const ev = evidenceByReviewId.get(r.id);
+                                  return ev
+                                    ? { storagePath: ev.storage_path as string, filename: ev.original_filename as string }
+                                    : undefined;
+                                })()}
+                                loggedByEmail={loggedByByReviewId.get(r.id)}
+                              />
                             )}
                           </div>
                         </div>

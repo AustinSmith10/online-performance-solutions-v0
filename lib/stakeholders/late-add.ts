@@ -7,6 +7,7 @@ import { notify } from "@/lib/notifications/notify";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
 import { formatLongDateAU } from "@/lib/time";
 import { getBusinessTimezone } from "@/lib/settings/timezone";
+import { getRoundStatus } from "./review-round";
 
 // A reviewer added to a project *after* the current review cycle has already
 // been dispatched is a "late add": they must be invited immediately (own
@@ -41,6 +42,19 @@ export async function inviteLateStakeholder(
     .eq("review_cycle", reviewCycle);
 
   if (!count) return;
+
+  // #191: a round that already closed rejected (or was superseded) is over —
+  // the late reviewer joins the next redispatch like everyone else. A round
+  // that closed approved reopens, so conversion waits on them as before.
+  const roundStatus = await getRoundStatus(supabase, projectId, reviewCycle);
+  if (roundStatus === "closed_rejected" || roundStatus === "superseded") return;
+  if (roundStatus === "closed_approved") {
+    await supabase
+      .from("stakeholder_reviews")
+      .update({ round_status: "open" })
+      .eq("project_id", projectId)
+      .eq("review_cycle", reviewCycle);
+  }
 
   const email = stakeholder.email.toLowerCase();
   const stateTerritory =
@@ -78,6 +92,7 @@ export async function inviteLateStakeholder(
       status: "pending",
       comments: null,
       responded_at: null,
+      round_status: "open",
     },
     { onConflict: "project_id,review_cycle,stakeholder_email" }
   );

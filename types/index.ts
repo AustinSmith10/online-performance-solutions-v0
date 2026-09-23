@@ -253,7 +253,13 @@ export type StakeholderReviewStatus =
   | "approved_without_comments"
   | "approved_with_comments"
   | "rejected_with_comments"
-  | "waived";
+  | "waived"
+  // Still pending when a revised PBDB force-closed the round (#191) —
+  // internal/audit only, never shown to stakeholders.
+  | "superseded";
+
+/** A review round's (= review cycle's) status, shared by every row in it (#191). */
+export type ReviewRoundStatus = "open" | "closed_approved" | "closed_rejected" | "superseded";
 
 export interface StakeholderReview {
   id: string;
@@ -275,4 +281,5 @@ export interface StakeholderReview {
   email_reply_text: string | null;
   email_reply_received_at: string | null;
   email_reply_sender_verified: boolean | null;
+  round_status: ReviewRoundStatus;
 }

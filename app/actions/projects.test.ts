@@ -11,6 +11,7 @@ vi.mock("@/lib/notifications/notify");
 vi.mock("@/lib/stakeholders/dispatch");
 vi.mock("@/lib/documents/pending-delivery");
 vi.mock("@/lib/documents/generator");
+vi.mock("@/lib/stakeholders/review-round");
 vi.mock("@/lib/jobs/queue-client", () => ({
   enqueueGeneratePbdb: vi.fn().mockResolvedValue("job-1"),
 }));
@@ -22,6 +23,7 @@ import { scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
 import { auditLog } from "@/lib/audit/log";
 import { enqueueGeneratePbdb } from "@/lib/jobs/queue-client";
 import { generatePbdb } from "@/lib/documents/generator";
+import { forceCloseRound } from "@/lib/stakeholders/review-round";
 
 const PROJECT_ID = "proj-1";
 const CLIENT_ID = "org-1";
@@ -149,6 +151,26 @@ describe("uploadQaPbdb — review_cycle tagging across a multi-round rejection s
     expect(mock.insertFn).toHaveBeenCalledWith(
       expect.objectContaining({ review_cycle: 2, version: 2 })
     );
+  });
+});
+
+describe("uploadQaPbdb — forced round close (#191)", () => {
+  it("force-closes the still-open round when a revised PBDB is uploaded mid-review", async () => {
+    const mock = buildMock({ status: "dispatched", reviewCycle: 1, existingVersion: 1 });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await uploadQaPbdb(PROJECT_ID, {}, makeFileFormData());
+
+    expect(forceCloseRound).toHaveBeenCalledWith(mock, PROJECT_ID, 1, { id: ACTOR_ID, email: "c@ddeg.com.au" });
+  });
+
+  it("does not touch the review round on an initial QA upload", async () => {
+    const mock = buildMock({ status: "in_progress", reviewCycle: 1, existingVersion: 1 });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    await uploadQaPbdb(PROJECT_ID, {}, makeFileFormData());
+
+    expect(forceCloseRound).not.toHaveBeenCalled();
   });
 });
 

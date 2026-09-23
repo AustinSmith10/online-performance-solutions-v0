@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { notify } from "@/lib/notifications/notify";
-import { recordRevisionEvent } from "@/lib/documents/revision-history";
+import { closeRoundIfComplete } from "@/lib/stakeholders/review-round";
 import { renderReviewResponseConfirmationEmail } from "@/lib/email/templates/ReviewResponseConfirmationEmail";
 import {
   resolveProjectRef,
@@ -127,13 +127,6 @@ export async function submitPortalApproval(
       return { error: "Your response was recorded, but the project status couldn't be updated. Please notify DDEG." };
     }
 
-    // Bumps the PBDB revision_history counter (#108) — matches the equivalent
-    // call in approval.ts and stakeholders.ts for the other two rejection paths.
-    // Only the cycle's first rejection bumps it — see the matching guard there.
-    if (projectForGuard.status !== "revision_required") {
-      await recordRevisionEvent(supabase, review.project_id as string, "pbdb", "rejected");
-    }
-
     await notifyModificationsRequested({
       supabase,
       projectId: review.project_id as string,
@@ -154,6 +147,9 @@ export async function submitPortalApproval(
       "[submitPortalApproval]"
     );
   }
+
+  // Revision bump happens at round close, not per rejection (#191).
+  await closeRoundIfComplete(supabase, review.project_id as string, cycle);
 
   // Confirm to the client that their response was recorded
   const clientName =

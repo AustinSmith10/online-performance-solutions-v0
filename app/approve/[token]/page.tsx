@@ -30,6 +30,23 @@ export default async function ApprovePage({
     "waived",
   ].includes(review.status);
 
+  // Still pending when a revised PBDB replaced the one it was for (#191).
+  // Internal status — the stakeholder just sees that a new link is coming.
+  if (review.status === "superseded") {
+    return (
+      <div style={styles.wrapper}>
+        <div style={styles.card}>
+          <h1 style={styles.heading}>A revised document is on its way</h1>
+          <p style={styles.body}>
+            This document has been updated since this link was sent, so this link is no longer
+            active. You&apos;ll receive a new link to review the revised version.
+          </p>
+          <p style={styles.footer}>DDEG Online Performance Solution</p>
+        </div>
+      </div>
+    );
+  }
+
   if (alreadyResponded) {
     const recordedAt = review.status === "waived" ? review.waived_at : review.responded_at;
     return (

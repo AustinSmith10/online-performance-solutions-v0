@@ -48,6 +48,7 @@ const REVIEW: StakeholderReview = {
   expires_at: new Date(Date.now() + 86_400_000).toISOString(),
   fresh_token_sent_at: null,
   status: "pending",
+  round_status: "open",
   comments: null,
   responded_at: null,
   waived_by: null,
