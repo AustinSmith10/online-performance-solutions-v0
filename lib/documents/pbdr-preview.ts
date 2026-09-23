@@ -8,6 +8,7 @@ import { peekNextRevNumber, getRevisionHistory, formatRevisionHistoryRows } from
 import { formatAddress } from "@/lib/documents/formatters";
 import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
 import { getBusinessTimezone } from "@/lib/settings/timezone";
+import { auditLog } from "@/lib/audit/log";
 
 export interface PbdrPreviewProject {
   id: string;
@@ -115,7 +116,14 @@ async function buildPbdrPreviewInner(
     }))
   );
 
-  transformedDocx = setCoverRevisionNumber(transformedDocx, String(revisionIndex));
+  const coverPatch = setCoverRevisionNumber(transformedDocx, String(revisionIndex));
+  transformedDocx = coverPatch.buffer;
+  if (coverPatch.warning) {
+    await auditLog("project.revision_table_patch_failed", null, null, {
+      projectId: project.id,
+      metadata: { warning: coverPatch.warning, revNumber: revisionIndex, docType: "pbdr", preview: true },
+    });
+  }
 
   if (project.strip_token_color) {
     transformedDocx = stripRedTokenColor(transformedDocx);
