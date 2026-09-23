@@ -144,13 +144,16 @@ export default async function ClientProjectDetailPage({
       : Promise.resolve({ data: null }),
   ]);
 
-  // Outage signature (#169): a project that reads as dispatched /
-  // revision_required but has zero stakeholder_reviews rows for the current
-  // cycle — nobody was actually invited. Can't be legitimate; surface it as
-  // "contact DDEG" rather than letting the stakeholder see "nothing needed".
+  // Outage signature (#166/#169): a DISPATCHED project with zero
+  // stakeholder_reviews rows for the current cycle means nobody was actually
+  // invited — genuinely broken, surfaced as "contact DDEG". A
+  // revision_required project with zero current-cycle rows is different
+  // (#196): uploadQaPbdb advances the cycle before the consultant
+  // redispatches, so a brief window with no rows for the new cycle is the
+  // normal mid-revision state, not a misconfiguration — it falls through to
+  // the calm "Applying your requested changes" card below instead.
   const currentCycleReviewsMissing =
-    (project.status === "dispatched" || project.status === "revision_required") &&
-    (reviewRows ?? []).length === 0;
+    project.status === "dispatched" && (reviewRows ?? []).length === 0;
 
   const templateName = (templateRow?.name as string | null) ?? null;
   const consultantRevisionNote = (revisionNoteRow?.note as string | null) ?? null;

@@ -9,6 +9,7 @@ import { PbdbQaUploadForm } from "./_components/PbdbQaUploadForm";
 import { PbdbReuploadToggle } from "./_components/PbdbReuploadToggle";
 import { PbdbSendPreview } from "./_components/PbdbSendPreview";
 import { QaUploadedBanner } from "./_components/QaUploadedBanner";
+import { RevisionTablePatchWarningBanner } from "@/components/RevisionTablePatchWarningBanner";
 import { prettifyToken } from "@/lib/tokens/prettify";
 import { ProjectStripColorToggle } from "@/components/ProjectStripColorToggle";
 import { ProjectDeliveryDelayPresetSelect } from "@/components/ProjectDeliveryDelayPresetSelect";
@@ -115,6 +116,7 @@ export default async function ConsultantProjectDetailPage({
   const sp = await searchParams;
   const justPickedUp = sp.picked_up === "1";
   const justUploadedQa = sp.qa_uploaded === "1";
+  const revisionTableWarning = sp.revision_table_warning ?? null;
   const justQueueApproved = sp.queue_approved === "1";
   const justPbdrResent = sp.pbdr_resent === "1";
   const justReviewWaived = sp.review_waived === "1";
@@ -1418,6 +1420,12 @@ export default async function ConsultantProjectDetailPage({
           { table: "stakeholder_reviews", filter: `project_id=eq.${id}` },
         ]}
       />
+      {revisionTableWarning && (
+        <RevisionTablePatchWarningBanner
+          warning={revisionTableWarning}
+          cleanUrl={`/ops/projects/${id}${justUploadedQa ? "?qa_uploaded=1" : ""}`}
+        />
+      )}
       {justPickedUp && (
         <PickedUpBanner projectId={id} isTerminal={isTerminal} hasProjectNumber={!!project.project_number} />
       )}
