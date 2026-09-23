@@ -48,3 +48,6 @@ next-env.d.ts
 
 # playwright run artifacts
 /test-results/
+
+# next.config.ts deploymentId written at build (version-skew protection)
+/.deployment-id
