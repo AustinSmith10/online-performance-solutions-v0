@@ -122,19 +122,25 @@ export function groupPbdbVersions(input: {
   ];
 
   const revisions = input.revisionHistory;
-  const rejectedRows = revisions.filter((r) => r.event === "rejected" && r.review_cycle != null);
+  const cycleRejectedRows = revisions.filter((r) => r.event === "rejected" && r.review_cycle != null);
+  // Reverts, and rejections recorded before #191 added review_cycle, have no
+  // cycle to match on — they're attributed by time instead.
+  const untaggedBumpRows = revisions.filter(
+    (r) => r.event === "reverted" || (r.event === "rejected" && r.review_cycle == null)
+  );
   const revertedRows = revisions.filter((r) => r.event === "reverted");
   const currentRev = Math.max(0, ...revisions.map((r) => r.rev_number));
 
   // A file's rev is whatever the last bump before it was: a rejection of an
-  // earlier cycle (matched by cycle — exact), or a revert that happened before
-  // it was uploaded (matched by time — a revert precedes the corrected upload
-  // by human-scale time, unlike a forced close that races the upload itself).
+  // earlier cycle (matched by cycle — exact), or an untagged bump that
+  // happened before it was uploaded (matched by time — these precede the
+  // corrected upload by human-scale time, unlike a forced close that races
+  // the upload itself).
   const revOfFile = (f: PbdbFileRow) =>
     Math.max(
       0,
-      ...rejectedRows.filter((r) => (r.review_cycle as number) < f.review_cycle).map((r) => r.rev_number),
-      ...revertedRows.filter((r) => r.created_at <= f.created_at).map((r) => r.rev_number)
+      ...cycleRejectedRows.filter((r) => (r.review_cycle as number) < f.review_cycle).map((r) => r.rev_number),
+      ...untaggedBumpRows.filter((r) => r.created_at <= f.created_at).map((r) => r.rev_number)
     );
 
   const nextCycleStart = (cycle: number) => {

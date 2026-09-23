@@ -238,6 +238,27 @@ describe("groupPbdbVersions", () => {
   });
 });
 
+describe("groupPbdbVersions with pre-#191 rejection rows (no review_cycle)", () => {
+  it("attributes an untagged rejection by time so later files carry its rev", () => {
+    const f1 = file(1, 1, "02");
+    const f2 = file(2, 2, "06");
+    const g = groupPbdbVersions({
+      files: [f1, f2],
+      reviews: [
+        review(1, "Ann", "rejected_with_comments", "closed_rejected"),
+        review(2, "Ann", "rejected_with_comments", "closed_rejected"),
+      ],
+      revisionHistory: [initial, rev("rejected", 1, null, "05"), rev("rejected", 2, 2, "08")],
+      revisionNotesByCycle: noNotes,
+    })!;
+    expect(g.historical.map((h) => [h.fileId, h.revNumber])).toEqual([
+      [f2.id, 1],
+      [f1.id, 0],
+    ]);
+    expect(g.active).toMatchObject({ fileId: f2.id, revNumber: 2, badge: "draft" });
+  });
+});
+
 describe("rejectedByLabel", () => {
   it("is null with no rejecters", () => {
     expect(rejectedByLabel({ names: [], count: 0 })).toBeNull();
