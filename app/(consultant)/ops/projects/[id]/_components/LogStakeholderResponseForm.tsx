@@ -22,6 +22,29 @@ const MODE_OPTIONS: { value: ResponseMode; label: string }[] = [
 
 const OTHER_RESPONDENT = "__other__";
 
+const STATUS_LABELS: Record<string, string> = {
+  approved_without_comments: "Approved",
+  approved_with_comments: "Approved with comments",
+  rejected_with_comments: "Rejected",
+  waived: "Waived",
+};
+
+function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status;
+}
+
+/** A response already recorded for this reviewer (#192) — logged on their behalf, or their own portal/link response. */
+export interface ExistingResponse {
+  status: string;
+  comments: string | null;
+  respondedAt: string | null;
+  // null = the stakeholder responded themselves (portal or approval link).
+  responseMode: ResponseMode | null;
+  respondentName: string | null;
+  loggedByEmail: string | null;
+  evidenceFilename: string | null;
+}
+
 function toDatetimeLocalValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -43,6 +66,13 @@ interface Props {
   // either way (#111).
   prefilledEvidence?: { storagePath: string; filename: string };
   prefilledComments?: string;
+  // Set when this reviewer already responded (#192): the dialog opens
+  // pre-filled with that response and requires an explicit "Replace existing
+  // response" confirmation naming it before saving.
+  existing?: ExistingResponse;
+  // True when this is the last response the round is waiting on — saving it
+  // closes the round, after which nothing in it can be corrected.
+  closesRound?: boolean;
 }
 
 export function LogStakeholderResponseForm({
@@ -53,22 +83,35 @@ export function LogStakeholderResponseForm({
   roster,
   prefilledEvidence,
   prefilledComments,
+  existing,
+  closesRound,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const [response, setResponse] = useState<"approved" | "rejected" | "">("");
-  const [comments, setComments] = useState(prefilledComments ?? "");
+  const existingDecision: "approved" | "rejected" | "" = existing?.status.startsWith("approved")
+    ? "approved"
+    : existing?.status.startsWith("rejected")
+      ? "rejected"
+      : "";
+  const [response, setResponse] = useState<"approved" | "rejected" | "">(existingDecision);
+  const [comments, setComments] = useState(existing?.comments ?? prefilledComments ?? "");
+  const [confirmReplace, setConfirmReplace] = useState(false);
+  const [confirmFinal, setConfirmFinal] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [useEmailEvidence, setUseEmailEvidence] = useState(!!prefilledEvidence);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
-  const [mode, setMode] = useState<ResponseMode | "">("");
+  const [mode, setMode] = useState<ResponseMode | "">(existing?.responseMode ?? "");
+  const initialRespondent = existing?.respondentName ?? stakeholderName;
   const [respondentChoice, setRespondentChoice] = useState<string>(
-    roster.some((r) => r.name === stakeholderName) ? stakeholderName : OTHER_RESPONDENT
+    roster.some((r) => r.name === initialRespondent) ? initialRespondent : OTHER_RESPONDENT
   );
   const [respondentOther, setRespondentOther] = useState(
-    roster.some((r) => r.name === stakeholderName) ? "" : stakeholderName
+    roster.some((r) => r.name === initialRespondent) ? "" : initialRespondent
   );
-  const [respondedAt, setRespondedAt] = useState(() => toDatetimeLocalValue(new Date()));
+  const [respondedAt, setRespondedAt] = useState(() =>
+    toDatetimeLocalValue(existing?.respondedAt ? new Date(existing.respondedAt) : new Date())
+  );
+  const replace = existing ? { previousStatus: existing.status } : null;
 
   const respondentFinal =
     respondentChoice === OTHER_RESPONDENT ? respondentOther.trim() : respondentChoice;
@@ -90,6 +133,12 @@ export function LogStakeholderResponseForm({
     if (!mode) return { error: "Select how the stakeholder responded." };
     if (!respondentFinal) return { error: "Select or enter who responded." };
     if (!respondedAt) return { error: "Enter when the stakeholder responded." };
+    if (existing && !confirmReplace) {
+      return { error: `Confirm you want to replace the existing "${statusLabel(existing.status)}" response.` };
+    }
+    if (closesRound && !confirmFinal) {
+      return { error: "Confirm this final response — it closes the round and can't be changed afterward." };
+    }
 
     const respondedAtIso = new Date(respondedAt).toISOString();
 
@@ -102,7 +151,8 @@ export function LogStakeholderResponseForm({
         prefilledEvidence,
         mode,
         respondentFinal,
-        respondedAtIso
+        respondedAtIso,
+        replace
       );
     }
 
@@ -116,7 +166,8 @@ export function LogStakeholderResponseForm({
         null,
         mode,
         respondentFinal,
-        respondedAtIso
+        respondedAtIso,
+        replace
       );
     }
 
@@ -141,7 +192,8 @@ export function LogStakeholderResponseForm({
       { storagePath: requested.path, filename: selectedFile.name },
       mode,
       respondentFinal,
-      respondedAtIso
+      respondedAtIso,
+      replace
     );
   }
 
@@ -180,7 +232,9 @@ export function LogStakeholderResponseForm({
     (response !== "rejected" || comments.trim().length > 0) &&
     !!mode &&
     !!respondentFinal &&
-    !!respondedAt;
+    !!respondedAt &&
+    (!existing || confirmReplace) &&
+    (!closesRound || confirmFinal);
 
   return (
     <>
@@ -193,13 +247,47 @@ export function LogStakeholderResponseForm({
         <div className="fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-sm bg-black/30 p-4">
           <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl">
             <p className="text-base font-semibold text-zinc-900">
-              Log response for {stakeholderName}?
+              {existing ? `Replace response for ${stakeholderName}?` : `Log response for ${stakeholderName}?`}
             </p>
             <p className="mt-0.5 text-xs text-zinc-400">{stakeholderEmail}</p>
-            <p className="mt-2 text-sm text-zinc-500">
-              For stakeholders who replied by phone or email instead of using the portal.
-              Attaching evidence is optional — you always confirm the response before submitting.
-            </p>
+            {existing ? (
+              <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs text-zinc-600">
+                <p>
+                  <span className="font-semibold text-zinc-800">Current response: {statusLabel(existing.status)}</span>
+                  {existing.respondedAt && (
+                    <>
+                      {" "}
+                      ·{" "}
+                      {new Date(existing.respondedAt).toLocaleString("en-AU", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </>
+                  )}
+                </p>
+                <p className="mt-0.5">
+                  {existing.responseMode
+                    ? `Logged${existing.loggedByEmail ? ` by ${existing.loggedByEmail}` : ""} via ${
+                        MODE_OPTIONS.find((m) => m.value === existing.responseMode)?.label ?? existing.responseMode
+                      }${existing.respondentName ? ` — respondent: ${existing.respondentName}` : ""}`
+                    : existing.status === "waived"
+                      ? "Waived by staff"
+                      : "Submitted by the stakeholder themselves (portal or approval link)"}
+                </p>
+                {existing.comments && (
+                  <p className="mt-1 whitespace-pre-wrap italic text-zinc-700">&ldquo;{existing.comments}&rdquo;</p>
+                )}
+                {existing.evidenceFilename && <p className="mt-1">Evidence: {existing.evidenceFilename}</p>}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-zinc-500">
+                For stakeholders who replied by phone or email instead of using the portal.
+                Attaching evidence is optional — you always confirm the response before submitting.
+              </p>
+            )}
 
             <form action={formAction} className="mt-4 space-y-4">
               <div>
@@ -364,6 +452,36 @@ export function LogStakeholderResponseForm({
                 )}
               </div>
 
+              {existing && (
+                <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <input
+                    type="checkbox"
+                    checked={confirmReplace}
+                    onChange={(e) => setConfirmReplace(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-semibold">Replace existing response</span> — this overwrites the
+                    recorded &ldquo;{statusLabel(existing.status)}&rdquo;. The original stays in the audit log.
+                  </span>
+                </label>
+              )}
+
+              {closesRound && (
+                <label className="flex cursor-pointer items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900">
+                  <input
+                    type="checkbox"
+                    checked={confirmFinal}
+                    onChange={(e) => setConfirmFinal(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-semibold">This is the final response for this round.</span> Saving it
+                    closes the round — none of its responses can be changed afterward.
+                  </span>
+                </label>
+              )}
+
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -377,7 +495,7 @@ export function LogStakeholderResponseForm({
                   disabled={pending || !canSubmit}
                   className="flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                 >
-                  {pending ? "Submitting…" : "Log response"}
+                  {pending ? "Submitting…" : existing ? "Replace response" : "Log response"}
                 </button>
               </div>
             </form>
@@ -391,7 +509,7 @@ export function LogStakeholderResponseForm({
         onClick={() => setOpen(true)}
         className="shrink-0 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
       >
-        Log response
+        {existing ? "Replace response" : "Log response"}
       </button>
     </>
   );

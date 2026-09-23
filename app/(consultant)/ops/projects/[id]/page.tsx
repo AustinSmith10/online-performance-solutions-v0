@@ -28,10 +28,11 @@ import { ProjectDetailsEditor, type OpenFieldFlag } from "./_components/ProjectD
 import { FlagAcknowledgeControl } from "./_components/FlagAcknowledgeControl";
 import { ReExtractButton } from "@/components/ReExtractButton";
 import { ProjectAuditTrail, type ProjectAuditRow } from "./_components/ProjectAuditTrail";
-import { LogStakeholderResponseForm } from "./_components/LogStakeholderResponseForm";
 import { PendingReviewCard } from "./_components/PendingReviewCard";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
+import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
+import { ReviewResponseControl } from "./_components/ReviewResponseControl";
 import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import type { ProjectStatus } from "@/types";
 import { HeaderStatInline } from "./_components/HeaderStatInline";
@@ -237,7 +238,7 @@ export default async function ConsultantProjectDetailPage({
     supabase
       .from("stakeholder_reviews")
       .select(
-        "id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle, email_reply_text, email_reply_received_at, email_reply_sender_verified"
+        "id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle, email_reply_text, email_reply_received_at, email_reply_sender_verified, round_status, response_mode, respondent_name"
       )
       .eq("project_id", id)
       .order("review_cycle", { ascending: false })
@@ -363,6 +364,7 @@ export default async function ConsultantProjectDetailPage({
     status: string; comments: string | null; responded_at: string | null; review_cycle: number;
     email_reply_text: string | null; email_reply_received_at: string | null;
     email_reply_sender_verified: boolean | null;
+    round_status: string; response_mode: string | null; respondent_name: string | null;
   };
   const allReviews = (rawReviews ?? []) as ReviewRow[];
   // Known stakeholder roster for the Respondent dropdown (#111) — everyone
@@ -493,6 +495,16 @@ export default async function ConsultantProjectDetailPage({
   const currentCycleComments = currentCycleReviews.filter((r) => r.comments);
   const pendingReviews = currentCycleReviews.filter((r) => r.status === "pending");
   const pendingCount = pendingReviews.length;
+  // #191/#192: the current round's status gates correcting a logged response.
+  const currentRoundStatus = deriveRoundStatus(currentCycleReviews);
+  // Who logged each review's latest response on the stakeholder's behalf —
+  // shown when a consultant opens it to replace it (#192).
+  const loggedByByReviewId = new Map<string, string | null>();
+  for (const e of rawAuditEntries ?? []) {
+    if (e.event_type !== "stakeholder.responded_on_behalf" && e.event_type !== "stakeholder.response_replaced") continue;
+    const reviewId = (e.metadata as { review_id?: string } | null)?.review_id;
+    if (reviewId) loggedByByReviewId.set(reviewId, (e.actor_email as string | null) ?? null);
+  }
   // Single source of truth for "what stage is this project really at" —
   // collapses dispatched+all-approved into "converting" the same way every
   // other surface (dashboard lists, client portal, stepper) does, instead of
@@ -786,6 +798,7 @@ export default async function ConsultantProjectDetailPage({
               return (
                 <PendingReviewCard
                   key={r.id}
+                  closesRound={pendingReviews.length === 1}
                   review={r}
                   projectId={id}
                   stakeholderRoster={stakeholderRoster}
@@ -848,6 +861,7 @@ export default async function ConsultantProjectDetailPage({
                 return (
                   <PendingReviewCard
                     key={r.id}
+                    closesRound={pendingReviews.length === 1}
                     review={r}
                     projectId={id}
                     stakeholderRoster={stakeholderRoster}
@@ -1230,8 +1244,6 @@ export default async function ConsultantProjectDetailPage({
                     // Internal only (#191): still pending when a revised PBDB force-closed the round.
                     superseded: { label: "Superseded", cls: "bg-zinc-100 text-zinc-400" },
                   }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
-                  const canLogOnBehalf =
-                    isCurrent && r.status === "pending" && project.status === "dispatched";
                   const emailReplyEvidence = evidenceByReviewId.get(r.id);
                   return (
                     <div key={r.id} className="px-5 py-3">
@@ -1256,14 +1268,15 @@ export default async function ConsultantProjectDetailPage({
                               </p>
                             )}
                           </div>
-                          {canLogOnBehalf && (
-                            <LogStakeholderResponseForm
-                              reviewId={r.id}
+                          {isCurrent && (
+                            <ReviewResponseControl
+                              review={r}
                               projectId={id}
-                              stakeholderName={r.stakeholder_name}
-                              stakeholderEmail={r.stakeholder_email}
+                              roundStatus={currentRoundStatus}
+                              revisionNumber={currentRevNumber}
+                              pendingCount={pendingCount}
                               roster={stakeholderRoster}
-                              prefilledEvidence={
+                              evidence={
                                 emailReplyEvidence
                                   ? {
                                       storagePath: emailReplyEvidence.storage_path as string,
@@ -1271,7 +1284,7 @@ export default async function ConsultantProjectDetailPage({
                                     }
                                   : undefined
                               }
-                              prefilledComments={r.email_reply_text ?? undefined}
+                              loggedByEmail={loggedByByReviewId.get(r.id)}
                             />
                           )}
                         </div>

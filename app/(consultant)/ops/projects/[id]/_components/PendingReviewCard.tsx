@@ -27,12 +27,15 @@ export function PendingReviewCard({
   stakeholderRoster,
   evidence,
   highlighted,
+  closesRound,
 }: {
   review: PendingReview;
   projectId: string;
   stakeholderRoster: { name: string; email: string }[];
   evidence?: { storagePath: string; filename: string } | null;
   highlighted?: boolean;
+  // This is the round's last pending review — logging it closes the round (#192).
+  closesRound?: boolean;
 }) {
   const inner = (
     <div className="space-y-2 rounded-md border border-amber-200 bg-white px-3 py-2.5">
@@ -65,6 +68,7 @@ export function PendingReviewCard({
           roster={stakeholderRoster}
           prefilledEvidence={evidence ?? undefined}
           prefilledComments={review.email_reply_text ?? undefined}
+          closesRound={closesRound}
         />
         <UpdateEmailReveal reviewId={review.id} projectId={projectId} currentEmail={review.stakeholder_email} />
         <WaiveForm reviewId={review.id} projectId={projectId} stakeholderName={review.stakeholder_name} requireEvidence />
