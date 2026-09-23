@@ -23,6 +23,8 @@ export interface RedispatchPanelData {
   projectedSendDate?: string;
   /** The business timezone setting (#187), for displaying `scheduledFor`. */
   timeZone: string;
+  /** #193: reset-impact reminder for the redispatch confirm dialog, when the previous cycle had reviewers. */
+  resetWarning?: { totalStakeholders: number; previouslyApprovedCount: number };
 }
 
 export type RedispatchPanelResult =
@@ -57,7 +59,7 @@ export async function getRedispatchPanelData(projectId: string): Promise<Redispa
     (latestPbdb.structure_scan_findings as { message: string }[] | null)?.map((f) => f.message) ?? [];
   const flagsAcknowledged = !!latestPbdb.qa_flags_acknowledged_at;
 
-  const [deliveryDurations, pendingPbdbDelivery, sendPreview, timeZone] = await Promise.all([
+  const [deliveryDurations, pendingPbdbDelivery, sendPreview, timeZone, previousCycleReviews] = await Promise.all([
     getDeliveryDelayDurations(supabase),
     supabase
       .from("pending_deliveries")
@@ -67,7 +69,23 @@ export async function getRedispatchPanelData(projectId: string): Promise<Redispa
       .maybeSingle(),
     previewNextSendTime(projectId, "pbdb").catch(() => null),
     getBusinessTimezone(supabase),
+    supabase
+      .from("stakeholder_reviews")
+      .select("status")
+      .eq("project_id", projectId)
+      .eq("review_cycle", (project.review_cycle as number) - 1),
   ]);
+
+  const previousReviews = previousCycleReviews.data ?? [];
+  const resetWarning =
+    previousReviews.length > 0
+      ? {
+          totalStakeholders: previousReviews.length,
+          previouslyApprovedCount: previousReviews.filter(
+            (r) => r.status === "approved_without_comments" || r.status === "approved_with_comments"
+          ).length,
+        }
+      : undefined;
 
   return {
     ok: true,
@@ -81,6 +99,7 @@ export async function getRedispatchPanelData(projectId: string): Promise<Redispa
       deliveryDurations,
       projectedSendDate: sendPreview ? sendPreview.toISOString() : undefined,
       timeZone,
+      resetWarning,
     },
   };
 }

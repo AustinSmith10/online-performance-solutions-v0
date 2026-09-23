@@ -3,7 +3,21 @@
 import { useActionState, useState } from "react";
 import { dispatchToStakeholders, type DispatchState } from "@/app/actions/stakeholders";
 
-export function DispatchButton({ projectId }: { projectId: string }) {
+export interface DispatchResetWarning {
+  /** How many stakeholders this dispatch will email. */
+  totalStakeholders: number;
+  /** Of those, how many had already approved a prior cycle that this upload reset. */
+  previouslyApprovedCount: number;
+}
+
+export function DispatchButton({
+  projectId,
+  resetWarning,
+}: {
+  projectId: string;
+  /** Set on a redispatch (post-revision) so the confirm dialog names the reset impact. Omit for a first-ever dispatch — nothing to reset yet. */
+  resetWarning?: DispatchResetWarning;
+}) {
   const boundAction = dispatchToStakeholders.bind(null, projectId);
   const [state, formAction, pending] = useActionState<DispatchState, FormData>(
     boundAction,
@@ -38,6 +52,13 @@ export function DispatchButton({ projectId }: { projectId: string }) {
               Emails the QA&apos;d PBDB out for stakeholder review, applying the delivery timing
               selected above (immediately, or staged for later).
             </p>
+            {resetWarning && resetWarning.previouslyApprovedCount > 0 && (
+              <p className="mt-2 text-sm text-amber-700">
+                This will email {resetWarning.totalStakeholders} stakeholder
+                {resetWarning.totalStakeholders === 1 ? "" : "s"}, including{" "}
+                {resetWarning.previouslyApprovedCount} who previously approved.
+              </p>
+            )}
             {state.error && (
               <p className="mt-3 text-sm text-red-600">{state.error}</p>
             )}

@@ -3,20 +3,33 @@
 import { useActionState, useRef, useState } from "react";
 import { uploadQaPbdb, type UploadQaPbdbState } from "@/app/actions/projects";
 import { UploadDropzone } from "@/components/UploadDropzone";
+import { buildResetWarningCopy, type ReviewerForResetWarning } from "@/lib/stakeholders/reset-warning";
 
-export function PbdbQaUploadForm({
-  projectId,
-  submitLabel = "Upload completed PBDB",
-  requireConfirmation = false,
-  confirmCopy,
-  children,
-}: {
+export type { ReviewerForResetWarning };
+
+type PbdbQaUploadFormProps = {
   projectId: string;
   submitLabel?: string;
-  requireConfirmation?: boolean;
-  confirmCopy?: string;
   children?: React.ReactNode;
-}) {
+} & (
+  | {
+      /** First-ever QA upload, or a swap before anything has been dispatched — no reset to warn about. */
+      context?: "initial" | "pre_dispatch_replace";
+    }
+  | {
+      /** A replacement after the PBDB has already gone out — resets every current-cycle approval/rejection. */
+      context: "post_dispatch_revision";
+      /** Current cycle's reviewers, for the dynamic reset-warning copy. Required so this can't ship silent. */
+      reviewers: ReviewerForResetWarning[];
+    }
+);
+
+export function PbdbQaUploadForm(props: PbdbQaUploadFormProps) {
+  const { projectId, submitLabel = "Upload completed PBDB", children } = props;
+  const context = props.context ?? "initial";
+  const requireConfirmation = context === "post_dispatch_revision";
+  const confirmCopy = props.context === "post_dispatch_revision" ? buildResetWarningCopy(props.reviewers) : undefined;
+
   const boundAction = uploadQaPbdb.bind(null, projectId);
   const [state, formAction, pending] = useActionState<UploadQaPbdbState, FormData>(
     boundAction,

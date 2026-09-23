@@ -70,7 +70,7 @@ export function DrawerRedispatchPanel({ projectId }: { projectId: string }) {
                 projectedSendDate={d.projectedSendDate}
               />
             </div>
-            <DispatchButton projectId={projectId} />
+            <DispatchButton projectId={projectId} resetWarning={d.resetWarning} />
           </>
         ))}
 
