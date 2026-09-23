@@ -18,6 +18,7 @@ import { setEmailsEnabled } from "@/lib/settings/emails-enabled";
 import { setJudgeDocumentTextCharCap } from "@/lib/settings/judge-document-text-cap";
 import { setAiExtractionEnabled } from "@/lib/settings/ai-extraction-enabled";
 import { setExtractionDailyLimit } from "@/lib/settings/extraction-budget";
+import { getBusinessTimezone, setBusinessTimezone } from "@/lib/settings/timezone";
 
 const DigestScheduleSchema = z.object({
   morning: z.string().refine(isValidTime, { error: "Enter a valid time (HH:MM)" }),
@@ -346,6 +347,37 @@ export async function updateJudgeDocumentTextCapAction(
     actor.email as string,
     { metadata: { cap: validated.data.cap } }
   );
+
+  revalidatePath("/admin/settings");
+  return { saved: true };
+}
+
+export type UpdateBusinessTimezoneState = {
+  saved?: boolean;
+  errors?: { form?: string[] };
+};
+
+/**
+ * Super admin only (#187) — the business timezone stamps every generated
+ * document date, filename, email and due date, so plain admins can't move it.
+ */
+export async function updateBusinessTimezoneAction(
+  _prev: UpdateBusinessTimezoneState,
+  formData: FormData
+): Promise<UpdateBusinessTimezoneState> {
+  const actor = await requireRole("super_admin");
+
+  const timeZone = String(formData.get("timeZone") ?? "");
+
+  const supabase = createAdminClient();
+  const previous = await getBusinessTimezone(supabase);
+  const { error } = await setBusinessTimezone(supabase, timeZone, actor.id as string);
+
+  if (error) return { errors: { form: [error] } };
+
+  await auditLog("settings.business_timezone_updated", actor.id as string, actor.email as string, {
+    metadata: { from: previous, to: timeZone },
+  });
 
   revalidatePath("/admin/settings");
   return { saved: true };

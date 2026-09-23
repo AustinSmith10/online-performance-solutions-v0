@@ -10,7 +10,7 @@ vi.mock("@/lib/stakeholders/dispatch");
 
 import { scheduleOrDeliverPbdb, scheduleOrDeliverPbdr, expeditePbdbDispatch } from "./pending-delivery";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getBusinessHours } from "@/lib/settings/business-hours";
+import { getBusinessClock } from "@/lib/settings/business-hours";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
@@ -55,7 +55,7 @@ function mockProject(preset: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getBusinessHours).mockResolvedValue({ start: "09:00", end: "17:00" });
+  vi.mocked(getBusinessClock).mockResolvedValue({ start: "09:00", end: "17:00", timeZone: "Australia/Melbourne" });
   vi.mocked(getPublicHolidays).mockResolvedValue(new Set<string>());
   vi.mocked(getDeliveryDelayDurations).mockResolvedValue({
     normal: { unit: "workingDays", value: 1 },

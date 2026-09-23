@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { computeEffectiveDeliveryTime, type DeliveryDelayDurations } from "./delivery-delay";
 
 const NO_HOLIDAYS = new Set<string>();
-const HOURS = { start: "09:00", end: "17:00" };
+// Tests were written against Melbourne (the old hardcoded zone).
+const HOURS = { start: "09:00", end: "17:00", timeZone: "Australia/Melbourne" };
 const DURATIONS: DeliveryDelayDurations = {
   normal: { unit: "workingDays", value: 1 },
   extended: { unit: "workingDays", value: 7 },

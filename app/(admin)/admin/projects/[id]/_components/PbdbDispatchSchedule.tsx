@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { expediteProjectPbdbDispatch } from "@/app/actions/projects";
 
-function formatScheduledFor(iso: string): string {
+function formatScheduledFor(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleString("en-AU", {
-    timeZone: "Australia/Melbourne",
+    timeZone,
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -22,9 +22,12 @@ function formatScheduledFor(iso: string): string {
 export function PbdbDispatchSchedule({
   projectId,
   scheduledFor,
+  timeZone,
 }: {
   projectId: string;
   scheduledFor: string;
+  /** The business timezone setting (#187) — getBusinessTimezone on the server. */
+  timeZone: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -51,7 +54,7 @@ export function PbdbDispatchSchedule({
   return (
     <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5">
       <p className="text-sm font-semibold text-amber-900">
-        Scheduled for {formatScheduledFor(scheduledFor)}
+        Scheduled for {formatScheduledFor(scheduledFor, timeZone)}
       </p>
       <p className="mt-0.5 text-xs text-amber-800">
         Not sent yet — the dispatch is staged and will go out automatically at the time above.

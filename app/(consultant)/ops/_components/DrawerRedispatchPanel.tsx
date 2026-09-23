@@ -57,7 +57,7 @@ export function DrawerRedispatchPanel({ projectId }: { projectId: string }) {
 
       {d.readyToSend &&
         (d.scheduledFor ? (
-          <PbdbDispatchSchedule projectId={projectId} scheduledFor={d.scheduledFor} />
+          <PbdbDispatchSchedule projectId={projectId} scheduledFor={d.scheduledFor} timeZone={d.timeZone} />
         ) : (
           <>
             <div>

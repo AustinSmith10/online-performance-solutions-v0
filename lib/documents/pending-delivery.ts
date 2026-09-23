@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
 import { computeEffectiveDeliveryTime, type DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
-import { getBusinessHours } from "@/lib/settings/business-hours";
+import { getBusinessClock } from "@/lib/settings/business-hours";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { deliverPbdr } from "@/lib/documents/delivery";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
@@ -38,7 +38,7 @@ export async function scheduleOrDeliverPbdr(
   const preset = (project?.delivery_delay_preset ?? "normal") as DeliveryDelayPreset;
 
   const [businessHours, durations, holidaysThisYear, holidaysNextYear] = await Promise.all([
-    getBusinessHours(supabase),
+    getBusinessClock(supabase),
     getDeliveryDelayDurations(supabase),
     getPublicHolidays(stateTerritory, now.getUTCFullYear()),
     getPublicHolidays(stateTerritory, now.getUTCFullYear() + 1),
@@ -114,7 +114,7 @@ export async function scheduleOrDeliverPbdb(
   }
 
   const [businessHours, durations, holidaysThisYear, holidaysNextYear] = await Promise.all([
-    getBusinessHours(supabase),
+    getBusinessClock(supabase),
     getDeliveryDelayDurations(supabase),
     getPublicHolidays(stateTerritory, now.getUTCFullYear()),
     getPublicHolidays(stateTerritory, now.getUTCFullYear() + 1),
@@ -181,7 +181,7 @@ export async function previewNextSendTime(
   if (docType === "pbdb" && preset === "expedited") return now;
 
   const [businessHours, durations, holidaysThisYear, holidaysNextYear] = await Promise.all([
-    getBusinessHours(supabase),
+    getBusinessClock(supabase),
     getDeliveryDelayDurations(supabase),
     getPublicHolidays(stateTerritory, now.getUTCFullYear()),
     getPublicHolidays(stateTerritory, now.getUTCFullYear() + 1),

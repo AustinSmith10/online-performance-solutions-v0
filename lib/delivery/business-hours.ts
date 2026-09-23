@@ -1,38 +1,27 @@
 import { isWorkingDay, addWorkingDays } from "./working-days";
+import { zonedParts } from "@/lib/time";
 
 export interface BusinessHours {
   start: string; // HH:MM, 24h
   end: string; // HH:MM, 24h
 }
 
-// Business hours are anchored to a single org-wide timezone — this is an
-// AU-only product (state_territory codes, AU public holiday feed).
-const BUSINESS_TIMEZONE = "Australia/Melbourne";
-
-const partsFormatter = new Intl.DateTimeFormat("en-AU", {
-  timeZone: BUSINESS_TIMEZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
+/**
+ * Business hours plus the timezone they're anchored to. The zone is the
+ * single platform-wide business timezone setting (#187,
+ * lib/settings/timezone.ts) — callers load it alongside getBusinessHours.
+ */
+export interface BusinessClock extends BusinessHours {
+  timeZone: string;
+}
 
 interface LocalParts {
   isoDate: string; // YYYY-MM-DD in the business timezone
   minutesOfDay: number; // minutes since local midnight
 }
 
-function toLocalParts(date: Date): LocalParts {
-  const parts = partsFormatter.formatToParts(date);
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
-  const year = get("year");
-  const month = get("month");
-  const day = get("day");
-  // Intl renders midnight as "24:00" with hour12: false in some engines — normalize.
-  const hour = Number(get("hour")) % 24;
-  const minute = Number(get("minute"));
+function toLocalParts(date: Date, timeZone: string): LocalParts {
+  const { year, month, day, hour, minute } = zonedParts(date, timeZone);
   return { isoDate: `${year}-${month}-${day}`, minutesOfDay: hour * 60 + minute };
 }
 
@@ -49,29 +38,29 @@ function localMidnightAsUtcDate(isoDate: string): Date {
 
 export function isWithinBusinessHours(
   date: Date,
-  hours: BusinessHours,
+  hours: BusinessClock,
   holidays: Set<string>
 ): boolean {
-  const { isoDate, minutesOfDay } = toLocalParts(date);
+  const { isoDate, minutesOfDay } = toLocalParts(date, hours.timeZone);
   if (!isWorkingDay(localMidnightAsUtcDate(isoDate), holidays)) return false;
   return minutesOfDay >= timeToMinutes(hours.start) && minutesOfDay < timeToMinutes(hours.end);
 }
 
 // Returns the instant `date` if already within business hours, otherwise the
-// next business-hours start (a working day's `hours.start`, in BUSINESS_TIMEZONE).
+// next business-hours start (a working day's `hours.start`, in `hours.timeZone`).
 export function nextBusinessHoursStart(
   date: Date,
-  hours: BusinessHours,
+  hours: BusinessClock,
   holidays: Set<string>
 ): Date {
   if (isWithinBusinessHours(date, hours, holidays)) return date;
 
-  const { isoDate, minutesOfDay } = toLocalParts(date);
+  const { isoDate, minutesOfDay } = toLocalParts(date, hours.timeZone);
   const startMinutes = timeToMinutes(hours.start);
 
   // If today is a working day and we're before the window opens, today's start applies.
   if (isWorkingDay(localMidnightAsUtcDate(isoDate), holidays) && minutesOfDay < startMinutes) {
-    return localWindowStart(isoDate, hours.start);
+    return localWindowStart(isoDate, hours.start, hours.timeZone);
   }
 
   // Otherwise walk forward day by day until we hit a working day.
@@ -80,7 +69,7 @@ export function nextBusinessHoursStart(
     probe = new Date(probe.getTime() + 24 * 60 * 60 * 1000);
   } while (!isWorkingDay(probe, holidays));
 
-  return localWindowStart(probe.toISOString().slice(0, 10), hours.start);
+  return localWindowStart(probe.toISOString().slice(0, 10), hours.start, hours.timeZone);
 }
 
 // Business-hours start of the Nth working day after `date`'s local calendar
@@ -89,21 +78,21 @@ export function nextBusinessHoursStart(
 export function nthWorkingDayStart(
   date: Date,
   n: number,
-  hours: BusinessHours,
+  hours: BusinessClock,
   holidays: Set<string>
 ): Date {
-  const { isoDate } = toLocalParts(date);
+  const { isoDate } = toLocalParts(date, hours.timeZone);
   const target = addWorkingDays(localMidnightAsUtcDate(isoDate), n, holidays);
-  return localWindowStart(target.toISOString().slice(0, 10), hours.start);
+  return localWindowStart(target.toISOString().slice(0, 10), hours.start, hours.timeZone);
 }
 
-// Builds the instant corresponding to `time` (HH:MM) on `isoDate` in BUSINESS_TIMEZONE.
-function localWindowStart(isoDate: string, time: string): Date {
+// Builds the instant corresponding to `time` (HH:MM) on `isoDate` in `timeZone`.
+function localWindowStart(isoDate: string, time: string, timeZone: string): Date {
   const [h, m] = time.split(":").map(Number);
-  // Resolve the UTC offset for BUSINESS_TIMEZONE on this date by comparing a UTC
+  // Resolve the UTC offset for `timeZone` on this date by comparing a UTC
   // guess against how it renders locally, then correcting.
   const guessUtc = new Date(`${isoDate}T${time}:00.000Z`);
-  const rendered = toLocalParts(guessUtc);
+  const rendered = toLocalParts(guessUtc, timeZone);
   const renderedMinutes = rendered.minutesOfDay;
   const targetMinutes = h * 60 + m;
   let diffMinutes = targetMinutes - renderedMinutes;

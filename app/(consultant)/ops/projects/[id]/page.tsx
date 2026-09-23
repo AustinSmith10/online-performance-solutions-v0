@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { ProjectNumberForm } from "./_components/ProjectNumberForm";
 import { PbdbQaUploadForm } from "./_components/PbdbQaUploadForm";
@@ -118,6 +119,7 @@ export default async function ConsultantProjectDetailPage({
   const justEmailUpdated = sp.email_updated ?? null;
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
+  const businessTimezone = await getBusinessTimezone(supabase);
 
   const { data, error } = await supabase
     .from("projects")
@@ -748,6 +750,7 @@ export default async function ConsultantProjectDetailPage({
               <PbdbDispatchSchedule
                 projectId={id}
                 scheduledFor={pendingPbdbDelivery.scheduled_for as string}
+                timeZone={businessTimezone}
               />
             ) : (
               <>
@@ -903,6 +906,7 @@ export default async function ConsultantProjectDetailPage({
               <PbdbDispatchSchedule
                 projectId={id}
                 scheduledFor={pendingPbdbDelivery.scheduled_for as string}
+                timeZone={businessTimezone}
               />
             ) : (
               <>
@@ -1351,7 +1355,7 @@ export default async function ConsultantProjectDetailPage({
       </div>
       {pendingDelivery && (
         <div className="border-t border-zinc-100 pt-3">
-          <PendingDeliveryPanel projectId={id} scheduledFor={pendingDelivery.scheduled_for as string} />
+          <PendingDeliveryPanel projectId={id} scheduledFor={pendingDelivery.scheduled_for as string} timeZone={businessTimezone} />
         </div>
       )}
       {latestPbdb && (

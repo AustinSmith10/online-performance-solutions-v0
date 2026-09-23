@@ -69,3 +69,11 @@ describe("setBusinessHours", () => {
     );
   });
 });
+
+describe("getBusinessClock", () => {
+  it("combines business hours with the business timezone (default Brisbane)", async () => {
+    const { getBusinessClock } = await import("./business-hours");
+    const clock = await getBusinessClock(supabaseWithRow(null) as never);
+    expect(clock).toEqual({ ...DEFAULT_BUSINESS_HOURS, timeZone: "Australia/Brisbane" });
+  });
+});

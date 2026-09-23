@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { requireProjectAccess } from "@/lib/auth/project-access";
 import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import type { DeliveryDelayDurations, DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 
@@ -20,6 +21,8 @@ export interface RedispatchPanelData {
   deliveryDurations: DeliveryDelayDurations;
   /** ISO date the PBDB would actually send with the saved preset (#176). */
   projectedSendDate?: string;
+  /** The business timezone setting (#187), for displaying `scheduledFor`. */
+  timeZone: string;
 }
 
 export type RedispatchPanelResult =
@@ -54,7 +57,7 @@ export async function getRedispatchPanelData(projectId: string): Promise<Redispa
     (latestPbdb.structure_scan_findings as { message: string }[] | null)?.map((f) => f.message) ?? [];
   const flagsAcknowledged = !!latestPbdb.qa_flags_acknowledged_at;
 
-  const [deliveryDurations, pendingPbdbDelivery, sendPreview] = await Promise.all([
+  const [deliveryDurations, pendingPbdbDelivery, sendPreview, timeZone] = await Promise.all([
     getDeliveryDelayDurations(supabase),
     supabase
       .from("pending_deliveries")
@@ -63,6 +66,7 @@ export async function getRedispatchPanelData(projectId: string): Promise<Redispa
       .eq("delivery_type", "pbdb")
       .maybeSingle(),
     previewNextSendTime(projectId, "pbdb").catch(() => null),
+    getBusinessTimezone(supabase),
   ]);
 
   return {
@@ -76,6 +80,7 @@ export async function getRedispatchPanelData(projectId: string): Promise<Redispa
       deliveryPreset: (project.pbdb_delivery_delay_preset as DeliveryDelayPreset | null) ?? "expedited",
       deliveryDurations,
       projectedSendDate: sendPreview ? sendPreview.toISOString() : undefined,
+      timeZone,
     },
   };
 }

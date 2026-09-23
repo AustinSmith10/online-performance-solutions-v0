@@ -8,6 +8,7 @@ import { getEmailsEnabled } from "@/lib/settings/emails-enabled";
 import { getJudgeDocumentTextCharCap } from "@/lib/settings/judge-document-text-cap";
 import { getAiExtractionEnabled } from "@/lib/settings/ai-extraction-enabled";
 import { getExtractionDailyLimit } from "@/lib/settings/extraction-budget";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 import { DigestScheduleForm } from "./_components/DigestScheduleForm";
 import { BusinessHoursForm } from "./_components/BusinessHoursForm";
 import { DeliveryDelayDurationsForm } from "./_components/DeliveryDelayDurationsForm";
@@ -16,6 +17,7 @@ import { EmailsEnabledForm } from "./_components/EmailsEnabledForm";
 import { JudgeDocumentTextCapForm } from "./_components/JudgeDocumentTextCapForm";
 import { ExtractionDailyLimitForm } from "./_components/ExtractionDailyLimitForm";
 import { AiExtractionEnabledForm } from "./_components/AiExtractionEnabledForm";
+import { BusinessTimezoneForm } from "./_components/BusinessTimezoneForm";
 import { SettingsSection } from "./_components/SettingsSection";
 
 export default async function AdminSettingsPage() {
@@ -31,6 +33,7 @@ export default async function AdminSettingsPage() {
     user.role === "super_admin" ? await getAdminNavRestrictions(supabase) : [];
   const emailsEnabled =
     user.role === "super_admin" ? await getEmailsEnabled(supabase) : true;
+  const businessTimezone = await getBusinessTimezone(supabase);
   const aiExtractionEnabled =
     user.role === "super_admin" ? await getAiExtractionEnabled(supabase) : true;
 
@@ -63,6 +66,12 @@ export default async function AdminSettingsPage() {
         <JudgeDocumentTextCapForm cap={judgeDocumentTextCap} />
         <ExtractionDailyLimitForm limit={extractionDailyLimit} />
       </SettingsSection>
+
+      {user.role === "super_admin" && (
+        <SettingsSection title="Timezone" description="Super admin only.">
+          <BusinessTimezoneForm timeZone={businessTimezone} />
+        </SettingsSection>
+      )}
 
       {user.role === "super_admin" && (
         <SettingsSection title="Access control" description="Super admin only.">

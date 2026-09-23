@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isValidTime } from "./digest-schedule";
-import type { BusinessHours } from "@/lib/delivery/business-hours";
+import type { BusinessClock, BusinessHours } from "@/lib/delivery/business-hours";
+import { getBusinessTimezone } from "./timezone";
 
 export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
   start: "09:00",
@@ -19,6 +20,15 @@ export async function getBusinessHours(supabase: SupabaseClient): Promise<Busine
   const value = data?.value as Partial<BusinessHours> | undefined;
   if (!value?.start || !value?.end) return DEFAULT_BUSINESS_HOURS;
   return { start: value.start, end: value.end };
+}
+
+/** Business hours plus the business timezone they're anchored to (#187). */
+export async function getBusinessClock(supabase: SupabaseClient): Promise<BusinessClock> {
+  const [hours, timeZone] = await Promise.all([
+    getBusinessHours(supabase),
+    getBusinessTimezone(supabase),
+  ]);
+  return { ...hours, timeZone };
 }
 
 export async function setBusinessHours(
