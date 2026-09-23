@@ -90,6 +90,35 @@ export async function getCurrentRevNumber(
   return (data?.rev_number as number | undefined) ?? 0;
 }
 
+export interface LatestRevisionHistoryRow {
+  id: string;
+  rev_number: number;
+  working_pbdb_downloaded_at: string | null;
+}
+
+/**
+ * The latest (highest rev_number) row for a project/doc_type, with the
+ * #195 working-PBDB-download timestamp — for the "Download the new working
+ * PBDB" Focus-card step, which needs to know whether the consultant has
+ * already grabbed the revision-populated copy for the *current* revision.
+ */
+export async function getLatestRevisionHistoryRow(
+  supabase: SupabaseClient,
+  projectId: string,
+  docType: RevisionDocType
+): Promise<LatestRevisionHistoryRow | null> {
+  const { data } = await supabase
+    .from("revision_history")
+    .select("id, rev_number, working_pbdb_downloaded_at")
+    .eq("project_id", projectId)
+    .eq("doc_type", docType)
+    .order("rev_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return (data as LatestRevisionHistoryRow | null) ?? null;
+}
+
 /** Full project history (both doc types), oldest first — callers filter to the doc type their document actually renders. */
 export async function getRevisionHistory(
   supabase: SupabaseClient,

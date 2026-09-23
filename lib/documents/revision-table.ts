@@ -1,5 +1,11 @@
 import PizZip from "pizzip";
 
+export interface RevisionTablePatchResult {
+  buffer: Buffer;
+  /** null on success; a human-readable reason the patch didn't apply otherwise. Never thrown — callers decide how loud to be. */
+  warning: string | null;
+}
+
 /**
  * Appends a new row to the Revision History table inside a consultant's
  * re-uploaded QA'd PBDB .docx.
@@ -16,9 +22,11 @@ import PizZip from "pizzip";
  *
  * Identifies the table by its header row's cell text ("DOC", "REV",
  * "PURPOSE" all present) rather than any fixed position, so it's resilient
- * to the table moving around the document. Returns the buffer unchanged
- * (with a console.warn) if no matching table or no existing row is found —
- * this must never throw and block an otherwise-valid upload.
+ * to the table moving around the document. Returns the buffer unchanged,
+ * with a non-null `warning`, if no matching table or no existing row is
+ * found — this must never throw and block an otherwise-valid upload; the
+ * caller decides how to surface the warning (#194: visibly, not just a
+ * server console.warn).
  */
 export function appendRevisionHistoryRow(
   docxBuffer: Buffer,
@@ -29,28 +37,30 @@ export function appendRevisionHistoryRow(
     purpose: string;
     preparedBy: string;
   }
-): Buffer {
+): RevisionTablePatchResult {
   try {
     const zip = new PizZip(docxBuffer);
     const docFile = zip.files["word/document.xml"];
-    if (!docFile) return docxBuffer;
+    if (!docFile) return { buffer: docxBuffer, warning: "The document has no word/document.xml part." };
 
     const xml = docFile.asText();
     const patched = insertRevisionRow(xml, row);
     if (patched === null) {
-      console.warn(
-        "[revision-table] Could not locate the Revision History table (or its last row) — leaving the document unchanged."
-      );
-      return docxBuffer;
+      return {
+        buffer: docxBuffer,
+        warning: "Could not locate the Revision History table (or its last row) — the document was left unchanged.",
+      };
     }
 
     zip.file("word/document.xml", patched);
-    return zip.generate({ type: "nodebuffer" }) as Buffer;
+    return { buffer: zip.generate({ type: "nodebuffer" }) as Buffer, warning: null };
   } catch (err) {
     // Must never throw and block an otherwise-valid upload — a malformed or
     // unreadable .docx just means the revision table doesn't get its new row.
-    console.warn("[revision-table] Failed to append revision row — leaving the document unchanged.", err);
-    return docxBuffer;
+    return {
+      buffer: docxBuffer,
+      warning: `Failed to append the revision row: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 }
 
@@ -64,31 +74,31 @@ export function appendRevisionHistoryRow(
  * The cover renders this as a two-cell table row: a label cell ("Revision")
  * and a value cell next to it. Identifies the row by that exact label text
  * rather than any fixed position, and only touches the first match — never
- * throws, a missing/unrecognized row just leaves the document unchanged.
+ * throws; a missing/unrecognized row just leaves the document unchanged and
+ * returns a non-null `warning` for the caller to surface (#194).
  */
-export function setCoverRevisionNumber(docxBuffer: Buffer, revNumber: string): Buffer {
+export function setCoverRevisionNumber(docxBuffer: Buffer, revNumber: string): RevisionTablePatchResult {
   try {
     const zip = new PizZip(docxBuffer);
     const docFile = zip.files["word/document.xml"];
-    if (!docFile) return docxBuffer;
+    if (!docFile) return { buffer: docxBuffer, warning: "The document has no word/document.xml part." };
 
     const xml = docFile.asText();
     const patched = patchCoverRevisionRow(xml, revNumber);
     if (patched === null) {
-      console.warn(
-        "[revision-table] Could not locate the cover page's Revision field — leaving the document unchanged."
-      );
-      return docxBuffer;
+      return {
+        buffer: docxBuffer,
+        warning: "Could not locate the cover page's Revision field — the document was left unchanged.",
+      };
     }
 
     zip.file("word/document.xml", patched);
-    return zip.generate({ type: "nodebuffer" }) as Buffer;
+    return { buffer: zip.generate({ type: "nodebuffer" }) as Buffer, warning: null };
   } catch (err) {
-    console.warn(
-      "[revision-table] Failed to patch the cover page's Revision field — leaving the document unchanged.",
-      err
-    );
-    return docxBuffer;
+    return {
+      buffer: docxBuffer,
+      warning: `Failed to patch the cover page's Revision field: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 }
 

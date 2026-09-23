@@ -11,6 +11,8 @@ export interface DownloadProgress {
   bytesServed: number;
   totalBytes: number | null;
   done: boolean;
+  /** #194: set when the served PBDB's revision table/cover couldn't be patched — surfaced by DownloadCard instead of failing silently. */
+  warning?: string | null;
 }
 
 const TTL_MS = 5 * 60 * 1000;
@@ -41,10 +43,11 @@ export function updateDownloadProgress(id: string, bytesServed: number): void {
   entry.bytesServed = bytesServed;
 }
 
-export function completeDownloadProgress(id: string): void {
+export function completeDownloadProgress(id: string, warning?: string | null): void {
   const entry = store.get(id);
   if (!entry) return;
   entry.done = true;
+  if (warning) entry.warning = warning;
   if (entry.totalBytes !== null) entry.bytesServed = entry.totalBytes;
   // Keep the completed entry around briefly so a poll landing right after
   // completion still sees "done: true" instead of a 404.

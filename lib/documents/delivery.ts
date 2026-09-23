@@ -204,7 +204,14 @@ export async function deliverPbdr(
     // Same for the cover page's scalar Revision value — it still shows
     // whatever the source PBDB's own cover said (its own PBDB rev number),
     // not the PBDR's independent counter. Patch it to the PBDR's own rev.
-    transformedDocx = setCoverRevisionNumber(transformedDocx, String(revisionIndex));
+    const coverPatch = setCoverRevisionNumber(transformedDocx, String(revisionIndex));
+    transformedDocx = coverPatch.buffer;
+    if (coverPatch.warning) {
+      await auditLog("project.revision_table_patch_failed", null, null, {
+        projectId,
+        metadata: { warning: coverPatch.warning, revNumber: revisionIndex, docType: "pbdr" },
+      });
+    }
 
     // Strip red token colour if enabled (default on)
     if (project.strip_token_color as boolean) {

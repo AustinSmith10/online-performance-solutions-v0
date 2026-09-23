@@ -20,7 +20,7 @@ import { notify } from "@/lib/notifications/notify";
 import { QaCompleteEmail } from "@/lib/email/templates/QaCompleteEmail";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import { expediteDelivery, expeditePbdbDispatch, scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
-import { getCurrentRevNumber, peekNextRevNumber } from "@/lib/documents/revision-history";
+import { getCurrentRevNumber, peekNextRevNumber, getLatestRevisionHistoryRow } from "@/lib/documents/revision-history";
 import { forceCloseRound, forcedCloseWouldBump } from "@/lib/stakeholders/review-round";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { appendRevisionHistoryRow, setCoverRevisionNumber } from "@/lib/documents/revision-table";
@@ -1033,9 +1033,53 @@ export async function markPbdbDownloaded(
   return {};
 }
 
+// ─── Consultant: mark the revision-populated working PBDB downloaded (#195) ──
+//
+// Distinct from markPbdbDownloaded above (projects.pbdb_downloaded_at, the
+// *first* generated copy) — this tracks, per revision, whether the
+// consultant has grabbed the copy the #194 download route patches with the
+// new revision-history row/cover number once a round closes rejected.
+// Scoped to revision_history's latest pbdb row rather than a projects
+// column so it needs no explicit reset on the next redispatch cycle: the
+// next rejection writes a fresh row with this column null again.
+
+export type MarkWorkingPbdbDownloadedState = { error?: string };
+
+export async function markWorkingPbdbDownloaded(projectId: string): Promise<MarkWorkingPbdbDownloadedState> {
+  const actor = await requireRole("consultant", "super_admin", "admin");
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .is("deleted_at", null);
+  if (actor.role === "consultant") {
+    query = query.eq("assigned_consultant_id", actor.id);
+  }
+
+  const { data: project } = await query.maybeSingle();
+  if (!project) return { error: "Project not found or access denied." };
+
+  const latestRow = await getLatestRevisionHistoryRow(supabase, projectId, "pbdb");
+  if (!latestRow) return { error: "No revision history found for this project." };
+
+  if (!latestRow.working_pbdb_downloaded_at) {
+    await supabase
+      .from("revision_history")
+      .update({ working_pbdb_downloaded_at: new Date().toISOString() })
+      .eq("id", latestRow.id)
+      .is("working_pbdb_downloaded_at", null);
+  }
+
+  revalidatePath(`/ops/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return {};
+}
+
 // ─── Consultant: re-upload corrected PBDB after QA ───────────────────────────
 
-export type UploadQaPbdbState = { error?: string; success?: boolean };
+export type UploadQaPbdbState = { error?: string; success?: boolean; warning?: string };
 
 export async function uploadQaPbdb(
   projectId: string,
@@ -1120,6 +1164,7 @@ export async function uploadQaPbdb(
   // already come in — so the filename uses the number that close will
   // record. A pre-emptive correction with no rejection, or a plain QA
   // correction, leaves the counter untouched.
+  let revisionTablePatchWarning: string | null = null;
   const forcedCloseBumps = isReupload && (await forcedCloseWouldBump(supabase, projectId, cycle));
   const expectedRev = forcedCloseBumps
     ? await peekNextRevNumber(supabase, projectId, "pbdb")
@@ -1167,22 +1212,33 @@ export async function uploadQaPbdb(
       ? new Date(revHistoryRow.created_at as string)
       : uploadDate;
 
-    fileBuffer = Buffer.from(
-      appendRevisionHistoryRow(fileBuffer, {
-        docType: "PBDB",
-        revNumber: String(expectedRev),
-        date: formatDateAU(rowDate, timeZone),
-        purpose: "Stakeholder Review",
-        preparedBy: preparedByName,
-      })
-    );
+    const appendResult = appendRevisionHistoryRow(fileBuffer, {
+      docType: "PBDB",
+      revNumber: String(expectedRev),
+      date: formatDateAU(rowDate, timeZone),
+      purpose: "Stakeholder Review",
+      preparedBy: preparedByName,
+    });
+    fileBuffer = Buffer.from(appendResult.buffer);
 
     // The cover page's scalar Revision value (SYS_REV_NO) is subject to the
     // same frozen-at-initial-generation problem as the table above — patch
     // it to match. Always safe to re-run: it unconditionally sets the cell
     // to expectedRev rather than appending, so a forced resend with an
     // unchanged rev just writes the same value again.
-    fileBuffer = Buffer.from(setCoverRevisionNumber(fileBuffer, String(expectedRev)));
+    const coverResult = setCoverRevisionNumber(fileBuffer, String(expectedRev));
+    fileBuffer = Buffer.from(coverResult.buffer);
+
+    // #194: never silently swallow a patch failure — audit-log it and hand
+    // the warning back so the consultant sees it, instead of a server-only
+    // console.warn nobody reads.
+    revisionTablePatchWarning = appendResult.warning ?? coverResult.warning ?? null;
+    if (revisionTablePatchWarning) {
+      await auditLog("project.revision_table_patch_failed", actor.id as string, actor.email as string, {
+        projectId,
+        metadata: { warning: revisionTablePatchWarning, revNumber: expectedRev },
+      });
+    }
   }
 
   const storedFilename = buildPbdbFilename(projectNum, expectedRev, address, uploadDate, timeZone, {
@@ -1313,7 +1369,10 @@ export async function uploadQaPbdb(
   }
 
   revalidatePath(`/admin/projects/${projectId}`);
-  redirect(`/ops/projects/${projectId}?qa_uploaded=1`);
+  const warningParam = revisionTablePatchWarning
+    ? `&revision_table_warning=${encodeURIComponent(revisionTablePatchWarning)}`
+    : "";
+  redirect(`/ops/projects/${projectId}?qa_uploaded=1${warningParam}`);
 }
 
 // ─── Consultant: acknowledge PBDB QA flags before send (#112) ───────────────

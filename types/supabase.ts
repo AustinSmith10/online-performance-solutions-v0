@@ -1359,6 +1359,7 @@ export type Database = {
           project_id: string
           rev_number: number
           review_cycle: number | null
+          working_pbdb_downloaded_at: string | null
         }
         Insert: {
           created_at?: string
@@ -1369,6 +1370,7 @@ export type Database = {
           project_id: string
           rev_number: number
           review_cycle?: number | null
+          working_pbdb_downloaded_at?: string | null
         }
         Update: {
           created_at?: string
@@ -1379,6 +1381,7 @@ export type Database = {
           project_id?: string
           rev_number?: number
           review_cycle?: number | null
+          working_pbdb_downloaded_at?: string | null
         }
         Relationships: [
           {

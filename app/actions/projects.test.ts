@@ -16,7 +16,7 @@ vi.mock("@/lib/jobs/queue-client", () => ({
   enqueueGeneratePbdb: vi.fn().mockResolvedValue("job-1"),
 }));
 
-import { uploadQaPbdb, adminDeleteProject, confirmProjectFileType, generatePbdbForProject } from "./projects";
+import { uploadQaPbdb, adminDeleteProject, confirmProjectFileType, generatePbdbForProject, markWorkingPbdbDownloaded } from "./projects";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { scheduleOrDeliverPbdb } from "@/lib/documents/pending-delivery";
@@ -171,6 +171,63 @@ describe("uploadQaPbdb — forced round close (#191)", () => {
     await uploadQaPbdb(PROJECT_ID, {}, makeFileFormData());
 
     expect(forceCloseRound).not.toHaveBeenCalled();
+  });
+});
+
+describe("markWorkingPbdbDownloaded (#195)", () => {
+  function buildRevisionRowMock(row: { id: string; working_pbdb_downloaded_at: string | null } | null) {
+    const updateEqFn = vi.fn().mockReturnValue({ is: vi.fn().mockResolvedValue({ data: null, error: null }) });
+    const from = vi.fn((table: string) => {
+      if (table === "projects") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { id: PROJECT_ID }, error: null }),
+        };
+      }
+      if (table === "revision_history") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }),
+          update: vi.fn().mockReturnValue({ eq: updateEqFn }),
+        };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+    return { from, updateEqFn };
+  }
+
+  it("errors when no revision history row exists yet", async () => {
+    const mock = buildRevisionRowMock(null);
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await markWorkingPbdbDownloaded(PROJECT_ID);
+
+    expect(result.error).toBeTruthy();
+  });
+
+  it("sets the timestamp on the latest row when not already downloaded", async () => {
+    const mock = buildRevisionRowMock({ id: "rev-row-1", working_pbdb_downloaded_at: null });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await markWorkingPbdbDownloaded(PROJECT_ID);
+
+    expect(result.error).toBeUndefined();
+    expect(mock.updateEqFn).toHaveBeenCalledWith("id", "rev-row-1");
+  });
+
+  it("is a no-op when already downloaded (doesn't re-issue the update)", async () => {
+    const mock = buildRevisionRowMock({ id: "rev-row-1", working_pbdb_downloaded_at: "2026-08-05T00:00:00Z" });
+    vi.mocked(createAdminClient).mockReturnValue(mock as never);
+
+    const result = await markWorkingPbdbDownloaded(PROJECT_ID);
+
+    expect(result.error).toBeUndefined();
+    expect(mock.updateEqFn).not.toHaveBeenCalled();
   });
 });
 
