@@ -10,6 +10,7 @@ import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
 import { buildPbdrPreview, type PbdrPreviewProject } from "@/lib/documents/pbdr-preview";
 import { computeSignedUrlExpirySeconds } from "@/lib/stakeholders/tokens";
+import { runLoggedJob } from "@/lib/jobs/job-log";
 
 export type ConvertState = { error?: string; success?: boolean; scheduledFor?: string | null };
 
@@ -46,7 +47,9 @@ export async function getPbdrPreviewUrl(projectId: string): Promise<PbdrPreviewR
 
   let preview;
   try {
-    preview = await buildPbdrPreview(supabase, project as unknown as PbdrPreviewProject);
+    preview = await runLoggedJob("pbdr-preview", { jobId: crypto.randomUUID(), projectId }, () =>
+      buildPbdrPreview(supabase, project as unknown as PbdrPreviewProject)
+    );
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to generate preview." };
   }
@@ -92,7 +95,9 @@ export async function triggerPbdrConversion(
   }
 
   try {
-    const result = await scheduleOrDeliverPbdr(projectId, actor.id, actor.email as string);
+    const result = await runLoggedJob("pbdr-conversion", { jobId: crypto.randomUUID(), projectId }, () =>
+      scheduleOrDeliverPbdr(projectId, actor.id, actor.email as string)
+    );
     revalidatePath(`/admin/projects/${projectId}`);
     revalidatePath(`/ops/projects/${projectId}`);
     return { success: true, scheduledFor: result.scheduledFor };
