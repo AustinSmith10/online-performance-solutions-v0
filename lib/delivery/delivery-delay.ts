@@ -2,7 +2,7 @@ import {
   isWithinBusinessHours,
   nextBusinessHoursStart,
   nthWorkingDayStart,
-  type BusinessHours,
+  type BusinessClock,
 } from "./business-hours";
 
 export type DeliveryDelayPreset = "expedited" | "normal" | "extended";
@@ -37,7 +37,7 @@ export function computeEffectiveDeliveryTime(
   now: Date,
   preset: DeliveryDelayPreset,
   durations: DeliveryDelayDurations,
-  businessHours: BusinessHours,
+  businessHours: BusinessClock,
   holidays: Set<string>
 ): Date {
   if (preset === "expedited") {

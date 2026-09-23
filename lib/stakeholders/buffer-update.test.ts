@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("@/lib/settings/timezone", () => ({ getBusinessTimezone: vi.fn().mockResolvedValue("Australia/Brisbane") }));
 vi.mock("@/lib/stakeholders/tokens", () => ({
   generateTokenString: vi.fn(() => "fresh-token"),
   computeTokenExpiry: vi.fn(async () => new Date("2026-08-01T00:00:00Z")),

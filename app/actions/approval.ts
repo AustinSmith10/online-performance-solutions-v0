@@ -12,6 +12,8 @@ import {
 } from "@/lib/stakeholders/review-outcome";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
 import { getOrCreateDispatchPdf, type DispatchPdfProject } from "@/lib/documents/pbdb-pdf";
+import { formatLongDateAU } from "@/lib/time";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 
 export interface ApprovalState {
   error?: string;
@@ -213,11 +215,7 @@ export async function requestNewApprovalLink(
 
   const token = generateTokenString();
   const expiresAt = await computeTokenExpiry(new Date(), stateTerritory);
-  const expiresFormatted = expiresAt.toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const expiresFormatted = formatLongDateAU(expiresAt, await getBusinessTimezone(supabase));
 
   const { count } = await supabase
     .from("stakeholder_reviews")

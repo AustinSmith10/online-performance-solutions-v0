@@ -5,6 +5,12 @@ import { join } from "path";
 vi.mock("server-only", () => ({}));
 
 const messagesCreate = vi.fn();
+const { mockGetExtractionCap } = vi.hoisted(() => ({ mockGetExtractionCap: vi.fn() }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+vi.mock("@/lib/settings/extraction-document-text-cap", async (orig) => ({
+  ...(await orig<object>()),
+  getExtractionDocumentTextCharCap: mockGetExtractionCap,
+}));
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class {
     messages = { create: messagesCreate };
@@ -253,5 +259,25 @@ describe("single-vendor (Anthropic-only) fail-open behavior", () => {
 
     expect(text).toBe("");
     expect(messagesCreate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("extraction document text cap setting", () => {
+  const TOKENS: ExtractToken[] = [{ token: "EXTRACT_ADDRESS", label: "Address", hint: "full street address" }];
+
+  it("truncates each document's text in the extraction prompt to the configured cap", async () => {
+    messagesCreate.mockReset();
+    messagesCreate.mockRejectedValue(new Error("stop"));
+
+    mockGetExtractionCap.mockResolvedValue(150_000);
+    await extractSingleDocument({ label: "doc.pdf", buffer: VALID_PDF }, TOKENS).catch(() => {});
+    const fullPrompt = JSON.stringify(messagesCreate.mock.calls[0][0]);
+
+    messagesCreate.mockClear();
+    mockGetExtractionCap.mockResolvedValue(5);
+    await extractSingleDocument({ label: "doc.pdf", buffer: VALID_PDF }, TOKENS).catch(() => {});
+    const cappedPrompt = JSON.stringify(messagesCreate.mock.calls[0][0]);
+
+    expect(cappedPrompt.length).toBeLessThan(fullPrompt.length);
   });
 });

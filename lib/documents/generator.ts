@@ -11,6 +11,8 @@ import {
 } from "@/lib/documents/revision-history";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
+import { formatDateAU } from "@/lib/time";
 
 /**
  * Runs docxtemplater find-and-replace on the project's active template .docx,
@@ -112,13 +114,18 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
         }
       : null;
 
+  // Every date stamped on the document or its filename is the calendar day in
+  // the business timezone — server-local getters put the previous day on
+  // anything generated before ~10am AEST (#188).
+  const timeZone = await getBusinessTimezone(supabase);
+
   const fullHistory = await getRevisionHistory(supabase, projectId);
   const pbdbHistory = fullHistory.filter((row) => row.doc_type === "pbdb");
   if (pendingInitialEvent) pbdbHistory.push(pendingInitialEvent);
 
   // This is the PBDB document, so its table shows only PBDB rows — PBDR
   // gets its own independently-scoped table (see lib/documents/delivery.ts).
-  const revisionHistoryForDoc = await formatRevisionHistoryRows(supabase, pbdbHistory);
+  const revisionHistoryForDoc = await formatRevisionHistoryRows(supabase, pbdbHistory, timeZone);
 
   const pbdbRevision = pbdbHistory.reduce((max, h) => Math.max(max, h.rev_number), 0);
 
@@ -155,13 +162,6 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   const genDate = new Date();
   const subDate = new Date(project.created_at as string);
 
-  // All dates in the document use DD/MM/YYYY
-  const fmtDate = (d: Date) => {
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    return `${dd}/${mm}/${d.getFullYear()}`;
-  };
-
   // R[n] now derives from revision_history's PBDB counter (#108/#109),
   // replacing the old review_cycle-based calculation.
   const revision = pbdbRevision;
@@ -176,8 +176,9 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     ...extractedFields,
     // PROJECT_NO includes the -S suffix per naming convention
     PROJECT_NO: `${project.project_number as string}-S`,
-    SYS_GEN_DATE: fmtDate(genDate),
-    SYS_SUB_DATE: fmtDate(subDate),
+    // All dates in the document use DD/MM/YYYY, in the business timezone.
+    SYS_GEN_DATE: formatDateAU(genDate, timeZone),
+    SYS_SUB_DATE: formatDateAU(subDate, timeZone),
     SYS_REV_NO: String(revision),
     SYS_USER_NAME: submitterName,
     // Full growing revision-history table, for a docxtemplater loop
@@ -221,6 +222,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     revision,
     address,
     genDate,
+    timeZone,
     { forQa: true }
   );
 

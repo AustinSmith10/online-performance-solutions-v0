@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { isWithinBusinessHours, nextBusinessHoursStart, nthWorkingDayStart } from "./business-hours";
 
 const NO_HOLIDAYS = new Set<string>();
-const HOURS = { start: "09:00", end: "17:00" };
+// Tests were written against Melbourne (the old hardcoded zone).
+const HOURS = { start: "09:00", end: "17:00", timeZone: "Australia/Melbourne" };
 
 describe("isWithinBusinessHours", () => {
   it("is true at the start of the window on a weekday (AEDT, UTC+11)", () => {
@@ -115,5 +116,20 @@ describe("nthWorkingDayStart", () => {
     // Monday 2024-01-08 -> Tue is a holiday -> lands on Wed 2024-01-10 09:00 AEDT
     const result = nthWorkingDayStart(new Date("2024-01-08T12:00:00.000Z"), 1, HOURS, holidays);
     expect(result.toISOString()).toBe("2024-01-09T22:00:00.000Z");
+  });
+});
+
+describe("business timezone is a parameter, not hardcoded (#187)", () => {
+  // 2024-01-08 (Mon) 22:30 UTC = 08:30 Brisbane (AEST, no DST) but 09:30 Melbourne (AEDT).
+  const instant = new Date("2024-01-08T22:30:00.000Z");
+
+  it("reads the window in the supplied zone", () => {
+    expect(isWithinBusinessHours(instant, { ...HOURS, timeZone: "Australia/Melbourne" }, NO_HOLIDAYS)).toBe(true);
+    expect(isWithinBusinessHours(instant, { ...HOURS, timeZone: "Australia/Brisbane" }, NO_HOLIDAYS)).toBe(false);
+  });
+
+  it("anchors the next window start to the supplied zone", () => {
+    const next = nextBusinessHoursStart(instant, { ...HOURS, timeZone: "Australia/Brisbane" }, NO_HOLIDAYS);
+    expect(next.toISOString()).toBe("2024-01-08T23:00:00.000Z"); // 09:00 AEST
   });
 });

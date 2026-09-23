@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+vi.mock("@/lib/settings/timezone", () => ({ getBusinessTimezone: vi.fn().mockResolvedValue("Australia/Brisbane") }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/documents/pdf");
 vi.mock("@/lib/documents/color-strip");
 vi.mock("@/lib/documents/converter");
 
-import { getOrCreateDispatchPdf } from "./pbdb-pdf";
+import { getOrCreateDispatchPdf, getDispatchPdfForCycle } from "./pbdb-pdf";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
 import { makeDocxConversionSafe } from "@/lib/documents/converter";
@@ -26,6 +27,7 @@ function buildSupabaseMock(opts: {
   sourceDocx?: unknown;
   downloadOk?: boolean;
   pbdbRevision?: number;
+  project?: unknown;
 }) {
   const insertFn = vi.fn().mockResolvedValue({ data: null, error: null });
   const uploadFn = vi.fn().mockResolvedValue({ data: null, error: null });
@@ -47,6 +49,14 @@ function buildSupabaseMock(opts: {
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }),
+      };
+    }
+    if (table === "projects") {
+      // getDispatchPdfForCycle's project lookup
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: opts.project ?? null, error: null }),
       };
     }
     if (table !== "project_files") throw new Error(`unexpected table ${table}`);
@@ -116,7 +126,7 @@ describe("getOrCreateDispatchPdf", () => {
   });
 
   it("reuses a cached PDF for the cycle instead of converting again", async () => {
-    const cached = { storage_path: "org-1/proj-1/pbdb/v2_file.pdf", original_filename: "file.pdf" };
+    const cached = { storage_path: "org-1/proj-1/pbdb/v2_file.pdf", original_filename: "file.pdf", version: 2 };
     const sourceDocx = { storage_path: "org-1/proj-1/pbdb/v2_file.docx", original_filename: "file.docx", version: 2 };
     const mock = buildSupabaseMock({ cachedPdf: cached, sourceDocx });
 
@@ -126,7 +136,11 @@ describe("getOrCreateDispatchPdf", () => {
       ACTOR_ID
     );
 
-    expect(result).toEqual({ storagePath: cached.storage_path, originalFilename: cached.original_filename });
+    expect(result).toEqual({
+      storagePath: cached.storage_path,
+      originalFilename: cached.original_filename,
+      version: cached.version,
+    });
     expect(vi.mocked(convertDocxToPdf)).not.toHaveBeenCalled();
     expect(mock.uploadFn).not.toHaveBeenCalled();
   });
@@ -170,6 +184,7 @@ describe("getOrCreateDispatchPdf", () => {
       2,
       formatAddress("123 Main St"),
       new Date(2024, 2, 15),
+      "Australia/Brisbane",
       { forQa: false }
     ).replace(/\.docx$/i, ".pdf");
     const expectedStoragePath = "org-1/proj-1/pbdb/v3_OPS-1-S PBDB Rev2 For QA.pdf";
@@ -274,5 +289,36 @@ describe("getOrCreateDispatchPdf", () => {
     ).rejects.toThrow("Failed to record PBDB PDF");
 
     expect(mock.removeFn).toHaveBeenCalledWith(["org-1/proj-1/pbdb/v1_file.pdf"]);
+  });
+});
+
+describe("getDispatchPdfForCycle — stakeholder routes self-heal a missing cache (#186)", () => {
+  const sourceDocx = {
+    storage_path: "org-1/proj-1/pbdb/v2_file.docx",
+    original_filename: "file.docx",
+    version: 2,
+    uploaded_by: "consultant-1",
+  };
+
+  it("regenerates the PDF from the review cycle's source docx when no pbdb_pdf row exists", async () => {
+    const mock = buildSupabaseMock({
+      project: { ...BASE_PROJECT, review_cycle: 3 },
+      sourceDocx,
+      cachedPdf: null,
+      pbdbRevision: 1,
+    });
+
+    const result = await getDispatchPdfForCycle(mock as never, PROJECT_ID, 2);
+
+    expect(vi.mocked(convertDocxToPdf)).toHaveBeenCalledTimes(1);
+    expect(mock.insertFn).toHaveBeenCalledWith(
+      expect.objectContaining({ file_type: "pbdb_pdf", review_cycle: 2, version: 2, uploaded_by: "consultant-1" })
+    );
+    expect(result?.version).toBe(2);
+  });
+
+  it("returns null when the project doesn't exist", async () => {
+    const mock = buildSupabaseMock({ project: null });
+    expect(await getDispatchPdfForCycle(mock as never, PROJECT_ID, 1)).toBeNull();
   });
 });

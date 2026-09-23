@@ -4,8 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications/notify";
 import { auditLog } from "@/lib/audit/log";
 import { ConsultantAssignedEmail } from "@/lib/email/templates/ConsultantAssignedEmail";
-import { getPublicHolidays } from "@/lib/delivery/public-holidays";
-import { addWorkingDays } from "@/lib/delivery/working-days";
+import { computeExpectedDeliveryDate } from "@/lib/delivery/expected-delivery-date";
 
 export async function performAssignment(
   projectId: string,
@@ -46,14 +45,7 @@ export async function performAssignment(
       const org = project.clients;
       const deliveryDays = org?.delivery_working_days ?? 5;
       const stateTerritory = org?.state_territory ?? null;
-      const now = new Date();
-      const [hA, hB] = await Promise.all([
-        getPublicHolidays(stateTerritory, now.getUTCFullYear()),
-        getPublicHolidays(stateTerritory, now.getUTCFullYear() + 1),
-      ]);
-      deliveryDate = addWorkingDays(now, deliveryDays, new Set([...hA, ...hB]))
-        .toISOString()
-        .slice(0, 10);
+      deliveryDate = await computeExpectedDeliveryDate(supabase, deliveryDays, stateTerritory);
     } catch {
       // Non-fatal — proceed without delivery date
     }

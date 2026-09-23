@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { generatePbdbForProject, type GeneratePbdbState } from "@/app/actions/projects";
 import { useProjectProgress } from "@/hooks/useProjectProgress";
 import { ProgressTrack } from "@/components/ProgressTrack";
+import { ProgressStalledNotice } from "@/components/ProgressStalledNotice";
 
 function Spinner() {
   return (
@@ -25,7 +26,7 @@ export function GeneratePbdbButton({ projectId }: { projectId: string }) {
   // client-side effect here isn't reliable.
   const boundAction = generatePbdbForProject.bind(null, projectId, pathname);
   const [state, formAction, pending] = useActionState<GeneratePbdbState, FormData>(boundAction, {});
-  const pct = useProjectProgress(projectId, pending);
+  const { pct, stalled, refresh } = useProjectProgress(projectId, pending);
   // pending only covers the click's own round-trip (enqueue + revalidate);
   // the worker job itself keeps running after that resolves, so the visible
   // "in progress" state must also track pct until the worker clears it —
@@ -41,10 +42,15 @@ export function GeneratePbdbButton({ projectId }: { projectId: string }) {
         disabled={busy}
         className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
       >
-        {busy && <Spinner />}
+        {busy && !stalled && <Spinner />}
         {busy ? "Generating…" : "Generate PBDB"}
       </button>
-      {busy && pct !== null && (
+      {busy && stalled && (
+        <div className="mt-3 w-56">
+          <ProgressStalledNotice onRefresh={refresh} />
+        </div>
+      )}
+      {busy && !stalled && pct !== null && (
         <div className="mt-3 w-56">
           <div className="mb-1 flex justify-between text-xs text-zinc-500">
             <span>Generating…</span>
@@ -70,7 +76,7 @@ export function RegeneratePbdbButton({
   const boundAction = generatePbdbForProject.bind(null, projectId, pathname);
   const [state, formAction, pending] = useActionState<GeneratePbdbState, FormData>(boundAction, {});
   const [confirming, setConfirming] = useState(false);
-  const pct = useProjectProgress(projectId, pending);
+  const { pct, stalled, refresh } = useProjectProgress(projectId, pending);
   const busy = pending || pct !== null;
 
   useEffect(() => {
@@ -100,7 +106,12 @@ export function RegeneratePbdbButton({
               This will create a new version of the PBDB. Existing versions will be kept.
             </p>
             {state.error && <p className="mt-3 text-sm text-red-600">{state.error}</p>}
-            {busy && pct !== null && (
+            {busy && stalled && (
+              <div className="mt-4">
+                <ProgressStalledNotice onRefresh={refresh} />
+              </div>
+            )}
+            {busy && !stalled && pct !== null && (
               <div className="mt-4">
                 <div className="mb-1 flex justify-between text-xs text-zinc-500">
                   <span>Regenerating…</span>
@@ -113,7 +124,7 @@ export function RegeneratePbdbButton({
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                disabled={busy}
+                disabled={busy && !stalled}
                 className="flex-1 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
               >
                 Cancel

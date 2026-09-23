@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 import { AssignForm, type ConsultantOption } from "./_components/AssignForm";
 import { OverrideForm } from "./_components/OverrideForm";
 import { FileUploadForm } from "./_components/FileUploadForm";
@@ -183,6 +184,7 @@ export default async function ProjectDetailPage({
   const justQueueApproved = sp.queue_approved === "1";
 
   const supabase = createAdminClient();
+  const businessTimezone = await getBusinessTimezone(supabase);
 
   const [projectResult, consultantsResult, pendingDeliveryResult, pendingPbdbDeliveryResult] = await Promise.all([
     supabase
@@ -861,6 +863,7 @@ export default async function ProjectDetailPage({
               <PbdbDispatchSchedule
                 projectId={id}
                 scheduledFor={pendingPbdbDelivery.scheduled_for}
+                timeZone={businessTimezone}
               />
             ) : (
               <>
@@ -907,6 +910,7 @@ export default async function ProjectDetailPage({
               <PbdbDispatchSchedule
                 projectId={id}
                 scheduledFor={pendingPbdbDelivery.scheduled_for}
+                timeZone={businessTimezone}
               />
             ) : (
               <>
@@ -1512,7 +1516,7 @@ export default async function ProjectDetailPage({
         )}
         {pendingDelivery && (
           <div className="mt-3">
-            <PendingDeliveryPanel projectId={id} scheduledFor={pendingDelivery.scheduled_for} />
+            <PendingDeliveryPanel projectId={id} scheduledFor={pendingDelivery.scheduled_for} timeZone={businessTimezone} />
           </div>
         )}
       </div>

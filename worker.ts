@@ -12,7 +12,9 @@ import { notify } from "@/lib/notifications/notify";
 import { deliverPbdr } from "@/lib/documents/delivery";
 import { generatePbdb } from "@/lib/documents/generator";
 import { writeProgress } from "@/lib/documents/progress";
-import { GENERATE_PBDB_QUEUE, type GeneratePbdbJob } from "@/lib/jobs/queue-client";
+import { GENERATE_PBDB_QUEUE, pbdbJobSingletonKey, type GeneratePbdbJob } from "@/lib/jobs/queue-client";
+import { runLoggedJob } from "@/lib/jobs/job-log";
+import { clearStaleProgress, type ProgressTracker } from "@/lib/jobs/stale-progress";
 import { sendAvailableRequestsDigest } from "@/lib/jobs/available-requests-digest";
 import {
   reconcileDigestSchedule,
@@ -92,6 +94,7 @@ async function main() {
     "approval-buffer",
     "assignment-accept-overdue",
     "release-pending-deliveries",
+    "clear-stale-progress",
     AVAILABLE_REQUESTS_DIGEST_QUEUE,
     "reconcile-digest-schedule",
   ]) {
@@ -339,7 +342,12 @@ async function main() {
         continue;
       }
 
-      const result = await deliverPbdr(projectId, null, null);
+      const result = await runLoggedJob(
+        "pbdr-conversion",
+        { jobId: `pending-delivery:${projectId}`, projectId },
+        () => deliverPbdr(projectId, null, null),
+        (r) => !r.success
+      );
       if (!result.success) {
         console.error(`[release-pending-deliveries] delivery failed for ${projectId}: ${result.reason}`);
         continue;
@@ -378,7 +386,9 @@ async function main() {
             }
           }
 
-          await generatePbdb(projectId, actorId);
+          await runLoggedJob("generate-pbdb", { jobId: job.id, projectId }, () =>
+            generatePbdb(projectId, actorId)
+          );
           console.log(`[generate-pbdb] generated PBDB for ${projectId} (regenerate=${isRegenerate})`);
         } catch (err) {
           console.error(`[generate-pbdb] generation failed for ${projectId}:`, err);
@@ -400,6 +410,46 @@ async function main() {
     },
     { batchSize: 2 }
   );
+
+  // #184: clear progress_pct left behind by a heavy document job that died
+  // mid-run (worker crash/redeploy, pg-boss expiry, web restart during an
+  // inline PBDR conversion/preview) so the UI stops spinning and the
+  // per-project lock releases. See lib/jobs/stale-progress.ts.
+  const progressTracker: ProgressTracker = new Map();
+  await boss.schedule("clear-stale-progress", "*/1 * * * *", {});
+  await work("clear-stale-progress", async () => {
+    const supabase = createAdminClient();
+    const cleared = await clearStaleProgress(supabase, progressTracker, async (projectId) => {
+      const jobs = await boss.findJobs<GeneratePbdbJob>(GENERATE_PBDB_QUEUE, {
+        key: pbdbJobSingletonKey(projectId),
+      });
+      const latest = [...jobs].sort((a, b) => b.createdOn.getTime() - a.createdOn.getTime())[0];
+      return {
+        inFlight: jobs.some((j) => j.state === "created" || j.state === "retry" || j.state === "active"),
+        actorId: latest?.data?.actorId ?? null,
+      };
+    });
+
+    for (const { projectId, pct, actorId } of cleared) {
+      console.error(`[job] kind=stale-progress project=${projectId} outcome=failure stuck_at=${pct}`);
+      Sentry.captureMessage("Heavy document job died mid-run; cleared stale progress_pct", {
+        level: "error",
+        tags: { queue: "clear-stale-progress", projectId },
+        extra: { stuckAt: pct },
+      });
+      if (actorId) {
+        await notify({
+          recipientId: actorId,
+          type: "pbdb_generation_failed",
+          message: "A document job for this project stopped before finishing. Open the project and try again.",
+          projectId,
+          emailSubject: "Document generation did not finish",
+          emailHtml:
+            '<p style="font-family:sans-serif">A document job you triggered in OPS stopped before finishing. Open the project and try again. If it keeps failing, contact an administrator.</p>',
+        }).catch(() => {});
+      }
+    }
+  });
 
   // Twice-daily digest of available (submitted, unassigned) projects, sent to
   // consultants/admins/super_admins. Send times are admin-configurable — see

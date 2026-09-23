@@ -10,6 +10,9 @@ import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
 import { recordRevisionEvent } from "@/lib/documents/revision-history";
 import { buildPbdrPreview, type PbdrPreviewProject } from "@/lib/documents/pbdr-preview";
 import { computeSignedUrlExpirySeconds } from "@/lib/stakeholders/tokens";
+import { runLoggedJob } from "@/lib/jobs/job-log";
+import { formatLongDateAU } from "@/lib/time";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 
 export type ConvertState = { error?: string; success?: boolean; scheduledFor?: string | null };
 
@@ -46,7 +49,9 @@ export async function getPbdrPreviewUrl(projectId: string): Promise<PbdrPreviewR
 
   let preview;
   try {
-    preview = await buildPbdrPreview(supabase, project as unknown as PbdrPreviewProject);
+    preview = await runLoggedJob("pbdr-preview", { jobId: crypto.randomUUID(), projectId }, () =>
+      buildPbdrPreview(supabase, project as unknown as PbdrPreviewProject)
+    );
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to generate preview." };
   }
@@ -92,7 +97,9 @@ export async function triggerPbdrConversion(
   }
 
   try {
-    const result = await scheduleOrDeliverPbdr(projectId, actor.id, actor.email as string);
+    const result = await runLoggedJob("pbdr-conversion", { jobId: crypto.randomUUID(), projectId }, () =>
+      scheduleOrDeliverPbdr(projectId, actor.id, actor.email as string)
+    );
     revalidatePath(`/admin/projects/${projectId}`);
     revalidatePath(`/ops/projects/${projectId}`);
     return { success: true, scheduledFor: result.scheduledFor };
@@ -205,19 +212,20 @@ export async function resendPbdrEmail(
   const stateTerritory =
     (project.clients as unknown as { state_territory: string | null } | null)?.state_territory ?? null;
 
+  const expirySeconds = await computeSignedUrlExpirySeconds(new Date(), stateTerritory);
   const { data: signed } = await supabase.storage
     .from("documents")
-    .createSignedUrl(
-      pbdrFile.storage_path as string,
-      await computeSignedUrlExpirySeconds(new Date(), stateTerritory)
-    );
+    .createSignedUrl(pbdrFile.storage_path as string, expirySeconds);
 
   if (!signed?.signedUrl) return { error: "Failed to generate download link." };
 
   const downloadUrl = signed.signedUrl;
-  const expiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1000).toLocaleDateString("en-AU", {
-    day: "numeric", month: "long", year: "numeric",
-  });
+  // The link's real expiry (was a hardcoded "+30 days" that didn't match the
+  // signed URL), as a calendar day in the business timezone (#188).
+  const expiresAt = formatLongDateAU(
+    new Date(Date.now() + expirySeconds * 1000),
+    await getBusinessTimezone(supabase)
+  );
   const projectRef = (project.project_number as string | null)
     ? `${project.project_number as string}-S`
     : projectId.slice(0, 8);

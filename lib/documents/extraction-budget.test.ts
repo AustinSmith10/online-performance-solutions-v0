@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { claimExtractionSlot } from "./extraction-budget";
+import { claimExtractionSlot, claimExtractionSlots } from "./extraction-budget";
 
 function supabaseMock({
   limit = 30,
@@ -56,5 +56,32 @@ describe("claimExtractionSlot", () => {
     });
     const result = await claimExtractionSlot(supabase as never, "user-1");
     expect(result.allowed).toBe(true);
+  });
+});
+
+describe("claimExtractionSlots", () => {
+  function sequenced(statuses: string[]) {
+    const single = vi.fn();
+    for (const status of statuses) single.mockResolvedValueOnce({ data: { status, remaining: 0 }, error: null });
+    return {
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { value: { limit: 30 } }, error: null }),
+      })),
+      rpc: vi.fn(() => ({ single })),
+    };
+  }
+
+  it("claims one slot per document", async () => {
+    const supabase = sequenced(["ok", "ok", "ok"]);
+    expect(await claimExtractionSlots(supabase as never, "user-1", 3)).toEqual({ granted: 3, limit: 30 });
+    expect(supabase.rpc).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops at the first refusal", async () => {
+    const supabase = sequenced(["ok", "limit_reached", "ok"]);
+    expect(await claimExtractionSlots(supabase as never, "user-1", 3)).toEqual({ granted: 1, limit: 30 });
+    expect(supabase.rpc).toHaveBeenCalledTimes(2);
   });
 });

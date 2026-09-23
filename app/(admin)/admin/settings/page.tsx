@@ -6,16 +6,20 @@ import { getDeliveryDelayDurations } from "@/lib/settings/delivery-delay";
 import { getAdminNavRestrictions } from "@/lib/settings/admin-nav-restrictions";
 import { getEmailsEnabled } from "@/lib/settings/emails-enabled";
 import { getJudgeDocumentTextCharCap } from "@/lib/settings/judge-document-text-cap";
+import { getExtractionDocumentTextCharCap } from "@/lib/settings/extraction-document-text-cap";
 import { getAiExtractionEnabled } from "@/lib/settings/ai-extraction-enabled";
 import { getExtractionDailyLimit } from "@/lib/settings/extraction-budget";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 import { DigestScheduleForm } from "./_components/DigestScheduleForm";
 import { BusinessHoursForm } from "./_components/BusinessHoursForm";
 import { DeliveryDelayDurationsForm } from "./_components/DeliveryDelayDurationsForm";
 import { AdminNavRestrictionsForm } from "./_components/AdminNavRestrictionsForm";
 import { EmailsEnabledForm } from "./_components/EmailsEnabledForm";
 import { JudgeDocumentTextCapForm } from "./_components/JudgeDocumentTextCapForm";
+import { ExtractionDocumentTextCapForm } from "./_components/ExtractionDocumentTextCapForm";
 import { ExtractionDailyLimitForm } from "./_components/ExtractionDailyLimitForm";
 import { AiExtractionEnabledForm } from "./_components/AiExtractionEnabledForm";
+import { BusinessTimezoneForm } from "./_components/BusinessTimezoneForm";
 import { SettingsSection } from "./_components/SettingsSection";
 
 export default async function AdminSettingsPage() {
@@ -26,11 +30,13 @@ export default async function AdminSettingsPage() {
   const businessHours = await getBusinessHours(supabase);
   const deliveryDelayDurations = await getDeliveryDelayDurations(supabase);
   const judgeDocumentTextCap = await getJudgeDocumentTextCharCap(supabase);
+  const extractionDocumentTextCap = await getExtractionDocumentTextCharCap(supabase);
   const extractionDailyLimit = await getExtractionDailyLimit(supabase);
   const navRestrictions =
     user.role === "super_admin" ? await getAdminNavRestrictions(supabase) : [];
   const emailsEnabled =
     user.role === "super_admin" ? await getEmailsEnabled(supabase) : true;
+  const businessTimezone = await getBusinessTimezone(supabase);
   const aiExtractionEnabled =
     user.role === "super_admin" ? await getAiExtractionEnabled(supabase) : true;
 
@@ -58,11 +64,18 @@ export default async function AdminSettingsPage() {
 
       <SettingsSection
         title="Document processing"
-        description="How AI checks process uploaded documents."
+        description="Limits on the AI calls made for uploaded documents. The AI extraction kill switch (super admin) turns all of them off."
       >
-        <JudgeDocumentTextCapForm cap={judgeDocumentTextCap} />
         <ExtractionDailyLimitForm limit={extractionDailyLimit} />
+        <ExtractionDocumentTextCapForm cap={extractionDocumentTextCap} />
+        <JudgeDocumentTextCapForm cap={judgeDocumentTextCap} />
       </SettingsSection>
+
+      {user.role === "super_admin" && (
+        <SettingsSection title="Timezone" description="Super admin only.">
+          <BusinessTimezoneForm timeZone={businessTimezone} />
+        </SettingsSection>
+      )}
 
       {user.role === "super_admin" && (
         <SettingsSection title="Access control" description="Super admin only.">

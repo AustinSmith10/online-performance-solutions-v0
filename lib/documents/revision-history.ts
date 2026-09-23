@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { formatDateAU } from "@/lib/time";
 
 export type RevisionDocType = "pbdb" | "pbdr";
 // "reverted" — a consultant/admin sends a delivered PBDR back to the PBDB QA
@@ -122,11 +123,13 @@ export const REVISION_PURPOSE_LABELS: Record<RevisionDocType, string> = {
  * a document's revision-history table. Shared by generatePbdb() (rendered
  * via a docxtemplater loop) and deliverPbdr() (rebuilt via XML surgery,
  * since PBDR conversion never re-renders through docxtemplater) so both
- * documents produce identically-shaped rows.
+ * documents produce identically-shaped rows. DATE is the calendar day in
+ * `timeZone` (the business timezone setting), not the server's (#188).
  */
 export async function formatRevisionHistoryRows(
   supabase: SupabaseClient,
-  rows: RevisionHistoryRow[]
+  rows: RevisionHistoryRow[],
+  timeZone: string
 ): Promise<FormattedRevisionRow[]> {
   const ids = [...new Set(rows.map((r) => r.prepared_by).filter((x): x is string => !!x))];
   const { data: users } = ids.length
@@ -148,10 +151,6 @@ export async function formatRevisionHistoryRows(
     // purpose string, not the row's actual event.
     EVENT: REVISION_PURPOSE_LABELS[row.doc_type] ?? row.doc_type,
     PREPARED_BY: row.prepared_by ? (nameById.get(row.prepared_by) ?? "") : "",
-    DATE: new Date(row.created_at).toLocaleDateString("en-AU", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }),
+    DATE: formatDateAU(new Date(row.created_at), timeZone),
   }));
 }

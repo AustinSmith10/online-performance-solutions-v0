@@ -14,11 +14,12 @@ export function JudgeDocumentTextCapForm({ cap }: { cap: number }) {
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-zinc-900">File-requirement judge document cap</h2>
+      <h2 className="text-sm font-semibold text-zinc-900">Upload-check document cap</h2>
       <p className="mt-0.5 text-xs text-zinc-500">
-        How many characters of an uploaded document&apos;s text get sent to the AI judge that
-        checks a file against what was expected for its upload slot. Raise this if long documents
-        are being judged on an incomplete excerpt; lower it to reduce judge-call cost.
+        How many characters of an uploaded document&apos;s text are sent to the AI check that
+        confirms a file matches its upload slot (e.g. that a PO is really a PO). Only affects that
+        check — field extraction has its own cap above. Raise this if long documents are being
+        judged on an incomplete excerpt; lower it to reduce cost.
       </p>
 
       {state.errors?.form?.map((e) => (

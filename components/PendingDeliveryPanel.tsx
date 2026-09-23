@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { expediteProjectDelivery } from "@/app/actions/projects";
 
-function formatScheduledFor(iso: string): string {
+function formatScheduledFor(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleString("en-AU", {
-    timeZone: "Australia/Melbourne",
+    timeZone,
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -15,9 +15,12 @@ function formatScheduledFor(iso: string): string {
 export function PendingDeliveryPanel({
   projectId,
   scheduledFor,
+  timeZone,
 }: {
   projectId: string;
   scheduledFor: string;
+  /** The business timezone setting (#187) — getBusinessTimezone on the server. */
+  timeZone: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -46,13 +49,13 @@ export function PendingDeliveryPanel({
         <p className="text-xs text-zinc-600">
           {result.delivered
             ? "Delivered immediately."
-            : `Brought forward — now scheduled for ${formatScheduledFor(result.scheduledFor as string)}.`}
+            : `Brought forward — now scheduled for ${formatScheduledFor(result.scheduledFor as string, timeZone)}.`}
         </p>
       ) : (
         <>
           <p className="mb-3 text-xs leading-relaxed text-zinc-500">
             All stakeholders have approved. The final report is staged to go out on{" "}
-            <span className="font-medium text-zinc-700">{formatScheduledFor(scheduledFor)}</span>.
+            <span className="font-medium text-zinc-700">{formatScheduledFor(scheduledFor, timeZone)}</span>.
             Expediting still respects business hours — it won&apos;t deliver outside the
             configured window, just brings it forward to the earliest one.
           </p>

@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/stakeholders/tokens");
 vi.mock("@/lib/supabase/admin");
 vi.mock("@/lib/audit/log");
+vi.mock("@/lib/settings/timezone", () => ({ getBusinessTimezone: vi.fn().mockResolvedValue("Australia/Brisbane") }));
 
 // Stub out the client components so we don't need a router/action-state
 // context in this node test environment; we only care about whether the
@@ -157,5 +158,25 @@ describe("ApprovePage download button visibility", () => {
 
     expect(html).toContain('data-testid="download-link"');
     expect(html).toContain("cycle2.pdf");
+  });
+
+  it("still renders the download button from the cycle's source docx when the PDF cache is empty (#186)", async () => {
+    validateTokenMock.mockResolvedValue({ review: REVIEW, isExpired: false });
+    auditLogMock.mockResolvedValue(undefined);
+
+    // Cached pbdb_pdf purged; the download route regenerates it on demand.
+    mockSupabase([
+      {
+        file_type: "pbdb",
+        review_cycle: 2,
+        storage_path: "path/cycle2.docx",
+        original_filename: "OPS-1-S PBDB Rev1 1 Test St 2026 09 23 For QA.docx",
+      },
+    ]);
+
+    const html = await renderApprovePage();
+
+    expect(html).toContain('data-testid="download-link"');
+    expect(html).toContain("OPS-1-S PBDB Rev1 1 Test St 2026 09 23.pdf");
   });
 });

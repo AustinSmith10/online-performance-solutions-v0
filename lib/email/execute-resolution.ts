@@ -5,6 +5,7 @@ import { buildInboundReplyTo } from "@/lib/email/parser";
 import { resolveStakeholders } from "@/lib/stakeholders/resolver";
 import { notify } from "@/lib/notifications/notify";
 import { extractDocumentFields } from "@/lib/documents/extractor";
+import { claimExtractionSlots } from "@/lib/documents/extraction-budget";
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import {
   getMetricsAutofillConfigs,
@@ -335,8 +336,16 @@ async function executeNewSubmission(
         );
       }
 
+      // Charged to the sender's daily extraction budget (#152), one slot per
+      // attachment; attachments past the limit are stored but not extracted.
+      const { granted, limit } = await claimExtractionSlots(supabase, user.id as string, pdfBuffers.length);
+      if (granted < pdfBuffers.length) {
+        console.warn(
+          `[email-queue] extraction budget (${limit}/24h) reached for ${user.email as string} — extracting ${granted} of ${pdfBuffers.length} attachment(s)`
+        );
+      }
       extracted = await extractDocumentFields(
-        pdfBuffers.map((buf, i) => ({ label: `Attachment ${i + 1}`, buffer: buf })),
+        pdfBuffers.slice(0, granted).map((buf, i) => ({ label: `Attachment ${i + 1}`, buffer: buf })),
         extractTokens
       );
     } catch (err) {
@@ -569,8 +578,19 @@ async function executeThreadReply(
         }));
       }
 
+      // Charged to the project submitter's daily extraction budget (#152),
+      // one slot per attachment; attachments past the limit aren't extracted.
+      const submitterId = project.submitted_by as string | null;
+      const { granted, limit } = submitterId
+        ? await claimExtractionSlots(supabase, submitterId, pdfBuffers.length)
+        : { granted: pdfBuffers.length, limit: 0 };
+      if (granted < pdfBuffers.length) {
+        console.warn(
+          `[email-queue] extraction budget (${limit}/24h) reached for project ${projectId} submitter — extracting ${granted} of ${pdfBuffers.length} attachment(s)`
+        );
+      }
       const extracted = await extractDocumentFields(
-        pdfBuffers.map((buf, i) => ({ label: `Attachment ${i + 1}`, buffer: buf })),
+        pdfBuffers.slice(0, granted).map((buf, i) => ({ label: `Attachment ${i + 1}`, buffer: buf })),
         extractTokens
       );
 

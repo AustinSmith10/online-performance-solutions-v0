@@ -4,6 +4,8 @@ import { sendEmail } from "@/lib/email/sender";
 import { notify } from "@/lib/notifications/notify";
 import { renderStakeholderBufferUpdateEmail } from "@/lib/email/templates/StakeholderBufferUpdateEmail";
 import { renderModificationsRequestedEmail } from "@/lib/email/templates/ModificationsRequestedEmail";
+import { formatLongDateAU } from "@/lib/time";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 
 export interface BufferUpdateResult {
   total: number;
@@ -54,6 +56,7 @@ export async function sendStakeholderBufferUpdate(
   }
 
   // Email all stakeholders
+  const timeZone = await getBusinessTimezone(supabase);
   for (const review of reviews) {
     const email = review.stakeholder_email as string;
     const name = review.stakeholder_name as string;
@@ -62,7 +65,7 @@ export async function sendStakeholderBufferUpdate(
 
     const approvalUrl = fresh ? `${process.env.NEXT_PUBLIC_APP_URL}/approve/${fresh.token}` : null;
     const expiresFormatted = fresh
-      ? fresh.expiresAt.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
+      ? formatLongDateAU(fresh.expiresAt, timeZone)
       : null;
 
     const html = renderStakeholderBufferUpdateEmail({

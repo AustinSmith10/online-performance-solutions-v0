@@ -371,6 +371,7 @@ describe("requestNewApprovalLink", () => {
     vi.mocked(getOrCreateDispatchPdf).mockResolvedValue({
       storagePath: "org-1/proj-1/pbdb/v1_file.pdf",
       originalFilename: "file.pdf",
+      version: 1,
     });
   });
 

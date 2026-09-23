@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateToken } from "@/lib/stakeholders/tokens";
 import { auditLog } from "@/lib/audit/log";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
+import { formatLongDateAU } from "@/lib/time";
+import { dispatchPdfFilenameFor } from "@/lib/documents/naming";
 import { ApprovalForm } from "./_components/ApprovalForm";
 import { ApproveDownloadLink } from "./_components/ApproveDownloadLink";
 import { RequestNewLinkForm } from "./_components/RequestNewLinkForm";
@@ -17,6 +20,8 @@ export default async function ApprovePage({
   if (!result) notFound();
 
   const { review, isExpired } = result;
+  // Link-expiry dates are the calendar day in the business timezone (#188).
+  const timeZone = await getBusinessTimezone(createAdminClient());
 
   const alreadyResponded = [
     "approved_without_comments",
@@ -64,11 +69,7 @@ export default async function ApprovePage({
           <p style={styles.body}>
             This approval link expired on{" "}
             <strong>
-              {new Date(review.expires_at).toLocaleDateString("en-AU", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
+              {formatLongDateAU(new Date(review.expires_at), timeZone)}
             </strong>
             . Request a new link below, or contact DDEG if you need help.
           </p>
@@ -87,12 +88,24 @@ export default async function ApprovePage({
 
   // Check if stakeholder has a portal account (in parallel with other queries)
   const supabase = createAdminClient();
-  const [{ data: pbdbPdf }, { data: portalUser }] = await Promise.all([
+  const [{ data: pbdbPdf }, { data: sourceDocx }, { data: portalUser }] = await Promise.all([
     supabase
       .from("project_files")
       .select("storage_path, original_filename")
       .eq("project_id", review.project_id)
       .eq("file_type", "pbdb_pdf")
+      .eq("review_cycle", review.review_cycle)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    // No cached PDF yet (a failed dispatch-time render, or the #186 purge)?
+    // The download/preview routes regenerate it on demand from this cycle's
+    // source docx, so the link still shows as long as that docx exists.
+    supabase
+      .from("project_files")
+      .select("original_filename")
+      .eq("project_id", review.project_id)
+      .eq("file_type", "pbdb")
       .eq("review_cycle", review.review_cycle)
       .order("version", { ascending: false })
       .limit(1)
@@ -106,6 +119,11 @@ export default async function ApprovePage({
   ]);
 
   const hasPortalAccount = !!portalUser;
+  const pdfFilename =
+    (pbdbPdf?.original_filename as string | undefined) ??
+    (sourceDocx?.original_filename
+      ? dispatchPdfFilenameFor(sourceDocx.original_filename as string)
+      : null);
 
   return (
     <div style={styles.wrapper}>
@@ -118,10 +136,10 @@ export default async function ApprovePage({
           Please review the document below and submit your response.
         </p>
 
-        {pbdbPdf && (
+        {pdfFilename && (
           <ApproveDownloadLink
             href={`/approve/${tokenString}/download`}
-            filename={pbdbPdf.original_filename as string | null}
+            filename={pdfFilename}
             previewHref={`/approve/${tokenString}/preview`}
           />
         )}
@@ -130,11 +148,7 @@ export default async function ApprovePage({
 
         <p style={styles.note}>
           This link expires on{" "}
-          {new Date(review.expires_at).toLocaleDateString("en-AU", {
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-          })}
+          {formatLongDateAU(new Date(review.expires_at), timeZone)}
           .
         </p>
         <p style={styles.footer}>DDEG Online Performance Solution</p>

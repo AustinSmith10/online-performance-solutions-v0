@@ -5,6 +5,7 @@ import { makeDocxConversionSafe } from "@/lib/documents/converter";
 import { buildPbdbFilename } from "@/lib/documents/naming";
 import { formatAddress } from "@/lib/documents/formatters";
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
+import { getBusinessTimezone } from "@/lib/settings/timezone";
 
 export interface DispatchPdfProject {
   id: string;
@@ -18,6 +19,8 @@ export interface DispatchPdfProject {
 export interface DispatchPdf {
   storagePath: string;
   originalFilename: string;
+  /** The source docx version this PDF was rendered from. */
+  version: number;
 }
 
 /**
@@ -67,7 +70,7 @@ export async function getOrCreateDispatchPdf(
   // served a stale PDF from the previous version (#112).
   const { data: existingPdf } = await supabase
     .from("project_files")
-    .select("storage_path, original_filename")
+    .select("storage_path, original_filename, version")
     .eq("project_id", project.id)
     .eq("file_type", "pbdb_pdf")
     .eq("review_cycle", project.review_cycle)
@@ -80,6 +83,7 @@ export async function getOrCreateDispatchPdf(
     return {
       storagePath: existingPdf.storage_path as string,
       originalFilename: existingPdf.original_filename as string,
+      version: existingPdf.version as number,
     };
   }
 
@@ -99,7 +103,8 @@ export async function getOrCreateDispatchPdf(
   }
   // Same header-logo/TOC/Bibliography field protections as the PBDR path
   // (#118) — this PDF is what both the consultant's preview and stakeholders
-  // (since #112) actually see.
+  // (since #112) actually see. It deliberately keeps the "NOT FOR
+  // CONSTRUCTION" watermark; only PBDR conversion strips it (#185).
   docxBuffer = makeDocxConversionSafe(docxBuffer);
 
   await onStep?.(40);
@@ -114,6 +119,7 @@ export async function getOrCreateDispatchPdf(
   // Dispatch-time filename regenerates: drops the "For QA" suffix and uses
   // today's date instead of the original generation/QA-upload date (#109).
   const revision = await getCurrentRevNumber(supabase, project.id, "pbdb");
+  const timeZone = await getBusinessTimezone(supabase);
   const rawAddress = (project.extracted_fields?.["EXTRACT_ADDRESS"] ?? "").trim();
   const address = formatAddress(rawAddress);
   const originalFilename = buildPbdbFilename(
@@ -121,6 +127,7 @@ export async function getOrCreateDispatchPdf(
     revision,
     address,
     new Date(),
+    timeZone,
     { forQa: false }
   ).replace(/\.docx$/i, ".pdf");
 
@@ -149,5 +156,36 @@ export async function getOrCreateDispatchPdf(
 
   await onStep?.(90);
 
-  return { storagePath, originalFilename };
+  return { storagePath, originalFilename, version: sourceDocx.version as number };
+}
+
+/**
+ * The stakeholder-facing PBDB PDF for one review cycle — the cached
+ * `pbdb_pdf` row if there is one, otherwise regenerated on the spot from
+ * that cycle's source docx. Stakeholder routes read through this rather than
+ * querying `pbdb_pdf` directly, so a missing cache row (a failed dispatch-time
+ * render, or the #186 purge of unwatermarked PDFs) self-heals on the next
+ * view instead of 404ing.
+ *
+ * `reviewCycle` is the cycle the stakeholder's review belongs to, which may
+ * be behind the project's current one. Returns null if the project or that
+ * cycle's source docx doesn't exist.
+ */
+export async function getDispatchPdfForCycle(
+  supabase: SupabaseClient,
+  projectId: string,
+  reviewCycle: number
+): Promise<DispatchPdf | null> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, client_id, review_cycle, strip_token_color, project_number, extracted_fields")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (!project) return null;
+
+  return getOrCreateDispatchPdf(
+    supabase,
+    { ...(project as unknown as DispatchPdfProject), review_cycle: reviewCycle },
+    null
+  );
 }

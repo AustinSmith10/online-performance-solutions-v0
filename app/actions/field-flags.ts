@@ -9,6 +9,7 @@ import { extractDocumentFields, type ExtractedCandidate } from "@/lib/documents/
 import { normalizeExtractedFields } from "@/lib/documents/formatters";
 import { buildFieldFlagPlan } from "@/lib/documents/field-flags";
 import { groupCandidates, type ComparisonMode } from "@/lib/documents/compare-candidates";
+import { claimExtractionSlots } from "@/lib/documents/extraction-budget";
 import {
   getMetricsAutofillConfigs,
   getAutofillExclusionTokens,
@@ -333,6 +334,17 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
   ).catch((err: Error) => err);
 
   if (documents instanceof Error) return { ok: false, error: documents.message };
+
+  // Daily per-user extraction budget (#152) — one slot per document, same
+  // unit as the upload-time extractions. All-or-nothing: a partial re-extract
+  // would flag every skipped document's fields as having gone blank.
+  const { granted, limit } = await claimExtractionSlots(supabase, profile.id as string, documents.length);
+  if (granted < documents.length) {
+    return {
+      ok: false,
+      error: `Daily extraction limit reached (${limit}/24h) — re-checking ${documents.length} document(s) needs ${documents.length} extractions. Try again later or contact an admin.`,
+    };
+  }
 
   const metricsAutofillConfigs = await getMetricsAutofillConfigs(supabase, project.client_id as string);
   const metricsExclusionTokens = getAutofillExclusionTokens(metricsAutofillConfigs);

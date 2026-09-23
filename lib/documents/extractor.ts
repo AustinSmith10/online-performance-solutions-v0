@@ -4,6 +4,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { classifyProviderError, reportProviderFailure } from "@/lib/ai/provider-failure";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAiExtractionEnabled } from "@/lib/settings/ai-extraction-enabled";
+import {
+  getExtractionDocumentTextCharCap,
+  DEFAULT_EXTRACTION_DOCUMENT_TEXT_CHAR_CAP,
+} from "@/lib/settings/extraction-document-text-cap";
 
 const require = createRequire(import.meta.url);
 type PdfPageProxy = {
@@ -77,14 +81,12 @@ function pickBest<T extends ExtractedField>(candidates: T[]): T | null {
 
 const EMPTY_FIELD: ExtractedField = { value: "", confidence: "low" };
 
-// Bounds worst-case prompt size on unusually large PDFs. Applied to every
-// place raw document text enters a prompt in this file. Sized well above the
-// largest real documents seen in practice (~91,000 chars) with headroom to
-// grow, while still guarding against a pathological huge PDF — Sonnet 5's 1M
-// token context window has no trouble with this. Independent of the judge's
-// own document-text cap (file-requirement-verification.ts), which is admin-
-// configurable rather than a fixed constant.
-const DOC_TEXT_CHAR_CAP = 150_000;
+// Bounds how much of each document's text enters an extraction prompt. The
+// value is the admin-configurable extraction cap
+// (lib/settings/extraction-document-text-cap.ts, default and maximum
+// 150,000 — well above the largest real documents seen, ~91,000 chars), read
+// per extraction via getExtractionCap(). Independent of the upload-slot
+// judge's own cap (file-requirement-verification.ts).
 
 // A JSON Schema (draft-2020-12-ish subset both providers' structured-output
 // modes accept) plus the name OpenAI's response_format requires. Passed
@@ -97,12 +99,13 @@ export interface JsonOutputSchema {
 
 function buildPrompt(
   documents: { label: string; text: string }[],
-  tokens: ExtractToken[]
+  tokens: ExtractToken[],
+  docTextCap: number
 ): string {
   const docSections =
     documents.length > 0
       ? documents
-          .map((d) => `--- ${d.label.toUpperCase()} ---\n${d.text.slice(0, DOC_TEXT_CHAR_CAP)}`)
+          .map((d) => `--- ${d.label.toUpperCase()} ---\n${d.text.slice(0, docTextCap)}`)
           .join("\n\n")
       : "(no documents provided)";
 
@@ -292,7 +295,7 @@ async function extractWithAnthropic(
   prompt: string,
   tokenNames: string[]
 ): Promise<SingleDocResult> {
-  // 180s — sized for up to 150k chars of input (DOC_TEXT_CHAR_CAP). Do not
+  // 180s — sized for up to 150k chars of input (MAX_EXTRACTION_DOCUMENT_TEXT_CHAR_CAP). Do not
   // lower this: a shorter timeout fails silently into an empty extraction
   // result on genuinely large documents rather than a visible error (#139).
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 180_000 });
@@ -321,6 +324,17 @@ async function extractWithAnthropic(
 // silently disable extraction, so any error here defaults to "enabled"
 // rather than propagating. Mirrors the fail-open behavior already used for
 // Anthropic call failures elsewhere in this file.
+// Fail-open like the kill switch above: a settings read failure falls back
+// to the default cap rather than failing the extraction.
+async function getExtractionCap(): Promise<number> {
+  try {
+    return await getExtractionDocumentTextCharCap(createAdminClient());
+  } catch (err) {
+    console.error("[extractor] extraction text-cap lookup failed, using default:", err);
+    return DEFAULT_EXTRACTION_DOCUMENT_TEXT_CHAR_CAP;
+  }
+}
+
 async function isAiExtractionEnabled(): Promise<boolean> {
   try {
     return await getAiExtractionEnabled(createAdminClient());
@@ -381,7 +395,7 @@ export async function extractSingleDocument(
 ): Promise<SingleDocExtraction> {
   const tokenNames = extractTokens.map((t) => t.token);
   const text = await extractPdfText(doc.buffer);
-  const prompt = buildPrompt([{ label: doc.label, text }], extractTokens);
+  const prompt = buildPrompt([{ label: doc.label, text }], extractTokens, await getExtractionCap());
   const result = await runSingleExtraction(prompt, tokenNames);
   return { label: doc.label, result };
 }
@@ -469,7 +483,7 @@ export async function extractSingleDocumentStreaming(
   const tokenNames = extractTokens.map((t) => t.token);
   const total = extractionFieldTotal(extractTokens);
   const text = await extractPdfText(doc.buffer);
-  const prompt = buildPrompt([{ label: doc.label, text }], extractTokens);
+  const prompt = buildPrompt([{ label: doc.label, text }], extractTokens, await getExtractionCap());
   let last = 0;
   const result = await runSingleExtractionStreaming(prompt, tokenNames, (found) => {
     const clamped = Math.min(found, total);

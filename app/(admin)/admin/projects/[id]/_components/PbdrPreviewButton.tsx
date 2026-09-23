@@ -6,6 +6,7 @@ import { getPbdrPreviewUrl } from "@/app/actions/conversion";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { useProjectProgress } from "@/hooks/useProjectProgress";
 import { ProgressTrack } from "@/components/ProgressTrack";
+import { ProgressStalledNotice } from "@/components/ProgressStalledNotice";
 
 /**
  * Sits in the "Ready to convert" focus card next to ConvertButton — lets the
@@ -18,7 +19,7 @@ export function PbdrPreviewButton({ projectId }: { projectId: string }) {
   const [state, setState] = useState<
     { status: "idle" } | { status: "loading" } | { status: "error"; message: string } | { status: "ready"; url: string; filename: string }
   >({ status: "idle" });
-  const pct = useProjectProgress(projectId, state.status === "loading");
+  const { pct, stalled, refresh } = useProjectProgress(projectId, state.status === "loading");
 
   async function openPreview() {
     setOpen(true);
@@ -71,8 +72,14 @@ export function PbdrPreviewButton({ projectId }: { projectId: string }) {
             <div className="flex min-h-0 flex-1 flex-col overflow-auto">
               {state.status === "loading" && (
                 <div className="px-6 py-12 text-center">
-                  <p className="text-sm text-zinc-500">Generating preview…</p>
-                  {pct !== null && (
+                  {stalled ? (
+                    <div className="mx-auto w-64">
+                      <ProgressStalledNotice onRefresh={refresh} />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-500">Generating preview…</p>
+                  )}
+                  {!stalled && pct !== null && (
                     <div className="mx-auto mt-3 w-48">
                       <ProgressTrack pct={pct} tone="zinc" />
                       <p className="mt-1 text-xs text-zinc-400">{pct}%</p>

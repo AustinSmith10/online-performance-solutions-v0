@@ -37,3 +37,30 @@ export async function claimExtractionSlot(
 
   return { allowed: data.status === "ok", limit };
 }
+
+export interface ClaimExtractionSlotsResult {
+  /** How many of the requested slots were granted (claimed in order, stopping at the first refusal). */
+  granted: number;
+  limit: number;
+}
+
+// Claims one slot per document for a multi-document extraction (re-extract,
+// email attachments) — one extraction = one document, the same unit the
+// single-upload call sites above charge. Stops at the first refusal, so a
+// caller can extract just the documents that fit (email) or refuse the whole
+// batch (re-extract). Same fail-open behaviour per slot as claimExtractionSlot.
+export async function claimExtractionSlots(
+  supabase: SupabaseClient,
+  userId: string,
+  count: number
+): Promise<ClaimExtractionSlotsResult> {
+  let granted = 0;
+  let limit = 0;
+  for (let i = 0; i < count; i++) {
+    const res = await claimExtractionSlot(supabase, userId);
+    limit = res.limit;
+    if (!res.allowed) break;
+    granted++;
+  }
+  return { granted, limit };
+}
