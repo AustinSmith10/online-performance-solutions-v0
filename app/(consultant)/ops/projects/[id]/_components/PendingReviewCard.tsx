@@ -28,6 +28,7 @@ export function PendingReviewCard({
   evidence,
   highlighted,
   closesRound,
+  waiveRequiresEvidence = true,
 }: {
   review: PendingReview;
   projectId: string;
@@ -36,6 +37,8 @@ export function PendingReviewCard({
   highlighted?: boolean;
   // This is the round's last pending review — logging it closes the round (#192).
   closesRound?: boolean;
+  // Consultants must attach evidence to waive; admins never had to.
+  waiveRequiresEvidence?: boolean;
 }) {
   const inner = (
     <div className="space-y-2 rounded-md border border-amber-200 bg-white px-3 py-2.5">
@@ -71,7 +74,7 @@ export function PendingReviewCard({
           closesRound={closesRound}
         />
         <UpdateEmailReveal reviewId={review.id} projectId={projectId} currentEmail={review.stakeholder_email} />
-        <WaiveForm reviewId={review.id} projectId={projectId} stakeholderName={review.stakeholder_name} requireEvidence />
+        <WaiveForm reviewId={review.id} projectId={projectId} stakeholderName={review.stakeholder_name} requireEvidence={waiveRequiresEvidence} />
       </div>
     </div>
   );
