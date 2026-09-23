@@ -88,7 +88,7 @@ export default async function ApprovePage({
 
   // Check if stakeholder has a portal account (in parallel with other queries)
   const supabase = createAdminClient();
-  const [{ data: pbdbPdf }, { data: sourceDocx }, { data: portalUser }] = await Promise.all([
+  const [{ data: pbdbPdf }, { data: sourceDocx }, { data: portalUser }, { data: revisionNoteRow }] = await Promise.all([
     supabase
       .from("project_files")
       .select("storage_path, original_filename")
@@ -116,9 +116,19 @@ export default async function ApprovePage({
       .eq("email", review.stakeholder_email)
       .eq("role", "stakeholder")
       .maybeSingle(),
+    // #59: the consultant's "what changed" note for this cycle, shown next to
+    // the re-dispatched PBDB — same as the portal review screen, for
+    // stakeholders reviewing via this link without a portal account.
+    supabase
+      .from("revision_notes")
+      .select("note")
+      .eq("project_id", review.project_id)
+      .eq("review_cycle", review.review_cycle)
+      .maybeSingle(),
   ]);
 
   const hasPortalAccount = !!portalUser;
+  const revisionNote = (revisionNoteRow?.note as string | null) ?? null;
   const pdfFilename =
     (pbdbPdf?.original_filename as string | undefined) ??
     (sourceDocx?.original_filename
@@ -135,6 +145,13 @@ export default async function ApprovePage({
         <p style={styles.body}>
           Please review the document below and submit your response.
         </p>
+
+        {revisionNote && (
+          <div style={styles.revisionNote} data-testid="revision-note">
+            <p style={styles.revisionNoteLabel}>Note from your consultant</p>
+            <p style={styles.revisionNoteText}>{revisionNote}</p>
+          </div>
+        )}
 
         {pdfFilename && (
           <ApproveDownloadLink
@@ -158,6 +175,27 @@ export default async function ApprovePage({
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  revisionNote: {
+    border: "1px solid #bfdbfe",
+    backgroundColor: "#eff6ff",
+    borderRadius: 6,
+    padding: "8px 12px",
+    marginBottom: 16,
+  },
+  revisionNoteLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: "#1d4ed8",
+    margin: 0,
+  },
+  revisionNoteText: {
+    fontSize: 14,
+    color: "#1e3a8a",
+    margin: "4px 0 0",
+    whiteSpace: "pre-wrap",
+  },
   wrapper: {
     minHeight: "100vh",
     backgroundColor: "#f4f4f5",
