@@ -466,11 +466,9 @@ export default async function ClientProjectDetailPage({
       >
         <div className="space-y-3">
           {consultantRevisionNote && (
-            <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                Note from your consultant
-              </p>
-              <p className="mt-1 text-sm text-blue-900">{consultantRevisionNote}</p>
+            <div>
+              <p className="text-xs font-semibold text-amber-900">Note from your consultant</p>
+              <p className="mt-1 text-sm text-amber-900">{consultantRevisionNote}</p>
             </div>
           )}
           <PortalApprovalForm
@@ -535,8 +533,8 @@ export default async function ClientProjectDetailPage({
 
   // ── Left rail reference card ──────────────────────────────────────────────
   const leftRailExtras = !isDeleted && project.status !== "draft" && (
-    <div className="hidden rounded-lg border border-zinc-200 bg-white p-4 text-sm md:block">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Reference</p>
+    <div className="hidden rounded-xl border border-zinc-200 bg-white p-4 text-sm md:block">
+      <p className="mb-2 text-sm font-semibold text-zinc-900">Reference</p>
       <dl className="space-y-1.5 text-zinc-700">
         {templateName && (
           <div className="flex justify-between gap-3">
@@ -564,8 +562,8 @@ export default async function ClientProjectDetailPage({
 
   // ── Overview tab ───────────────────────────────────────────────────────────
   const overviewTab = (
-    <div className="space-y-3">
-      <div className="rounded-lg border border-zinc-200 bg-white p-5">
+    <div className="space-y-4">
+      <div className="rounded-xl border border-zinc-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-zinc-900">What&apos;s happening</h2>
         <p className="mt-2 text-sm leading-relaxed text-zinc-600">
           {isDeleted
@@ -593,7 +591,7 @@ export default async function ClientProjectDetailPage({
           Once a consultant has picked it up, the client can no longer
           re-check documents (mirrors isLocked below). */}
       {!isDeleted && project.status !== "draft" && !isLocked && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <h2 className="mb-1 text-sm font-semibold text-zinc-900">Re-check documents</h2>
           <p className="mb-3 text-sm text-zinc-500">
             Added a document since submitting, or think something was misread? Re-run extraction
@@ -607,7 +605,7 @@ export default async function ClientProjectDetailPage({
 
   // ── Documents tab ──────────────────────────────────────────────────────────
   const documentsTab = (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {files.length > 0 && (
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <div className="mb-3 flex items-center gap-2">
@@ -616,12 +614,12 @@ export default async function ClientProjectDetailPage({
                 <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7.914a2 2 0 00-.586-1.414l-3.914-3.914A2 2 0 0012.086 2H4zm7 1.5V6a1 1 0 001 1h2.5L11 3.5zM6 9a1 1 0 000 2h8a1 1 0 100-2H6zm0 4a1 1 0 100 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
               </svg>
             </div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Your files</p>
+            <p className="text-sm font-semibold text-zinc-900">Your files</p>
           </div>
-          <div className="space-y-1.5">
+          <div className="divide-y divide-zinc-100 border-t border-zinc-100">
             {files.map((f) => (
-              <div key={f.id as string} className="space-y-1">
-                <div className="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2">
+              <div key={f.id as string} className="space-y-1 py-2 last:pb-0">
+                <div className="flex items-center gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium text-zinc-900">
                       {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
@@ -690,13 +688,13 @@ export default async function ClientProjectDetailPage({
       )}
 
       {files.length === 0 && !latestPbdb && !latestPbdr && (
-        <p className="rounded-lg border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">
+        <p className="rounded-xl border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">
           No documents uploaded yet.
         </p>
       )}
 
       {!isDeleted && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-4">
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <FileUploadForm projectId={id} />
         </div>
       )}
@@ -722,7 +720,7 @@ export default async function ClientProjectDetailPage({
   }[];
 
   const reviewTab = (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5">
+    <div className="rounded-xl border border-zinc-200 bg-white p-4">
       <h2 className="text-sm font-semibold text-zinc-900">Review history</h2>
       {reviewHistory.length === 0 && !clientReviewOpen && (
         <p className="mt-2 text-sm text-zinc-500">No review requested yet.</p>

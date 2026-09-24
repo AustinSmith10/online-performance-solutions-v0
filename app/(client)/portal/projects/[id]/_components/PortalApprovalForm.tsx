@@ -60,7 +60,7 @@ export function PortalApprovalForm({ reviewId, projectId, pbdbDownloadUrl, pbdbF
     const approved = state.response === "approved";
     return (
       <div className={bare ? undefined : "rounded-lg border border-amber-200 bg-amber-50 p-5"}>
-        <div className={`rounded-lg p-5 ${approved ? "border border-green-200 bg-green-50" : "border border-amber-200 bg-amber-50"}`}>
+        <div className={bare ? undefined : `rounded-lg p-4 ${approved ? "bg-green-50" : "bg-amber-50"}`}>
           <div className="flex items-start gap-3">
             <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${approved ? "bg-green-100" : "bg-amber-100"}`}>
               {approved ? (
@@ -102,7 +102,7 @@ export function PortalApprovalForm({ reviewId, projectId, pbdbDownloadUrl, pbdbF
   }
 
   return (
-    <div className={bare ? undefined : "rounded-lg border border-amber-200 bg-amber-50 p-5"}>
+    <div className={bare ? undefined : "rounded-xl border border-amber-200 bg-amber-50 p-5"}>
       <h2 className="text-sm font-semibold text-amber-900">Your brief review is required</h2>
       <p className="mt-1 text-sm text-amber-800">
         A quick response helps keep your report on schedule. Please review and reply before{" "}
@@ -123,7 +123,7 @@ export function PortalApprovalForm({ reviewId, projectId, pbdbDownloadUrl, pbdbF
                 buttonLabel="Preview"
               />
             }
-            wrapperClassName="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-4 py-3"
+            wrapperClassName="flex items-center justify-between gap-3 border-y border-amber-200 py-3"
           >
             <p className="text-sm font-medium text-zinc-900">Brief document</p>
           </DownloadCard>
@@ -171,7 +171,7 @@ export function PortalApprovalForm({ reviewId, projectId, pbdbDownloadUrl, pbdbF
         <div>
           <label htmlFor="portal-comments" className="block text-sm font-medium text-zinc-700">
             {response === "rejected" ? "What needs to change" : "Comments"}{" "}
-            <span className="font-normal text-zinc-400">
+            <span className="font-normal text-zinc-500">
               {response === "rejected" ? "(required)" : "(optional)"}
             </span>
           </label>
@@ -191,7 +191,7 @@ export function PortalApprovalForm({ reviewId, projectId, pbdbDownloadUrl, pbdbF
                 ? "e.g. Page 4, Section J.0 — the thermal bridging U-value appears incorrect. Please revise before resubmitting."
                 : "Any additional notes for the team…"
             }
-            className="mt-1.5 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-60"
+            className="mt-1.5 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:opacity-60"
           />
         </div>
 

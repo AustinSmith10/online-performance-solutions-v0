@@ -45,17 +45,17 @@ export function DocGroupCard({
             </svg>
           )}
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+        <p className="text-sm font-semibold text-zinc-900">{label}</p>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="divide-y divide-zinc-100 border-t border-zinc-100">
         {files.map((f) => (
-          <div key={f.id} className="space-y-1">
+          <div key={f.id} className="space-y-1 py-2 last:pb-0">
             <DownloadCard
               href={f.href}
               filename={f.name}
               external={f.external}
-              wrapperClassName="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-2"
+              wrapperClassName="flex items-center justify-between gap-2"
               buttonClassName="shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
             >
               <p className="truncate text-xs font-medium text-zinc-900" title={f.name}>
@@ -76,7 +76,7 @@ export function DocGroupCard({
               </div>
             </DownloadCard>
             {f.note && (
-              <p className="px-3 text-xs leading-relaxed text-zinc-500">
+              <p className="text-xs leading-relaxed text-zinc-500">
                 <span className="font-medium text-zinc-600">Consultant&apos;s note:</span> {f.note}
               </p>
             )}
