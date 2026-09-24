@@ -199,7 +199,7 @@ export function DownloadCard({
         <div className="relative min-w-0 flex-1">
           {children}
           {originalFilename && (
-            <p className={`mt-0.5 truncate text-xs text-zinc-500 ${filenameClassName}`}>
+            <p className={`mt-0.5 truncate font-mono text-xs text-zinc-500 ${filenameClassName}`}>
               {originalFilename}
             </p>
           )}

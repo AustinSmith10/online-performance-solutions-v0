@@ -773,7 +773,7 @@ export async function ProjectWorkspace({
   const headerCard = (
     <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[effectiveStatus]} bg-white p-5`}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-        <h1 className="text-base font-semibold tracking-tight text-zinc-900">{title}</h1>
+        <h1 className="text-balance text-base font-semibold tracking-tight text-zinc-900">{title}</h1>
         <span className="text-sm text-zinc-500">{project.clients?.name ?? "No organisation"}</span>
         <span className={`self-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[effectiveStatus]}`}>
           {STATUS_LABELS[effectiveStatus]}
@@ -831,6 +831,7 @@ export async function ProjectWorkspace({
         />
         <HeaderStatInline
           value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"}
+          valueClassName={project.project_number ? "font-mono" : undefined}
           title={
             project.project_number
               ? "The DDEG project number. It isn't unique across projects — check the site address to confirm this is the right job."
@@ -1558,7 +1559,7 @@ export async function ProjectWorkspace({
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
-                          <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
+                          <p className="font-mono text-xs text-zinc-500">{r.stakeholder_email}</p>
                           {r.comments && (
                             <p className="mt-1.5 text-sm leading-relaxed text-zinc-700">{r.comments}</p>
                           )}

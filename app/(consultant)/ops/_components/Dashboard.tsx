@@ -104,7 +104,7 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
           <p className="mt-0.5 truncate text-xs text-zinc-600">
             {[p.clientName, p.isPending ? "assigned to you" : p.submitterName].filter(Boolean).join(" · ")}
           </p>
-          <p className="mt-0.5 text-xs text-zinc-600">
+          <p className="mt-0.5 text-xs tabular-nums text-zinc-600">
             {p.expectedDeliveryLabel ? `Expected ${p.expectedDeliveryLabel}` : "No delivery date set"}
           </p>
         </div>
@@ -238,7 +238,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
     // pb-20: clears the floating Available pill so the last row is never covered.
     <div className="space-y-4 pb-20">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-zinc-900">My projects</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-zinc-900">My projects</h1>
         <Link
           href="/ops/projects/submit"
           className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-150 hover:bg-zinc-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2"
