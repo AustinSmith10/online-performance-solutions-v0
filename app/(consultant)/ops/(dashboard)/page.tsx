@@ -6,7 +6,8 @@ import { DeclinedBanner } from "../_components/DeclinedBanner";
 import { OnboardingFlow } from "../_components/OnboardingFlow";
 import { Dashboard } from "../_components/Dashboard";
 import type { DashboardData, DashboardProject } from "../_components/dashboardTypes";
-import { daysOverdue, matchesQuery, paginate, parsePage, parseSection, sortByAttention } from "../_components/dashboardList";
+import { SECTION_KEYS, daysOverdue, matchesQuery, paginate, parsePage, parseSection, sortByAttention, type SectionKey } from "../_components/dashboardList";
+import type { TabSlice } from "../_components/dashboardTypes";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { ProjectStatus } from "@/types";
 
@@ -79,7 +80,11 @@ export default async function ConsultantOpsPage({
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
 
-  const { data, error } = await supabase
+  // Independent reads run together: this page is dynamic and every tab, page and
+  // search navigation re-renders it, so sequential round trips add up quickly
+  // (the server and database are in different regions).
+  const [{ data, error }, { data: rawAvailable }] = await Promise.all([
+    supabase
     .from("projects")
     .select(`
       id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle, accepted_at, paused_previous_status,
@@ -89,7 +94,15 @@ export default async function ConsultantOpsPage({
     .eq("assigned_consultant_id", user.id)
     .not("status", "eq", "draft")
     .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false }),
+    supabase
+    .from("projects")
+    .select("id, extracted_fields, po_number, created_at, expected_delivery_date, clients(name)")
+    .eq("status", "submitted")
+    .is("assigned_consultant_id", null)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true }),
+  ]);
 
   if (error) console.error("[ops] project list query failed:", error);
   const allAssigned = (data ?? []) as unknown as ProjectRow[];
@@ -111,6 +124,7 @@ export default async function ConsultantOpsPage({
     string,
     { id: string; original_filename: string | null; version: number; created_at: string }
   > = {};
+  const revisionTask = (async () => {
   if (revisionRequired.length > 0) {
     const revisionIds = revisionRequired.map((p) => p.id);
 
@@ -143,6 +157,7 @@ export default async function ConsultantOpsPage({
       pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version, created_at: f.created_at };
     }
   }
+  })();
   // Single source of truth for "what stage is this project really at" — every
   // list, tab bucket, and label below derives from this instead of separately
   // recomputing "are all reviews resolved," which is what let this landing
@@ -152,6 +167,7 @@ export default async function ConsultantOpsPage({
   // approval).
   const dispatchedIds = projects.filter((p) => p.status === "dispatched").map((p) => p.id);
   const reviewsByProjectId = new Map<string, { status: string }[]>();
+  const dispatchedTask = (async () => {
   if (dispatchedIds.length > 0) {
     const { data: reviewRows } = await supabase
       .from("stakeholder_reviews")
@@ -166,6 +182,21 @@ export default async function ConsultantOpsPage({
       );
     }
   }
+  })();
+  // #115: a single aggregated query for "which of this consultant's projects
+  // has at least one stakeholder-confirmed verification mismatch" — not N+1
+  // lookups per row.
+  const mismatchTask = allAssigned.length
+    ? supabase
+        .from("project_files")
+        .select("project_id")
+        .in("project_id", allAssigned.map((p) => p.id))
+        .not("verification_mismatch_reasons", "is", null)
+        .not("verification_confirmed_at", "is", null)
+    : Promise.resolve({ data: [] as { project_id: string }[] });
+
+  // The three lookups only depend on the project list, so run them together.
+  const [, , { data: mismatchRows }] = await Promise.all([revisionTask, dispatchedTask, mismatchTask]);
   const effectiveStatusMap = new Map<string, ProjectStatus>(
     projects.map((p) => [p.id, resolveEffectiveStatus(p.status, reviewsByProjectId.get(p.id) ?? [])])
   );
@@ -195,28 +226,9 @@ export default async function ConsultantOpsPage({
     (["delivered", "complete"] as ProjectStatus[]).includes(p.status)
   );
 
-  // Available jobs — submitted, unassigned, not deleted
-  const { data: rawAvailable } = await supabase
-    .from("projects")
-    .select("id, extracted_fields, po_number, created_at, expected_delivery_date, clients(name)")
-    .eq("status", "submitted")
-    .is("assigned_consultant_id", null)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: true });
-
+  // Available jobs — submitted, unassigned, not deleted (fetched above)
   const availableProjects = (rawAvailable ?? []) as unknown as AvailableProject[];
 
-  // #115: a single aggregated query for "which of this consultant's projects
-  // has at least one stakeholder-confirmed verification mismatch" — not N+1
-  // lookups per row.
-  const { data: mismatchRows } = allAssigned.length
-    ? await supabase
-        .from("project_files")
-        .select("project_id")
-        .in("project_id", allAssigned.map((p) => p.id))
-        .not("verification_mismatch_reasons", "is", null)
-        .not("verification_confirmed_at", "is", null)
-    : { data: [] };
   const mismatchProjectIds = new Set((mismatchRows ?? []).map((r) => r.project_id as string));
 
   function toDashboardProject(p: ProjectRow): DashboardProject {
@@ -274,18 +286,38 @@ export default async function ConsultantOpsPage({
   const sortedActive = sortByAttention(activeAccepted.map(toLight)).map((x) => x.p);
   const sortedStakeholders = sortByAttention(withStakeholders.map(toLight)).map((x) => x.p);
 
-  const tabRows: ProjectRow[] =
-    tab === "active"
+  const rowsForTab = (key: SectionKey): ProjectRow[] =>
+    key === "active"
       ? [...pendingAssignments, ...sortedActive]
-      : tab === "stakeholders"
+      : key === "stakeholders"
         ? sortedStakeholders
-        : tab === "archive"
+        : key === "archive"
           ? done
           : [];
+  const tabRows = rowsForTab(tab);
   const paged = paginate(tabRows.filter(rowMatches), parsePage(pageParam));
   const availableMatches = availableProjects.filter((p) => matchesQuery(q, [availableLabel(p), p.clients?.name]));
   const pagedAvailable = paginate(availableMatches, parsePage(pageParam));
   const isAvailableTab = tab === "available";
+
+  const toAvailable = (p: AvailableProject) => ({
+    id: p.id,
+    label: availableLabel(p),
+    clientName: p.clients?.name ?? null,
+    submittedLabel: formatAuDate(p.created_at),
+    expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
+  });
+  // Page 1 of every tab, so the client can switch tabs without a round trip.
+  const preloaded = Object.fromEntries(
+    SECTION_KEYS.map((key): [SectionKey, TabSlice] => {
+      if (key === "available") {
+        const first = paginate(availableProjects, 1);
+        return [key, { rows: [], available: first.items.map(toAvailable), total: first.total, pageCount: first.pageCount }];
+      }
+      const first = paginate(rowsForTab(key), 1);
+      return [key, { rows: first.items.map(build), available: [], total: first.total, pageCount: first.pageCount }];
+    })
+  ) as Record<SectionKey, TabSlice>;
 
   const dashboardData: DashboardData = {
     tab,
@@ -303,13 +335,8 @@ export default async function ConsultantOpsPage({
     pendingAssignments: pendingAssignments.map(build),
     attention: sortedActive.map(build).filter((d) => d.isRevision || d.isOverdue),
     rows: paged.items.map(build),
-    available: pagedAvailable.items.map((p) => ({
-      id: p.id,
-      label: availableLabel(p),
-      clientName: p.clients?.name ?? null,
-      submittedLabel: formatAuDate(p.created_at),
-      expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
-    })),
+    available: pagedAvailable.items.map(toAvailable),
+    preloaded,
   };
 
   return (

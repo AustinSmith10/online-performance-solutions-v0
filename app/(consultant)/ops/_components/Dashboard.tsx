@@ -143,15 +143,30 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
 }
 
 export function Dashboard({ data }: { data: DashboardData }) {
-  const { pendingAssignments, attention, counts, tab, q, page, pageCount, total } = data;
+  const { pendingAssignments, attention, counts, tab, q, preloaded } = data;
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const [isNavigating, startTransition] = useTransition();
-  // While a navigation is in flight the clicked tab highlights immediately;
-  // `tab` (from the server) decides which rows are actually on screen.
-  const [pendingTab, setPendingTab] = useState<SectionKey | null>(null);
-  const section = isNavigating && pendingTab ? pendingTab : tab;
+  // Tab switching is client-side: the server sends page 1 of every tab, so a
+  // click just changes which slice is shown (and rewrites the URL without a
+  // request). `detached` means "showing a preloaded slice, not the server's
+  // current page"; a real server navigation (search, paging) resets it.
+  const [viewTab, setViewTab] = useState<SectionKey>(tab);
+  const [detached, setDetached] = useState(false);
+  const serverKey = `${tab}|${data.page}|${q}`;
+  const [prevServerKey, setPrevServerKey] = useState(serverKey);
+  if (serverKey !== prevServerKey) {
+    setPrevServerKey(serverKey);
+    setViewTab(tab);
+    setDetached(false);
+  }
+  const fromServer = viewTab === tab && !detached;
+  const view = fromServer
+    ? { rows: data.rows, available: data.available, page: data.page, pageCount: data.pageCount, total: data.total }
+    : { rows: preloaded[viewTab].rows, available: preloaded[viewTab].available, page: 1, pageCount: preloaded[viewTab].pageCount, total: preloaded[viewTab].total };
+  const activeQuery = fromServer ? q : "";
+  const tabParam = (key: SectionKey) => (key === "active" ? null : key);
   const [search, setSearch] = useState(q);
   const [sentQuery, setSentQuery] = useState(q);
   const [prevQ, setPrevQ] = useState(q);
@@ -182,8 +197,10 @@ export function Dashboard({ data }: { data: DashboardData }) {
     [params, pathname, router]
   );
   const goRef = useRef(go);
+  const viewTabRef = useRef(viewTab);
   useEffect(() => {
     goRef.current = go;
+    viewTabRef.current = viewTab;
   });
 
   // Debounced search: typing updates the URL ~300ms after the last keystroke.
@@ -192,7 +209,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
     if (term === sentQuery) return;
     const t = setTimeout(() => {
       setSentQuery(term);
-      goRef.current({ q: term || null, page: null }, "replace");
+      goRef.current({ tab: tabParam(viewTabRef.current), q: term || null, page: null }, "replace");
     }, 300);
     return () => clearTimeout(t);
   }, [search, sentQuery]);
@@ -216,19 +233,28 @@ export function Dashboard({ data }: { data: DashboardData }) {
   ];
 
   const selectSection = (key: SectionKey) => {
-    setPendingTab(key);
+    if (key === viewTab && !detached && q === "" && data.page === 1) return;
+    setViewTab(key);
+    setDetached(true);
     setSearch("");
     setSentQuery("");
-    go({ tab: key === "active" ? null : key, page: null, q: null });
+    // Keep the URL shareable and refresh-safe without asking the server for anything.
+    const next = new URLSearchParams(params.toString());
+    next.delete("page");
+    next.delete("q");
+    if (key === "active") next.delete("tab");
+    else next.set("tab", key);
+    const qs = next.toString();
+    window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
   };
 
   const goToPage = (n: number) => {
-    go({ page: n <= 1 ? null : String(n) });
+    go({ tab: tabParam(viewTab), page: n <= 1 ? null : String(n) });
     panelRef.current?.scrollIntoView({ block: "start" });
   };
 
-  const tabTotal = counts[tab];
-  const showSearch = tabTotal > 6 || q !== "" || search !== "";
+  const tabTotal = counts[viewTab];
+  const showSearch = tabTotal > 6 || activeQuery !== "" || search !== "";
 
   return (
     // pb-20: clears the floating Available pill so the last row is never covered.
@@ -283,7 +309,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
           aria-label="Project lists"
           className="grid grid-cols-2 gap-1 rounded-lg border border-zinc-200 bg-white p-1 sm:flex"
           onKeyDown={(e) => {
-            const i = sections.findIndex((s) => s.key === section);
+            const i = sections.findIndex((s) => s.key === viewTab);
             const next =
               e.key === "ArrowRight" ? (i + 1) % sections.length
               : e.key === "ArrowLeft" ? (i - 1 + sections.length) % sections.length
@@ -302,17 +328,17 @@ export function Dashboard({ data }: { data: DashboardData }) {
               id={`dash-tab-${s.key}`}
               type="button"
               role="tab"
-              aria-selected={section === s.key}
+              aria-selected={viewTab === s.key}
               aria-controls="dash-panel"
-              tabIndex={section === s.key ? 0 : -1}
+              tabIndex={viewTab === s.key ? 0 : -1}
               onClick={() => selectSection(s.key)}
               className={`press-subtle flex-1 rounded-md px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-1 ${
-                section === s.key ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                viewTab === s.key ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
               }`}
             >
               {s.label}
               {s.count > 0 && (
-                <span className={`ml-1.5 tabular-nums ${section === s.key ? "text-zinc-300" : "text-zinc-500"}`}>({s.count})</span>
+                <span className={`ml-1.5 tabular-nums ${viewTab === s.key ? "text-zinc-300" : "text-zinc-500"}`}>({s.count})</span>
               )}
             </button>
           ))}
@@ -323,17 +349,17 @@ export function Dashboard({ data }: { data: DashboardData }) {
 
       <div
         ref={panelRef}
-        key={tab}
+        key={viewTab}
         id="dash-panel"
         role="tabpanel"
-        aria-labelledby={`dash-tab-${tab}`}
+        aria-labelledby={`dash-tab-${viewTab}`}
         aria-busy={isNavigating}
         tabIndex={-1}
         className={`pane-in scroll-mt-28 space-y-3 outline-none transition-opacity duration-150 ${isNavigating ? "opacity-60" : ""}`}
       >
         {showSearch && (
           <div>
-            <label htmlFor="dash-search" className="sr-only">Search {sections.find((x) => x.key === tab)?.label} projects</label>
+            <label htmlFor="dash-search" className="sr-only">Search {sections.find((x) => x.key === viewTab)?.label} projects</label>
             <input
               id="dash-search"
               type="search"
@@ -342,21 +368,21 @@ export function Dashboard({ data }: { data: DashboardData }) {
               placeholder="Search address, project number or client"
               className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             />
-            {q && (
+            {activeQuery && (
               <p className="mt-1.5 text-xs text-zinc-600" role="status" aria-live="polite">
-                {total} of {tabTotal} shown
+                {view.total} of {tabTotal} shown
               </p>
             )}
           </div>
         )}
 
         {tabTotal === 0 ? (
-          <EmptyState {...EMPTY[tab]} action={tab !== "available" && counts.available > 0 ? { label: `Browse available jobs (${counts.available})`, onClick: () => selectSection("available") } : undefined} />
-        ) : total === 0 ? (
-          <EmptyState title="No matches" subtitle={`Nothing in this list matches “${q}”.`} action={{ label: "Clear search", onClick: () => { setSearch(""); setSentQuery(""); go({ q: null, page: null }, "replace"); } }} />
-        ) : tab === "available" ? (
+          <EmptyState {...EMPTY[viewTab]} action={viewTab !== "available" && counts.available > 0 ? { label: `Browse available jobs (${counts.available})`, onClick: () => selectSection("available") } : undefined} />
+        ) : view.total === 0 ? (
+          <EmptyState title="No matches" subtitle={`Nothing in this list matches “${activeQuery}”.`} action={{ label: "Clear search", onClick: () => { setSearch(""); setSentQuery(""); go({ tab: tabParam(viewTab), q: null, page: null }, "replace"); } }} />
+        ) : viewTab === "available" ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {data.available.map((p) => (
+            {view.available.map((p) => (
               <div key={p.id} className="rounded-xl border border-blue-200 bg-blue-50 p-4">
                 <p className="truncate text-sm font-semibold text-zinc-900" title={p.label}>{p.label}</p>
                 <p className="mt-0.5 truncate text-xs text-zinc-600">{p.clientName ?? "—"}</p>
@@ -371,18 +397,18 @@ export function Dashboard({ data }: { data: DashboardData }) {
             ))}
           </div>
         ) : (
-          data.rows.map((p) => <ProjectRow key={p.id} p={p} />)
+          view.rows.map((p) => <ProjectRow key={p.id} p={p} />)
         )}
 
-        {pageCount > 1 && total > 0 && (
+        {view.pageCount > 1 && view.total > 0 && (
           <nav aria-label="Pagination" className="flex items-center justify-between gap-3 pt-1">
             <p className="text-xs tabular-nums text-zinc-600" aria-live="polite">
-              Page {page} of {pageCount} · {total} {total === 1 ? "project" : "projects"}
+              Page {view.page} of {view.pageCount} · {view.total} {view.total === 1 ? "project" : "projects"}
             </p>
             <div className="flex gap-2">
               {(["Previous", "Next"] as const).map((label) => {
-                const target = label === "Previous" ? page - 1 : page + 1;
-                const disabled = target < 1 || target > pageCount;
+                const target = label === "Previous" ? view.page - 1 : view.page + 1;
+                const disabled = target < 1 || target > view.pageCount;
                 return (
                   <button
                     key={label}

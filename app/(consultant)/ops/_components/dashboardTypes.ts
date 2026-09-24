@@ -29,6 +29,14 @@ export interface DashboardAvailableProject {
   expectedDeliveryLabel: string | null;
 }
 
+/** One tab's first page, unfiltered: what the client shows instantly on a tab click. */
+export interface TabSlice {
+  rows: DashboardProject[];
+  available: DashboardAvailableProject[];
+  total: number;
+  pageCount: number;
+}
+
 export interface DashboardCounts {
   /** Pending assignments + accepted active projects. */
   active: number;
@@ -57,4 +65,10 @@ export interface DashboardData {
   rows: DashboardProject[];
   /** Current page of available jobs for the available tab. */
   available: DashboardAvailableProject[];
+  /**
+   * Page 1 (no search) of every tab. Switching tabs with no search active reads
+   * from here on the client, so it is instant; only searching and paging beyond
+   * page 1 go back to the server.
+   */
+  preloaded: Record<SectionKey, TabSlice>;
 }
