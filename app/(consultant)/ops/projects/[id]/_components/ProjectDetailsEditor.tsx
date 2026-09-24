@@ -115,13 +115,13 @@ function EditableRow({
   if (!editing) {
     return (
       <div className="px-5 py-3">
-        <div className="group flex items-center gap-4">
-          <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
-          <span className="min-w-0 flex-1 text-sm text-zinc-900">{value || "—"}</span>
+        <div className="group flex items-baseline gap-4">
+          <span className="w-32 shrink-0 text-sm text-zinc-500">{label}</span>
+          <span className="min-w-0 flex-1 break-words text-sm text-zinc-900">{value || "—"}</span>
           <EditIconButton
             onClick={() => setEditing(true)}
             label={`Edit ${label}`}
-            className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
+            className="text-zinc-400 opacity-0 hover:text-zinc-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
           />
         </div>
         {/* Rendered on its own line, not trailing inline with the value —
