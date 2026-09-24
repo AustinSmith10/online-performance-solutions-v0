@@ -111,7 +111,7 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
         <div className="flex shrink-0 flex-col items-end gap-1">
           <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${p.statusClassName}`}>{p.statusLabel}</span>
           {p.isOverdue && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-red-300 bg-white px-2 py-0.5 text-xs font-medium text-red-700">
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-300 bg-white px-2 py-0.5 text-xs font-medium tabular-nums text-red-700">
               <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
               </svg>
@@ -241,7 +241,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
         <h1 className="text-xl font-semibold tracking-tight text-zinc-900">My projects</h1>
         <Link
           href="/ops/projects/submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-150 hover:bg-zinc-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2"
+          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white press hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2"
         >
           Submit request
         </Link>
@@ -310,7 +310,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               aria-controls="dash-panel"
               tabIndex={section === s.key ? 0 : -1}
               onClick={() => selectSection(s.key)}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-1 ${
+              className={`press-subtle flex-1 rounded-md px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-1 ${
                 section === s.key ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
               }`}
             >
@@ -380,7 +380,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
 
         {pageCount > 1 && total > 0 && (
           <nav aria-label="Pagination" className="flex items-center justify-between gap-3 pt-1">
-            <p className="text-xs text-zinc-600" aria-live="polite">
+            <p className="text-xs tabular-nums text-zinc-600" aria-live="polite">
               Page {page} of {pageCount} · {total} {total === 1 ? "project" : "projects"}
             </p>
             <div className="flex gap-2">
@@ -393,7 +393,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
                     type="button"
                     disabled={disabled}
                     onClick={() => goToPage(target)}
-                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-[background-color,transform] duration-150 hover:bg-zinc-50 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 press hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {label}
                   </button>
@@ -431,7 +431,7 @@ function EmptyState({
         <button
           type="button"
           onClick={action.onClick}
-          className="mt-4 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-[background-color,transform] duration-150 hover:bg-zinc-50 active:scale-[0.97]"
+          className="mt-4 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 press hover:bg-zinc-50"
         >
           {action.label}
         </button>

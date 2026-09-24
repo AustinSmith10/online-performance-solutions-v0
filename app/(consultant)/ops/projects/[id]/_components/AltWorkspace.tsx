@@ -119,7 +119,7 @@ function AltWorkspaceInner({
                   key={t.id}
                   type="button"
                   onClick={() => requestNavigate(() => setRefTab(t.id))}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  className={`press-subtle flex-1 rounded-md px-3 py-1.5 text-sm font-medium ${
                     refTab === t.id
                       ? "bg-white text-zinc-900 shadow-sm"
                       : "text-zinc-500 hover:text-zinc-700"

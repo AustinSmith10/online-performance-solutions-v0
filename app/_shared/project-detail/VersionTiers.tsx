@@ -56,13 +56,13 @@ function Row({
           {entry.originalFilename}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-medium text-zinc-600">Rev {entry.revNumber}</span>
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs font-medium tabular-nums text-zinc-600">Rev {entry.revNumber}</span>
+          <span className="text-xs tabular-nums text-zinc-500">
             {new Date(entry.createdAt).toLocaleDateString("en-AU")}
           </span>
           {badge}
         </div>
-        {detail && <p className="mt-0.5 text-xs text-zinc-500">{detail}</p>}
+        {detail && <p className="mt-0.5 text-xs tabular-nums text-zinc-500">{detail}</p>}
       </DownloadCard>
       {cta && <p className="px-3 text-xs leading-relaxed text-amber-700">{cta}</p>}
       {entry.revisionNote && (

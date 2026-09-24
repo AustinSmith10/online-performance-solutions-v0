@@ -42,7 +42,7 @@ export function OnboardingCard({ onDismiss }: { onDismiss: () => void }) {
         <button
           type="button"
           onClick={gotIt}
-          className="shrink-0 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 transition-[background-color,transform] duration-150 hover:bg-blue-100 active:scale-[0.97]"
+          className="shrink-0 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 press hover:bg-blue-100"
         >
           Got it
         </button>
