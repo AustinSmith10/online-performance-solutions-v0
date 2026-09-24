@@ -80,7 +80,7 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
       : "border-zinc-200 bg-white";
   return (
     <div
-      className={`relative rounded-xl border p-5 transition-[border-color,box-shadow] duration-150 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-zinc-400 has-[a:focus-visible]:ring-offset-1 ${accent} ${
+      className={`relative rounded-xl border p-5 transition-[border-color,box-shadow] duration-150 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-zinc-500 has-[a:focus-visible]:ring-offset-1 ${accent} ${
         p.isPending ? "" : "hover:border-zinc-400 hover:shadow-sm"
       }`}
     >
@@ -174,7 +174,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
         <h1 className="text-xl font-semibold text-zinc-900">My projects</h1>
         <Link
           href="/ops/projects/submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-150 hover:bg-zinc-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
+          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-150 hover:bg-zinc-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2"
         >
           Submit request
         </Link>
@@ -241,7 +241,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               aria-controls="dash-panel"
               tabIndex={section === s.key ? 0 : -1}
               onClick={() => setSection(s.key)}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-1 ${
                 section === s.key ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
               }`}
             >
