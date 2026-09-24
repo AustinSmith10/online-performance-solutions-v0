@@ -9,7 +9,7 @@ import {
 } from "@/lib/documents/pbdb-versions";
 
 const ROW_CLASS =
-  "flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-2 transition-shadow duration-700";
+  "flex items-center justify-between gap-2 border-t border-zinc-100 py-2 transition-shadow duration-700 first:border-t-0";
 const BUTTON_CLASS =
   "shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100";
 
@@ -74,11 +74,11 @@ function Row({
 
 function CollapsedGroup({ summary, children }: { summary: string; children: React.ReactNode }) {
   return (
-    <details className="group rounded-lg border border-zinc-100">
-      <summary className="cursor-pointer select-none px-3 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700">
+    <details className="group border-t border-zinc-100">
+      <summary className="cursor-pointer select-none py-2 text-xs font-medium text-zinc-500 hover:text-zinc-700">
         {summary}
       </summary>
-      <div className="space-y-1.5 px-1.5 pb-1.5">{children}</div>
+      <div>{children}</div>
     </details>
   );
 }
