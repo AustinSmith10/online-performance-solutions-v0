@@ -198,23 +198,48 @@ export function Dashboard({ data }: { data: DashboardData }) {
       </TourHighlight>
 
       <TourHighlight id="consultant_project_tabs">
-        <div className="flex gap-1 rounded-lg border border-zinc-200 bg-white p-1">
+        <div
+          role="tablist"
+          aria-label="Project lists"
+          className="flex gap-1 rounded-lg border border-zinc-200 bg-white p-1"
+          onKeyDown={(e) => {
+            const i = sections.findIndex((s) => s.key === section);
+            const next =
+              e.key === "ArrowRight" ? (i + 1) % sections.length
+              : e.key === "ArrowLeft" ? (i - 1 + sections.length) % sections.length
+              : e.key === "Home" ? 0
+              : e.key === "End" ? sections.length - 1
+              : null;
+            if (next === null) return;
+            e.preventDefault();
+            setSection(sections[next].key);
+            document.getElementById(`dash-tab-${sections[next].key}`)?.focus();
+          }}
+        >
           {sections.map((s) => (
             <button
               key={s.key}
+              id={`dash-tab-${s.key}`}
               type="button"
+              role="tab"
+              aria-selected={section === s.key}
+              aria-controls="dash-panel"
+              tabIndex={section === s.key ? 0 : -1}
               onClick={() => setSection(s.key)}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                section === s.key ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
+                section === s.key ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
               }`}
             >
               {s.label}
-              {s.count > 0 && <span className="ml-1.5 opacity-70">({s.count})</span>}
+              {s.count > 0 && (
+                <span className={`ml-1.5 tabular-nums ${section === s.key ? "text-zinc-300" : "text-zinc-500"}`}>({s.count})</span>
+              )}
             </button>
           ))}
         </div>
       </TourHighlight>
 
+      <div id="dash-panel" role="tabpanel" aria-labelledby={`dash-tab-${section}`} tabIndex={-1} className="outline-none">
       {section === "active" && (
         <div className="space-y-3">
           {pendingAssignments.length === 0 && active.length === 0 ? (
@@ -268,6 +293,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -91,3 +91,10 @@ body {
     align-items: start;
   }
 }
+
+/* Baseline keyboard focus for controls that don't define their own ring.
+   :where() keeps specificity at zero so any utility class still wins. */
+:where(a, button, summary, [role="tab"]):focus-visible {
+  outline: 2px solid oklch(70.5% 0.015 286);
+  outline-offset: 2px;
+}
