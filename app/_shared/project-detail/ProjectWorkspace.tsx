@@ -10,7 +10,8 @@ import { groupPbdbVersions } from "@/lib/documents/pbdb-versions";
 import { groupPbdrVersions } from "@/lib/documents/pbdr-versions";
 import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
 import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
-import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
+import { resolveStaffStatus } from "@/lib/delivery/effective-status";
+import { summarizeRound } from "@/lib/stakeholders/round-summary";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import type { ProjectStatus, ConsultantAvailability } from "@/types";
@@ -25,6 +26,7 @@ import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { GeneratedPbdbDownload } from "@/components/GeneratedPbdbDownload";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
+import { ReviewTallyChip } from "@/components/ReviewTallyChip";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { PbdbGeneratedBanner } from "@/components/PbdbGeneratedBanner";
 import { RevisionTablePatchWarningBanner } from "@/components/RevisionTablePatchWarningBanner";
@@ -744,7 +746,11 @@ export async function ProjectWorkspace({
   // collapses dispatched+all-approved into "converting" the same way every
   // other surface (dashboard lists, client portal, stepper) does, instead of
   // this page recomputing its own version of the same check.
-  const effectiveStatus = resolveEffectiveStatus(project.status, currentCycleReviews);
+  // The stored status flips to revision_required on the first rejection even
+  // while other reviewers are pending; staff see it as still awaiting
+  // stakeholders until the round actually closes.
+  const effectiveStatus = resolveStaffStatus(project.status, currentCycleReviews);
+  const roundSummary = summarizeRound(currentCycleReviews);
 
   // Shared dispatch-readiness rule (#168) — the same classifier the
   // `dispatchToStakeholders` server action uses, so the card and the action
@@ -792,6 +798,9 @@ export async function ProjectWorkspace({
         <span className={`self-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[effectiveStatus]}`}>
           {STATUS_LABELS[effectiveStatus]}
         </span>
+        {(effectiveStatus === "dispatched" || effectiveStatus === "revision_required") && (
+          <ReviewTallyChip summary={roundSummary} className="self-center" />
+        )}
         <span className={`self-center inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
           project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
         }`}>
@@ -1121,9 +1130,23 @@ export async function ProjectWorkspace({
       <FocusCard
         tone="amber"
         title="Awaiting stakeholder review"
-        subtitle={`${pendingCount} of ${currentCycleReviews.length} approvals outstanding.`}
+        subtitle={
+          roundSummary.rejected > 0
+            ? `${roundSummary.rejected} rejected — ${pendingCount} still to respond. The revision starts once everyone has responded.`
+            : `${pendingCount} of ${currentCycleReviews.length} approvals outstanding.`
+        }
       >
         <div className="space-y-4">
+          {currentCycleComments.length > 0 && roundSummary.rejected > 0 && (
+            <div className="divide-y divide-amber-200">
+              {currentCycleComments.map((r) => (
+                <div key={r.id} className="py-3 first:pt-0 last:pb-0">
+                  <p className="text-sm font-semibold text-red-900">{r.stakeholder_name} — rejected</p>
+                  <p className="mt-1 text-sm leading-relaxed text-zinc-800">{r.comments}</p>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="space-y-2">{renderPendingReviewCards()}</div>
           <div className="border-t border-amber-200/60 pt-4">
             <p className="mb-2 text-xs text-zinc-500">
@@ -1152,23 +1175,6 @@ export async function ProjectWorkspace({
     focusCard = (
       <FocusCard tone="red" title="Revision requested" subtitle="A stakeholder asked for changes.">
         <div className="space-y-4">
-          {pendingReviews.length > 0 && (
-            // #120: status flips to revision_required on the first rejection
-            // regardless of how many stakeholders are still pending, and none
-            // of this gates the revise/re-upload action below — it's so the
-            // consultant can chase down (log a response for, fix a bad email
-            // for, resend to, or waive) whoever hasn't responded yet without
-            // leaving this card, same actions available from the "Awaiting
-            // stakeholder review" card.
-            <div className="space-y-2">
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                {currentCycleReviews.length - pendingReviews.length} of {currentCycleReviews.length} stakeholders
-                responded — {pendingReviews.map((r) => r.stakeholder_name).join(", ")}{" "}
-                {pendingReviews.length === 1 ? "hasn't" : "haven't"} responded yet.
-              </div>
-              {renderPendingReviewCards()}
-            </div>
-          )}
           {currentCycleComments.length > 0 && (
             // Plain text on the tinted card, separated by hairlines: the red card is
             // the one container; boxes inside it would be a card within a card.

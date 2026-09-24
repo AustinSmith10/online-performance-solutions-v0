@@ -94,7 +94,7 @@ function DrawerContent({
               Revised PBDB uploaded — ready to redispatch (Rev {project.review_cycle - 1})
             </span>
           ) : (
-            <span className="font-medium text-red-600">Revision required — Rev {project.review_cycle - 1}</span>
+            <span className="font-medium text-red-600">Revision required — Rev {project.review_cycle - 1} was rejected</span>
           )}
         </p>
       </div>
@@ -178,6 +178,9 @@ function DrawerContent({
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
           PBDB sent to stakeholders
+        </p>
+        <p className="mb-2 text-xs text-zinc-500">
+          Every reviewer has responded. This download comes pre-labeled with the new revision — make your corrections in it.
         </p>
         {pbdbFile ? (
           <DownloadCard

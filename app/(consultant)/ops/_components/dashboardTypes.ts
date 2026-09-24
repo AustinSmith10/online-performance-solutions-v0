@@ -1,5 +1,6 @@
 import type { ReviewRow, PbdbFile, RevisionProject } from "./RevisionReviewDrawer";
 import type { SectionKey } from "./dashboardList";
+import type { RoundSummary } from "@/lib/stakeholders/round-summary";
 
 export interface DashboardProject {
   id: string;
@@ -16,6 +17,8 @@ export interface DashboardProject {
   daysOverdue: number;
   isPending: boolean;
   isRevision: boolean;
+  /** Current review round progress, for projects out with (or bounced by) stakeholders. */
+  tally?: RoundSummary;
   hasVerificationMismatch: boolean;
   pendingAssignment?: { projectId: string };
   revisionReview?: { project: RevisionProject; reviews: ReviewRow[]; pbdbFile: PbdbFile | null };

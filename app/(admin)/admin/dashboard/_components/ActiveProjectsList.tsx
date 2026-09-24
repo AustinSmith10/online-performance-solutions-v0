@@ -18,6 +18,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ProjectStatus } from "@/types";
 import { OverduePill } from "@/components/OverduePill";
+import { ReviewTallyChip } from "@/components/ReviewTallyChip";
+import type { RoundSummary } from "@/lib/stakeholders/round-summary";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -66,6 +68,7 @@ export type ActiveProjectItem = {
   client: string | null;
   consultant: string | null;
   status: ProjectStatus;
+  tally?: RoundSummary;
   dueLabel: string | null;
   overdue: boolean;
   awaitingStakeholder: boolean;
@@ -168,6 +171,7 @@ function ProjectRow({ p }: { p: ActiveProjectItem }) {
             Flagged doc
           </span>
         )}
+        {p.tally && <ReviewTallyChip summary={p.tally} />}
         <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_CLASSES[p.status]}`}>
           {STATUS_LABELS[p.status]}
         </span>

@@ -8,7 +8,8 @@ import { Dashboard } from "../_components/Dashboard";
 import type { DashboardData, DashboardProject } from "../_components/dashboardTypes";
 import { SECTION_KEYS, daysOverdue, matchesQuery, paginate, parsePage, parseSection, sortByAttention, type SectionKey } from "../_components/dashboardList";
 import type { TabSlice } from "../_components/dashboardTypes";
-import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
+import { resolveStaffStatus } from "@/lib/delivery/effective-status";
+import { summarizeRound } from "@/lib/stakeholders/round-summary";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -165,7 +166,11 @@ export default async function ConsultantOpsPage({
   // project still being "dispatched" in the DB until an admin/consultant
   // explicitly clicks Convert (conversion no longer auto-fires on full
   // approval).
-  const dispatchedIds = projects.filter((p) => p.status === "dispatched").map((p) => p.id);
+  // revision_required is included: a first rejection flips it before every
+  // reviewer has responded, and the round is only really closed once none are pending.
+  const dispatchedIds = projects
+    .filter((p) => p.status === "dispatched" || p.status === "revision_required")
+    .map((p) => p.id);
   const reviewsByProjectId = new Map<string, { status: string }[]>();
   const dispatchedTask = (async () => {
   if (dispatchedIds.length > 0) {
@@ -198,7 +203,7 @@ export default async function ConsultantOpsPage({
   // The three lookups only depend on the project list, so run them together.
   const [, , { data: mismatchRows }] = await Promise.all([revisionTask, dispatchedTask, mismatchTask]);
   const effectiveStatusMap = new Map<string, ProjectStatus>(
-    projects.map((p) => [p.id, resolveEffectiveStatus(p.status, reviewsByProjectId.get(p.id) ?? [])])
+    projects.map((p) => [p.id, resolveStaffStatus(p.status, reviewsByProjectId.get(p.id) ?? [])])
   );
   const effectiveStatusOf = (p: ProjectRow) => effectiveStatusMap.get(p.id) ?? p.status;
 
@@ -235,8 +240,12 @@ export default async function ConsultantOpsPage({
     const overdueDays = TERMINAL_STATUSES.has(p.status) ? 0 : daysOverdue(p.expected_delivery_date, todayIso);
     const isOverdue = overdueDays > 0;
     const isPending = !p.accepted_at;
-    const isRevision = p.status === "revision_required";
     const effectiveStatus = effectiveStatusOf(p);
+    const isRevision = effectiveStatus === "revision_required";
+    const tally =
+      effectiveStatus === "dispatched" || effectiveStatus === "revision_required"
+        ? summarizeRound(reviewsByProjectId.get(p.id) ?? [])
+        : undefined;
     return {
       id: p.id,
       href: `/ops/projects/${p.id}`,
@@ -251,6 +260,7 @@ export default async function ConsultantOpsPage({
       daysOverdue: overdueDays,
       isPending,
       isRevision,
+      tally,
       hasVerificationMismatch: mismatchProjectIds.has(p.id),
       pendingAssignment: isPending ? { projectId: p.id } : undefined,
       revisionReview:
@@ -281,7 +291,7 @@ export default async function ConsultantOpsPage({
   // travel separately as `attention` regardless of page or search.
   const toLight = (p: ProjectRow) => {
     const d = TERMINAL_STATUSES.has(p.status) ? 0 : daysOverdue(p.expected_delivery_date, todayIso);
-    return { p, isRevision: p.status === "revision_required", isOverdue: d > 0, daysOverdue: d };
+    return { p, isRevision: effectiveStatusOf(p) === "revision_required", isOverdue: d > 0, daysOverdue: d };
   };
   const sortedActive = sortByAttention(activeAccepted.map(toLight)).map((x) => x.p);
   const sortedStakeholders = sortByAttention(withStakeholders.map(toLight)).map((x) => x.p);

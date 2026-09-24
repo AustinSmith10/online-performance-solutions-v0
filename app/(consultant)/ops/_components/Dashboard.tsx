@@ -16,6 +16,7 @@ import { TourHighlight } from "@/components/onboarding-tour/TourHighlight";
 import type { DashboardData, DashboardProject } from "./dashboardTypes";
 import type { SectionKey } from "./dashboardList";
 import { OverduePill } from "@/components/OverduePill";
+import { ReviewTallyChip } from "@/components/ReviewTallyChip";
 
 export function Tile({
   tone,
@@ -111,6 +112,7 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${p.statusClassName}`}>{p.statusLabel}</span>
+          {p.tally && <ReviewTallyChip summary={p.tally} />}
           {p.isOverdue && (
             <OverduePill days={p.daysOverdue} />
           )}
