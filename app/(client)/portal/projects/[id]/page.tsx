@@ -535,7 +535,7 @@ export default async function ClientProjectDetailPage({
 
   // ── Left rail reference card ──────────────────────────────────────────────
   const leftRailExtras = !isDeleted && project.status !== "draft" && (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+    <div className="hidden rounded-lg border border-zinc-200 bg-white p-4 text-sm md:block">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Reference</p>
       <dl className="space-y-1.5 text-zinc-700">
         {templateName && (
@@ -780,7 +780,22 @@ export default async function ClientProjectDetailPage({
           <ClientHeaderCard
             title={title}
             subtitle={subtitleParts.length > 0 ? subtitleParts.join(" · ") : undefined}
-            statusLabel={isDeleted ? "In recovery bin" : project.status === "draft" ? "Draft" : currentStageLabel ?? undefined}
+            statusLabel={
+              isDeleted
+                ? "In recovery bin"
+                : project.status === "draft"
+                ? "Draft"
+                : clientReviewOpen
+                ? "Your review needed"
+                : currentStageLabel ?? undefined
+            }
+            tone={
+              !isDeleted && clientReviewOpen
+                ? "amber"
+                : !isDeleted && TERMINAL_STATUSES.has(project.status) && latestPbdr
+                ? "green"
+                : "neutral"
+            }
             roundBadge={project.review_cycle}
           />
         }
