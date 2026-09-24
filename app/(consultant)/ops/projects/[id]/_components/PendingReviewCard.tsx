@@ -51,7 +51,7 @@ export function PendingReviewCard({
           <div className="flex items-center gap-2">
             <p className="text-xs font-semibold text-amber-800">Replied by email — needs action</p>
             {review.email_reply_sender_verified === false && (
-              <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+              <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
                 Unverified sender
               </span>
             )}

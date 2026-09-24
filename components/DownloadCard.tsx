@@ -208,7 +208,7 @@ export function DownloadCard({
 
       <div className="relative flex shrink-0 items-center gap-2">
         {href && downloaded && (
-          <span className="rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+          <span className="rounded-full bg-green-600 px-2 py-0.5 text-xs font-semibold text-white">
             Downloaded ✓
           </span>
         )}
