@@ -99,7 +99,7 @@ export function StageRail({ stages }: { stages: Stage[] }) {
                   </div>
                 )}
                 <span
-                  className={`max-w-[6.5rem] text-center text-[11px] font-medium leading-tight ${
+                  className={`max-w-[7rem] text-center text-xs font-medium leading-tight ${
                     stage.state === "upcoming"
                       ? "text-zinc-500"
                       : stage.state === "current"
