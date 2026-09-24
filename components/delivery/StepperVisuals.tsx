@@ -180,7 +180,7 @@ export function MiniStepper({
             style={{ top: "-8px", left: "58%" }}
           >
             {roundBadge ? (
-              <span className="text-xs font-semibold leading-none">{roundBadge}</span>
+              <span className="text-xs font-semibold leading-none tabular-nums">{roundBadge}</span>
             ) : (
               <StepperIcon name="refresh" className="h-2.5 w-2.5" />
             )}

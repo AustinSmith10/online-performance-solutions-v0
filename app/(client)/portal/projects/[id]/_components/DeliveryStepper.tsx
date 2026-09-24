@@ -48,7 +48,7 @@ export function DeliveryStepper({ result }: { result: StepperResult }) {
             style={{ top: "-10px", left: "58%" }}
           >
             {roundBadge ? (
-              <span className="text-xs font-semibold leading-none">{roundBadge}</span>
+              <span className="text-xs font-semibold leading-none tabular-nums">{roundBadge}</span>
             ) : (
               <Icon name="refresh" className="h-3 w-3" />
             )}

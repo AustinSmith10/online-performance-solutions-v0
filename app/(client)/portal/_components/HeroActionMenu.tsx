@@ -138,7 +138,7 @@ export function usePendingReviewHeroAction(items: PendingReviewItem[]): {
       type="button"
       onClick={() => setExpanded((v) => !v)}
       aria-expanded={expanded}
-      className="press inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800"
+      className="press inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1"
     >
       Review ({items.length})
       <ChevronToggle expanded={expanded} />
@@ -155,7 +155,7 @@ export function usePendingReviewHeroAction(items: PendingReviewItem[]): {
               <button
                 type="button"
                 onClick={() => setActive(item)}
-                className="press shrink-0 rounded-md bg-amber-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-800"
+                className="press shrink-0 rounded-md bg-amber-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1"
               >
                 Review
               </button>
@@ -267,7 +267,7 @@ export function useReadyDownloadHeroAction(items: ReadyItemInput[]): {
       type="button"
       onClick={() => setExpanded((v) => !v)}
       aria-expanded={expanded}
-      className="press inline-flex items-center gap-1.5 rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+      className="press inline-flex items-center gap-1.5 rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1"
     >
       Download ({items.length})
       <ChevronToggle expanded={expanded} />
@@ -299,7 +299,7 @@ export function useReadyDownloadHeroAction(items: ReadyItemInput[]): {
               <div className="shrink-0">
                 {status === "downloading" ? (
                   <span
-                    className="press inline-flex items-center rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800"
+                    className="press inline-flex items-center rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1"
                     title={item.filename}
                   >
                     {activePct !== null ? `${activePct}%` : "…"}

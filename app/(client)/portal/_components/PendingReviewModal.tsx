@@ -36,7 +36,7 @@ export function PendingReviewModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="press inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800"
+        className="press inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1"
       >
         Review
         <svg

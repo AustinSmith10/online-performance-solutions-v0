@@ -63,11 +63,11 @@ export function DocGroupCard({
               </p>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                 {f.version !== undefined && (
-                  <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-xs font-semibold text-zinc-600">
+                  <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-zinc-600">
                     v{f.version}
                   </span>
                 )}
-                <span className="text-xs text-zinc-500">{f.date}</span>
+                <span className="text-xs tabular-nums text-zinc-500">{f.date}</span>
                 {f.badge && (
                   <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
                     {f.badge}

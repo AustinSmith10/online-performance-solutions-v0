@@ -483,7 +483,7 @@ export function PortalDashboard({
                   type="button"
                   onClick={() => setCategoryFilter(value)}
                   aria-pressed={categoryFilter === value}
-                  className={`press-subtle rounded-md px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${
+                  className={`press-subtle rounded-md px-3 py-1.5 text-sm font-medium tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${
                     categoryFilter === value ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"
                   }`}
                 >
@@ -590,12 +590,12 @@ export function PortalDashboard({
                         {caption}
                       </p>
                     )}
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs tabular-nums text-zinc-500">
                       Submitted {row.submittedLabel}
                       {row.expectedDeliveryLabel ? ` · Expected ${row.expectedDeliveryLabel}` : " · No delivery date set"}
                     </p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${badge.className}`}>
                     {badge.label}
                     {row.stepper?.roundBadge ? ` · Round ${row.stepper.roundBadge}` : ""}
                   </span>

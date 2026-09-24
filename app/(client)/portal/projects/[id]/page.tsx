@@ -544,17 +544,17 @@ export default async function ClientProjectDetailPage({
         )}
         <div className="flex justify-between gap-3">
           <dt className="text-zinc-500">Submitted</dt>
-          <dd>{submittedLabel}</dd>
+          <dd className="tabular-nums">{submittedLabel}</dd>
         </div>
         {dueLabel && (
           <div className="flex justify-between gap-3">
             <dt className="text-zinc-500">Due</dt>
-            <dd>{dueLabel}</dd>
+            <dd className="tabular-nums">{dueLabel}</dd>
           </div>
         )}
         <div className="flex justify-between gap-3">
           <dt className="text-zinc-500">PO number</dt>
-          <dd>{project.po_number || "—"}</dd>
+          <dd className="tabular-nums">{project.po_number || "—"}</dd>
         </div>
       </dl>
     </div>
@@ -745,7 +745,7 @@ export default async function ClientProjectDetailPage({
                       <span className="text-amber-700">Changes requested</span>
                     )}
                   </span>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs tabular-nums text-zinc-500">
                     {new Date(ev.responded_at).toLocaleDateString("en-AU")}
                   </span>
                 </div>
