@@ -202,7 +202,7 @@ function FilterPanel({
   }
 
   return (
-    <div ref={ref} role="group" aria-label="Filter report requests" className="absolute right-0 top-11 z-50 w-[20rem] rounded-xl border border-zinc-200 bg-white p-4 shadow-xl">
+    <div ref={ref} role="group" aria-label="Filter report requests" className="rise-in absolute right-0 top-11 z-50 w-[20rem] rounded-xl border border-zinc-200 bg-white p-4 shadow-xl">
       <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
         {statuses.length > 0 && (
           <div>
@@ -306,12 +306,12 @@ function CompactHero({
   expanded?: React.ReactNode;
 }) {
   const classes = {
-    neutral: "border-blue-200 bg-blue-50",
+    neutral: "border-zinc-200 bg-white",
     amber: "border-amber-200 bg-amber-50",
     green: "border-green-200 bg-green-50",
   }[tone];
   const titleClasses = {
-    neutral: "text-blue-900",
+    neutral: "text-zinc-900",
     amber: "text-amber-900",
     green: "text-green-900",
   }[tone];
@@ -383,11 +383,11 @@ export function PortalDashboard({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-zinc-900">My report requests</h1>
         <Link
           href="/portal/submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          className="press rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
         >
           New report request
         </Link>
@@ -398,7 +398,7 @@ export function PortalDashboard({
           {/* Summary strip */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Tile tone={attentionCount > 0 ? "amber" : "zinc"} label="Needs your review" value={attentionCount} />
-            <Tile tone="neutral" label="In progress" value={inProgressCount} />
+            <Tile tone="zinc" label="In progress" value={inProgressCount} />
             <Tile tone={readyCount > 0 ? "green" : "zinc"} label={`Ready (${readyWindowDays}d window)`} value={readyCount} />
             {org?.paymentMethod === "credit_deduction" ? (
               <Tile tone={org.creditBalance === 0 ? "amber" : "zinc"} label="Credits remaining" value={org.creditBalance} />
@@ -453,12 +453,18 @@ export function PortalDashboard({
       {/* Project cards */}
       <TourHighlight id="stakeholder_project_list">
       {rows.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-12 text-center">
-          <p className="text-sm font-medium text-zinc-900">No active report requests</p>
-          <p className="mt-1 text-sm text-zinc-500">
-            Submit a new request or check{" "}
-            <Link href="/portal/history" className="underline underline-offset-2">History</Link> for past reports.
+        <div className="rounded-xl border border-zinc-200 bg-white p-12 text-center">
+          <p className="text-base font-semibold text-zinc-900">No active report requests</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-zinc-500">
+            Start a request and it will appear here with its progress. Finished reports are kept in{" "}
+            <Link href="/portal/history" className="underline underline-offset-2 hover:text-zinc-700">History</Link>.
           </p>
+          <Link
+            href="/portal/submit"
+            className="press mt-4 inline-block rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
+          >
+            New report request
+          </Link>
         </div>
       ) : (
         <div className="space-y-3">
@@ -476,7 +482,7 @@ export function PortalDashboard({
                 type="button"
                 onClick={() => setCategoryFilter(value)}
                 aria-pressed={categoryFilter === value}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
+                className={`rounded-full px-3 py-1.5 text-sm font-medium press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
                   categoryFilter === value
                     ? "bg-zinc-900 text-white"
                     : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
@@ -492,7 +498,7 @@ export function PortalDashboard({
                 onClick={() => setFiltersOpen((v) => !v)}
                 aria-expanded={filtersOpen}
                 aria-haspopup="true"
-                className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
+                className={`press flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
                   isFilterActive(filters)
                     ? "border-zinc-900 bg-zinc-900 text-white"
                     : "border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
@@ -512,20 +518,20 @@ export function PortalDashboard({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
               type="search"
               aria-label="Search by project or address"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by project or address…"
-              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+              className="w-full min-w-0 sm:flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
             <select
               aria-label="Sort report requests"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+              className="w-full shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 sm:w-auto focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             >
               {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -572,10 +578,10 @@ export function PortalDashboard({
             );
 
             return (
-              <div key={row.id} className="rounded-xl border border-zinc-200 bg-white p-5">
+              <div key={row.id} className="rounded-xl border border-zinc-200 bg-white p-5 transition-colors duration-150 hover:border-zinc-300">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <Link href={row.href} className="truncate text-base font-semibold text-zinc-900 hover:underline">
+                    <Link href={row.href} className="text-base font-semibold text-zinc-900 [overflow-wrap:anywhere] hover:underline">
                       {row.label}
                     </Link>
                     {caption && (
@@ -596,7 +602,7 @@ export function PortalDashboard({
 
                 {row.stepper ? (
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4">
-                    <div className="min-w-0 flex-1">
+                    <div className="w-full min-w-0 sm:w-auto sm:flex-1">
                       <MiniStepper
                         stages={row.stepper.stages}
                         showRevisionLoop={row.stepper.showRevisionLoop}

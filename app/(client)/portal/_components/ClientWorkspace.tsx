@@ -106,7 +106,7 @@ function ClientWorkspaceInner({
                 aria-controls="ref-tabpanel"
                 tabIndex={refTab === t.id ? 0 : -1}
                 onClick={() => requestNavigate(() => setRefTab(t.id))}
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium press-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${
                   refTab === t.id
                     ? "bg-white text-zinc-900 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-700"
