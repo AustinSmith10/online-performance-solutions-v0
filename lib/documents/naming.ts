@@ -1,8 +1,10 @@
 import { isoDateInTz } from "@/lib/time";
+import { resolveNumberSuffix } from "@/lib/projects/project-number";
 
 /**
  * Builds the PBDR filename per the naming convention:
- *   <<ProjectNo>>-S_PBDR_R<<n>>_<<address>>_<<YYYY_MM_DD>>.pdf
+ *   <<ProjectNo>>-<<Suffix>>_PBDR_R<<n>>_<<address>>_<<YYYY_MM_DD>>.pdf
+ * where <<Suffix>> is the template's discipline letter (default S).
  *
  * Sanitisation rules:
  *   - Spaces → underscores
@@ -15,7 +17,7 @@ import { isoDateInTz } from "@/lib/time";
  */
 /**
  * Builds the PBDB filename per the naming convention:
- *   <<ProjectNo>>-S PBDB Rev<<n>> <<address>> <<YYYY MM DD>> [For QA].docx
+ *   <<ProjectNo>>-<<Suffix>> PBDB Rev<<n>> <<address>> <<YYYY MM DD>> [For QA].docx
  *
  * Space-separated (unlike PBDR's underscore convention) — matches the
  * existing PBDB naming style. "For QA" sits at the end when the file is the
@@ -32,12 +34,12 @@ export function buildPbdbFilename(
   address: string,
   date: Date,
   timeZone: string,
-  opts: { forQa?: boolean } = {}
+  opts: { forQa?: boolean; suffix?: string | null } = {}
 ): string {
   const [yyyy, mm, dd] = isoDateInTz(date, timeZone).split("-");
 
   const parts = [
-    `${projectNumber}-S PBDB Rev${revisionIndex}`,
+    `${projectNumber}-${resolveNumberSuffix(opts.suffix)} PBDB Rev${revisionIndex}`,
     address,
     `${yyyy} ${mm} ${dd}`,
   ].filter(Boolean);
@@ -51,7 +53,8 @@ export function buildPbdrFilename(
   revisionIndex: number,
   address: string,
   date: Date,
-  timeZone: string
+  timeZone: string,
+  suffix?: string | null
 ): string {
   const [yyyy, mm, dd] = isoDateInTz(date, timeZone).split("-");
 
@@ -68,7 +71,7 @@ export function buildPbdrFilename(
   const addrPart = sanitize(address, 80);
   const datePart = `${yyyy}_${mm}_${dd}`;
 
-  const raw = `${projPart}-S_PBDR_R${revisionIndex}_${addrPart}_${datePart}.pdf`;
+  const raw = `${projPart}-${resolveNumberSuffix(suffix)}_PBDR_R${revisionIndex}_${addrPart}_${datePart}.pdf`;
   return raw.slice(0, 200);
 }
 

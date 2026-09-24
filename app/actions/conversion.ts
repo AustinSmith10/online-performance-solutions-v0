@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formatProjectNumber, getProjectNumberSuffix } from "@/lib/projects/project-number";
 import { scheduleOrDeliverPbdr } from "@/lib/documents/pending-delivery";
 import { auditLog } from "@/lib/audit/log";
 import { deliverPbdrEmails } from "@/lib/documents/pbdr-delivery-email";
@@ -227,7 +228,7 @@ export async function resendPbdrEmail(
     await getBusinessTimezone(supabase)
   );
   const projectRef = (project.project_number as string | null)
-    ? `${project.project_number as string}-S`
+    ? formatProjectNumber(project.project_number as string, await getProjectNumberSuffix(supabase, projectId))
     : projectId.slice(0, 8);
 
   await deliverPbdrEmails({

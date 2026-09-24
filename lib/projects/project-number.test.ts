@@ -5,6 +5,14 @@ import {
   duplicateProjectNumberError,
   isDuplicateProjectNumberDbError,
   PROJECT_NUMBER_RE,
+  DEFAULT_NUMBER_SUFFIX,
+  DISCIPLINES,
+  disciplineNameForSuffix,
+  validateNumberSuffix,
+  resolveNumberSuffix,
+  formatProjectNumber,
+  getProjectNumberSuffix,
+  getTemplateNumberSuffix,
 } from "./project-number";
 
 describe("validateProjectNumber", () => {
@@ -108,5 +116,82 @@ describe("isDuplicateProjectNumberDbError", () => {
   it("ignores other errors and null", () => {
     expect(isDuplicateProjectNumberDbError({ code: "23503", message: "fk" })).toBe(false);
     expect(isDuplicateProjectNumberDbError(null)).toBe(false);
+  });
+});
+
+describe("discipline suffix", () => {
+  it("is the fixed six-discipline list", () => {
+    expect(DISCIPLINES).toEqual([
+      { name: "Fire", suffix: "F" },
+      { name: "Solutions", suffix: "S" },
+      { name: "Access", suffix: "D" },
+      { name: "Acoustics", suffix: "A" },
+      { name: "ESD", suffix: "E" },
+      { name: "Code", suffix: "C" },
+    ]);
+  });
+
+  it("defaults to S (Solutions)", () => {
+    expect(DEFAULT_NUMBER_SUFFIX).toBe("S");
+  });
+
+  it("accepts any of the six letters and uppercases it", () => {
+    expect(validateNumberSuffix("s")).toEqual({ ok: true, value: "S" });
+    expect(validateNumberSuffix(" e ")).toEqual({ ok: true, value: "E" });
+    for (const { suffix } of DISCIPLINES) {
+      expect(validateNumberSuffix(suffix)).toEqual({ ok: true, value: suffix });
+    }
+  });
+
+  it.each(["", "  ", "SE", "1", "-", "é", "X", "B", null, undefined])("rejects %j", (v) => {
+    expect(validateNumberSuffix(v as string | null | undefined).ok).toBe(false);
+  });
+
+  it("resolves a stored value, falling back to the default for anything not in the list", () => {
+    expect(resolveNumberSuffix("e")).toBe("E");
+    expect(resolveNumberSuffix(null)).toBe("S");
+    expect(resolveNumberSuffix("")).toBe("S");
+    expect(resolveNumberSuffix("SE")).toBe("S");
+    expect(resolveNumberSuffix("X")).toBe("S");
+  });
+
+  it("maps a letter back to its discipline name", () => {
+    expect(disciplineNameForSuffix("f")).toBe("Fire");
+    expect(disciplineNameForSuffix("D")).toBe("Access");
+    expect(disciplineNameForSuffix("X")).toBeNull();
+    expect(disciplineNameForSuffix(null)).toBeNull();
+  });
+
+  it("formats a project number with the template's suffix", () => {
+    expect(formatProjectNumber("250012", "S")).toBe("250012-S");
+    expect(formatProjectNumber("250012", "E")).toBe("250012-E");
+    expect(formatProjectNumber("250012")).toBe("250012-S");
+    expect(formatProjectNumber("250012", null)).toBe("250012-S");
+  });
+});
+
+describe("suffix lookups", () => {
+  function fake(row: unknown) {
+    const chain = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn().mockResolvedValue({ data: row }) };
+    chain.select.mockReturnValue(chain);
+    chain.eq.mockReturnValue(chain);
+    return { from: vi.fn().mockReturnValue(chain) } as never;
+  }
+
+  it("reads the suffix from a template", async () => {
+    expect(await getTemplateNumberSuffix(fake({ number_suffix: "E" }), "t1")).toBe("E");
+  });
+
+  it("defaults with no template id or a missing/blank suffix", async () => {
+    expect(await getTemplateNumberSuffix(fake(null), null)).toBe("S");
+    expect(await getTemplateNumberSuffix(fake(null), "t1")).toBe("S");
+    expect(await getTemplateNumberSuffix(fake({ number_suffix: null }), "t1")).toBe("S");
+  });
+
+  it("reads the suffix through a project's embedded template (object or array)", async () => {
+    expect(await getProjectNumberSuffix(fake({ templates: { number_suffix: "E" } }), "p1")).toBe("E");
+    expect(await getProjectNumberSuffix(fake({ templates: [{ number_suffix: "E" }] }), "p1")).toBe("E");
+    expect(await getProjectNumberSuffix(fake({ templates: null }), "p1")).toBe("S");
+    expect(await getProjectNumberSuffix(fake(null), "p1")).toBe("S");
   });
 });

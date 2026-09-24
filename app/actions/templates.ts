@@ -10,6 +10,7 @@ import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { detectSource, isKnownToken } from "@/lib/documents/field-keys";
 import type { ComparisonMode } from "@/lib/documents/compare-candidates";
 import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
+import { DEFAULT_NUMBER_SUFFIX, resolveNumberSuffix, validateNumberSuffix } from "@/lib/projects/project-number";
 
 const COMPARISON_MODES = new Set<ComparisonMode>(["exact", "normalized", "semantic"]);
 function parseComparisonMode(v: FormDataEntryValue | null): ComparisonMode {
@@ -31,6 +32,12 @@ export async function uploadTemplate(
   const name = (formData.get("name") as string | null)?.trim();
 
   if (!name) return { error: "Template name is required." };
+
+  // Discipline letter appended to project numbers in documents from this
+  // template (S = Solutions). Blank falls back to the default.
+  const rawSuffix = (formData.get("number_suffix") as string | null)?.trim();
+  const suffix = rawSuffix ? validateNumberSuffix(rawSuffix) : ({ ok: true, value: DEFAULT_NUMBER_SUFFIX } as const);
+  if (!suffix.ok) return { error: suffix.error };
   if (!file || file.size === 0) return { error: "A .docx file is required." };
   if (!file.name.endsWith(".docx")) return { error: "Only .docx files are supported." };
   if (file.size > 20 * 1024 * 1024) return { error: "File must be under 20 MB." };
@@ -63,6 +70,7 @@ export async function uploadTemplate(
     storage_path: storagePath,
     status: "draft",
     created_by: actor.id,
+    number_suffix: suffix.value,
   });
 
   if (insertError) {
@@ -88,7 +96,7 @@ export async function uploadTemplate(
 
   await auditLog("template.uploaded", actor.id, actor.email, {
     orgId,
-    metadata: { templateId, name, tokenCount: tokens.length },
+    metadata: { templateId, name, tokenCount: tokens.length, numberSuffix: suffix.value },
   });
 
   revalidatePath(`/admin/templates`);
@@ -941,4 +949,49 @@ export async function getTemplatePreviewUrl(templateId: string): Promise<Templat
   });
 
   return { url: signed.signedUrl, filename };
+}
+
+export type UpdateNumberSuffixState = { error?: string; success?: boolean };
+
+/**
+ * Sets the discipline letter appended to project numbers in documents made
+ * from this template. Always editable — the letter is read fresh whenever a
+ * document is generated (lib/documents/generator.ts etc.), so a change only
+ * takes effect on the next PBDB/PBDR/email; anything already sent keeps the
+ * letter it was built with.
+ */
+export async function updateTemplateNumberSuffix(
+  templateId: string,
+  _prev: UpdateNumberSuffixState,
+  formData: FormData
+): Promise<UpdateNumberSuffixState> {
+  const actor = await requireRole("super_admin", "admin");
+  const supabase = createAdminClient();
+
+  const parsed = validateNumberSuffix(formData.get("number_suffix") as string | null);
+  if (!parsed.ok) return { error: parsed.error };
+
+  const { data: template } = await supabase
+    .from("templates")
+    .select("name, client_id, number_suffix")
+    .eq("id", templateId)
+    .maybeSingle();
+  if (!template) return { error: "Template not found." };
+
+  const current = resolveNumberSuffix(template.number_suffix as string | null);
+  if (parsed.value === current) return { success: true };
+
+  const { error } = await supabase
+    .from("templates")
+    .update({ number_suffix: parsed.value })
+    .eq("id", templateId);
+  if (error) return { error: error.message };
+
+  await auditLog("template.number_suffix_changed", actor.id, actor.email, {
+    orgId: template.client_id as string,
+    metadata: { templateId, name: template.name, from: current, to: parsed.value },
+  });
+
+  revalidatePath(`/admin/templates/${templateId}`);
+  return { success: true };
 }

@@ -13,9 +13,11 @@ import { useProjectNumberField, projectNumberInputClass } from "@/hooks/useProje
 interface Props {
   projectId: string;
   currentNumber: string | null;
+  /** Discipline letter from the project's template. */
+  suffix: string;
 }
 
-export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
+export function AdminProjectNumberForm({ projectId, currentNumber, suffix }: Props) {
   const router = useRouter();
   const boundAction = adminSetProjectNumber.bind(null, projectId);
   const [state, action, pending] = useActionState<AdminProjectNumberState, FormData>(
@@ -76,7 +78,7 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
               <span className="rounded-md bg-zinc-100 px-3 py-1.5 font-mono text-sm text-zinc-900">
                 {currentNumber}
               </span>
-              <span className="text-xs text-zinc-400">→ document prefix: {currentNumber}-S</span>
+              <span className="text-xs text-zinc-400">→ document prefix: {currentNumber}-{suffix}</span>
             </div>
           ) : (
             <form action={action} onSubmit={field.markSubmitted} className="mt-3 space-y-3">
@@ -96,7 +98,7 @@ export function AdminProjectNumberForm({ projectId, currentNumber }: Props) {
                   className={projectNumberInputClass(field.showError)}
                 />
                 <p className="mt-1 text-xs text-zinc-400">
-                  Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically in generated documents.
+                  Exactly six digits. The suffix <span className="font-mono">-{suffix}</span> is appended automatically in generated documents.
                 </p>
               </div>
 

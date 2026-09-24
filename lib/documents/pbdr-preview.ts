@@ -4,6 +4,7 @@ import { setRevisionHistoryRows, setCoverRevisionNumber } from "@/lib/documents/
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { buildPbdrFilename } from "@/lib/documents/naming";
+import { getProjectNumberSuffix } from "@/lib/projects/project-number";
 import { peekNextRevNumber, getRevisionHistory, formatRevisionHistoryRows } from "@/lib/documents/revision-history";
 import { formatAddress } from "@/lib/documents/formatters";
 import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
@@ -142,7 +143,8 @@ async function buildPbdrPreviewInner(
     revisionIndex,
     address,
     new Date(),
-    timeZone
+    timeZone,
+    await getProjectNumberSuffix(supabase, project.id)
   );
 
   const storagePath = `${project.client_id}/${project.id}/pbdr/preview.pdf`;

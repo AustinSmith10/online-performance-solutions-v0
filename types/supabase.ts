@@ -1680,6 +1680,7 @@ export type Database = {
           deleted_at: string | null
           id: string
           name: string
+          number_suffix: string | null
           section_labels: Json
           status: string
           storage_path: string
@@ -1691,6 +1692,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           name: string
+          number_suffix?: string | null
           section_labels?: Json
           status?: string
           storage_path: string
@@ -1702,6 +1704,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           name?: string
+          number_suffix?: string | null
           section_labels?: Json
           status?: string
           storage_path?: string

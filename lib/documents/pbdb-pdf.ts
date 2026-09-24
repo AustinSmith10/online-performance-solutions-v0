@@ -3,6 +3,7 @@ import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
 import { makeDocxConversionSafe } from "@/lib/documents/converter";
 import { buildPbdbFilename } from "@/lib/documents/naming";
+import { getProjectNumberSuffix } from "@/lib/projects/project-number";
 import { formatAddress } from "@/lib/documents/formatters";
 import { getCurrentRevNumber } from "@/lib/documents/revision-history";
 import { getBusinessTimezone } from "@/lib/settings/timezone";
@@ -128,7 +129,7 @@ export async function getOrCreateDispatchPdf(
     address,
     new Date(),
     timeZone,
-    { forQa: false }
+    { forQa: false, suffix: await getProjectNumberSuffix(supabase, project.id) }
   ).replace(/\.docx$/i, ".pdf");
 
   const { error: uploadErr } = await supabase.storage

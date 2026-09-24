@@ -16,6 +16,8 @@ Single-context domain reference for this repo. Companion decision records live i
 
 - **PBDR** — Performance-Based Design Report: the final report, produced after stakeholder approval of the PBDB.
 
+- **Project number / discipline suffix** — a project is identified by a six-digit number, unique across all disciplines and stored on its own. The suffix in "250012-S" is one letter from a fixed list (Fire F, Solutions S, Access D, Acoustics A, ESD E, Code C — `lib/projects/project-number.ts`'s `DISCIPLINES`) that comes from the project's template (`templates.number_suffix`), is appended only in document names, the `PROJECT_NO` token and emails, and is never stored on the project. Always editable on the template; a change only affects documents generated after it, not ones already sent.
+
 ### Why "stakeholder" is overloaded
 
 "Stakeholder" is an intentional umbrella term, not a naming bug. It splits into two unrelated concepts that happen to share a name:

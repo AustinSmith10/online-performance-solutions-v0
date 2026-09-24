@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/projects/project-number", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/projects/project-number")>()),
+  // These tests fake the Supabase client; the template-suffix lookup is covered in project-number.test.ts.
+  getProjectNumberSuffix: vi.fn().mockResolvedValue("S"),
+}));
 vi.mock("@/lib/documents/converter");
 vi.mock("@/lib/documents/color-strip");
 vi.mock("@/lib/documents/pdf");
