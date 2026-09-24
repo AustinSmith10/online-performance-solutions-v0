@@ -224,7 +224,7 @@ Bordered white track with 4 equal ARIA tabs (2x2 on phones); selected = zinc-900
 - **Do** keep one dominant object (Right now) and let reference content recede behind tabs and collapsibles.
 - **Do** use tabular figures for dates and numbers, and Geist Mono for filenames, emails and project numbers.
 - **Do** give every interactive control a visible `focus-visible` style (2px zinc-400 ring, inset where clipped).
-- **Do** keep motion short (150-200ms, ease-out) and disable it under `prefers-reduced-motion`.
+- **Do** keep motion short and purposeful: entrances 120-180ms on `--ease-out` (`cubic-bezier(0.23, 1, 0.32, 1)`), on-screen movement 300ms on `--ease-in-out` (`cubic-bezier(0.77, 0, 0.175, 1)`), press feedback 160ms at `scale(0.97)`. Animate `transform`, `scale` and `opacity` only; exits are instant or faster than entrances; nothing animates on frequent or keyboard-driven actions beyond a 120ms fade. Under `prefers-reduced-motion` soften rather than remove: keep the fades, drop scale, translate, press and rotation motion.
 
 ### Don't:
 - **Don't** use zinc-400 for text that carries information (client name, labels, dates, eyebrows); use zinc-500 (4.6:1) or darker. Zinc-400 is acceptable only for disabled or decorative text.
