@@ -62,11 +62,11 @@ function Row({
           </span>
           {badge}
         </div>
-        {detail && <p className="mt-0.5 text-[11px] text-zinc-500">{detail}</p>}
+        {detail && <p className="mt-0.5 text-xs text-zinc-500">{detail}</p>}
       </DownloadCard>
-      {cta && <p className="px-3 text-[11px] leading-relaxed text-amber-700">{cta}</p>}
+      {cta && <p className="px-3 text-xs leading-relaxed text-amber-700">{cta}</p>}
       {entry.revisionNote && (
-        <p className="px-3 text-[11px] leading-relaxed text-zinc-500">{entry.revisionNote}</p>
+        <p className="px-3 text-xs leading-relaxed text-zinc-500">{entry.revisionNote}</p>
       )}
     </div>
   );
@@ -75,7 +75,7 @@ function Row({
 function CollapsedGroup({ summary, children }: { summary: string; children: React.ReactNode }) {
   return (
     <details className="group rounded-lg border border-zinc-100">
-      <summary className="cursor-pointer select-none px-3 py-1.5 text-[11px] font-medium text-zinc-500 hover:text-zinc-700">
+      <summary className="cursor-pointer select-none px-3 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700">
         {summary}
       </summary>
       <div className="space-y-1.5 px-1.5 pb-1.5">{children}</div>
@@ -117,11 +117,11 @@ export function VersionTiers({
           cta={active.ctaCopy}
           badge={
             active.badge === "dispatched" ? (
-              <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+              <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
                 Dispatched
               </span>
             ) : active.badge === "draft" ? (
-              <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+              <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
                 Draft
               </span>
             ) : undefined

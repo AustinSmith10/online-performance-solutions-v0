@@ -1603,12 +1603,12 @@ export async function ProjectWorkspace({
                           <div className="flex items-center gap-2">
                             <p className="text-xs font-semibold text-amber-800">Replied by email — needs action</p>
                             {r.email_reply_sender_verified === false && (
-                              <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                              <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
                                 Unverified sender
                               </span>
                             )}
                             {r.email_reply_received_at && (
-                              <span className="text-[10px] text-amber-600">
+                              <span className="text-xs text-amber-600">
                                 {new Date(r.email_reply_received_at).toLocaleString("en-AU", {
                                   day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
                                 })}
@@ -1687,12 +1687,12 @@ export async function ProjectWorkspace({
           </p>
         )}
         {deliveryLocked ? (
-          <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-500">
+          <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-xs leading-relaxed text-zinc-500">
             All stakeholders already approved, so this delivery is using whatever was set
             beforehand — changing it now won&apos;t affect this PBDR.
           </p>
         ) : (
-          <p className="mt-2.5 rounded-md bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-700">
+          <p className="mt-2.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs leading-relaxed text-amber-700">
             Set this before the last stakeholder approves — it locks in at that point and can&apos;t
             be changed retroactively.
           </p>

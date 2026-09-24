@@ -110,7 +110,7 @@ export function FlagAcknowledgeControl({
                     ({c.source_document})
                   </span>
                   {i === acceptedIdx && (
-                    <span className="ml-1.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                    <span className="ml-1.5 rounded-full bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700">
                       selected
                     </span>
                   )}

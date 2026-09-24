@@ -50,7 +50,7 @@ export function ProjectAuditTrail({ entries }: { entries: ProjectAuditRow[] }) {
                     <span className="text-xs font-medium text-zinc-800">{label}</span>
                     {catInfo && (
                       <span
-                        className={`inline-block w-fit rounded-full px-2 py-0.5 text-[10px] font-medium ${catInfo.color}`}
+                        className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs font-medium ${catInfo.color}`}
                       >
                         {catInfo.label}
                       </span>
