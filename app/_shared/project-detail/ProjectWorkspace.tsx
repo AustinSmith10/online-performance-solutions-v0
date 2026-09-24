@@ -191,7 +191,6 @@ export async function ProjectWorkspace({
   const justGeneratedPbdb = sp.pbdb_generated === "1";
 
   const supabase = createAdminClient();
-  const businessTimezone = await getBusinessTimezone(supabase);
 
   const projectQuery = supabase
     .from("projects")
@@ -199,9 +198,15 @@ export async function ProjectWorkspace({
       `id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, pbdb_delivery_delay_preset, delivery_recipient_email, qa_completed_by, accepted_at, pbdb_downloaded_at, credit_deducted, payment_override, payment_override_reason, payment_override_at, deleted_at, clients(id, name, state_territory, client_config, revision_notes_required), assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability), submitter:users!projects_submitted_by_fkey(id, first_name, last_name, email, phone, company_role)`
     )
     .eq("id", id);
-  const { data, error } = await (isAdmin
-    ? projectQuery.maybeSingle()
-    : projectQuery.eq("assigned_consultant_id", userId ?? "").maybeSingle());
+  // The two settings lookups don't depend on the project, so they run with the
+  // project query instead of ahead of / after it (each is a database round trip).
+  const [businessTimezone, deliveryDurations, { data, error }] = await Promise.all([
+    getBusinessTimezone(supabase),
+    getDeliveryDelayDurations(supabase),
+    isAdmin
+      ? projectQuery.maybeSingle()
+      : projectQuery.eq("assigned_consultant_id", userId ?? "").maybeSingle(),
+  ]);
 
   if (error) console.error(`[${role}/projects/${id}] project query failed:`, error);
   if (!data) notFound();
@@ -440,6 +445,28 @@ export async function ProjectWorkspace({
 
   const allFieldFlags = openFieldFlags ?? [];
 
+  // Signing file URLs only needs the file rows, so start it now and let it run
+  // while the flag-actor lookup below waits on its own round trip.
+  const signedFilesPromise = Promise.all([
+    Promise.all(
+      (rawSubmissionFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("submissions")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
+    Promise.all(
+      (rawEvidenceFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("evidence")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
+    Promise.resolve(rawPbdrFiles ?? []),
+  ]);
+
   const flagActorIds = [
     ...new Set(
       allFieldFlags
@@ -484,25 +511,7 @@ export async function ProjectWorkspace({
     (rawFileRequirements ?? []).map((r) => [r.slug as string, r.name as string])
   );
 
-  const [submissionFiles, evidenceFiles, pbdrFiles] = await Promise.all([
-    Promise.all(
-      (rawSubmissionFiles ?? []).map(async (f) => {
-        const { data: signed } = await supabase.storage
-          .from("submissions")
-          .createSignedUrl(f.storage_path as string, 3600);
-        return { ...f, signedUrl: signed?.signedUrl ?? null };
-      })
-    ),
-    Promise.all(
-      (rawEvidenceFiles ?? []).map(async (f) => {
-        const { data: signed } = await supabase.storage
-          .from("evidence")
-          .createSignedUrl(f.storage_path as string, 3600);
-        return { ...f, signedUrl: signed?.signedUrl ?? null };
-      })
-    ),
-    Promise.resolve(rawPbdrFiles ?? []),
-  ]);
+  const [submissionFiles, evidenceFiles, pbdrFiles] = await signedFilesPromise;
 
   const pbdbFiles = rawPbdbFiles ?? [];
   const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
@@ -868,7 +877,6 @@ export async function ProjectWorkspace({
     </div>
   );
 
-  const deliveryDurations = await getDeliveryDelayDurations(supabase);
   const deliveryLocked = isTerminal || project.status === "converting" || !!pendingDelivery;
 
   // --- Stage rail: whole workflow at a glance instead of 3 stacked step cards ---
