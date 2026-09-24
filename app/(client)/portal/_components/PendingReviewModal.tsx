@@ -55,10 +55,10 @@ export function PendingReviewModal({
 
       {open && (
         <div
-          className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30"
+          className="modal-backdrop fixed inset-0 z-50 flex overflow-y-auto overscroll-contain backdrop-blur-sm bg-black/30 p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
-          <div className="modal-panel mx-4 w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
+          <div className="modal-panel m-auto w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
             <div className="flex items-start justify-between border-b border-zinc-100 px-6 py-4">
               <div className="min-w-0 pr-4">
                 <h2 className="text-base font-semibold text-zinc-900">Brief Review</h2>

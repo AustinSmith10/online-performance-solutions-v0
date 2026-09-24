@@ -123,7 +123,7 @@ export function PortalApprovalForm({ reviewId, projectId, pbdbDownloadUrl, pbdbF
                 buttonLabel="Preview"
               />
             }
-            wrapperClassName="flex items-center justify-between gap-3 border-y border-amber-200 py-3"
+            wrapperClassName="flex items-center justify-between gap-3 rounded-none! border-y border-amber-200 py-3"
           >
             <p className="text-sm font-medium text-zinc-900">Brief document</p>
           </DownloadCard>
