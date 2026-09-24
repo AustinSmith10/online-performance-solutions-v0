@@ -28,7 +28,7 @@ export function CollapsibleSection({
           {subtitle && <p className="mt-0.5 text-xs text-zinc-500">{subtitle}</p>}
         </div>
         <svg
-          className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 ease-out ${open ? "rotate-180" : ""}`}
           viewBox="0 0 20 20"
           fill="currentColor"
         >

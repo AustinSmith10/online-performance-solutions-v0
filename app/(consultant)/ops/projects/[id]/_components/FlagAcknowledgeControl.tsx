@@ -94,7 +94,7 @@ export function FlagAcknowledgeControl({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600"
               >
                 Close
               </button>
@@ -106,7 +106,7 @@ export function FlagAcknowledgeControl({
                   <span className={i === acceptedIdx ? "font-semibold text-zinc-900" : "text-zinc-700"}>
                     {c.value || "(empty)"}
                   </span>{" "}
-                  <span className="text-zinc-400">
+                  <span className="text-zinc-500">
                     ({c.source_document})
                   </span>
                   {i === acceptedIdx && (

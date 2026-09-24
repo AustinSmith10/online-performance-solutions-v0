@@ -53,7 +53,7 @@ export function SidebarNavLinks({
       {sections.map(({ group, items: groupItems }) => (
         <div key={group ?? "_ungrouped"} className="mb-3 last:mb-0">
           {group && (
-            <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
               {group}
             </p>
           )}

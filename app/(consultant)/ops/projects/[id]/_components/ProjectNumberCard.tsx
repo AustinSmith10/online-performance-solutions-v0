@@ -34,7 +34,7 @@ export function ProjectNumberCard({
         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-500">
           #
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Project number</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Project number</p>
       </div>
 
       {projectNumber && !editing ? (
@@ -63,7 +63,7 @@ export function ProjectNumberCard({
               {...field.inputProps}
               className={projectNumberInputClass(field.showError)}
             />
-            <p className="mt-1 text-xs text-zinc-400">
+            <p className="mt-1 text-xs text-zinc-500">
               Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically.
             </p>
           </div>

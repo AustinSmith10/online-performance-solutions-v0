@@ -56,8 +56,8 @@ function Row({
           {entry.originalFilename}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-medium text-zinc-600">Rev {entry.revNumber}</span>
-          <span className="text-[11px] text-zinc-400">
+          <span className="text-xs font-medium text-zinc-600">Rev {entry.revNumber}</span>
+          <span className="text-xs text-zinc-500">
             {new Date(entry.createdAt).toLocaleDateString("en-AU")}
           </span>
           {badge}

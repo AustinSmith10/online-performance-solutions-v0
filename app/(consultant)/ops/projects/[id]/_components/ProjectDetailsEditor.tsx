@@ -183,7 +183,7 @@ function EditableRow({
           onClick={() => setEditing(false)}
           disabled={pending}
           aria-label="Cancel"
-          className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
+          className="text-zinc-500 hover:text-zinc-600 disabled:opacity-50"
         >
           <XIcon />
         </button>

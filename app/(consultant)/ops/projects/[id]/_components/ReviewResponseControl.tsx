@@ -43,7 +43,7 @@ export function ReviewResponseControl({
   loggedByEmail?: string | null;
 }) {
   if (roundStatus === "closed_approved" || roundStatus === "closed_rejected") {
-    return <p className="shrink-0 text-xs text-zinc-400">Round closed — Revision {revisionNumber}</p>;
+    return <p className="shrink-0 text-xs text-zinc-500">Round closed — Revision {revisionNumber}</p>;
   }
   if (roundStatus !== "open" || review.status === "superseded") return null;
 

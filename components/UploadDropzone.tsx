@@ -121,7 +121,7 @@ export function UploadDropzone({
   if (pending) {
     inner = (
       <div className="flex flex-col items-center gap-2">
-        <svg className="h-5 w-5 animate-spin text-zinc-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
+        <svg className="h-5 w-5 animate-spin text-zinc-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.25" />
           <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.568 3 7.291l3-3.291z" />
         </svg>
@@ -137,7 +137,7 @@ export function UploadDropzone({
           </svg>
         </div>
         <p className="text-sm font-medium text-zinc-800">{file?.name}</p>
-        <p className="text-xs text-zinc-400">Click to upload another</p>
+        <p className="text-xs text-zinc-500">Click to upload another</p>
       </div>
     );
   } else if (showResult && error) {
@@ -149,7 +149,7 @@ export function UploadDropzone({
           </svg>
         </div>
         <p className="text-sm text-red-600">{error}</p>
-        <p className="text-xs text-zinc-400">Click to try again</p>
+        <p className="text-xs text-zinc-500">Click to try again</p>
       </div>
     );
   } else if (loadingIn) {
@@ -181,7 +181,7 @@ export function UploadDropzone({
             prompt
           )}
         </p>
-        <p className="mt-1 text-xs text-zinc-400">{hint}</p>
+        <p className="mt-1 text-xs text-zinc-500">{hint}</p>
       </>
     );
   }

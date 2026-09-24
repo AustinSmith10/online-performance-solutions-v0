@@ -16,7 +16,7 @@ export function StepIndicator({
   }
   if (locked) {
     return (
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-zinc-400 text-xs font-semibold">
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-zinc-500 text-xs font-semibold">
         {step}
       </div>
     );
