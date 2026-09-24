@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UnsavedChangesProvider, useRequestNavigate } from "@/components/UnsavedChangesProvider";
 import type { Stage } from "@/components/workspace/StageRail";
 import { StageRail } from "@/components/workspace/StageRail";
@@ -59,6 +59,17 @@ function ClientWorkspaceInner({
 }) {
   const [refTab, setRefTab] = useState<RefTab>(defaultRefTab);
   const requestNavigate = useRequestNavigate();
+  // Tab that arrow-key navigation wants focused. Focus moves in an effect once
+  // refTab really is that tab, so a cancelled unsaved-changes prompt leaves
+  // focus on the still-selected tab.
+  const focusAfterSwitch = useRef<RefTab | null>(null);
+
+  useEffect(() => {
+    if (focusAfterSwitch.current === refTab) {
+      document.getElementById(`ref-tab-${refTab}`)?.focus();
+    }
+    focusAfterSwitch.current = null;
+  }, [refTab]);
 
   // Arrow keys / Home / End move between tabs (ARIA tab pattern); the
   // selected tab is the only one in the tab order.
@@ -71,8 +82,8 @@ function ClientWorkspaceInner({
     else if (e.key === "End") next = REF_TABS.length - 1;
     else return;
     e.preventDefault();
+    focusAfterSwitch.current = REF_TABS[next].id;
     requestNavigate(() => setRefTab(REF_TABS[next].id));
-    document.getElementById(`ref-tab-${REF_TABS[next].id}`)?.focus();
   }
 
   const refContent: Record<RefTab, React.ReactNode> = {

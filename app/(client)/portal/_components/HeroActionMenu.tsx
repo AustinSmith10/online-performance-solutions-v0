@@ -77,7 +77,7 @@ function ReviewFormModal({ item, onClose }: { item: PendingReviewItem; onClose: 
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600"
+            className="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1"
             aria-label="Close"
           >
             <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -285,7 +285,7 @@ export function useReadyDownloadHeroAction(items: ReadyItemInput[]): {
             setActiveIndex(0);
           }}
           disabled={activeIndex !== null}
-          className="press rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          className="press rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 disabled:opacity-50"
         >
           Download all
         </button>
