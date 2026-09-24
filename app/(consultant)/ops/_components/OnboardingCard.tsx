@@ -36,13 +36,13 @@ export function OnboardingCard({ onDismiss }: { onDismiss: () => void }) {
   }
 
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 p-5">
+    <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
       <div className="flex items-start justify-between gap-4">
         <h2 className="text-sm font-semibold text-blue-900">How jobs flow through</h2>
         <button
           type="button"
           onClick={gotIt}
-          className="shrink-0 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+          className="shrink-0 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 transition-[background-color,transform] duration-150 hover:bg-blue-100 active:scale-[0.97]"
         >
           Got it
         </button>
