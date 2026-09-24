@@ -82,7 +82,7 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
       : "border-zinc-200 bg-white";
   return (
     <div
-      className={`relative rounded-xl border px-5 py-4 transition-[border-color,box-shadow] duration-150 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-zinc-500 has-[a:focus-visible]:ring-offset-1 ${accent} ${
+      className={`relative rounded-xl border p-4 transition-[border-color,box-shadow] duration-150 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-zinc-500 has-[a:focus-visible]:ring-offset-1 ${accent} ${
         p.isPending ? "" : "hover:border-zinc-400 hover:shadow-sm"
       }`}
     >
@@ -236,7 +236,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
 
   return (
     // pb-20: clears the floating Available pill so the last row is never covered.
-    <div className="space-y-5 pb-20">
+    <div className="space-y-4 pb-20">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900">My projects</h1>
         <Link
