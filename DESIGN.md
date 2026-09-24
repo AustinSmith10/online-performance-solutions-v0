@@ -125,7 +125,7 @@ Neutral zinc scale for structure; four semantic families (red, amber, green, blu
 ### Neutral
 - **Ink Hover** (#3f3f46, zinc-700): primary-button hover, strong secondary text.
 - **Text Secondary** (#71717a, zinc-500): labels, secondary copy, inactive tabs. Passes 4.5:1 on white.
-- **Text Muted** (#a1a1aa, zinc-400): currently used for real content (client name, header stat labels, dates, "Right now" eyebrow, upcoming stage labels). Only about 2.4-2.6:1 on white or zinc-50; see Do's and Don'ts.
+- **Text Muted** (#a1a1aa, zinc-400): disabled and decorative text only (about 2.6:1 on white). Informational text (client name, labels, dates, eyebrows, placeholders, upcoming stage labels) uses Text Secondary, zinc-500 (#71717a, 4.6:1). The consultant and stakeholder screens follow this; a few unmigrated admin screens still use zinc-400.
 - **Border / Border Strong / Border Subtle** (#e4e4e7 / #d4d4d8 / #f4f4f5): card outlines, input outlines, row dividers.
 - **Surface / Surface Sunken** (#ffffff / #fafafa, plus #f4f4f5 tints): cards, table headers, segmented-control track.
 
@@ -143,7 +143,7 @@ Neutral zinc scale for structure; four semantic families (red, amber, green, blu
 
 ## Typography
 
-**Body Font:** Geist (loaded in `app/layout.tsx` via `next/font`), falling back to Arial. **Shipped reality:** `app/globals.css` sets `body { font-family: Arial, Helvetica, sans-serif }`, which overrides the Geist variable, so Arial is what renders today. Recorded here as Geist per the owner; the override is a critique finding.
+**Body Font:** Geist (loaded in `app/layout.tsx` via `next/font`), falling back to Arial. `app/globals.css` sets `body` to the Geist variable, so Geist renders on every screen. The old global Arial override has been removed.
 **Mono:** Geist Mono is used for identifiers only: document filenames, stakeholder email addresses and project numbers (`font-mono`). Nothing else is mono.
 
 **Character:** Neutral and utilitarian; hierarchy through weight and colour, not scale.
@@ -168,7 +168,7 @@ Project page: full-width header card, then a primary tab row (Workspace / Audit 
 
 **Consultant dashboard ("My projects").** Single column, `space-y-5`, full width: page title + primary "Submit request" button; a 4-up summary strip (2-up on mobile); one "Right now" banner row (two side by side when both an assignment and a review need attention); a segmented list switcher (Active / With stakeholders / Archive / Available jobs); then stacked 20px-padded project rows (available jobs are a 2-up grid of cards). It is a queue view: the banner and tinted rows carry urgency, everything else is white or zinc.
 
-**Stakeholder portal (`app/(client)/portal`).** Same tokens and components, narrower frame: header bar `h-11` on a `max-w-5xl` column (vs the consultant's full width). Dashboard = title + "New report request", a 4-up tile strip (Needs your review / In progress / Ready / Credits or Total active), one or two compact "Right now" banners, then category pills (All / Needs your review / In progress / Delivered) plus a Filters popover, a search input and a sort select, then `rounded-xl` request cards with a status pill and a `MiniStepper`. Project page = `ClientHeaderCard` (3px blue left edge, always blue), then a 22rem sticky left rail (StageRail + FocusCard + Reference card) beside Overview / Documents / Review buttons. Differences from the consultant screens: no Overdue indicator by design (clients should not feel due-date pressure); status is shown as a stepper stage label plus a round badge, not workflow status names; pills use `rounded-full px-2.5 py-1`; Reference and filter headings use `uppercase tracking-wide text-zinc-400`.
+**Stakeholder portal (`app/(client)/portal`).** Same tokens and components, narrower frame: header bar `h-11` on a `max-w-5xl` column (vs the consultant's full width). Dashboard = title + "New report request", a 4-up tile strip (Needs your review / In progress / Ready / Credits or Total active), one or two compact "Right now" banners, then category pills (All / Needs your review / In progress / Delivered) plus a Filters popover, a search input and a sort select, then `rounded-xl` request cards with a status pill and a `MiniStepper`. Project page = `ClientHeaderCard`, then a 22rem sticky left rail (StageRail + FocusCard + Reference card) beside Overview / Documents / Review buttons. **The header follows the Right now tone:** its 3px left edge and status pill are blue (`blue-400`, `blue-100`/`blue-700`) in progress, amber (`amber-400`, `amber-100`/`amber-800`) when this viewer must act (the label then reads "Your review needed"), and green (`green-500`, `green-100`/`green-700`) once delivered, so the header never says "in progress" while the card below asks for action. The Reference card is desktop-only (`md` and up); below that the header and Right now card carry the essentials. Differences from the consultant screens: no Overdue indicator by design (clients should not feel due-date pressure); status is shown as a stepper stage label plus a round badge, not workflow status names; pills use `rounded-full px-2.5 py-1`; Reference and filter headings use `uppercase tracking-wide text-zinc-500`. The "In progress" tile and the caught-up banner are neutral zinc, because nothing in either needs action; amber and blue stay reserved for "Needs your review" and "Ready".
 
 ## Elevation & Depth
 
@@ -199,7 +199,7 @@ White, 1px zinc-200 border, 12px radius, 16px padding (`p-4`) for rows and rail 
 6px radius, 1px zinc-300 border, 14px text, zinc-400 placeholders; focus swaps to zinc-500 border plus a 1px ring. Errors appear as red inline text or red-tinted panels (`border-red-100 bg-red-50/40`).
 
 ### Navigation
-Top bar with logo, Workspace / Email Queue links, notification bell and user menu. Project tabs are a 2px underline bar (primary) and a zinc-100 segmented control (secondary), both plain buttons with no tab roles.
+Top bar with logo, Workspace / Email Queue links, notification bell and user menu. Project tabs are a 2px underline bar (primary) and a zinc-100 segmented control (secondary), The secondary segmented control on the stakeholder project page, the consultant dashboard list switcher and the stakeholder category pills carry real semantics (ARIA tab roles with roving tabindex and arrow/Home/End keys, or `aria-pressed` for the pills), and nav links set `aria-current`. The consultant project-page tab bars are still plain buttons.
 
 ### Stage rail (signature)
 Rounded card with a zinc gradient holding a horizontal stepper: done = emerald disc with check; current = urgency-coloured disc with a 5px tinted ring; upcoming = dashed zinc-300 disc. 3px connector fills emerald when the previous stage is done.
@@ -211,7 +211,7 @@ A 2px-bordered, urgency-tinted (blue neutral / amber / red / green) card with a 
 `rounded-xl` bordered card, 16px padding, 24px semibold tabular count over a 12px label. Tone = state: amber when something needs a response, green when jobs are available, blue for Active when non-zero, white otherwise.
 
 ### Compact "Right now" banner (dashboard)
-`rounded-lg`, 1px tone border and tinted fill (amber assignment, red review/overdue, blue caught-up), one line: 14px semibold "Right now", 12px subtitle, action buttons right-aligned; expands in place into a per-item picker when there are several.
+`rounded-xl`, 1px tone border and tinted fill (amber assignment, red review/overdue, zinc when caught up or nothing needs action), one line: 14px semibold "Right now", 12px subtitle, action buttons right-aligned; expands in place into a per-item picker when there are several.
 
 ### Project row (dashboard)
 `rounded-xl` bordered card, 20px padding: 16px semibold title (link), 12px zinc meta lines, status pill and Overdue/Flagged chips stacked top-right, and an action strip under a tinted rule for pending assignments (Accept/Decline) or revision review. Fill encodes state: amber = pending assignment, red = revision, white = otherwise.
@@ -226,7 +226,7 @@ Bordered white track with 4 equal ARIA tabs (2x2 on phones); selected = zinc-900
 - **Do** keep one dominant object (Right now) and let reference content recede behind tabs and collapsibles.
 - **Do** use tabular figures for dates and numbers, and Geist Mono for filenames, emails and project numbers.
 - **Do** give every interactive control a visible `focus-visible` style (2px zinc-400 ring, inset where clipped).
-- **Do** keep motion short and purposeful: entrances 120-180ms on `--ease-out` (`cubic-bezier(0.23, 1, 0.32, 1)`), on-screen movement 300ms on `--ease-in-out` (`cubic-bezier(0.77, 0, 0.175, 1)`), press feedback 160ms at `scale(0.97)`. Animate `transform`, `scale` and `opacity` only; exits are instant or faster than entrances; nothing animates on frequent or keyboard-driven actions beyond a 120ms fade. Under `prefers-reduced-motion` soften rather than remove: keep the fades, drop scale, translate, press and rotation motion.
+- **Do** keep motion short and purposeful: entrances 120-180ms on `--ease-out` (`cubic-bezier(0.23, 1, 0.32, 1)`), on-screen movement 300ms on `--ease-in-out` (`cubic-bezier(0.77, 0, 0.175, 1)`), press feedback 160ms at `scale(0.97)`. Animate `transform`, `scale` and `opacity` only; exits are instant or faster than entrances; nothing animates on frequent or keyboard-driven actions beyond a 120ms fade. Anchored panels that open from a corner trigger use `popover-br`; panels that drop in below their trigger (the stakeholder Filters popover) use `rise-in`. Under `prefers-reduced-motion` soften rather than remove: keep the fades, drop scale, translate, press and rotation motion.
 
 ### Don't:
 - **Don't** use zinc-400 for text that carries information (client name, labels, dates, eyebrows); use zinc-500 (4.6:1) or darker. Zinc-400 is acceptable only for disabled or decorative text.
@@ -234,4 +234,4 @@ Bordered white track with 4 equal ARIA tabs (2x2 on phones); selected = zinc-900
 - **Don't** convey state by colour alone or rely on hover for information.
 - **Don't** go below 12px for readable content.
 - **Don't** nest a bordered box inside a bordered card, or add a shadow to a button.
-- **Don't** let Arial and Geist compete: the global `body` font override should be resolved to one family.
+- **Don't** reintroduce a global `body` font override: Geist is the single family.
