@@ -61,7 +61,7 @@ export function useAssignmentHeroAction(items: DashboardProject[]): HeroAction |
       <div className="mt-3 divide-y divide-amber-200/70 border-t border-amber-200 pt-1">
         {items.map((item) => (
           <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-            <span className="min-w-0 truncate text-sm text-amber-900">{item.label}</span>
+            <span className="min-w-0 break-words text-sm text-amber-900">{item.label}</span>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <InlineAssignmentActions projectId={item.pendingAssignment!.projectId} label={item.label} />
             </div>
@@ -131,8 +131,8 @@ export function useReviewHeroAction(revisionItems: DashboardProject[], overdueIt
       <div className="mt-3 divide-y divide-red-200/70 border-t border-red-200 pt-1">
         {items.map((item) => (
           <div key={item.id} className="flex items-center justify-between gap-3 py-2">
-            <span className="flex min-w-0 items-center gap-1.5 truncate text-sm text-red-900">
-              <span className="min-w-0 truncate">{item.label}</span>
+            <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-red-900">
+              <span className="min-w-0 break-words">{item.label}</span>
               {item.isOverdue && (
                 <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-red-700">
                   Overdue

@@ -63,7 +63,7 @@ export function CompactHero({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
           <span className={`shrink-0 whitespace-nowrap text-sm font-semibold ${titleClasses}`}>Right now</span>
-          <span className="text-xs text-zinc-600 sm:truncate">{subtitle}</span>
+          <span className="text-xs text-zinc-600 sm:line-clamp-2">{subtitle}</span>
         </div>
         {action && <div className="sm:shrink-0">{action}</div>}
       </div>
@@ -80,7 +80,7 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
       : "border-zinc-200 bg-white";
   return (
     <div
-      className={`relative rounded-xl border p-5 transition-[border-color,box-shadow] duration-150 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-zinc-500 has-[a:focus-visible]:ring-offset-1 ${accent} ${
+      className={`relative rounded-xl border px-5 py-4 transition-[border-color,box-shadow] duration-150 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-zinc-500 has-[a:focus-visible]:ring-offset-1 ${accent} ${
         p.isPending ? "" : "hover:border-zinc-400 hover:shadow-sm"
       }`}
     >
@@ -99,10 +99,10 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
               {p.label}
             </Link>
           )}
-          <p className="mt-0.5 truncate text-xs text-zinc-500">
+          <p className="mt-0.5 truncate text-xs text-zinc-600">
             {[p.clientName, p.isPending ? "assigned to you" : p.submitterName].filter(Boolean).join(" · ")}
           </p>
-          <p className="mt-1 text-xs text-zinc-500">
+          <p className="mt-0.5 text-xs text-zinc-600">
             {p.expectedDeliveryLabel ? `Expected ${p.expectedDeliveryLabel}` : "No delivery date set"}
           </p>
         </div>
@@ -146,9 +146,22 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
 
 type SectionKey = "active" | "stakeholders" | "archive" | "available";
 
+// Needs-attention first: revisions, then overdue, then the rest. Array.sort is
+// stable, so the original (newest-first) order holds within each group.
+function attentionRank(p: DashboardProject) {
+  return p.isRevision ? 0 : p.isOverdue ? 1 : 2;
+}
+const byAttention = (a: DashboardProject, b: DashboardProject) => attentionRank(a) - attentionRank(b);
+
+function matches(query: string, parts: (string | null | undefined)[]) {
+  const q = query.trim().toLowerCase();
+  return !q || parts.some((x) => x?.toLowerCase().includes(q));
+}
+
 export function Dashboard({ data }: { data: DashboardData }) {
   const { pendingAssignments, active, withStakeholders, archive, available } = data;
   const [section, setSection] = useState<SectionKey>("active");
+  const [query, setQuery] = useState("");
 
   const revisions = active.filter((p) => p.isRevision);
   // Overdue-but-not-revision projects join the revision hero below rather than
@@ -161,12 +174,31 @@ export function Dashboard({ data }: { data: DashboardData }) {
   const heroCount = [assignmentHero, reviewHero].filter(Boolean).length;
   const heroGridClass = heroCount === 2 ? "md:grid-cols-2" : "";
 
+  const activeCount = pendingAssignments.length + active.length;
   const sections: { key: SectionKey; label: string; count: number }[] = [
-    { key: "active", label: "Active", count: pendingAssignments.length + active.length },
+    { key: "active", label: "Active", count: activeCount },
     { key: "stakeholders", label: "With stakeholders", count: withStakeholders.length },
     { key: "archive", label: "Archive", count: archive.length },
     { key: "available", label: "Available jobs", count: available.length },
   ];
+
+  const selectSection = (key: SectionKey) => {
+    setSection(key);
+    setQuery("");
+  };
+
+  const rows: DashboardProject[] =
+    section === "active"
+      ? [...pendingAssignments, ...[...active].sort(byAttention)]
+      : section === "stakeholders"
+        ? [...withStakeholders].sort(byAttention)
+        : section === "archive"
+          ? archive
+          : [];
+  const filteredRows = rows.filter((p) => matches(query, [p.label, p.clientName, p.submitterName]));
+  const filteredAvailable = available.filter((p) => matches(query, [p.label, p.clientName]));
+  const listLen = section === "available" ? available.length : rows.length;
+  const shownCount = section === "available" ? filteredAvailable.length : filteredRows.length;
 
   return (
     <div className="space-y-5">
@@ -184,7 +216,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Tile tone={pendingAssignments.length > 0 ? "amber" : "zinc"} label="Needs your response" value={pendingAssignments.length} />
-            <Tile tone={active.length > 0 ? "neutral" : "zinc"} label="Active" value={active.length} />
+            <Tile tone={activeCount > 0 ? "neutral" : "zinc"} label="Active" value={activeCount} />
             <Tile tone="zinc" label="With stakeholders" value={withStakeholders.length} />
             <Tile tone={available.length > 0 ? "green" : "zinc"} label="Available jobs" value={available.length} />
           </div>
@@ -212,6 +244,8 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </div>
       </TourHighlight>
 
+      {/* Sticky from sm up (below the 45px sticky header) so the tab bar stays reachable while a long list scrolls; on phones the header is already 84px so it scrolls away. */}
+      <div className="sm:sticky sm:top-[45px] sm:z-20 -mx-1 bg-zinc-50 px-1 py-1">
       <TourHighlight id="consultant_project_tabs">
         <div
           role="tablist"
@@ -227,7 +261,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               : null;
             if (next === null) return;
             e.preventDefault();
-            setSection(sections[next].key);
+            selectSection(sections[next].key);
             document.getElementById(`dash-tab-${sections[next].key}`)?.focus();
           }}
         >
@@ -240,7 +274,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
               aria-selected={section === s.key}
               aria-controls="dash-panel"
               tabIndex={section === s.key ? 0 : -1}
-              onClick={() => setSection(s.key)}
+              onClick={() => selectSection(s.key)}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-1 ${
                 section === s.key ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
               }`}
@@ -254,70 +288,85 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </div>
       </TourHighlight>
 
-      <div key={section} id="dash-panel" role="tabpanel" aria-labelledby={`dash-tab-${section}`} tabIndex={-1} className="pane-in outline-none">
-      {section === "active" && (
-        <div className="space-y-3">
-          {pendingAssignments.length === 0 && active.length === 0 ? (
-            <EmptyState title="No active projects" subtitle="Projects will appear here once assigned by your account manager." />
-          ) : (
-            [...pendingAssignments, ...active].map((p) => <ProjectRow key={p.id} p={p} />)
-          )}
-        </div>
-      )}
+      </div>
 
-      {section === "stakeholders" && (
-        <div className="space-y-3">
-          {withStakeholders.length === 0 ? (
-            <EmptyState title="No projects with stakeholders" subtitle="Projects awaiting stakeholder approval will appear here." />
-          ) : (
-            withStakeholders.map((p) => <ProjectRow key={p.id} p={p} />)
-          )}
-        </div>
-      )}
+      <div key={section} id="dash-panel" role="tabpanel" aria-labelledby={`dash-tab-${section}`} tabIndex={-1} className="pane-in space-y-3 outline-none">
+        {listLen > 6 && (
+          <div>
+            <label htmlFor="dash-search" className="sr-only">Search {sections.find((x) => x.key === section)?.label} projects</label>
+            <input
+              id="dash-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search address, project number or client"
+              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            />
+            {query.trim() && (
+              <p className="mt-1.5 text-xs text-zinc-600" role="status" aria-live="polite">
+                {shownCount} of {listLen} shown
+              </p>
+            )}
+          </div>
+        )}
 
-      {section === "archive" && (
-        <div className="space-y-3">
-          {archive.length === 0 ? (
-            <EmptyState title="No archived projects" subtitle="Delivered and completed projects will appear here." />
-          ) : (
-            archive.map((p) => <ProjectRow key={p.id} p={p} />)
-          )}
-        </div>
-      )}
-
-      {section === "available" && (
-        <div className="space-y-3">
-          {available.length === 0 ? (
-            <EmptyState title="No available jobs" subtitle="New submissions will appear here once a client submits a report request." />
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {available.map((p) => (
-                <div key={p.id} className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-                  <p className="truncate text-sm font-semibold text-zinc-900">{p.label}</p>
-                  <p className="mt-0.5 truncate text-xs text-zinc-500">{p.clientName ?? "—"}</p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Submitted {p.submittedLabel}
-                    {p.expectedDeliveryLabel ? ` · Expected ${p.expectedDeliveryLabel}` : ""}
-                  </p>
-                  <div className="mt-3">
-                    <SelfAssignButton projectId={p.id} address={p.label} />
-                  </div>
+        {listLen === 0 ? (
+          <EmptyState {...EMPTY[section]} action={section !== "available" && available.length > 0 ? { label: `Browse available jobs (${available.length})`, onClick: () => selectSection("available") } : undefined} />
+        ) : shownCount === 0 ? (
+          <EmptyState title="No matches" subtitle={`Nothing in this list matches “${query.trim()}”.`} action={{ label: "Clear search", onClick: () => setQuery("") }} />
+        ) : section === "available" ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {filteredAvailable.map((p) => (
+              <div key={p.id} className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <p className="truncate text-sm font-semibold text-zinc-900" title={p.label}>{p.label}</p>
+                <p className="mt-0.5 truncate text-xs text-zinc-600">{p.clientName ?? "—"}</p>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Submitted {p.submittedLabel}
+                  {p.expectedDeliveryLabel ? ` · Expected ${p.expectedDeliveryLabel}` : ""}
+                </p>
+                <div className="mt-3">
+                  <SelfAssignButton projectId={p.id} address={p.label} />
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          filteredRows.map((p) => <ProjectRow key={p.id} p={p} />)
+        )}
       </div>
     </div>
   );
 }
 
-function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
+const EMPTY: Record<SectionKey, { title: string; subtitle: string }> = {
+  active: { title: "No active projects", subtitle: "Projects will appear here once assigned by your account manager." },
+  stakeholders: { title: "No projects with stakeholders", subtitle: "Projects awaiting stakeholder approval will appear here." },
+  archive: { title: "No archived projects", subtitle: "Delivered and completed projects will appear here." },
+  available: { title: "No available jobs", subtitle: "New submissions will appear here once a client submits a report request." },
+};
+
+function EmptyState({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle: string;
+  action?: { label: string; onClick: () => void };
+}) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-12 text-center">
+    <div className="rounded-xl border border-zinc-200 bg-white px-6 py-10 text-center">
       <p className="text-sm font-medium text-zinc-900">{title}</p>
-      <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
+      <p className="mt-1 text-sm text-zinc-600">{subtitle}</p>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="mt-4 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-[background-color,transform] duration-150 hover:bg-zinc-50 active:scale-[0.97]"
+        >
+          {action.label}
+        </button>
+      )}
     </div>
   );
 }
