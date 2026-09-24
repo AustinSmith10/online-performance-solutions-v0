@@ -60,12 +60,12 @@ export function CompactHero({
   }[tone];
   return (
     <div className={`rounded-lg border px-4 py-2.5 ${classes}`}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-baseline gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
           <span className={`shrink-0 whitespace-nowrap text-sm font-semibold ${titleClasses}`}>Right now</span>
-          <span className="truncate text-xs text-zinc-600">{subtitle}</span>
+          <span className="text-xs text-zinc-600 sm:truncate">{subtitle}</span>
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+        {action && <div className="sm:shrink-0">{action}</div>}
       </div>
       {expanded}
     </div>
@@ -87,14 +87,14 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           {p.isPending ? (
-            <span className="block truncate text-base font-semibold text-zinc-900" title={p.label}>{p.label}</span>
+            <span className="block break-words text-base font-semibold text-zinc-900 sm:truncate" title={p.label}>{p.label}</span>
           ) : (
             // The link's ::after stretches over the whole row so the entire card
             // is the click target; action rows below sit above it (relative z-10).
             <Link
               href={p.href}
               title={p.label}
-              className="block truncate text-base font-semibold text-zinc-900 outline-none after:absolute after:inset-0 after:rounded-xl hover:underline"
+              className="block break-words text-base font-semibold text-zinc-900 outline-none sm:truncate after:absolute after:inset-0 after:rounded-xl hover:underline"
             >
               {p.label}
             </Link>
@@ -216,7 +216,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
         <div
           role="tablist"
           aria-label="Project lists"
-          className="flex gap-1 rounded-lg border border-zinc-200 bg-white p-1"
+          className="grid grid-cols-2 gap-1 rounded-lg border border-zinc-200 bg-white p-1 sm:flex"
           onKeyDown={(e) => {
             const i = sections.findIndex((s) => s.key === section);
             const next =
