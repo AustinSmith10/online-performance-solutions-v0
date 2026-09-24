@@ -99,17 +99,89 @@ body {
   outline-offset: 2px;
 }
 
-/* Short, ease-out entrance for swapped-in panes. Opacity + a few px of
-   translate only; disabled under reduced motion. */
-@keyframes pane-in {
-  from { opacity: 0; transform: translateY(4px); }
+/* ---------------------------------------------------------------------------
+   Motion vocabulary. One pair of curves for the whole app; UI stays <300ms.
+   Frequency drives the budget: press feedback and list swaps are near
+   imperceptible, occasional surfaces (modals, popovers, expanding sections)
+   get a short ease-out entrance, exits stay instant. Reduced motion keeps the
+   fades (they aid comprehension) and drops scale, translate and press motion.
+   --------------------------------------------------------------------------- */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+/* Swapped-in list/pane content (dashboard tab, page and search results):
+   opacity only, 120ms. Tens of uses a day, some keyboard-initiated. */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.pane-in {
+  animation: fade-in 120ms var(--ease-out) both;
+}
+
+/* Expand-in-place content (collapsible bodies, hero pickers): 160ms fade with a
+   4px settle from its trigger. Enter only; the content is unmounted on close. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: none; }
 }
-
-.pane-in {
-  animation: pane-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+.rise-in {
+  animation: rise-in 160ms var(--ease-out) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise-in { animation-name: fade-in; }
 }
 
+/* Modal entrance via @starting-style (no JS state). Backdrop 150ms, panel
+   180ms from scale(0.97); modals stay centred. Exit is an instant unmount. */
+.modal-backdrop {
+  transition: opacity 150ms var(--ease-out);
+  @starting-style { opacity: 0; }
+}
+.modal-panel {
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+  @starting-style { opacity: 0; transform: scale(0.97); }
+}
+/* Anchored popover (Delivery Config): grows from its bottom-right trigger. */
+.popover-br {
+  transform-origin: bottom right;
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+  @starting-style { opacity: 0; transform: scale(0.96); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .pane-in { animation: none; }
+  .modal-panel, .popover-br {
+    @starting-style { transform: none; }
+  }
+}
+
+/* Press feedback for pressable controls: 160ms ease-out, scale(0.97), or
+   scale(0.98) for wide segmented tabs. Reduced motion keeps the colour change. */
+@utility press {
+  transition-property: transform, background-color, color, border-color;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-out);
+  &:active { transform: scale(0.97); }
+  @media (prefers-reduced-motion: reduce) {
+    &:active { transform: none; }
+  }
+}
+@utility press-subtle {
+  transition-property: transform, background-color, color, border-color;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-out);
+  &:active { transform: scale(0.98); }
+  @media (prefers-reduced-motion: reduce) {
+    &:active { transform: none; }
+  }
+}
+
+/* Stage-rail connector: fills left to right (Tailwind scale-x-* sets the `scale` property, so that is what transitions). */
+.rail-fill {
+  transform-origin: left;
+  transition: scale 300ms var(--ease-in-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-fill { transition: none; }
 }
