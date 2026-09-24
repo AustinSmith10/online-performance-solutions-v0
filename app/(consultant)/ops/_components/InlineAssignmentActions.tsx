@@ -65,7 +65,7 @@ export function InlineAssignmentActions({
             role="dialog"
             aria-modal="true"
             aria-labelledby={`decline-title-${projectId}`}
-            className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl outline-none"
+            className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-[0_8px_30px_rgb(0_0_0/0.10)] outline-none"
           >
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
               <svg className="h-6 w-6 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>

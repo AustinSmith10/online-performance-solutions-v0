@@ -88,7 +88,7 @@ export function QaUploadedBanner({ cleanUrl }: { cleanUrl: string }) {
         </>
       )}
       {visible && (
-        <div className="fixed right-4 top-20 z-50 w-80 rounded-xl border border-zinc-200 bg-white p-4 shadow-lg">
+        <div className="fixed right-4 top-20 z-50 w-80 rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_4px_16px_rgb(0_0_0/0.08)]">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-100">
               <svg className="h-4 w-4 text-green-600" viewBox="0 0 20 20" fill="currentColor">

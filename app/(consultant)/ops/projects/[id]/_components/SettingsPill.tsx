@@ -31,7 +31,7 @@ export function SettingsPill({ children, title = "Delivery Config" }: { children
       {open && (
         <div
           ref={popoverRef}
-          className="fixed bottom-20 right-5 z-50 w-80 max-w-[calc(100vw-2.5rem)] rounded-xl border border-zinc-200 bg-white p-4 shadow-2xl"
+          className="fixed bottom-20 right-5 z-50 w-80 max-w-[calc(100vw-2.5rem)] rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_8px_30px_rgb(0_0_0/0.10)]"
         >
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
@@ -54,7 +54,7 @@ export function SettingsPill({ children, title = "Delivery Config" }: { children
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-lg hover:bg-zinc-50"
+        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-[0_4px_16px_rgb(0_0_0/0.08)] hover:bg-zinc-50"
       >
         <svg className="h-4 w-4 text-zinc-500" viewBox="0 0 20 20" fill="currentColor">
           <path

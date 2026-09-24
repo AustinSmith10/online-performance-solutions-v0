@@ -51,7 +51,7 @@ export function useAssignmentHeroAction(items: DashboardProject[]): HeroAction |
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-amber-700"
+        className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-amber-700"
       >
         Respond ({items.length})
         <ChevronToggle expanded={expanded} />
@@ -121,7 +121,7 @@ export function useReviewHeroAction(revisionItems: DashboardProject[], overdueIt
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-red-700"
+        className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-red-700"
       >
         Review ({items.length})
         <ChevronToggle expanded={expanded} />

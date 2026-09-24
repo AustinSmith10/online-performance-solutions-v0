@@ -47,7 +47,7 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }
           aria-modal="true"
           aria-label={title}
           className={[
-            "flex w-full max-w-lg flex-col bg-white shadow-2xl outline-none rounded-xl",
+            "flex w-full max-w-lg flex-col bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)] outline-none rounded-xl",
             "max-h-[90vh]",
             "transform transition-transform duration-200 ease-out",
             isOpen ? "scale-100" : "scale-95",
