@@ -91,3 +91,25 @@ body {
     align-items: start;
   }
 }
+
+/* Project-page motion: short, ease-out entrances for tab panes and expanding
+   sections. Opacity + a few px of translate only; disabled under reduced motion. */
+@keyframes pane-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.pane-in {
+  animation: pane-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-in { animation: none; }
+}
+
+/* Baseline keyboard focus for controls that don't define their own ring.
+   :where() keeps specificity at zero so any utility class still wins. */
+:where(a, button, summary, [role="tab"]):focus-visible {
+  outline: 2px solid oklch(70.5% 0.015 286);
+  outline-offset: 2px;
+}

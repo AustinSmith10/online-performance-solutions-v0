@@ -20,7 +20,7 @@ export function CollapsibleSection({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left"
+        className="flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition-colors duration-150 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-inset"
         aria-expanded={open}
       >
         <div className="min-w-0">
@@ -39,7 +39,7 @@ export function CollapsibleSection({
           />
         </svg>
       </button>
-      {open && <div className="border-t border-zinc-100">{children}</div>}
+      {open && <div className="pane-in border-t border-zinc-100">{children}</div>}
     </div>
   );
 }
