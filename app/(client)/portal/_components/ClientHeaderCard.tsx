@@ -32,12 +32,12 @@ export function ClientHeaderCard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!!roundBadge && roundBadge > 1 && (
-            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
               Round {roundBadge}
             </span>
           )}
           {statusLabel && (
-            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${pill}`}>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${pill}`}>
               {statusLabel}
             </span>
           )}

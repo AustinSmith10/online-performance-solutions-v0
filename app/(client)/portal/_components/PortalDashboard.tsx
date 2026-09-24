@@ -202,11 +202,11 @@ function FilterPanel({
   }
 
   return (
-    <div ref={ref} role="group" aria-label="Filter report requests" className="rise-in absolute right-0 top-11 z-50 w-[20rem] rounded-xl border border-zinc-200 bg-white p-4 shadow-xl">
+    <div ref={ref} role="group" aria-label="Filter report requests" className="rise-in absolute right-0 top-11 z-50 w-[20rem] rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
       <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
         {statuses.length > 0 && (
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Status</p>
+            <p className="mb-1.5 text-xs font-semibold text-zinc-700">Status</p>
             <div className="space-y-0.5">
               {statuses.map((s) => (
                 <CheckboxRow key={s} checked={filters.statuses.includes(s)} label={s} onChange={() => toggle("statuses", s)} />
@@ -217,7 +217,7 @@ function FilterPanel({
 
         {steps.length > 0 && (
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Delivery step</p>
+            <p className="mb-1.5 text-xs font-semibold text-zinc-700">Delivery step</p>
             <div className="space-y-0.5">
               {steps.map((s) => (
                 <CheckboxRow key={s.key} checked={filters.steps.includes(s.key)} label={s.label} onChange={() => toggle("steps", s.key)} />
@@ -227,7 +227,7 @@ function FilterPanel({
         )}
 
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Submitted date</p>
+          <p className="mb-1.5 text-xs font-semibold text-zinc-700">Submitted date</p>
           <div className="flex items-center gap-1.5">
             <input
               type="date"
@@ -246,7 +246,7 @@ function FilterPanel({
         </div>
 
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Expected delivery date</p>
+          <p className="mb-1.5 text-xs font-semibold text-zinc-700">Expected delivery date</p>
           <div className="flex items-center gap-1.5">
             <input
               type="date"
@@ -468,29 +468,29 @@ export function PortalDashboard({
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {(
-              [
-                ["all", `All (${rows.length})`],
-                ["needs_review", `Needs your review (${needsReviewCount})`],
-                ["in_progress", `In progress (${inProgressCount})`],
-                ["delivered", `Delivered (${deliveredCount})`],
-              ] as [RowCategory | "all", string][]
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setCategoryFilter(value)}
-                aria-pressed={categoryFilter === value}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
-                  categoryFilter === value
-                    ? "bg-zinc-900 text-white"
-                    : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div role="group" aria-label="Filter by status" className="grid grid-cols-2 gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 sm:inline-flex">
+              {(
+                [
+                  ["all", `All (${rows.length})`],
+                  ["needs_review", `Needs your review (${needsReviewCount})`],
+                  ["in_progress", `In progress (${inProgressCount})`],
+                  ["delivered", `Delivered (${deliveredCount})`],
+                ] as [RowCategory | "all", string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setCategoryFilter(value)}
+                  aria-pressed={categoryFilter === value}
+                  className={`press-subtle rounded-md px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${
+                    categoryFilter === value ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
             <div className="relative ml-auto">
               <button
@@ -498,7 +498,7 @@ export function PortalDashboard({
                 onClick={() => setFiltersOpen((v) => !v)}
                 aria-expanded={filtersOpen}
                 aria-haspopup="true"
-                className={`press flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
+                className={`press flex items-center gap-1 rounded-md border px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
                   isFilterActive(filters)
                     ? "border-zinc-900 bg-zinc-900 text-white"
                     : "border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
@@ -594,7 +594,7 @@ export function PortalDashboard({
                       {row.expectedDeliveryLabel ? ` · Expected ${row.expectedDeliveryLabel}` : " · No delivery date set"}
                     </p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${badge.className}`}>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}>
                     {badge.label}
                     {row.stepper?.roundBadge ? ` · Round ${row.stepper.roundBadge}` : ""}
                   </span>
