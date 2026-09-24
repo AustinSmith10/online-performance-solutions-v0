@@ -229,7 +229,7 @@ export function DownloadCard({
       </div>
     </div>
     {warning && (
-      <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
         <span className="font-semibold">Revision table couldn&apos;t be updated:</span> {warning}
       </p>
     )}

@@ -61,7 +61,7 @@ export function CompactHero({
     neutral: "text-blue-900",
   }[tone];
   return (
-    <div className={`rounded-lg border px-4 py-2.5 ${classes}`}>
+    <div className={`rounded-xl border px-4 py-2.5 ${classes}`}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
           <span className={`shrink-0 whitespace-nowrap text-sm font-semibold ${titleClasses}`}>Right now</span>
