@@ -773,8 +773,8 @@ export async function ProjectWorkspace({
   const headerCard = (
     <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[effectiveStatus]} bg-white p-5`}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-        <h1 className="text-base font-semibold text-zinc-900">{title}</h1>
-        <span className="text-sm text-zinc-400">{project.clients?.name ?? "No organisation"}</span>
+        <h1 className="text-base font-semibold tracking-tight text-zinc-900">{title}</h1>
+        <span className="text-sm text-zinc-500">{project.clients?.name ?? "No organisation"}</span>
         <span className={`self-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[effectiveStatus]}`}>
           {STATUS_LABELS[effectiveStatus]}
         </span>
@@ -1010,7 +1010,7 @@ export async function ProjectWorkspace({
       <FocusCard tone="neutral" title="Assign a consultant" subtitle="Unlocks PBDB generation for the assignee.">
         <AssignForm projectId={id} consultants={consultants} currentConsultantId="" isReassign={false} />
         {consultants.length === 0 && (
-          <p className="mt-3 text-sm text-zinc-400">
+          <p className="mt-3 text-sm text-zinc-500">
             No consultants available.{" "}
             <Link href="/admin/users/invite" className="underline hover:text-zinc-700">
               Create account →
@@ -1251,7 +1251,7 @@ export async function ProjectWorkspace({
               projectedSendDate={pbdrSendPreviewIso}
             />
             {project.expected_delivery_date && (
-              <p className="mt-1 text-xs text-zinc-400">
+              <p className="mt-1 text-xs text-zinc-500">
                 Project due date (contractual):{" "}
                 {fmtDMY(new Date(project.expected_delivery_date))}
               </p>
@@ -1337,10 +1337,10 @@ export async function ProjectWorkspace({
                 <>
                   {submitterName}
                   {project.submitter?.company_role && (
-                    <span className="text-zinc-400"> ({project.submitter.company_role})</span>
+                    <span className="text-zinc-500"> ({project.submitter.company_role})</span>
                   )}
                   {project.submitter?.email && (
-                    <span className="ml-2 text-xs text-zinc-400"> · {project.submitter.email}</span>
+                    <span className="ml-2 text-xs text-zinc-500"> · {project.submitter.email}</span>
                   )}
                 </>
               ) : (
@@ -1401,7 +1401,7 @@ export async function ProjectWorkspace({
               )}
             </>
           ) : (
-            <div className="px-5 py-4 text-sm text-zinc-400">
+            <div className="px-5 py-4 text-sm text-zinc-500">
               No submitter on record — project may have been submitted via email.
             </div>
           )}
@@ -1421,7 +1421,7 @@ export async function ProjectWorkspace({
     <>
       <CollapsibleSection title="Documents" defaultOpen>
         {submissionFiles.length === 0 ? (
-          <p className="px-5 py-4 text-sm text-zinc-400">No documents uploaded yet.</p>
+          <p className="px-5 py-4 text-sm text-zinc-500">No documents uploaded yet.</p>
         ) : (
           <div className="divide-y divide-zinc-100">
             {submissionFiles.map((f) => (
@@ -1433,7 +1433,7 @@ export async function ProjectWorkspace({
                   <p className="mt-0.5 text-xs text-zinc-500">
                     {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                   </p>
-                  <p className="mt-0.5 truncate text-[11px] text-zinc-400">{f.original_filename as string}</p>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">{f.original_filename as string}</p>
                   {!f.file_type_confirmed && (
                     <ConfirmFileTypeControl
                       projectId={id}
@@ -1463,7 +1463,7 @@ export async function ProjectWorkspace({
         defaultOpen={evidenceFiles.length > 0}
       >
         {evidenceFiles.length === 0 ? (
-          <p className="px-5 py-4 text-sm text-zinc-400">No evidence attached yet.</p>
+          <p className="px-5 py-4 text-sm text-zinc-500">No evidence attached yet.</p>
         ) : (
           <div className="divide-y divide-zinc-100">
             {evidenceFiles.map((f) => (
@@ -1511,7 +1511,7 @@ export async function ProjectWorkspace({
 
   const reviewsSection =
     allReviews.length === 0 ? (
-      <p className="px-1 py-4 text-sm text-zinc-400">No stakeholder reviews yet.</p>
+      <p className="px-1 py-4 text-sm text-zinc-500">No stakeholder reviews yet.</p>
     ) : (
       <CollapsibleSection
         title="Stakeholder reviews"
@@ -1527,11 +1527,11 @@ export async function ProjectWorkspace({
               <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
                 <span className="text-xs font-semibold text-zinc-700">Rev {cycle - 1}</span>
                 {pbdbForCycle ? (
-                  <span className="text-xs text-zinc-400">
+                  <span className="text-xs text-zinc-500">
                     · PBDB sent {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
                   </span>
                 ) : (
-                  <span className="text-xs text-zinc-400">· No PBDB for this Rev</span>
+                  <span className="text-xs text-zinc-500">· No PBDB for this Rev</span>
                 )}
                 {isCurrent && (
                   <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
@@ -1548,7 +1548,7 @@ export async function ProjectWorkspace({
                     rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
                     waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
                     // Internal only (#191): still pending when a revised PBDB force-closed the round.
-                    superseded: { label: "Superseded", cls: "bg-zinc-100 text-zinc-400" },
+                    superseded: { label: "Superseded", cls: "bg-zinc-100 text-zinc-500" },
                   }[r.status] ?? { label: r.status, cls: "bg-zinc-100 text-zinc-500" };
                   const emailReplyEvidence = evidenceByReviewId.get(r.id);
                   return (
@@ -1561,7 +1561,7 @@ export async function ProjectWorkspace({
                             <p className="mt-1.5 text-sm leading-relaxed text-zinc-700">{r.comments}</p>
                           )}
                           {isAdmin && r.waive_reason && (
-                            <p className="mt-1 text-xs text-zinc-400">Waive reason: {r.waive_reason}</p>
+                            <p className="mt-1 text-xs text-zinc-500">Waive reason: {r.waive_reason}</p>
                           )}
                         </div>
                         <div className="flex shrink-0 items-start gap-2">
@@ -1570,7 +1570,7 @@ export async function ProjectWorkspace({
                               {statusConfig.label}
                             </span>
                             {r.responded_at && (
-                              <p className="mt-0.5 text-xs text-zinc-400">
+                              <p className="mt-0.5 text-xs text-zinc-500">
                                 {new Date(r.responded_at).toLocaleDateString("en-AU", {
                                   day: "numeric", month: "short", year: "numeric",
                                 })}
@@ -1681,7 +1681,7 @@ export async function ProjectWorkspace({
           projectedSendDate={pbdrSendPreviewIso}
         />
         {project.expected_delivery_date && (
-          <p className="mt-1 text-xs text-zinc-400">
+          <p className="mt-1 text-xs text-zinc-500">
             Project due date (contractual): {fmtDMY(new Date(project.expected_delivery_date))} — the
             send date above is separate.
           </p>
@@ -1706,7 +1706,7 @@ export async function ProjectWorkspace({
       {latestPbdb && (
         <div className="border-t border-zinc-100 pt-3">
           <p className="text-xs font-medium text-zinc-600">Client document colour</p>
-          <p className="mt-1 mb-2 text-xs text-zinc-400">
+          <p className="mt-1 mb-2 text-xs text-zinc-500">
             Black text, or the original red token colour, when the client downloads the PBDB.
           </p>
           <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />

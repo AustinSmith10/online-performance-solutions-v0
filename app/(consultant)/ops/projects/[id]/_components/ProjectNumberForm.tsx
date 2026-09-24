@@ -73,7 +73,7 @@ export function ProjectNumberForm({
                 {...field.inputProps}
                 className={projectNumberInputClass(field.showError, "max-w-xs")}
               />
-              <p className="mt-1 text-xs text-zinc-400">
+              <p className="mt-1 text-xs text-zinc-500">
                 Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically in generated documents.
               </p>
             </div>

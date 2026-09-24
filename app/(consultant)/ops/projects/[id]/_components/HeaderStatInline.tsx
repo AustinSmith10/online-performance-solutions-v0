@@ -20,8 +20,8 @@ export function HeaderStatInline({
       }`}
       title={title}
     >
-      {label && <span className="text-zinc-400">{label}</span>}
-      <span className={`font-medium text-zinc-900 ${valueClassName ?? ""}`}>{value}</span>
+      {label && <span className="text-zinc-500">{label}</span>}
+      <span className={`font-medium tabular-nums text-zinc-900 ${valueClassName ?? ""}`}>{value}</span>
     </span>
   );
 }

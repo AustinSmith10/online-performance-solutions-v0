@@ -15,7 +15,7 @@ export function RevisionNoteField({
     <div className="space-y-2">
       <label htmlFor="revision-note" className="block text-xs font-medium text-zinc-700">
         Note on this revision{required && <span className="text-red-500"> *</span>}{" "}
-        <span className="font-normal text-zinc-400">
+        <span className="font-normal text-zinc-600">
           (sent to {reviewerNames.length > 0 ? reviewerNames.join(", ") : "stakeholders"} with the new version)
         </span>
       </label>
@@ -27,7 +27,7 @@ export function RevisionNoteField({
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="e.g. Rechecked and corrected the setback dimension on sheet 3."
-        className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+        className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
       />
       {note.trim() && (
         <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2">

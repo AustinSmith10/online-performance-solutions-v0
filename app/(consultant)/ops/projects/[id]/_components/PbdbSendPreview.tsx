@@ -100,7 +100,7 @@ export function PbdbSendPreview({ projectId, fileId, findings, acknowledged }: P
                 <button
                   type="button"
                   onClick={() => setPreviewOpen(false)}
-                  className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                  className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600"
                 >
                   Close
                 </button>

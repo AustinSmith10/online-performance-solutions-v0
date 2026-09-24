@@ -27,9 +27,9 @@ export function FocusCard({
   return (
     <div id={id} className={`rounded-xl border-2 p-5 ${toneClasses}`}>
       <div className="mb-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Right now</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Right now</p>
         <h2 className={`mt-0.5 text-lg font-semibold ${titleClasses}`}>{title}</h2>
-        {subtitle && <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>}
+        {subtitle && <p className="mt-1 text-sm text-zinc-600">{subtitle}</p>}
       </div>
       {children}
     </div>

@@ -38,7 +38,7 @@ export function SettingsPill({ children, title = "Delivery Config" }: { children
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+              className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600"
               aria-label="Close"
             >
               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">

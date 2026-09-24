@@ -21,7 +21,7 @@ export function PbdbVersionsCard({
             <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7.914a2 2 0 00-.586-1.414l-3.914-3.914A2 2 0 0012.086 2H4zm7 1.5V6a1 1 0 001 1h2.5L11 3.5zM6 9a1 1 0 000 2h8a1 1 0 100-2H6zm0 4a1 1 0 100 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
           </svg>
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">PBDB</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">PBDB</p>
       </div>
 
       <VersionTiers
@@ -36,7 +36,7 @@ export function PbdbVersionsCard({
 
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-zinc-100 pt-3">
         {canRegenerate && (
-          <p className="text-[11px] leading-relaxed text-zinc-400">
+          <p className="text-xs leading-relaxed text-zinc-500">
             Regenerating keeps existing versions and adds a new one.
           </p>
         )}

@@ -249,7 +249,7 @@ export function LogStakeholderResponseForm({
             <p className="text-base font-semibold text-zinc-900">
               {existing ? `Replace response for ${stakeholderName}?` : `Log response for ${stakeholderName}?`}
             </p>
-            <p className="mt-0.5 text-xs text-zinc-400">{stakeholderEmail}</p>
+            <p className="mt-0.5 text-xs text-zinc-500">{stakeholderEmail}</p>
             {existing ? (
               <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs text-zinc-600">
                 <p>
@@ -389,7 +389,7 @@ export function LogStakeholderResponseForm({
                     placeholder="Who responded?"
                     value={respondentOther}
                     onChange={(e) => setRespondentOther(e.target.value)}
-                    className="mt-1.5 w-full rounded-md border border-zinc-200 px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                    className="mt-1.5 w-full rounded-md border border-zinc-200 px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
                   />
                 )}
               </div>
@@ -398,7 +398,7 @@ export function LogStakeholderResponseForm({
                 <div className="mb-1.5 flex items-center justify-between">
                   <label htmlFor={`log-response-comments-${reviewId}`} className="block text-xs font-medium text-zinc-700">
                     Comments{" "}
-                    <span className="font-normal text-zinc-400">
+                    <span className="font-normal text-zinc-500">
                       {response === "rejected" ? "(required — what needs to change)" : "(optional)"}
                     </span>
                   </label>
@@ -420,14 +420,14 @@ export function LogStakeholderResponseForm({
                   value={comments}
                   onChange={(e) => setComments(e.target.value)}
                   placeholder="What did the stakeholder say?"
-                  className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
                 />
                 {extractError && <p className="mt-1 text-xs text-red-600">{extractError}</p>}
               </div>
 
               <div>
                 <span className="mb-1.5 block text-xs font-medium text-zinc-700">
-                  Evidence <span className="font-normal text-zinc-400">(optional)</span>
+                  Evidence <span className="font-normal text-zinc-500">(optional)</span>
                 </span>
                 {prefilledEvidence && (
                   <label className="mb-2 flex items-center gap-1.5 text-xs text-zinc-700">

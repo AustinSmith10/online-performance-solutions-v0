@@ -55,7 +55,7 @@ export default async function ConsultantLayout({
               <NotificationTrayServer projectBasePath="/ops/projects" align="right" />
               <Link
                 href="/ops/profile"
-                className="hidden max-w-[160px] truncate text-xs text-zinc-400 hover:text-zinc-700 sm:block"
+                className="hidden max-w-[160px] truncate text-xs text-zinc-500 hover:text-zinc-700 sm:block"
               >
                 {userName}
               </Link>
