@@ -79,13 +79,23 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
       ? "border-red-300 bg-red-50"
       : "border-zinc-200 bg-white";
   return (
-    <div className={`rounded-xl border p-5 ${accent}`}>
+    <div
+      className={`relative rounded-xl border p-5 transition-[border-color,box-shadow] duration-150 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-zinc-400 has-[a:focus-visible]:ring-offset-1 ${accent} ${
+        p.isPending ? "" : "hover:border-zinc-400 hover:shadow-sm"
+      }`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           {p.isPending ? (
-            <span className="truncate text-base font-semibold text-zinc-900">{p.label}</span>
+            <span className="block truncate text-base font-semibold text-zinc-900" title={p.label}>{p.label}</span>
           ) : (
-            <Link href={p.href} className="truncate text-base font-semibold text-zinc-900 hover:underline">
+            // The link's ::after stretches over the whole row so the entire card
+            // is the click target; action rows below sit above it (relative z-10).
+            <Link
+              href={p.href}
+              title={p.label}
+              className="block truncate text-base font-semibold text-zinc-900 outline-none after:absolute after:inset-0 after:rounded-xl hover:underline"
+            >
               {p.label}
             </Link>
           )}
@@ -99,7 +109,12 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
         <div className="flex shrink-0 flex-col items-end gap-1">
           <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${p.statusClassName}`}>{p.statusLabel}</span>
           {p.isOverdue && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Overdue</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-300 bg-white px-2 py-0.5 text-xs font-medium text-red-700">
+              <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
+              </svg>
+              Overdue
+            </span>
           )}
           {p.hasVerificationMismatch && (
             <span
@@ -112,7 +127,7 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
         </div>
       </div>
       {p.revisionReview && (
-        <div className="mt-3 flex items-center gap-2 border-t border-red-200 pt-3">
+        <div className="relative z-10 mt-3 flex items-center gap-2 border-t border-red-200 pt-3">
           <RevisionReviewDrawer
             project={p.revisionReview.project}
             reviews={p.revisionReview.reviews}
@@ -121,7 +136,7 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
         </div>
       )}
       {p.pendingAssignment && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-amber-200 pt-3">
+        <div className="relative z-10 mt-3 flex flex-wrap items-center gap-2 border-t border-amber-200 pt-3">
           <InlineAssignmentActions projectId={p.pendingAssignment.projectId} label={p.label} />
         </div>
       )}
