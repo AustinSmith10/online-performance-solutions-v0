@@ -180,7 +180,7 @@ export function MiniStepper({
             style={{ top: "-8px", left: "58%" }}
           >
             {roundBadge ? (
-              <span className="text-[10px] font-semibold leading-none">{roundBadge}</span>
+              <span className="text-xs font-semibold leading-none">{roundBadge}</span>
             ) : (
               <StepperIcon name="refresh" className="h-2.5 w-2.5" />
             )}
@@ -201,7 +201,7 @@ export function MiniStepper({
               >
                 <StepperIcon name={icon} className="h-3.5 w-3.5" />
               </div>
-              <span className={`text-center text-[11px] leading-snug ${STEPPER_LABEL_STYLES[visual]}`}>
+              <span className={`text-center text-xs leading-snug ${STEPPER_LABEL_STYLES[visual]}`}>
                 {shortStageLabel(stage)}
               </span>
             </div>

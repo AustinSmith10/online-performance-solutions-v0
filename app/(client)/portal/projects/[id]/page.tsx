@@ -626,7 +626,7 @@ export default async function ClientProjectDetailPage({
                     <p className="truncate text-xs font-medium text-zinc-900">
                       {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-zinc-400">
+                    <p className="mt-0.5 text-xs text-zinc-400">
                       {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                     </p>
                   </div>

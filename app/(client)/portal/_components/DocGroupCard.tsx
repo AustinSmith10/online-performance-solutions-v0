@@ -63,20 +63,20 @@ export function DocGroupCard({
               </p>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                 {f.version !== undefined && (
-                  <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600">
+                  <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-xs font-semibold text-zinc-600">
                     v{f.version}
                   </span>
                 )}
-                <span className="text-[11px] text-zinc-400">{f.date}</span>
+                <span className="text-xs text-zinc-400">{f.date}</span>
                 {f.badge && (
-                  <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                  <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
                     {f.badge}
                   </span>
                 )}
               </div>
             </DownloadCard>
             {f.note && (
-              <p className="px-3 text-[11px] leading-relaxed text-zinc-500">
+              <p className="px-3 text-xs leading-relaxed text-zinc-500">
                 <span className="font-medium text-zinc-600">Consultant&apos;s note:</span> {f.note}
               </p>
             )}
