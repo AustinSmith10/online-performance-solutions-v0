@@ -1,11 +1,11 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ReviewRow } from "./_components/RevisionReviewDrawer";
+import type { ReviewRow } from "../_components/RevisionReviewDrawer";
 import { RealtimeSubscriptionRefresher } from "@/components/RealtimeSubscriptionRefresher";
-import { DeclinedBanner } from "./_components/DeclinedBanner";
-import { OnboardingFlow } from "./_components/OnboardingFlow";
-import { Dashboard } from "./_components/Dashboard";
-import type { DashboardData, DashboardProject } from "./_components/dashboardTypes";
+import { DeclinedBanner } from "../_components/DeclinedBanner";
+import { OnboardingFlow } from "../_components/OnboardingFlow";
+import { Dashboard } from "../_components/Dashboard";
+import type { DashboardData, DashboardProject } from "../_components/dashboardTypes";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { ProjectStatus } from "@/types";
 
