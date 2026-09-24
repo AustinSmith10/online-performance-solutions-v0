@@ -38,7 +38,7 @@ export function InlineAssignmentActions({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-zinc-700 disabled:opacity-50"
         >
           {acceptPending ? "Accepting…" : "Accept"}
         </button>
@@ -47,7 +47,7 @@ export function InlineAssignmentActions({
         type="button"
         onClick={() => setConfirmingDecline(true)}
         disabled={busy}
-        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-zinc-50 disabled:opacity-50"
       >
         Decline
       </button>

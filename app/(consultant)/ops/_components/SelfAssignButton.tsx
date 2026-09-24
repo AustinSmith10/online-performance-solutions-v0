@@ -16,7 +16,7 @@ export function SelfAssignButton({ projectId, address }: { projectId: string; ad
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+        className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-blue-100"
       >
         Pick up →
       </button>

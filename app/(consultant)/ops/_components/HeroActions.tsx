@@ -15,7 +15,7 @@ import type { DashboardProject } from "./dashboardTypes";
 
 function ChevronToggle({ expanded }: { expanded: boolean }) {
   return (
-    <svg className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
+    <svg className={`h-3 w-3 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
       <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
     </svg>
   );
@@ -51,7 +51,7 @@ export function useAssignmentHeroAction(items: DashboardProject[]): HeroAction |
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-amber-700"
+        className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-amber-700"
       >
         Respond ({items.length})
         <ChevronToggle expanded={expanded} />
@@ -90,7 +90,7 @@ function rowAction(item: DashboardProject) {
   return (
     <Link
       href={item.href}
-      className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+      className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-red-50"
     >
       View →
     </Link>
@@ -121,7 +121,7 @@ export function useReviewHeroAction(revisionItems: DashboardProject[], overdueIt
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-red-700"
+        className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-red-700"
       >
         Review ({items.length})
         <ChevronToggle expanded={expanded} />

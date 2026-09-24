@@ -174,7 +174,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
         <h1 className="text-xl font-semibold text-zinc-900">My projects</h1>
         <Link
           href="/ops/projects/submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-150 hover:bg-zinc-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
         >
           Submit request
         </Link>
@@ -254,7 +254,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </div>
       </TourHighlight>
 
-      <div id="dash-panel" role="tabpanel" aria-labelledby={`dash-tab-${section}`} tabIndex={-1} className="outline-none">
+      <div key={section} id="dash-panel" role="tabpanel" aria-labelledby={`dash-tab-${section}`} tabIndex={-1} className="pane-in outline-none">
       {section === "active" && (
         <div className="space-y-3">
           {pendingAssignments.length === 0 && active.length === 0 ? (
