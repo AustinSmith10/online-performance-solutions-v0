@@ -74,7 +74,7 @@ export function QaUploadedBanner({ cleanUrl }: { cleanUrl: string }) {
             style={{ top: spotlightRect.top - 26, left: spotlightRect.left, width: spotlightRect.width }}
           >
             <svg
-              className="h-5 w-5 animate-bounce text-green-500 drop-shadow-sm"
+              className="h-5 w-5 motion-safe:animate-bounce text-green-500 drop-shadow-sm"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
