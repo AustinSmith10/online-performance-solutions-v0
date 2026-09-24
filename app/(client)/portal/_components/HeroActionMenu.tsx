@@ -68,7 +68,7 @@ function ReviewFormModal({ item, onClose }: { item: PendingReviewItem; onClose: 
       className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="mx-4 w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-xl">
+      <div className="mx-4 w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
         <div className="flex items-start justify-between border-b border-zinc-100 px-6 py-4">
           <div className="min-w-0 pr-4">
             <h2 className="text-base font-semibold text-zinc-900">Brief Review</h2>
@@ -138,7 +138,7 @@ export function usePendingReviewHeroAction(items: PendingReviewItem[]): {
       type="button"
       onClick={() => setExpanded((v) => !v)}
       aria-expanded={expanded}
-      className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-amber-700"
+      className="inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800"
     >
       Review ({items.length})
       <ChevronToggle expanded={expanded} />
@@ -155,7 +155,7 @@ export function usePendingReviewHeroAction(items: PendingReviewItem[]): {
               <button
                 type="button"
                 onClick={() => setActive(item)}
-                className="shrink-0 rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700"
+                className="shrink-0 rounded-md bg-amber-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-800"
               >
                 Review
               </button>
