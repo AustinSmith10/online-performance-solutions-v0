@@ -14,7 +14,7 @@ export function SubmissionSuccessBanner({ projectId }: { projectId: string }) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-200 ease-in-out ${
+      className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-150 ease-[var(--ease-out)] ${
         closing ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >

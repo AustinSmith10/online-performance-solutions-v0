@@ -53,7 +53,7 @@ function CompactDownloadButton({ projectId, filename }: { projectId: string; fil
 
 function ChevronToggle({ expanded }: { expanded: boolean }) {
   return (
-    <svg className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
+    <svg className={`h-3 w-3 transition-transform duration-[160ms] ease-[var(--ease-out)] motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
       <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
     </svg>
   );
@@ -65,10 +65,10 @@ function ReviewFormModal({ item, onClose }: { item: PendingReviewItem; onClose: 
   const router = useRouter();
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30 p-4"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="mx-4 w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
+      <div className="modal-panel mx-4 w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
         <div className="flex items-start justify-between border-b border-zinc-100 px-6 py-4">
           <div className="min-w-0 pr-4">
             <h2 className="text-base font-semibold text-zinc-900">Brief Review</h2>
@@ -138,7 +138,7 @@ export function usePendingReviewHeroAction(items: PendingReviewItem[]): {
       type="button"
       onClick={() => setExpanded((v) => !v)}
       aria-expanded={expanded}
-      className="inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800"
+      className="press inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800"
     >
       Review ({items.length})
       <ChevronToggle expanded={expanded} />
@@ -148,14 +148,14 @@ export function usePendingReviewHeroAction(items: PendingReviewItem[]): {
   const expandedNode = (
     <>
       {expanded && (
-        <div className="mt-3 divide-y divide-amber-200/70 border-t border-amber-200 pt-1">
+        <div className="rise-in mt-3 divide-y divide-amber-200/70 border-t border-amber-200 pt-1">
           {items.map((item) => (
             <div key={item.id} className="flex items-center justify-between gap-3 py-2">
               <span className="min-w-0 truncate text-sm text-amber-900">{item.label}</span>
               <button
                 type="button"
                 onClick={() => setActive(item)}
-                className="shrink-0 rounded-md bg-amber-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-800"
+                className="press shrink-0 rounded-md bg-amber-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-800"
               >
                 Review
               </button>
@@ -267,7 +267,7 @@ export function useReadyDownloadHeroAction(items: ReadyItemInput[]): {
       type="button"
       onClick={() => setExpanded((v) => !v)}
       aria-expanded={expanded}
-      className="inline-flex items-center gap-1.5 rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+      className="press inline-flex items-center gap-1.5 rounded-md border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
     >
       Download ({items.length})
       <ChevronToggle expanded={expanded} />
@@ -275,7 +275,7 @@ export function useReadyDownloadHeroAction(items: ReadyItemInput[]): {
   );
 
   const expandedNode = expanded && (
-    <div className="mt-3 border-t border-green-200 pt-3">
+    <div className="rise-in mt-3 border-t border-green-200 pt-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <span className="text-xs text-green-700">{items.length} reports ready</span>
         <button
@@ -285,7 +285,7 @@ export function useReadyDownloadHeroAction(items: ReadyItemInput[]): {
             setActiveIndex(0);
           }}
           disabled={activeIndex !== null}
-          className="rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          className="press rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
         >
           Download all
         </button>
@@ -299,7 +299,7 @@ export function useReadyDownloadHeroAction(items: ReadyItemInput[]): {
               <div className="shrink-0">
                 {status === "downloading" ? (
                   <span
-                    className="inline-flex items-center rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800"
+                    className="press inline-flex items-center rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800"
                     title={item.filename}
                   >
                     {activePct !== null ? `${activePct}%` : "…"}

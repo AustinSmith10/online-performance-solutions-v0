@@ -54,7 +54,7 @@ interface DownloadStatusResponse {
 }
 
 const DEFAULT_BUTTON_CLASS =
-  "shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50";
+  "press shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50";
 const DEFAULT_WRAPPER_CLASS = "flex items-center justify-between gap-3 px-5 py-3";
 
 export function DownloadCard({

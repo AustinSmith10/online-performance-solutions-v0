@@ -116,7 +116,7 @@ function ClientWorkspaceInner({
               </button>
             ))}
           </div>
-          <div role="tabpanel" id="ref-tabpanel" aria-labelledby={`ref-tab-${refTab}`} className="mt-4 space-y-4">{refContent[refTab]}</div>
+          <div key={refTab} role="tabpanel" id="ref-tabpanel" aria-labelledby={`ref-tab-${refTab}`} className="pane-in mt-4 space-y-4">{refContent[refTab]}</div>
         </div>
       </div>
     </div>

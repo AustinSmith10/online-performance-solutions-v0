@@ -541,6 +541,7 @@ export function PortalDashboard({
             </select>
           </div>
 
+          <div key={`${categoryFilter}-${sortBy}`} className="pane-in space-y-3">
           {visibleRows.length === 0 && (
             <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center">
               <p className="text-sm font-medium text-zinc-900">No report requests match these filters</p>
@@ -617,6 +618,7 @@ export function PortalDashboard({
               </div>
             );
           })}
+          </div>
         </div>
       )}
       </TourHighlight>
