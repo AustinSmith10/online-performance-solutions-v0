@@ -48,7 +48,7 @@ export function CompactHero({
   expanded,
 }: {
   tone: "amber" | "red" | "neutral";
-  subtitle: string;
+  subtitle: React.ReactNode;
   action?: React.ReactNode;
   expanded?: React.ReactNode;
 }) {
@@ -65,9 +65,9 @@ export function CompactHero({
   return (
     <div className={`rounded-xl border px-4 py-2.5 ${classes}`}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
+        <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
           <span className={`shrink-0 whitespace-nowrap text-sm font-semibold ${titleClasses}`}>Right now</span>
-          <span className="text-xs text-zinc-600 sm:line-clamp-2">{subtitle}</span>
+          <span className="min-w-0 text-xs text-zinc-600">{subtitle}</span>
         </div>
         {action && <div className="sm:shrink-0">{action}</div>}
       </div>

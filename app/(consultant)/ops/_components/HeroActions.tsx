@@ -23,9 +23,46 @@ function ChevronToggle({ expanded }: { expanded: boolean }) {
 }
 
 interface HeroAction {
-  subtitle: string;
+  subtitle: React.ReactNode;
   action: React.ReactNode;
   expanded: React.ReactNode;
+}
+
+// Labels arrive as "250012 — Site 036, 85 Twists Road, …". Shown as two pieces
+// (mono project number, then the address) instead of dash-separated text, so
+// a banner reads "status · number address" without stacked em dashes.
+function ProjectLabel({ label }: { label: string }) {
+  const m = label.match(/^(\S+) — (.+)$/);
+  if (!m) return <span className="min-w-0 break-words">{label}</span>;
+  return (
+    <span className="min-w-0 break-words">
+      <span className="font-mono tabular-nums text-zinc-800">{m[1]}</span>
+      <span className="ml-2">{m[2]}</span>
+    </span>
+  );
+}
+
+// One-item hero subtitle: an optional plain lead ("Revision requested"), the
+// shared OverduePill when overdue, then the project. Status is a word or a
+// pill, never punctuation.
+function HeroSubtitle({
+  lead,
+  leadClassName,
+  overdueDays,
+  label,
+}: {
+  lead?: string;
+  leadClassName?: string;
+  overdueDays?: number | null;
+  label: string;
+}) {
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+      {lead && <span className={`shrink-0 font-medium ${leadClassName ?? ""}`}>{lead}</span>}
+      {overdueDays !== null && overdueDays !== undefined && <OverduePill days={overdueDays} className="shrink-0" />}
+      <ProjectLabel label={label} />
+    </span>
+  );
 }
 
 export function useAssignmentHeroAction(items: DashboardProject[]): HeroAction | null {
@@ -35,7 +72,7 @@ export function useAssignmentHeroAction(items: DashboardProject[]): HeroAction |
   if (items.length === 1) {
     const item = items[0];
     return {
-      subtitle: `Respond to assignment — ${item.label}`,
+      subtitle: <HeroSubtitle lead="Respond to assignment" leadClassName="text-amber-900" label={item.label} />,
       action: (
         <div className="flex flex-wrap items-center gap-2">
           <InlineAssignmentActions projectId={item.pendingAssignment!.projectId} label={item.label} />
@@ -106,9 +143,14 @@ export function useReviewHeroAction(revisionItems: DashboardProject[], overdueIt
   if (items.length === 1) {
     const item = items[0];
     return {
-      subtitle: item.isRevision
-        ? `${item.isOverdue ? "Overdue revision" : "Revision"} requested — ${item.label}`
-        : `Overdue — ${item.label}`,
+      subtitle: (
+        <HeroSubtitle
+          lead={item.isRevision ? "Revision requested" : undefined}
+          leadClassName="text-red-900"
+          overdueDays={item.isOverdue ? item.daysOverdue : null}
+          label={item.label}
+        />
+      ),
       action: rowAction(item),
       expanded: null,
     };
