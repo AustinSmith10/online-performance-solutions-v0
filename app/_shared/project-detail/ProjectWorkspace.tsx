@@ -70,6 +70,8 @@ import { ResumeButton } from "@/app/(admin)/admin/projects/[id]/_components/Resu
 import { AdminDeleteButton } from "@/app/(admin)/admin/projects/[id]/_components/AdminDeleteButton";
 import { AdminProjectNumberForm } from "@/app/(admin)/admin/projects/[id]/_components/AdminProjectNumberForm";
 import { ConsultantCard } from "@/app/(admin)/admin/projects/[id]/_components/ConsultantCard";
+import { OverduePill } from "@/components/OverduePill";
+import { daysOverdue as daysOverdueBetween } from "@/app/(consultant)/ops/_components/dashboardList";
 
 export type ProjectWorkspaceRole = "consultant" | "admin";
 
@@ -133,9 +135,11 @@ function adminOverdueInfo(
 ): { isOverdue: boolean; daysOverdue: number } {
   if (isDeleted || !deliveryDate || !ADMIN_LIVE_STATUSES.includes(status))
     return { isOverdue: false, daysOverdue: 0 };
-  const ms = Date.now() - new Date(deliveryDate).getTime();
-  if (ms <= 0) return { isOverdue: false, daysOverdue: 0 };
-  return { isOverdue: true, daysOverdue: Math.ceil(ms / (1000 * 60 * 60 * 24)) };
+  // Whole calendar days past the delivery date, the same rule the consultant
+  // dashboard uses, so an admin and a consultant see the same project as
+  // overdue on the same day with the same count.
+  const days = daysOverdueBetween(deliveryDate, new Date().toISOString().slice(0, 10));
+  return { isOverdue: days > 0, daysOverdue: days };
 }
 
 function calcDaysPaused(pausedAt: string | null): number {
@@ -769,6 +773,7 @@ export async function ProjectWorkspace({
         daysOverdue: 0,
       };
   const daysPaused = calcDaysPaused(pauseData.paused_at);
+  const overdueDays = isAdmin ? daysOverdue : isOverdue ? daysOverdueBetween(project.expected_delivery_date, todayIso) : 0;
 
   const headerCard = (
     <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[effectiveStatus]} bg-white p-5`}>
@@ -789,9 +794,7 @@ export async function ProjectWorkspace({
           </span>
         )}
         {isOverdue && (
-          <span className="self-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-            Overdue
-          </span>
+          <OverduePill className="self-center" days={overdueDays} />
         )}
         {isDeleted && (
           <span className="self-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">

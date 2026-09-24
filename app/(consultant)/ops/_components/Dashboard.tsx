@@ -15,6 +15,7 @@ import { useAssignmentHeroAction, useReviewHeroAction } from "./HeroActions";
 import { TourHighlight } from "@/components/onboarding-tour/TourHighlight";
 import type { DashboardData, DashboardProject } from "./dashboardTypes";
 import type { SectionKey } from "./dashboardList";
+import { OverduePill } from "@/components/OverduePill";
 
 export function Tile({
   tone,
@@ -111,12 +112,7 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
         <div className="flex shrink-0 flex-col items-end gap-1">
           <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${p.statusClassName}`}>{p.statusLabel}</span>
           {p.isOverdue && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-red-300 bg-white px-2 py-0.5 text-xs font-medium tabular-nums text-red-700">
-              <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
-              </svg>
-              Overdue{p.daysOverdue > 0 ? ` · ${p.daysOverdue}d` : ""}
-            </span>
+            <OverduePill days={p.daysOverdue} />
           )}
           {p.hasVerificationMismatch && (
             <span

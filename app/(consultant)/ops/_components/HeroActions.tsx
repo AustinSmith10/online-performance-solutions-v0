@@ -12,6 +12,7 @@ import Link from "next/link";
 import { InlineAssignmentActions } from "./InlineAssignmentActions";
 import { RevisionReviewDrawer } from "./RevisionReviewDrawer";
 import type { DashboardProject } from "./dashboardTypes";
+import { OverduePill } from "@/components/OverduePill";
 
 function ChevronToggle({ expanded }: { expanded: boolean }) {
   return (
@@ -134,9 +135,7 @@ export function useReviewHeroAction(revisionItems: DashboardProject[], overdueIt
             <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-red-900">
               <span className="min-w-0 break-words">{item.label}</span>
               {item.isOverdue && (
-                <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-semibold uppercase tabular-nums tracking-wide text-red-700">
-                  Overdue{item.daysOverdue > 0 ? ` · ${item.daysOverdue}d` : ""}
-                </span>
+                <OverduePill days={item.daysOverdue} className="shrink-0" />
               )}
             </span>
             <div className="shrink-0">{rowAction(item)}</div>

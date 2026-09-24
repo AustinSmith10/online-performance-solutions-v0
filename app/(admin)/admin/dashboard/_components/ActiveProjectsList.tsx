@@ -17,6 +17,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ProjectStatus } from "@/types";
+import { OverduePill } from "@/components/OverduePill";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -155,7 +156,7 @@ function ProjectRow({ p }: { p: ActiveProjectItem }) {
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        {p.overdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">Overdue</span>}
+        {p.overdue && <OverduePill />}
         {p.overridePending && (
           <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700">Override</span>
         )}
