@@ -1163,9 +1163,9 @@ export async function ProjectWorkspace({
           {currentCycleComments.length > 0 && (
             <div className="space-y-3">
               {currentCycleComments.map((r) => (
-                <div key={r.id} className="rounded-md border border-red-100 bg-red-50 px-4 py-3">
-                  <p className="text-xs font-semibold text-red-800">{r.stakeholder_name}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-red-700">{r.comments}</p>
+                <div key={r.id} className="rounded-md border border-red-200 bg-white px-4 py-3">
+                  <p className="text-sm font-semibold text-red-900">{r.stakeholder_name}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-zinc-800">{r.comments}</p>
                 </div>
               ))}
             </div>
