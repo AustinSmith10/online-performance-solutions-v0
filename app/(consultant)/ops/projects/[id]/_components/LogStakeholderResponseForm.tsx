@@ -244,8 +244,8 @@ export function LogStakeholderResponseForm({
         // ancestor on the project page traps this `fixed` overlay below the
         // Documents-tab content that renders later in the DOM. z above every
         // other layer, matching DocumentPreviewModal / PbdrPreviewButton.
-        <div className="fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-sm bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
+        <div className="modal-backdrop fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-sm bg-black/30 p-4">
+          <div className="modal-panel w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
             <p className="text-base font-semibold text-zinc-900">
               {existing ? `Replace response for ${stakeholderName}?` : `Log response for ${stakeholderName}?`}
             </p>

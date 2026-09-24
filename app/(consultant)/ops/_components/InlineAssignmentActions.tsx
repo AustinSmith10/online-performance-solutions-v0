@@ -42,7 +42,7 @@ export function InlineAssignmentActions({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-zinc-700 disabled:opacity-50"
+          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white press hover:bg-zinc-700 disabled:opacity-50"
         >
           {acceptPending ? "Accepting…" : "Accept"}
         </button>
@@ -51,21 +51,21 @@ export function InlineAssignmentActions({
         type="button"
         onClick={() => setConfirmingDecline(true)}
         disabled={busy}
-        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-zinc-50 disabled:opacity-50"
+        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 press hover:bg-zinc-50 disabled:opacity-50"
       >
         Decline
       </button>
       {acceptState.error && <p className="w-full text-xs text-red-600">{acceptState.error}</p>}
 
       {confirmingDecline && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-black/30">
+        <div className="modal-backdrop fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-black/30">
           <div
             ref={dialogRef}
             tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby={`decline-title-${projectId}`}
-            className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-[0_8px_30px_rgb(0_0_0/0.10)] outline-none"
+            className="modal-panel mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-[0_8px_30px_rgb(0_0_0/0.10)] outline-none"
           >
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
               <svg className="h-6 w-6 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>

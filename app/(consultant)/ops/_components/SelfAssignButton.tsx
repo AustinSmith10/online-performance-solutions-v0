@@ -20,20 +20,20 @@ export function SelfAssignButton({ projectId, address }: { projectId: string; ad
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-[background-color,transform] duration-150 active:scale-[0.97] hover:bg-blue-100"
+        className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 press hover:bg-blue-100"
       >
         Pick up →
       </button>
 
       {confirming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
           <div
             ref={dialogRef}
             tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby={`pickup-title-${projectId}`}
-            className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-[0_8px_30px_rgb(0_0_0/0.10)] outline-none"
+            className="modal-panel mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-[0_8px_30px_rgb(0_0_0/0.10)] outline-none"
           >
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
               <svg className="h-6 w-6 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>

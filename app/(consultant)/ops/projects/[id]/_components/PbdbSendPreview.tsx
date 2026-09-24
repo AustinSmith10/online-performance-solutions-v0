@@ -86,11 +86,11 @@ export function PbdbSendPreview({ projectId, fileId, findings, acknowledged }: P
           // rendered inline it inherits the drawer's narrow containing block
           // and the document is unreadable. z above every other layer.
           <div
-            className="fixed inset-0 z-[100] flex flex-col items-center bg-zinc-900/80 p-4"
+            className="modal-backdrop fixed inset-0 z-[100] flex flex-col items-center bg-zinc-900/80 p-4"
             onClick={() => setPreviewOpen(false)}
           >
             <div
-              className="flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]"
+              className="modal-panel flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">

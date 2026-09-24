@@ -82,11 +82,11 @@ export function FlagAcknowledgeControl({
           // `fixed` overlay, so the scrim stops short and the 100dvh panel is
           // offset past the viewport (same trap as #177 for DocumentPreviewModal).
         <div
-          className="fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
+          className="modal-backdrop fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
           onClick={() => setOpen(false)}
         >
           <div
-            className="flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]"
+            className="modal-panel flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
