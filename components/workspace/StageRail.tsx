@@ -65,23 +65,27 @@ function StageIconGlyph({ icon, className }: { icon: StageIcon; className?: stri
 
 export function StageRail({ stages }: { stages: Stage[] }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-gradient-to-b from-white to-zinc-50 px-6 py-5">
-      <div className="flex items-start">
+    <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white px-3 py-4 sm:px-6">
+      <ol aria-label="Project progress" className="flex items-start">
         {stages.map((stage, i) => {
           const isLast = i === stages.length - 1;
           const urgency = stage.urgency ?? "neutral";
           return (
-            <div key={stage.id} className={`flex items-start ${isLast ? "" : "flex-1"}`}>
+            <li
+              key={stage.id}
+              aria-current={stage.state === "current" ? "step" : undefined}
+              className={`flex items-start ${isLast ? "" : "flex-1"}`}
+            >
               <div className="flex flex-col items-center gap-2">
                 {stage.state === "done" ? (
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm shadow-emerald-200">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white ">
                     <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
                     </svg>
                   </div>
                 ) : stage.state === "current" ? (
                   <div
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${URGENCY_BG[urgency]} text-white shadow-sm ring-[5px] ${URGENCY_RING[urgency]}`}
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${URGENCY_BG[urgency]} text-white ring-[3px] ${URGENCY_RING[urgency]}`}
                   >
                     {stage.icon === "number" ? (
                       <span className="text-xs font-semibold">{i + 1}</span>
@@ -99,7 +103,7 @@ export function StageRail({ stages }: { stages: Stage[] }) {
                   </div>
                 )}
                 <span
-                  className={`max-w-[6.5rem] text-center text-[11px] font-medium leading-tight ${
+                  className={`max-w-[4.5rem] text-center sm:max-w-[7rem] text-xs font-medium leading-tight ${
                     stage.state === "upcoming"
                       ? "text-zinc-500"
                       : stage.state === "current"
@@ -108,6 +112,9 @@ export function StageRail({ stages }: { stages: Stage[] }) {
                   }`}
                 >
                   {stage.label}
+                  <span className="sr-only">
+                    {stage.state === "done" ? " (done)" : stage.state === "current" ? " (current step)" : " (upcoming)"}
+                  </span>
                 </span>
               </div>
               {!isLast && (
@@ -119,10 +126,10 @@ export function StageRail({ stages }: { stages: Stage[] }) {
                   />
                 </div>
               )}
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </div>
   );
 }
