@@ -19,7 +19,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
   draft: "bg-zinc-100 text-zinc-500",
   submitted: "bg-blue-100 text-blue-700",
-  assigned: "bg-yellow-100 text-yellow-700",
+  assigned: "bg-zinc-200 text-zinc-700",
   in_progress: "bg-purple-100 text-purple-700",
   dispatched: "bg-amber-100 text-amber-700",
   revision_required: "bg-red-100 text-red-700",
