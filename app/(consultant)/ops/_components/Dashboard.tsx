@@ -32,7 +32,7 @@ export function Tile({
     zinc: "border-zinc-200 bg-white text-zinc-900",
   }[tone];
   return (
-    <div className={`rounded-xl border p-4 ${classes}`}>
+    <div className={`rounded-xl border p-3 sm:p-4 ${classes}`}>
       <p className="text-2xl font-semibold tabular-nums">{value}</p>
       <p className="mt-0.5 text-xs font-medium">{label}</p>
     </div>
@@ -235,7 +235,8 @@ export function Dashboard({ data }: { data: DashboardData }) {
   const showSearch = tabTotal > 6 || q !== "" || search !== "";
 
   return (
-    <div className="space-y-5">
+    // pb-20: clears the floating Available pill so the last row is never covered.
+    <div className="space-y-5 pb-20">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900">My projects</h1>
         <Link
