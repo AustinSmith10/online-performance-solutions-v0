@@ -292,6 +292,29 @@ function captionClassName(stepper: StepperResult | null, hasPendingReview: boole
 // full card with its own eyebrow + padding. `expanded` is an optional extra
 // section rendered below the header row (used by the hero action hooks to
 // expand a picker list in place, with no overlay — see HeroActionMenu.tsx).
+// Banner subtitle: a plain lead phrase, the project, and a "+N more" count,
+// separated by spacing rather than dashes. The address wraps instead of being
+// cut off, so two banners side by side still show which project each is about.
+function HeroSubtitle({
+  lead,
+  leadClassName,
+  label,
+  more,
+}: {
+  lead: string;
+  leadClassName: string;
+  label: string;
+  more: number;
+}) {
+  return (
+    <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <span className={`shrink-0 font-medium ${leadClassName}`}>{lead}</span>
+      <span className="min-w-0 break-words">{label}</span>
+      {more > 0 && <span className="shrink-0 tabular-nums text-zinc-500">+{more} more</span>}
+    </span>
+  );
+}
+
 function CompactHero({
   tone,
   title,
@@ -301,7 +324,7 @@ function CompactHero({
 }: {
   tone: "neutral" | "amber" | "green";
   title: string;
-  subtitle: string;
+  subtitle: React.ReactNode;
   action?: React.ReactNode;
   expanded?: React.ReactNode;
 }) {
@@ -319,9 +342,9 @@ function CompactHero({
   return (
     <div className={`rounded-lg border px-4 py-2.5 ${classes}`}>
       <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-baseline gap-2">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className={`shrink-0 whitespace-nowrap text-sm font-semibold ${titleClasses}`}>{title}</span>
-          <span className="truncate text-xs text-zinc-500">{subtitle}</span>
+          <span className="min-w-0 text-xs text-zinc-600">{subtitle}</span>
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
@@ -422,9 +445,12 @@ export function PortalDashboard({
                   tone="amber"
                   title="Right now"
                   subtitle={
-                    attentionCount > 1
-                      ? `Please review — ${firstPendingReview.label} (+${attentionCount - 1} more)`
-                      : `Please review — ${firstPendingReview.label}`
+                    <HeroSubtitle
+                      lead="Please review"
+                      leadClassName="text-amber-900"
+                      label={firstPendingReview.label}
+                      more={attentionCount - 1}
+                    />
                   }
                   action={pendingReviewHero.button}
                   expanded={pendingReviewHero.expanded}
@@ -435,9 +461,12 @@ export function PortalDashboard({
                   tone="green"
                   title="Right now"
                   subtitle={
-                    readyCount > 1
-                      ? `Report ready — ${firstReady.label} (+${readyCount - 1} more)`
-                      : `Report ready — ${firstReady.label}`
+                    <HeroSubtitle
+                      lead="Report ready"
+                      leadClassName="text-green-900"
+                      label={firstReady.label}
+                      more={readyCount - 1}
+                    />
                   }
                   action={readyDownloadHero.button}
                   expanded={readyDownloadHero.expanded}
@@ -445,7 +474,7 @@ export function PortalDashboard({
               )}
             </div>
           ) : (
-            <CompactHero tone="neutral" title="Right now" subtitle="You're all caught up — nothing needs your attention." />
+            <CompactHero tone="neutral" title="Right now" subtitle="You're all caught up. Nothing needs your attention." />
           )}
         </div>
       </TourHighlight>
