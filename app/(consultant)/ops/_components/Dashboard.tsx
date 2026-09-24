@@ -76,9 +76,9 @@ export function CompactHero({
 
 export function ProjectRow({ p }: { p: DashboardProject }) {
   const accent = p.isPending
-    ? "border-amber-300 bg-amber-50"
+    ? "border-amber-200 bg-amber-50"
     : p.isRevision
-      ? "border-red-300 bg-red-50"
+      ? "border-red-200 bg-red-50"
       : "border-zinc-200 bg-white";
   return (
     <div
