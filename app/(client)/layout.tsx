@@ -34,21 +34,21 @@ export default async function ClientLayout({ children }: { children: React.React
             <div className="flex shrink-0 items-center gap-2">
               <ReplayTourButton
                 href="/portal"
-                className="flex h-6 w-6 items-center justify-center rounded-full border border-zinc-300 text-xs font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-300 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
               >
                 ?
               </ReplayTourButton>
               <NotificationTrayServer projectBasePath="/portal/projects" align="right" />
               <Link
                 href="/portal/profile"
-                className="hidden max-w-[160px] truncate text-xs text-zinc-500 hover:text-zinc-700 sm:block"
+                className="hidden max-w-[160px] truncate py-2 text-xs text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 sm:block"
               >
                 {[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
               </Link>
               <form action={logout}>
                 <button
                   type="submit"
-                  className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                  className="rounded px-2 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
                 >
                   Sign out
                 </button>

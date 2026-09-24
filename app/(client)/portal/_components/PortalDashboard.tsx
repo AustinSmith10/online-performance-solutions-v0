@@ -184,8 +184,15 @@ function FilterPanel({
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
     document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [onClose]);
 
   function toggle(key: "statuses" | "steps", value: string) {
@@ -195,7 +202,7 @@ function FilterPanel({
   }
 
   return (
-    <div ref={ref} className="absolute right-0 top-9 z-50 w-[20rem] rounded-xl border border-zinc-200 bg-white p-4 shadow-xl">
+    <div ref={ref} role="group" aria-label="Filter report requests" className="absolute right-0 top-11 z-50 w-[20rem] rounded-xl border border-zinc-200 bg-white p-4 shadow-xl">
       <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
         {statuses.length > 0 && (
           <div>
@@ -226,14 +233,14 @@ function FilterPanel({
               type="date"
               value={filters.submittedFrom}
               onChange={(e) => onChange({ ...filters, submittedFrom: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
             <span className="text-xs text-zinc-500">to</span>
             <input
               type="date"
               value={filters.submittedTo}
               onChange={(e) => onChange({ ...filters, submittedTo: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
           </div>
         </div>
@@ -245,14 +252,14 @@ function FilterPanel({
               type="date"
               value={filters.expectedFrom}
               onChange={(e) => onChange({ ...filters, expectedFrom: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
             <span className="text-xs text-zinc-500">to</span>
             <input
               type="date"
               value={filters.expectedTo}
               onChange={(e) => onChange({ ...filters, expectedTo: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
           </div>
         </div>
@@ -468,7 +475,8 @@ export function PortalDashboard({
                 key={value}
                 type="button"
                 onClick={() => setCategoryFilter(value)}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                aria-pressed={categoryFilter === value}
+                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
                   categoryFilter === value
                     ? "bg-zinc-900 text-white"
                     : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
@@ -482,13 +490,15 @@ export function PortalDashboard({
               <button
                 type="button"
                 onClick={() => setFiltersOpen((v) => !v)}
-                className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium ${
+                aria-expanded={filtersOpen}
+                aria-haspopup="true"
+                className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
                   isFilterActive(filters)
                     ? "border-zinc-900 bg-zinc-900 text-white"
                     : "border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
                 }`}
               >
-                Filters {isFilterActive(filters) ? "•" : ""}
+                Filters{isFilterActive(filters) && <span className="sr-only"> (applied)</span>}{isFilterActive(filters) && <span aria-hidden="true">•</span>}
               </button>
               {filtersOpen && (
                 <FilterPanel
@@ -504,15 +514,18 @@ export function PortalDashboard({
 
           <div className="flex flex-wrap items-center gap-2">
             <input
+              type="search"
+              aria-label="Search by project or address"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by project or address…"
-              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
             <select
+              aria-label="Sort report requests"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 focus:border-zinc-400 focus:outline-none"
+              className="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             >
               {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([value, label]) => (
                 <option key={value} value={value}>
