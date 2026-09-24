@@ -2,6 +2,7 @@
 
 import { useActionState, useCallback, useRef, useState } from "react";
 import { useModalFocus } from "./useModalFocus";
+import { ModalPortal } from "@/components/ModalPortal";
 import { selfAssignProject, type SelfAssignState } from "@/app/actions/projects";
 
 export function SelfAssignButton({ projectId, address }: { projectId: string; address: string }) {
@@ -26,6 +27,7 @@ export function SelfAssignButton({ projectId, address }: { projectId: string; ad
       </button>
 
       {confirming && (
+        <ModalPortal>
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
           <div
             ref={dialogRef}
@@ -72,6 +74,7 @@ export function SelfAssignButton({ projectId, address }: { projectId: string; ad
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </>
   );

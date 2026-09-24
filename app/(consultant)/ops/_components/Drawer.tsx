@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useModalFocus } from "./useModalFocus";
+import { ModalPortal } from "@/components/ModalPortal";
 
 interface Props {
   isOpen: boolean;
@@ -24,20 +25,22 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }
   }, [isOpen]);
 
   return (
-    <>
+    <ModalPortal>
       <div
         aria-hidden="true"
         onClick={onClose}
         className={[
-          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-[opacity,visibility] ease-[var(--ease-out)]",
-          isOpen ? "visible opacity-100 duration-200" : "pointer-events-none invisible opacity-0 duration-150",
+          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm ease-[var(--ease-out)]",
+          // Only the closing state transitions `visibility`: the opening style must flip it
+          // instantly, otherwise the panel is still hidden when focus moves in.
+          isOpen ? "visible opacity-100 transition-opacity duration-200" : "pointer-events-none invisible opacity-0 transition-[opacity,visibility] duration-150",
         ].join(" ")}
       />
 
       <div
         className={[
-          "fixed inset-0 z-50 flex items-center justify-center p-4 transition-[opacity,visibility] ease-[var(--ease-out)]",
-          isOpen ? "visible opacity-100 duration-200" : "pointer-events-none invisible opacity-0 duration-150",
+          "fixed inset-0 z-50 flex items-center justify-center p-4 ease-[var(--ease-out)]",
+          isOpen ? "visible opacity-100 transition-opacity duration-200" : "pointer-events-none invisible opacity-0 transition-[opacity,visibility] duration-150",
         ].join(" ")}
       >
         <div
@@ -86,6 +89,6 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }
           </div>
         </div>
       </div>
-    </>
+    </ModalPortal>
   );
 }

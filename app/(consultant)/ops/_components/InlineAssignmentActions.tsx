@@ -2,6 +2,7 @@
 
 import { useActionState, useCallback, useRef, useState } from "react";
 import { useModalFocus } from "./useModalFocus";
+import { ModalPortal } from "@/components/ModalPortal";
 import {
   acceptAssignment,
   declineAssignment,
@@ -58,6 +59,7 @@ export function InlineAssignmentActions({
       {acceptState.error && <p className="w-full text-xs text-red-600">{acceptState.error}</p>}
 
       {confirmingDecline && (
+        <ModalPortal>
         <div className="modal-backdrop fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-black/30">
           <div
             ref={dialogRef}
@@ -102,6 +104,7 @@ export function InlineAssignmentActions({
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </>
   );
