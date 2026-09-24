@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { useModalFocus } from "./useModalFocus";
 
 interface Props {
   isOpen: boolean;
@@ -15,20 +16,11 @@ interface Props {
 export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [isOpen, onClose]);
+  useModalFocus(isOpen, panelRef, onClose);
 
   useEffect(() => {
     document.body.style.overflow = isOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (isOpen) panelRef.current?.focus();
   }, [isOpen]);
 
   return (
@@ -37,15 +29,15 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }
         aria-hidden="true"
         onClick={onClose}
         className={[
-          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-200",
-          isOpen ? "opacity-100" : "pointer-events-none opacity-0",
+          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-[opacity,visibility] duration-200",
+          isOpen ? "visible opacity-100" : "pointer-events-none invisible opacity-0",
         ].join(" ")}
       />
 
       <div
         className={[
-          "fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200",
-          isOpen ? "opacity-100" : "pointer-events-none opacity-0",
+          "fixed inset-0 z-50 flex items-center justify-center p-4 transition-[opacity,visibility] duration-200",
+          isOpen ? "visible opacity-100" : "pointer-events-none invisible opacity-0",
         ].join(" ")}
       >
         <div
@@ -71,7 +63,7 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }
             <button
               onClick={onClose}
               aria-label="Close panel"
-              className="mt-0.5 shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+              className="mt-0.5 shrink-0 rounded p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

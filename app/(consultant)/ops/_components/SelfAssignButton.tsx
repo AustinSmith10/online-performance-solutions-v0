@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useCallback, useRef, useState } from "react";
+import { useModalFocus } from "./useModalFocus";
 import { selfAssignProject, type SelfAssignState } from "@/app/actions/projects";
 
 export function SelfAssignButton({ projectId, address }: { projectId: string; address: string }) {
@@ -10,6 +11,9 @@ export function SelfAssignButton({ projectId, address }: { projectId: string; ad
     {}
   );
   const [confirming, setConfirming] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeConfirm = useCallback(() => setConfirming(false), []);
+  useModalFocus(confirming, dialogRef, closeConfirm);
 
   return (
     <>
@@ -23,13 +27,20 @@ export function SelfAssignButton({ projectId, address }: { projectId: string; ad
 
       {confirming && (
         <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
+          <div
+            ref={dialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`pickup-title-${projectId}`}
+            className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl outline-none"
+          >
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
               <svg className="h-6 w-6 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <p className="text-base font-semibold text-zinc-900 text-center">Pick up this job?</p>
+            <p id={`pickup-title-${projectId}`} className="text-base font-semibold text-zinc-900 text-center">Pick up this job?</p>
             {address && (
               <p className="mt-1 text-sm font-medium text-zinc-600 text-center">{address}</p>
             )}
@@ -51,6 +62,7 @@ export function SelfAssignButton({ projectId, address }: { projectId: string; ad
               </form>
               <button
                 type="button"
+                data-autofocus
                 onClick={() => setConfirming(false)}
                 disabled={pending}
                 className="w-full rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
