@@ -25,10 +25,14 @@ export default async function ConsultantLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireRole("consultant");
+  // The badge count doesn't depend on who is signed in, so fetch it alongside
+  // the session lookup rather than after it.
+  const [user, pendingQueueCount] = await Promise.all([
+    requireRole("consultant"),
+    getPendingEmailQueueCount(createAdminClient()),
+  ]);
   const userName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
 
-  const pendingQueueCount = await getPendingEmailQueueCount(createAdminClient());
   const NAV_ITEMS = [
     { href: "/ops", label: "Workspace" },
     { href: "/ops/email-queue", label: `Email Queue (${pendingQueueCount})` },
