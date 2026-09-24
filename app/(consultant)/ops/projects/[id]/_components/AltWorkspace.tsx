@@ -143,7 +143,7 @@ function AltWorkspaceInner({
       ) : (
         <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[25rem_1fr]">
           {/* Left rail: whole workflow state, stays visible while the right column scrolls */}
-          <div className="min-w-0 space-y-4 md:sticky md:top-4 md:max-h-[calc(100vh-2rem)] md:overflow-y-auto md:p-1 md:-m-1">
+          <div className="min-w-0 space-y-4 md:sticky md:top-4 md:max-h-[calc(100vh-2rem)] md:overflow-y-auto md:[scrollbar-width:thin] md:p-1 md:-m-1">
             <StageRail stages={stages} />
             {focusCard}
             {leftRailExtras}

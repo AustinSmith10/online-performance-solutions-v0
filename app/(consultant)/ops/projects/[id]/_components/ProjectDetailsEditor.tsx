@@ -116,7 +116,7 @@ function EditableRow({
     return (
       <div className="px-5 py-3">
         <div className="group flex items-baseline gap-4">
-          <span className="w-32 shrink-0 text-sm text-zinc-500">{label}</span>
+          <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
           <span className="min-w-0 flex-1 break-words text-sm text-zinc-900">{value || "—"}</span>
           <EditIconButton
             onClick={() => setEditing(true)}
