@@ -10,7 +10,8 @@ import { groupPbdbVersions } from "@/lib/documents/pbdb-versions";
 import { groupPbdrVersions } from "@/lib/documents/pbdr-versions";
 import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
 import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
-import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
+import { resolveStaffStatus } from "@/lib/delivery/effective-status";
+import { summarizeRound } from "@/lib/stakeholders/round-summary";
 import { PROJECT_AUDIT_EXCLUDED_EVENTS } from "@/lib/audit/project-scope";
 import type { DeliveryDelayPreset } from "@/lib/delivery/delivery-delay";
 import type { ProjectStatus, ConsultantAvailability } from "@/types";
@@ -25,6 +26,7 @@ import { AttachEvidenceForm } from "@/components/AttachEvidenceForm";
 import { GeneratePbdbButton } from "@/components/PbdbGenerationButtons";
 import { GeneratedPbdbDownload } from "@/components/GeneratedPbdbDownload";
 import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
+import { ReviewTallyChip } from "@/components/ReviewTallyChip";
 import { NumberSavedBanner } from "@/components/NumberSavedBanner";
 import { PbdbGeneratedBanner } from "@/components/PbdbGeneratedBanner";
 import { RevisionTablePatchWarningBanner } from "@/components/RevisionTablePatchWarningBanner";
@@ -70,6 +72,8 @@ import { ResumeButton } from "@/app/(admin)/admin/projects/[id]/_components/Resu
 import { AdminDeleteButton } from "@/app/(admin)/admin/projects/[id]/_components/AdminDeleteButton";
 import { AdminProjectNumberForm } from "@/app/(admin)/admin/projects/[id]/_components/AdminProjectNumberForm";
 import { ConsultantCard } from "@/app/(admin)/admin/projects/[id]/_components/ConsultantCard";
+import { OverduePill } from "@/components/OverduePill";
+import { daysOverdue as daysOverdueBetween } from "@/app/(consultant)/ops/_components/dashboardList";
 
 export type ProjectWorkspaceRole = "consultant" | "admin";
 
@@ -89,7 +93,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
   draft: "bg-zinc-100 text-zinc-500",
   submitted: "bg-blue-100 text-blue-700",
-  assigned: "bg-yellow-100 text-yellow-700",
+  assigned: "bg-zinc-200 text-zinc-700",
   in_progress: "bg-purple-100 text-purple-700",
   dispatched: "bg-amber-100 text-amber-700",
   revision_required: "bg-red-100 text-red-700",
@@ -102,7 +106,7 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
 const STATUS_ACCENT: Record<ProjectStatus, string> = {
   draft: "border-l-zinc-300",
   submitted: "border-l-blue-400",
-  assigned: "border-l-yellow-400",
+  assigned: "border-l-zinc-400",
   in_progress: "border-l-purple-400",
   dispatched: "border-l-amber-400",
   revision_required: "border-l-red-400",
@@ -133,9 +137,11 @@ function adminOverdueInfo(
 ): { isOverdue: boolean; daysOverdue: number } {
   if (isDeleted || !deliveryDate || !ADMIN_LIVE_STATUSES.includes(status))
     return { isOverdue: false, daysOverdue: 0 };
-  const ms = Date.now() - new Date(deliveryDate).getTime();
-  if (ms <= 0) return { isOverdue: false, daysOverdue: 0 };
-  return { isOverdue: true, daysOverdue: Math.ceil(ms / (1000 * 60 * 60 * 24)) };
+  // Whole calendar days past the delivery date, the same rule the consultant
+  // dashboard uses, so an admin and a consultant see the same project as
+  // overdue on the same day with the same count.
+  const days = daysOverdueBetween(deliveryDate, new Date().toISOString().slice(0, 10));
+  return { isOverdue: days > 0, daysOverdue: days };
 }
 
 function calcDaysPaused(pausedAt: string | null): number {
@@ -187,7 +193,6 @@ export async function ProjectWorkspace({
   const justGeneratedPbdb = sp.pbdb_generated === "1";
 
   const supabase = createAdminClient();
-  const businessTimezone = await getBusinessTimezone(supabase);
 
   const projectQuery = supabase
     .from("projects")
@@ -195,9 +200,15 @@ export async function ProjectWorkspace({
       `id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, pbdb_delivery_delay_preset, delivery_recipient_email, qa_completed_by, accepted_at, pbdb_downloaded_at, credit_deducted, payment_override, payment_override_reason, payment_override_at, deleted_at, clients(id, name, state_territory, client_config, revision_notes_required), assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability), submitter:users!projects_submitted_by_fkey(id, first_name, last_name, email, phone, company_role)`
     )
     .eq("id", id);
-  const { data, error } = await (isAdmin
-    ? projectQuery.maybeSingle()
-    : projectQuery.eq("assigned_consultant_id", userId ?? "").maybeSingle());
+  // The two settings lookups don't depend on the project, so they run with the
+  // project query instead of ahead of / after it (each is a database round trip).
+  const [businessTimezone, deliveryDurations, { data, error }] = await Promise.all([
+    getBusinessTimezone(supabase),
+    getDeliveryDelayDurations(supabase),
+    isAdmin
+      ? projectQuery.maybeSingle()
+      : projectQuery.eq("assigned_consultant_id", userId ?? "").maybeSingle(),
+  ]);
 
   if (error) console.error(`[${role}/projects/${id}] project query failed:`, error);
   if (!data) notFound();
@@ -436,6 +447,28 @@ export async function ProjectWorkspace({
 
   const allFieldFlags = openFieldFlags ?? [];
 
+  // Signing file URLs only needs the file rows, so start it now and let it run
+  // while the flag-actor lookup below waits on its own round trip.
+  const signedFilesPromise = Promise.all([
+    Promise.all(
+      (rawSubmissionFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("submissions")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
+    Promise.all(
+      (rawEvidenceFiles ?? []).map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("evidence")
+          .createSignedUrl(f.storage_path as string, 3600);
+        return { ...f, signedUrl: signed?.signedUrl ?? null };
+      })
+    ),
+    Promise.resolve(rawPbdrFiles ?? []),
+  ]);
+
   const flagActorIds = [
     ...new Set(
       allFieldFlags
@@ -480,25 +513,7 @@ export async function ProjectWorkspace({
     (rawFileRequirements ?? []).map((r) => [r.slug as string, r.name as string])
   );
 
-  const [submissionFiles, evidenceFiles, pbdrFiles] = await Promise.all([
-    Promise.all(
-      (rawSubmissionFiles ?? []).map(async (f) => {
-        const { data: signed } = await supabase.storage
-          .from("submissions")
-          .createSignedUrl(f.storage_path as string, 3600);
-        return { ...f, signedUrl: signed?.signedUrl ?? null };
-      })
-    ),
-    Promise.all(
-      (rawEvidenceFiles ?? []).map(async (f) => {
-        const { data: signed } = await supabase.storage
-          .from("evidence")
-          .createSignedUrl(f.storage_path as string, 3600);
-        return { ...f, signedUrl: signed?.signedUrl ?? null };
-      })
-    ),
-    Promise.resolve(rawPbdrFiles ?? []),
-  ]);
+  const [submissionFiles, evidenceFiles, pbdrFiles] = await signedFilesPromise;
 
   const pbdbFiles = rawPbdbFiles ?? [];
   const latestPbdb = pbdbFiles[pbdbFiles.length - 1] ?? null;
@@ -731,7 +746,11 @@ export async function ProjectWorkspace({
   // collapses dispatched+all-approved into "converting" the same way every
   // other surface (dashboard lists, client portal, stepper) does, instead of
   // this page recomputing its own version of the same check.
-  const effectiveStatus = resolveEffectiveStatus(project.status, currentCycleReviews);
+  // The stored status flips to revision_required on the first rejection even
+  // while other reviewers are pending; staff see it as still awaiting
+  // stakeholders until the round actually closes.
+  const effectiveStatus = resolveStaffStatus(project.status, currentCycleReviews);
+  const roundSummary = summarizeRound(currentCycleReviews);
 
   // Shared dispatch-readiness rule (#168) — the same classifier the
   // `dispatchToStakeholders` server action uses, so the card and the action
@@ -769,15 +788,19 @@ export async function ProjectWorkspace({
         daysOverdue: 0,
       };
   const daysPaused = calcDaysPaused(pauseData.paused_at);
+  const overdueDays = isAdmin ? daysOverdue : isOverdue ? daysOverdueBetween(project.expected_delivery_date, todayIso) : 0;
 
   const headerCard = (
     <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${STATUS_ACCENT[effectiveStatus]} bg-white p-5`}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-        <h1 className="text-base font-semibold tracking-tight text-zinc-900">{title}</h1>
+        <h1 className="text-balance text-base font-semibold tracking-tight text-zinc-900">{title}</h1>
         <span className="text-sm text-zinc-500">{project.clients?.name ?? "No organisation"}</span>
         <span className={`self-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[effectiveStatus]}`}>
           {STATUS_LABELS[effectiveStatus]}
         </span>
+        {(effectiveStatus === "dispatched" || effectiveStatus === "revision_required") && (
+          <ReviewTallyChip summary={roundSummary} className="self-center" />
+        )}
         <span className={`self-center inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
           project.source === "email" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
         }`}>
@@ -789,12 +812,7 @@ export async function ProjectWorkspace({
           </span>
         )}
         {isOverdue && (
-          <span className="inline-flex items-center gap-1 self-center rounded-full border border-red-300 bg-white px-2 py-0.5 text-xs font-medium text-red-700">
-            <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
-            </svg>
-            Overdue{daysOverdue > 0 ? ` · ${daysOverdue}d` : ""}
-          </span>
+          <OverduePill className="self-center" days={overdueDays} />
         )}
         {isDeleted && (
           <span className="self-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">
@@ -834,6 +852,7 @@ export async function ProjectWorkspace({
         />
         <HeaderStatInline
           value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"}
+          valueClassName={project.project_number ? "font-mono" : undefined}
           title={
             project.project_number
               ? "The DDEG project number. It isn't unique across projects — check the site address to confirm this is the right job."
@@ -867,7 +886,6 @@ export async function ProjectWorkspace({
     </div>
   );
 
-  const deliveryDurations = await getDeliveryDelayDurations(supabase);
   const deliveryLocked = isTerminal || project.status === "converting" || !!pendingDelivery;
 
   // --- Stage rail: whole workflow at a glance instead of 3 stacked step cards ---
@@ -1112,9 +1130,23 @@ export async function ProjectWorkspace({
       <FocusCard
         tone="amber"
         title="Awaiting stakeholder review"
-        subtitle={`${pendingCount} of ${currentCycleReviews.length} approvals outstanding.`}
+        subtitle={
+          roundSummary.rejected > 0
+            ? `${roundSummary.rejected} rejected — ${pendingCount} still to respond. The revision starts once everyone has responded.`
+            : `${pendingCount} of ${currentCycleReviews.length} approvals outstanding.`
+        }
       >
         <div className="space-y-4">
+          {currentCycleComments.length > 0 && roundSummary.rejected > 0 && (
+            <div className="divide-y divide-amber-200">
+              {currentCycleComments.map((r) => (
+                <div key={r.id} className="py-3 first:pt-0 last:pb-0">
+                  <p className="text-sm font-semibold text-red-900">{r.stakeholder_name} — rejected</p>
+                  <p className="mt-1 text-sm leading-relaxed text-zinc-800">{r.comments}</p>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="space-y-2">{renderPendingReviewCards()}</div>
           <div className="border-t border-amber-200/60 pt-4">
             <p className="mb-2 text-xs text-zinc-500">
@@ -1143,27 +1175,12 @@ export async function ProjectWorkspace({
     focusCard = (
       <FocusCard tone="red" title="Revision requested" subtitle="A stakeholder asked for changes.">
         <div className="space-y-4">
-          {pendingReviews.length > 0 && (
-            // #120: status flips to revision_required on the first rejection
-            // regardless of how many stakeholders are still pending, and none
-            // of this gates the revise/re-upload action below — it's so the
-            // consultant can chase down (log a response for, fix a bad email
-            // for, resend to, or waive) whoever hasn't responded yet without
-            // leaving this card, same actions available from the "Awaiting
-            // stakeholder review" card.
-            <div className="space-y-2">
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                {currentCycleReviews.length - pendingReviews.length} of {currentCycleReviews.length} stakeholders
-                responded — {pendingReviews.map((r) => r.stakeholder_name).join(", ")}{" "}
-                {pendingReviews.length === 1 ? "hasn't" : "haven't"} responded yet.
-              </div>
-              {renderPendingReviewCards()}
-            </div>
-          )}
           {currentCycleComments.length > 0 && (
-            <div className="space-y-3">
+            // Plain text on the tinted card, separated by hairlines: the red card is
+            // the one container; boxes inside it would be a card within a card.
+            <div className="divide-y divide-red-200">
               {currentCycleComments.map((r) => (
-                <div key={r.id} className="rounded-md border border-red-200 bg-white px-4 py-3">
+                <div key={r.id} className="py-3 first:pt-0 last:pb-0">
                   <p className="text-sm font-semibold text-red-900">{r.stakeholder_name}</p>
                   <p className="mt-1 text-sm leading-relaxed text-zinc-800">{r.comments}</p>
                 </div>
@@ -1559,7 +1576,7 @@ export async function ProjectWorkspace({
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-zinc-900">{r.stakeholder_name}</p>
-                          <p className="text-xs text-zinc-500">{r.stakeholder_email}</p>
+                          <p className="font-mono text-xs text-zinc-500">{r.stakeholder_email}</p>
                           {r.comments && (
                             <p className="mt-1.5 text-sm leading-relaxed text-zinc-700">{r.comments}</p>
                           )}
@@ -1602,7 +1619,7 @@ export async function ProjectWorkspace({
                         </div>
                       </div>
                       {r.email_reply_text && (
-                        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                           <div className="flex items-center gap-2">
                             <p className="text-xs font-semibold text-amber-800">Replied by email — needs action</p>
                             {r.email_reply_sender_verified === false && (
@@ -1887,7 +1904,7 @@ export async function ProjectWorkspace({
       </Link>
 
       {isAdmin && isDeleted && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <span className="font-semibold">This project is in the recovery bin.</span>{" "}
           It will be permanently deleted after 30 days.{" "}
           <Link href="/admin/recovery" className="font-medium underline hover:text-amber-900">
@@ -1896,7 +1913,7 @@ export async function ProjectWorkspace({
         </div>
       )}
       {isAdmin && project.status === "paused" && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <span className="font-semibold">Project paused.</span>
           {pauseData.pause_reason && (
             <>{" "}<span className="text-amber-700">{pauseData.pause_reason}</span></>
@@ -1904,7 +1921,7 @@ export async function ProjectWorkspace({
         </div>
       )}
       {isAdmin && isOverdue && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           <span className="font-semibold">
             Overdue by {daysOverdue} day{daysOverdue !== 1 ? "s" : ""}.
           </span>{" "}

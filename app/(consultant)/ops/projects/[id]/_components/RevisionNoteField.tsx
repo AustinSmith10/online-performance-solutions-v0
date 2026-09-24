@@ -30,7 +30,7 @@ export function RevisionNoteField({
         className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
       />
       {note.trim() && (
-        <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2">
+        <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
           <p className="text-xs font-medium uppercase tracking-wide text-blue-500">
             Preview — appears in the review history below
           </p>

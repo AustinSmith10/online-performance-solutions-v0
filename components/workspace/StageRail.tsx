@@ -120,8 +120,8 @@ export function StageRail({ stages }: { stages: Stage[] }) {
               {!isLast && (
                 <div className="mt-[18px] mx-1.5 h-[3px] flex-1 rounded-full bg-zinc-150 overflow-hidden bg-zinc-100">
                   <div
-                    className={`h-full rounded-full transition-[width] duration-500 ease-out ${
-                      stage.state === "done" ? "w-full bg-emerald-400" : "w-0"
+                    className={`rail-fill h-full w-full rounded-full bg-emerald-400 ${
+                      stage.state === "done" ? "scale-x-100" : "scale-x-0"
                     }`}
                   />
                 </div>

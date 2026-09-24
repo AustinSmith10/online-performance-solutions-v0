@@ -73,7 +73,7 @@ export function StepperIcon({ name, className }: { name: string; className?: str
 export const STEPPER_CIRCLE_STYLES: Record<StepperStage["visual"], string> = {
   complete: "bg-green-600 border-green-600 text-white",
   current: "bg-blue-600 border-blue-600 text-white",
-  upcoming: "bg-white border-zinc-300 text-zinc-400",
+  upcoming: "bg-white border-zinc-300 text-zinc-500",
   "revision-current": "bg-blue-600 border-blue-600 text-white",
   "revision-pending": "bg-amber-50 border-amber-400 text-amber-700",
 };
@@ -81,7 +81,7 @@ export const STEPPER_CIRCLE_STYLES: Record<StepperStage["visual"], string> = {
 export const STEPPER_LABEL_STYLES: Record<StepperStage["visual"], string> = {
   complete: "text-zinc-900",
   current: "text-zinc-900 font-medium",
-  upcoming: "text-zinc-400",
+  upcoming: "text-zinc-500",
   "revision-current": "text-zinc-900 font-medium",
   "revision-pending": "text-zinc-900",
 };
@@ -180,7 +180,7 @@ export function MiniStepper({
             style={{ top: "-8px", left: "58%" }}
           >
             {roundBadge ? (
-              <span className="text-[10px] font-semibold leading-none">{roundBadge}</span>
+              <span className="text-xs font-semibold leading-none tabular-nums">{roundBadge}</span>
             ) : (
               <StepperIcon name="refresh" className="h-2.5 w-2.5" />
             )}
@@ -201,7 +201,7 @@ export function MiniStepper({
               >
                 <StepperIcon name={icon} className="h-3.5 w-3.5" />
               </div>
-              <span className={`text-center text-[11px] leading-snug ${STEPPER_LABEL_STYLES[visual]}`}>
+              <span className={`text-center text-xs leading-snug ${STEPPER_LABEL_STYLES[visual]}`}>
                 {shortStageLabel(stage)}
               </span>
             </div>

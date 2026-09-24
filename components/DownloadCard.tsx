@@ -54,7 +54,7 @@ interface DownloadStatusResponse {
 }
 
 const DEFAULT_BUTTON_CLASS =
-  "shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50";
+  "press shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1";
 const DEFAULT_WRAPPER_CLASS = "flex items-center justify-between gap-3 px-5 py-3";
 
 export function DownloadCard({
@@ -162,7 +162,7 @@ export function DownloadCard({
 
   return (
     <div className="space-y-2">
-    <div id={id} className={`relative overflow-hidden rounded-md ${wrapperClassName}`}>
+    <div id={id} className={`relative flex-wrap overflow-hidden rounded-md ${wrapperClassName}`}>
       {href && phase !== "idle" && (
         <div
           className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-1.5 transition-colors duration-500 ${
@@ -196,17 +196,17 @@ export function DownloadCard({
       )}
 
       {(children || originalFilename) && (
-        <div className="relative min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1 basis-32">
           {children}
           {originalFilename && (
-            <p className={`mt-0.5 truncate text-xs text-zinc-500 ${filenameClassName}`}>
+            <p className={`mt-0.5 truncate font-mono text-xs text-zinc-500 ${filenameClassName}`}>
               {originalFilename}
             </p>
           )}
         </div>
       )}
 
-      <div className="relative flex shrink-0 items-center gap-2">
+      <div className="relative ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
         {href && downloaded && (
           <span className="rounded-full bg-green-600 px-2 py-0.5 text-xs font-semibold text-white">
             Downloaded ✓
@@ -229,7 +229,7 @@ export function DownloadCard({
       </div>
     </div>
     {warning && (
-      <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
         <span className="font-semibold">Revision table couldn&apos;t be updated:</span> {warning}
       </p>
     )}

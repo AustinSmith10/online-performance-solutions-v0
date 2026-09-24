@@ -49,7 +49,7 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   rejected_with_comments: { label: "Rejected", cls: "bg-red-100 text-red-700" },
   waived: { label: "Waived", cls: "bg-zinc-100 text-zinc-500" },
   // Internal only (#191): still pending when a revised PBDB force-closed the round.
-  superseded: { label: "Superseded", cls: "bg-zinc-100 text-zinc-400" },
+  superseded: { label: "Superseded", cls: "bg-zinc-100 text-zinc-500" },
 };
 
 function DrawerContent({
@@ -94,7 +94,7 @@ function DrawerContent({
               Revised PBDB uploaded — ready to redispatch (Rev {project.review_cycle - 1})
             </span>
           ) : (
-            <span className="font-medium text-red-600">Revision required — Rev {project.review_cycle - 1}</span>
+            <span className="font-medium text-red-600">Revision required — Rev {project.review_cycle - 1} was rejected</span>
           )}
         </p>
       </div>
@@ -105,7 +105,7 @@ function DrawerContent({
         <>
           {priorFeedback.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
                 What Rev {project.review_cycle - 2} was rejected for
               </p>
               <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
@@ -136,7 +136,7 @@ function DrawerContent({
       {/* Stakeholder feedback */}
       {currentReviews.length > 0 && (
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
             Stakeholder feedback — Rev {project.review_cycle - 1}
           </p>
           <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
@@ -154,7 +154,7 @@ function DrawerContent({
                         {cfg.label}
                       </span>
                       {r.responded_at && (
-                        <p className="mt-0.5 text-xs text-zinc-400">
+                        <p className="mt-0.5 text-xs text-zinc-500">
                           {new Date(r.responded_at).toLocaleDateString("en-AU", {
                             day: "numeric",
                             month: "short",
@@ -176,8 +176,11 @@ function DrawerContent({
 
       {/* PBDB sent to stakeholders — download to make edits against */}
       <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
           PBDB sent to stakeholders
+        </p>
+        <p className="mb-2 text-xs text-zinc-500">
+          Every reviewer has responded. This download comes pre-labeled with the new revision — make your corrections in it.
         </p>
         {pbdbFile ? (
           <DownloadCard
@@ -195,13 +198,13 @@ function DrawerContent({
             </p>
           </DownloadCard>
         ) : (
-          <p className="text-xs text-zinc-400">No PBDB file found for this project.</p>
+          <p className="text-xs text-zinc-500">No PBDB file found for this project.</p>
         )}
       </div>
 
       {/* Upload revised PBDB */}
       <div>
-        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
+        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
           Upload revised PBDB
         </p>
         <p className="mb-3 text-xs text-zinc-500">
@@ -209,7 +212,7 @@ function DrawerContent({
           stakeholders.
         </p>
         {rejections.length === 0 && currentReviews.length === 0 && (
-          <p className="mb-3 text-xs text-zinc-400">No stakeholder responses recorded yet.</p>
+          <p className="mb-3 text-xs text-zinc-500">No stakeholder responses recorded yet.</p>
         )}
         <PbdbQaUploadForm
           projectId={project.id}

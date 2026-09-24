@@ -49,8 +49,13 @@ typography:
     lineHeight: 1.33
   caption:
     fontFamily: "Geist, Arial, Helvetica, sans-serif"
-    fontSize: "11px"
+    fontSize: "12px"
     fontWeight: 500
+    lineHeight: 1.35
+  data-mono:
+    fontFamily: "Geist Mono, ui-monospace, monospace"
+    fontSize: "12px"
+    fontWeight: 400
     lineHeight: 1.35
 rounded:
   sm: "4px"
@@ -120,7 +125,7 @@ Neutral zinc scale for structure; four semantic families (red, amber, green, blu
 ### Neutral
 - **Ink Hover** (#3f3f46, zinc-700): primary-button hover, strong secondary text.
 - **Text Secondary** (#71717a, zinc-500): labels, secondary copy, inactive tabs. Passes 4.5:1 on white.
-- **Text Muted** (#a1a1aa, zinc-400): currently used for real content (client name, header stat labels, dates, "Right now" eyebrow, upcoming stage labels). Only about 2.4-2.6:1 on white or zinc-50; see Do's and Don'ts.
+- **Text Muted** (#a1a1aa, zinc-400): disabled and decorative text only (about 2.6:1 on white). Informational text (client name, labels, dates, eyebrows, placeholders, upcoming stage labels) uses Text Secondary, zinc-500 (#71717a, 4.6:1). The consultant screens and the stakeholder dashboard and project page follow this; the stakeholder submit flow (`portal/submit`), the history page and a few admin screens still use zinc-400 and are not yet migrated.
 - **Border / Border Strong / Border Subtle** (#e4e4e7 / #d4d4d8 / #f4f4f5): card outlines, input outlines, row dividers.
 - **Surface / Surface Sunken** (#ffffff / #fafafa, plus #f4f4f5 tints): cards, table headers, segmented-control track.
 
@@ -128,7 +133,8 @@ Neutral zinc scale for structure; four semantic families (red, amber, green, blu
 - **Danger** (#dc2626 accent, #b91c1c text, #fee2e2 pill, #fef2f2 wash): overdue, revision required, rejected, flagged. Red "Right now" card and header left edge for revision required.
 - **Warning** (#b45309 text, #fef3c7 pill): awaiting approval, paused, amber urgency.
 - **Success** (#10b981 accent, #15803d text, #dcfce7 pill): completed stage discs, delivered.
-- **Info / Progress** (#1d4ed8 on #dbeafe; #7e22ce on #f3e8ff): submitted, portal source badge; in progress and converting. Assigned uses yellow.
+- **Info / Progress** (#1d4ed8 on #dbeafe; #7e22ce on #f3e8ff): submitted, portal source badge; in progress and converting.
+- **Assigned** (zinc-200 fill, zinc-700 text, zinc-400 left accent): neutral, because assigned work is waiting, not urgent. It deliberately no longer uses yellow, which read as the amber "Awaiting approval".
 
 ### Named Rules
 **The Colour-Is-State Rule.** Hue is reserved for workflow status and urgency. Do not introduce accent colour for emphasis, branding or decoration.
@@ -137,8 +143,8 @@ Neutral zinc scale for structure; four semantic families (red, amber, green, blu
 
 ## Typography
 
-**Body Font:** Geist (loaded in `app/layout.tsx` via `next/font`), falling back to Arial. **Shipped reality:** `app/globals.css` sets `body { font-family: Arial, Helvetica, sans-serif }`, which overrides the Geist variable, so Arial is what renders today. Recorded here as Geist per the owner; the override is a critique finding.
-**Mono:** Geist Mono is loaded but not used in the project page.
+**Body Font:** Geist (loaded in `app/layout.tsx` via `next/font`), falling back to Arial. `app/globals.css` sets `body` to the Geist variable, so Geist renders on every screen. The old global Arial override has been removed.
+**Mono:** Geist Mono is used for identifiers only: document filenames, stakeholder email addresses and project numbers (`font-mono`). Nothing else is mono.
 
 **Character:** Neutral and utilitarian; hierarchy through weight and colour, not scale.
 
@@ -147,27 +153,33 @@ Neutral zinc scale for structure; four semantic families (red, amber, green, blu
 - **Focus title** (600, 18px): the "Right now" card heading, the largest text on the page.
 - **Body** (400-500, 14px): table values, form fields, buttons.
 - **Label** (500, 12px): field labels, badges, secondary buttons, meta.
-- **Caption** (500, 11px; 10px in a few spots): stage labels, small counts. About 55 uses of 11px and 35 of 10px in the codebase.
+- **Caption** (500, 12px): stage labels, pill text, small counts. 12px is the floor for any content text; 10px and 11px are no longer used on the dashboard or project page.
 
 Usage counts across `app/` and `components/`: `text-sm` about 1000, `text-xs` about 930, `text-base` 59, `text-xl`/`2xl` 35.
 
 ### Named Rules
-**The Tabular Rule.** Dates, revision numbers and project numbers use tabular figures so columns and header stats align (added on the project header).
+**The Tabular Rule.** Dates, revision numbers and counts use tabular figures so columns and header stats align.
+
+**The Balanced Title Rule.** Project titles and card headings use `text-wrap: balance` with tight tracking (-0.025em) so long addresses never leave an orphaned last word.
 
 ## Layout
 
 Project page: full-width header card, then a primary tab row (Workspace / Audit trail). Workspace is a two-column grid, left rail 25rem (stage rail + Right now card + extras, sticky on md+) and a fluid right column (segmented Details / Documents / Stakeholders, then collapsible sections). Vertical rhythm is 16-20px between blocks (`space-y-4`, `gap-5`); cards pad 12-20px; rows pad 12px vertical. Below md the columns stack. Content is wide and unconstrained; long unbroken values are handled with `min-w-0`.
 
+**Consultant dashboard ("My projects").** Single column, `space-y-5`, full width: page title + primary "Submit request" button; a 4-up summary strip (2-up on mobile); one "Right now" banner row (two side by side when both an assignment and a review need attention); a segmented list switcher (Active / With stakeholders / Archive / Available jobs); then stacked 20px-padded project rows (available jobs are a 2-up grid of cards). It is a queue view: the banner and tinted rows carry urgency, everything else is white or zinc.
+
+**Stakeholder portal (`app/(client)/portal`).** Same tokens and components, narrower frame: header bar `h-11` on a `max-w-5xl` column (vs the consultant's full width). Dashboard = title + "New report request", a 4-up tile strip (Needs your review / In progress / Ready / Credits or Total active), one or two compact "Right now" banners, then a segmented status filter (All / Needs your review / In progress / Delivered; the same track-and-tab control as the consultant list switcher, with `aria-pressed` buttons) plus a Filters popover, a search input and a sort select, then `rounded-xl` request cards with a status pill and a `MiniStepper`. Project page = `ClientHeaderCard`, then a 22rem sticky left rail (StageRail + FocusCard + Reference card) beside Overview / Documents / Review buttons. **The header follows the Right now tone:** its 3px left edge and status pill are blue (`blue-400`, `blue-100`/`blue-700`) in progress, amber (`amber-400`, `amber-100`/`amber-800`) when this viewer must act (the label then reads "Your review needed"), and green (`green-500`, `green-100`/`green-700`) once delivered, so the header never says "in progress" while the card below asks for action. The Reference card is desktop-only (`md` and up); below that the header and Right now card carry the essentials. Differences from the consultant screens: no Overdue indicator by design (clients should not feel due-date pressure); status is shown as a stepper stage label plus a round badge, not workflow status names; pills use the standard `rounded-full px-2 py-0.5`; card titles (Reference, Your files, PBDB, PBDR) are 14px/600 sentence case, and filter-panel group labels are 12px/600 zinc-700. The "In progress" tile and the caught-up banner are neutral zinc, because nothing in either needs action; amber and blue stay reserved for "Needs your review" and "Ready".
+
 ## Elevation & Depth
 
-Flat by default. Depth is tonal: white cards on a white/zinc-50 page separated by 1px zinc borders. Shadows are rare and small: `shadow-sm` on the active segmented tab, inputs and the floating Delivery Config pill; the neutral Right now card adds `shadow-sm shadow-blue-100`. The `:target` anchor highlight pulses an amber ring for 2.5s.
+Flat by default. Depth is tonal: white cards on a white/zinc-50 page separated by 1px zinc borders. Shadows are rare and soft: `shadow-sm` on the active segmented tab and inputs; the neutral Right now card adds `shadow-sm shadow-blue-100`. Floating elements (modals, drawers, the Available and Delivery Config pills) use custom low-opacity shadows: `0 8px 30px rgb(0 0 0 / 0.10)` for panels and `0 4px 16px rgb(0 0 0 / 0.08)` for pills. Buttons never carry a shadow. The `:target` anchor highlight pulses an amber ring for 2.5s.
 
 ### Named Rules
 **The Flat-By-Default Rule.** Surfaces are flat at rest; shadow appears only on floating or actively selected elements.
 
 ## Shapes
 
-Softly rounded rectangles. `rounded-md` (6px) for buttons and inputs, `rounded-lg` (8px) for sections, `rounded-xl` (12px) for the header card, stage rail and Right now card, `rounded-full` for pills and stage discs. Left-edge 3px accent border on the header card encodes status. Focus card uses a 2px border; everything else 1px.
+Softly rounded rectangles with one rule: **page-level cards `rounded-xl` (12px)** (tiles, banners, project rows, header card, rail cards, collapsible sections, stage rail, Right now card); **contained boxes and callouts `rounded-lg` (8px)**; **controls `rounded-md` (6px)**; `rounded-full` for pills and stage discs only. Left-edge 3px accent border on the header card encodes status. Focus card uses a 2px border; everything else 1px.
 
 ## Components
 
@@ -181,13 +193,13 @@ Softly rounded rectangles. `rounded-md` (6px) for buttons and inputs, `rounded-l
 Full-radius, 12px/500, 2x8px padding, tinted background with matching -700 text (see Colors). One pill for status, one for source (Portal blue / Email green), Overdue red, Override amber.
 
 ### Cards / Containers
-White, 1px zinc-200 border, 8-12px radius, 12-20px padding. `CollapsibleSection` = bordered card with a 14px/600 title, optional 12px subtitle and a rotating chevron; body separated by a zinc-100 rule.
+White, 1px zinc-200 border, 12px radius, 16px padding (`p-4`) for rows and rail cards, 20px (`p-5`) for the header and Right now card. **One bordered container per level:** inside a card use hairline dividers (`border-t`, `divide-y`) and plain text on the tint, never a second bordered box (rejection reasons, pending reviews and PBDB version tiers follow this). State-tinted cards use the -200 border; only the Right now card uses 2px -300. `CollapsibleSection` = bordered card with a 14px/600 title, optional 12px subtitle and a rotating chevron; body separated by a zinc-100 rule.
 
 ### Inputs / Fields
-6px radius, 1px zinc-300 border, 14px text, zinc-400 placeholders; focus swaps to zinc-500 border plus a 1px ring. Errors appear as red inline text or red-tinted panels (`border-red-100 bg-red-50/40`).
+6px radius, 1px zinc-300 border, 14px text, zinc-500 placeholders; focus swaps to zinc-500 border plus a 1px ring. Errors appear as red inline text or red-tinted panels (`border-red-100 bg-red-50/40`).
 
 ### Navigation
-Top bar with logo, Workspace / Email Queue links, notification bell and user menu. Project tabs are a 2px underline bar (primary) and a zinc-100 segmented control (secondary), both plain buttons with no tab roles.
+Top bar with logo, Workspace / Email Queue links, notification bell and user menu. Project tabs are a 2px underline bar (primary) and a zinc-100 segmented control (secondary). The secondary segmented control on the stakeholder project page, the consultant dashboard list switcher and the stakeholder category pills carry real semantics (ARIA tab roles with roving tabindex and arrow/Home/End keys, or `aria-pressed` for the pills), and nav links set `aria-current`. The consultant project-page tab bars are still plain buttons.
 
 ### Stage rail (signature)
 Rounded card with a zinc gradient holding a horizontal stepper: done = emerald disc with check; current = urgency-coloured disc with a 5px tinted ring; upcoming = dashed zinc-300 disc. 3px connector fills emerald when the previous stage is done.
@@ -195,18 +207,31 @@ Rounded card with a zinc gradient holding a horizontal stepper: done = emerald d
 ### Right now card (signature)
 A 2px-bordered, urgency-tinted (blue neutral / amber / red / green) card with a "Right now" eyebrow, an 18px title and the single next action's form. It is the visual anchor of the page.
 
+### Summary tile (dashboard)
+`rounded-xl` bordered card, 16px padding, 24px semibold tabular count over a 12px label. Tone = state: amber when something needs a response, green when jobs are available, blue for Active when non-zero, white otherwise.
+
+### Compact "Right now" banner (dashboard)
+`rounded-xl`, 1px tone border and tinted fill (amber assignment, red review/overdue, zinc when caught up or nothing needs action), one line: 14px semibold "Right now", 12px subtitle, action buttons right-aligned; expands in place into a per-item picker when there are several.
+
+### Project row (dashboard)
+`rounded-xl` bordered card, 20px padding: 16px semibold title (link), 12px zinc meta lines, status pill and Overdue/Flagged chips stacked top-right, and an action strip under a tinted rule for pending assignments (Accept/Decline) or revision review. Fill encodes state: amber = pending assignment, red = revision, white = otherwise.
+
+### List switcher (dashboard)
+Bordered white track with 4 equal ARIA tabs (2x2 on phones); selected = zinc-900 fill with white text, others zinc-600 text; counts in parentheses. Sticky under the header from `sm` up. The URL is the state (`?tab=&page=&q=`); each tab is paged server-side at 20, with a debounced search box once a list has more than 6 items and Previous/Next controls. Rows sort revisions first, then most overdue, then the rest; the Overdue pill shows days ("Overdue · 6d").
+
 ## Do's and Don'ts
 
 ### Do:
 - **Do** keep hue for state only; pair every colour with text or an icon.
 - **Do** keep one dominant object (Right now) and let reference content recede behind tabs and collapsibles.
-- **Do** use tabular figures for dates and numbers.
+- **Do** use tabular figures for dates and numbers, and Geist Mono for filenames, emails and project numbers.
 - **Do** give every interactive control a visible `focus-visible` style (2px zinc-400 ring, inset where clipped).
-- **Do** keep motion short (150-200ms, ease-out) and disable it under `prefers-reduced-motion`.
+- **Do** keep motion short and purposeful: entrances 120-180ms on `--ease-out` (`cubic-bezier(0.23, 1, 0.32, 1)`), on-screen movement 300ms on `--ease-in-out` (`cubic-bezier(0.77, 0, 0.175, 1)`), press feedback 160ms at `scale(0.97)`. Animate `transform`, `scale` and `opacity` only; exits are instant or faster than entrances; nothing animates on frequent or keyboard-driven actions beyond a 120ms fade. Anchored panels that open from a corner trigger use `popover-br`; panels that drop in below their trigger (the stakeholder Filters popover) use `rise-in`. Under `prefers-reduced-motion` soften rather than remove: keep the fades, drop scale, translate, press and rotation motion. Route-level loading skeletons (`loading.tsx`) pulse with `motion-safe:animate-pulse` (opacity only, Tailwind default timing); it is the one documented exception to the shared curves, it is off under reduced motion, and nothing else loops.
 
 ### Don't:
 - **Don't** use zinc-400 for text that carries information (client name, labels, dates, eyebrows); use zinc-500 (4.6:1) or darker. Zinc-400 is acceptable only for disabled or decorative text.
 - **Don't** introduce brand colour, gradients on text, or decorative shadows.
 - **Don't** convey state by colour alone or rely on hover for information.
-- **Don't** go below 11px for readable content.
-- **Don't** let Arial and Geist compete: the global `body` font override should be resolved to one family.
+- **Don't** go below 12px for readable content.
+- **Don't** nest a bordered box inside a bordered card, or add a shadow to a button.
+- **Don't** reintroduce a global `body` font override: Geist is the single family.

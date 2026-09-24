@@ -45,17 +45,17 @@ export function DocGroupCard({
             </svg>
           )}
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
+        <p className="text-sm font-semibold text-zinc-900">{label}</p>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="divide-y divide-zinc-100 border-t border-zinc-100">
         {files.map((f) => (
-          <div key={f.id} className="space-y-1">
+          <div key={f.id} className="space-y-1 py-2 last:pb-0">
             <DownloadCard
               href={f.href}
               filename={f.name}
               external={f.external}
-              wrapperClassName="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-2"
+              wrapperClassName="flex items-center justify-between gap-2"
               buttonClassName="shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
             >
               <p className="truncate text-xs font-medium text-zinc-900" title={f.name}>
@@ -63,20 +63,20 @@ export function DocGroupCard({
               </p>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                 {f.version !== undefined && (
-                  <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600">
+                  <span className="shrink-0 rounded-full bg-zinc-200 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-zinc-600">
                     v{f.version}
                   </span>
                 )}
-                <span className="text-[11px] text-zinc-400">{f.date}</span>
+                <span className="text-xs tabular-nums text-zinc-500">{f.date}</span>
                 {f.badge && (
-                  <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                  <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
                     {f.badge}
                   </span>
                 )}
               </div>
             </DownloadCard>
             {f.note && (
-              <p className="px-3 text-[11px] leading-relaxed text-zinc-500">
+              <p className="text-xs leading-relaxed text-zinc-500">
                 <span className="font-medium text-zinc-600">Consultant&apos;s note:</span> {f.note}
               </p>
             )}

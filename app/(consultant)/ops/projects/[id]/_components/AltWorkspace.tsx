@@ -171,7 +171,7 @@ function AltWorkspaceInner({
                   aria-controls="ref-panel"
                   tabIndex={refTab === t.id ? 0 : -1}
                   onClick={() => requestNavigate(() => setRefTab(t.id))}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${
+                  className={`press-subtle flex-1 rounded-md px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${
                     refTab === t.id
                       ? "bg-white text-zinc-900 shadow-sm"
                       : "text-zinc-500 hover:bg-white/60 hover:text-zinc-700"

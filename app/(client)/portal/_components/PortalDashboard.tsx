@@ -184,8 +184,15 @@ function FilterPanel({
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
     document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [onClose]);
 
   function toggle(key: "statuses" | "steps", value: string) {
@@ -195,11 +202,11 @@ function FilterPanel({
   }
 
   return (
-    <div ref={ref} className="absolute right-0 top-9 z-50 w-[20rem] rounded-xl border border-zinc-200 bg-white p-4 shadow-xl">
+    <div ref={ref} role="group" aria-label="Filter report requests" className="rise-in absolute right-0 top-11 z-50 w-[20rem] rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
       <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
         {statuses.length > 0 && (
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Status</p>
+            <p className="mb-1.5 text-xs font-semibold text-zinc-700">Status</p>
             <div className="space-y-0.5">
               {statuses.map((s) => (
                 <CheckboxRow key={s} checked={filters.statuses.includes(s)} label={s} onChange={() => toggle("statuses", s)} />
@@ -210,7 +217,7 @@ function FilterPanel({
 
         {steps.length > 0 && (
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Delivery step</p>
+            <p className="mb-1.5 text-xs font-semibold text-zinc-700">Delivery step</p>
             <div className="space-y-0.5">
               {steps.map((s) => (
                 <CheckboxRow key={s.key} checked={filters.steps.includes(s.key)} label={s.label} onChange={() => toggle("steps", s.key)} />
@@ -220,39 +227,39 @@ function FilterPanel({
         )}
 
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Submitted date</p>
+          <p className="mb-1.5 text-xs font-semibold text-zinc-700">Submitted date</p>
           <div className="flex items-center gap-1.5">
             <input
               type="date"
               value={filters.submittedFrom}
               onChange={(e) => onChange({ ...filters, submittedFrom: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
-            <span className="text-xs text-zinc-400">to</span>
+            <span className="text-xs text-zinc-500">to</span>
             <input
               type="date"
               value={filters.submittedTo}
               onChange={(e) => onChange({ ...filters, submittedTo: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
           </div>
         </div>
 
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Expected delivery date</p>
+          <p className="mb-1.5 text-xs font-semibold text-zinc-700">Expected delivery date</p>
           <div className="flex items-center gap-1.5">
             <input
               type="date"
               value={filters.expectedFrom}
               onChange={(e) => onChange({ ...filters, expectedFrom: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
-            <span className="text-xs text-zinc-400">to</span>
+            <span className="text-xs text-zinc-500">to</span>
             <input
               type="date"
               value={filters.expectedTo}
               onChange={(e) => onChange({ ...filters, expectedTo: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
           </div>
         </div>
@@ -262,7 +269,7 @@ function FilterPanel({
         <button type="button" onClick={() => onChange(EMPTY_FILTERS)} className="text-xs text-zinc-500 hover:text-zinc-800 hover:underline">
           Clear all
         </button>
-        <span className="text-xs text-zinc-400">{isFilterActive(filters) ? "Filters applied" : "No filters"}</span>
+        <span className="text-xs text-zinc-500">{isFilterActive(filters) ? "Filters applied" : "No filters"}</span>
       </div>
     </div>
   );
@@ -299,12 +306,12 @@ function CompactHero({
   expanded?: React.ReactNode;
 }) {
   const classes = {
-    neutral: "border-blue-200 bg-blue-50",
+    neutral: "border-zinc-200 bg-white",
     amber: "border-amber-200 bg-amber-50",
     green: "border-green-200 bg-green-50",
   }[tone];
   const titleClasses = {
-    neutral: "text-blue-900",
+    neutral: "text-zinc-900",
     amber: "text-amber-900",
     green: "text-green-900",
   }[tone];
@@ -376,11 +383,11 @@ export function PortalDashboard({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-zinc-900">My report requests</h1>
         <Link
           href="/portal/submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          className="press rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
         >
           New report request
         </Link>
@@ -391,7 +398,7 @@ export function PortalDashboard({
           {/* Summary strip */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Tile tone={attentionCount > 0 ? "amber" : "zinc"} label="Needs your review" value={attentionCount} />
-            <Tile tone="neutral" label="In progress" value={inProgressCount} />
+            <Tile tone="zinc" label="In progress" value={inProgressCount} />
             <Tile tone={readyCount > 0 ? "green" : "zinc"} label={`Ready (${readyWindowDays}d window)`} value={readyCount} />
             {org?.paymentMethod === "credit_deduction" ? (
               <Tile tone={org.creditBalance === 0 ? "amber" : "zinc"} label="Credits remaining" value={org.creditBalance} />
@@ -446,49 +453,58 @@ export function PortalDashboard({
       {/* Project cards */}
       <TourHighlight id="stakeholder_project_list">
       {rows.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-12 text-center">
-          <p className="text-sm font-medium text-zinc-900">No active report requests</p>
-          <p className="mt-1 text-sm text-zinc-500">
-            Submit a new request or check{" "}
-            <Link href="/portal/history" className="underline underline-offset-2">History</Link> for past reports.
+        <div className="rounded-xl border border-zinc-200 bg-white p-12 text-center">
+          <p className="text-base font-semibold text-zinc-900">No active report requests</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-zinc-500">
+            Start a request and it will appear here with its progress. Finished reports are kept in{" "}
+            <Link href="/portal/history" className="underline underline-offset-2 hover:text-zinc-700">History</Link>.
           </p>
+          <Link
+            href="/portal/submit"
+            className="press mt-4 inline-block rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
+          >
+            New report request
+          </Link>
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {(
-              [
-                ["all", `All (${rows.length})`],
-                ["needs_review", `Needs your review (${needsReviewCount})`],
-                ["in_progress", `In progress (${inProgressCount})`],
-                ["delivered", `Delivered (${deliveredCount})`],
-              ] as [RowCategory | "all", string][]
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setCategoryFilter(value)}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                  categoryFilter === value
-                    ? "bg-zinc-900 text-white"
-                    : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div role="group" aria-label="Filter by status" className="grid grid-cols-2 gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 sm:inline-flex">
+              {(
+                [
+                  ["all", `All (${rows.length})`],
+                  ["needs_review", `Needs your review (${needsReviewCount})`],
+                  ["in_progress", `In progress (${inProgressCount})`],
+                  ["delivered", `Delivered (${deliveredCount})`],
+                ] as [RowCategory | "all", string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setCategoryFilter(value)}
+                  aria-pressed={categoryFilter === value}
+                  className={`press-subtle rounded-md px-3 py-1.5 text-sm font-medium tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${
+                    categoryFilter === value ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
             <div className="relative ml-auto">
               <button
                 type="button"
                 onClick={() => setFiltersOpen((v) => !v)}
-                className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium ${
+                aria-expanded={filtersOpen}
+                aria-haspopup="true"
+                className={`press flex items-center gap-1 rounded-md border px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
                   isFilterActive(filters)
                     ? "border-zinc-900 bg-zinc-900 text-white"
                     : "border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
                 }`}
               >
-                Filters {isFilterActive(filters) ? "•" : ""}
+                Filters{isFilterActive(filters) && <span className="sr-only"> (applied)</span>}{isFilterActive(filters) && <span aria-hidden="true">•</span>}
               </button>
               {filtersOpen && (
                 <FilterPanel
@@ -502,17 +518,20 @@ export function PortalDashboard({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
+              type="search"
+              aria-label="Search by project or address"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by project or address…"
-              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+              className="w-full min-w-0 sm:flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             />
             <select
+              aria-label="Sort report requests"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 focus:border-zinc-400 focus:outline-none"
+              className="w-full shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 sm:w-auto focus:border-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             >
               {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -522,6 +541,7 @@ export function PortalDashboard({
             </select>
           </div>
 
+          <div key={`${categoryFilter}-${sortBy}`} className="pane-in space-y-3">
           {visibleRows.length === 0 && (
             <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center">
               <p className="text-sm font-medium text-zinc-900">No report requests match these filters</p>
@@ -559,10 +579,10 @@ export function PortalDashboard({
             );
 
             return (
-              <div key={row.id} className="rounded-xl border border-zinc-200 bg-white p-5">
+              <div key={row.id} className="rounded-xl border border-zinc-200 bg-white p-5 transition-colors duration-150 hover:border-zinc-300">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <Link href={row.href} className="truncate text-base font-semibold text-zinc-900 hover:underline">
+                    <Link href={row.href} className="text-base font-semibold text-zinc-900 [overflow-wrap:anywhere] hover:underline">
                       {row.label}
                     </Link>
                     {caption && (
@@ -570,12 +590,12 @@ export function PortalDashboard({
                         {caption}
                       </p>
                     )}
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs tabular-nums text-zinc-500">
                       Submitted {row.submittedLabel}
                       {row.expectedDeliveryLabel ? ` · Expected ${row.expectedDeliveryLabel}` : " · No delivery date set"}
                     </p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${badge.className}`}>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${badge.className}`}>
                     {badge.label}
                     {row.stepper?.roundBadge ? ` · Round ${row.stepper.roundBadge}` : ""}
                   </span>
@@ -583,7 +603,7 @@ export function PortalDashboard({
 
                 {row.stepper ? (
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4">
-                    <div className="min-w-0 flex-1">
+                    <div className="w-full min-w-0 sm:w-auto sm:flex-1">
                       <MiniStepper
                         stages={row.stepper.stages}
                         showRevisionLoop={row.stepper.showRevisionLoop}
@@ -598,6 +618,7 @@ export function PortalDashboard({
               </div>
             );
           })}
+          </div>
         </div>
       )}
       </TourHighlight>

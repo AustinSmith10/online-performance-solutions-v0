@@ -12,10 +12,11 @@ import Link from "next/link";
 import { InlineAssignmentActions } from "./InlineAssignmentActions";
 import { RevisionReviewDrawer } from "./RevisionReviewDrawer";
 import type { DashboardProject } from "./dashboardTypes";
+import { OverduePill } from "@/components/OverduePill";
 
 function ChevronToggle({ expanded }: { expanded: boolean }) {
   return (
-    <svg className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
+    <svg className={`h-3 w-3 transition-transform duration-200 ease-[var(--ease-out)] motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
       <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
     </svg>
   );
@@ -51,17 +52,17 @@ export function useAssignmentHeroAction(items: DashboardProject[]): HeroAction |
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-amber-700"
+        className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white press hover:bg-amber-700"
       >
-        Respond ({items.length})
+        Respond (<span className="tabular-nums">{items.length}</span>)
         <ChevronToggle expanded={expanded} />
       </button>
     ),
     expanded: expanded && (
-      <div className="mt-3 divide-y divide-amber-200/70 border-t border-amber-200 pt-1">
+      <div className="rise-in mt-3 divide-y divide-amber-200/70 border-t border-amber-200 pt-1">
         {items.map((item) => (
           <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-            <span className="min-w-0 truncate text-sm text-amber-900">{item.label}</span>
+            <span className="min-w-0 break-words text-sm text-amber-900">{item.label}</span>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <InlineAssignmentActions projectId={item.pendingAssignment!.projectId} label={item.label} />
             </div>
@@ -90,7 +91,7 @@ function rowAction(item: DashboardProject) {
   return (
     <Link
       href={item.href}
-      className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+      className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 press hover:bg-red-50"
     >
       View →
     </Link>
@@ -121,22 +122,20 @@ export function useReviewHeroAction(revisionItems: DashboardProject[], overdueIt
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-red-700"
+        className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white press hover:bg-red-700"
       >
-        Review ({items.length})
+        Review (<span className="tabular-nums">{items.length}</span>)
         <ChevronToggle expanded={expanded} />
       </button>
     ),
     expanded: expanded && (
-      <div className="mt-3 divide-y divide-red-200/70 border-t border-red-200 pt-1">
+      <div className="rise-in mt-3 divide-y divide-red-200/70 border-t border-red-200 pt-1">
         {items.map((item) => (
           <div key={item.id} className="flex items-center justify-between gap-3 py-2">
-            <span className="flex min-w-0 items-center gap-1.5 truncate text-sm text-red-900">
-              <span className="min-w-0 truncate">{item.label}</span>
+            <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-red-900">
+              <span className="min-w-0 break-words">{item.label}</span>
               {item.isOverdue && (
-                <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
-                  Overdue
-                </span>
+                <OverduePill days={item.daysOverdue} className="shrink-0" />
               )}
             </span>
             <div className="shrink-0">{rowAction(item)}</div>

@@ -94,10 +94,11 @@ export function TopNavLinks({ items }: { items: NavItem[] }) {
           <Link
             key={item.href}
             href={item.href}
+            aria-current={active ? "page" : undefined}
             className={
               active
-                ? "shrink-0 border-b-2 border-zinc-900 py-1 text-sm font-medium text-zinc-900"
-                : "shrink-0 border-b-2 border-transparent py-1 text-sm text-zinc-500 hover:text-zinc-700"
+                ? "shrink-0 border-b-2 border-zinc-900 py-2 text-sm font-medium text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                : "shrink-0 border-b-2 border-transparent py-2 text-sm text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             }
           >
             {item.label}

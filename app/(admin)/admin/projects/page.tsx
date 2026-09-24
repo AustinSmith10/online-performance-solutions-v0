@@ -2,6 +2,10 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildProjectSearchFilter } from "@/lib/projects/search";
 import type { ProjectStatus } from "@/types";
+import { OverduePill } from "@/components/OverduePill";
+import { ReviewTallyChip } from "@/components/ReviewTallyChip";
+import { resolveStaffStatus } from "@/lib/delivery/effective-status";
+import { summarizeRound, type RoundSummary } from "@/lib/stakeholders/round-summary";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -19,7 +23,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
   draft: "bg-zinc-100 text-zinc-500",
   submitted: "bg-blue-100 text-blue-700",
-  assigned: "bg-yellow-100 text-yellow-700",
+  assigned: "bg-zinc-200 text-zinc-700",
   in_progress: "bg-purple-100 text-purple-700",
   dispatched: "bg-amber-100 text-amber-700",
   revision_required: "bg-red-100 text-red-700",
@@ -61,6 +65,10 @@ type ProjectRow = {
   site_address: string | null;
   extracted_fields: Record<string, string> | null;
   status: ProjectStatus;
+  review_cycle: number;
+  /** What staff should read the status as — see resolveStaffStatus. */
+  displayStatus: ProjectStatus;
+  tally?: RoundSummary;
   payment_override: boolean;
   expected_delivery_date: string | null;
   created_at: string;
@@ -100,6 +108,7 @@ export default async function ProjectsPage({
       site_address,
       extracted_fields,
       status,
+      review_cycle,
       payment_override,
       expected_delivery_date,
       created_at,
@@ -116,7 +125,12 @@ export default async function ProjectsPage({
   if (searchFilter) {
     query = query.or(searchFilter);
   }
-  if (status?.trim()) query = query.eq("status", status.trim());
+  // "Awaiting Approval" and "Revision Required" are read off the round, not the
+  // stored status alone, so either filter has to look at both before narrowing.
+  const statusFilter = status?.trim() ?? "";
+  const roundAwareFilter = statusFilter === "dispatched" || statusFilter === "revision_required";
+  if (roundAwareFilter) query = query.in("status", ["dispatched", "revision_required"]);
+  else if (statusFilter) query = query.eq("status", statusFilter);
   if (orgIds !== null) {
     if (orgIds.length === 0) {
       const projects: ProjectRow[] = [];
@@ -127,7 +141,26 @@ export default async function ProjectsPage({
   }
 
   const { data } = await query;
-  const projects = (data ?? []) as unknown as ProjectRow[];
+  const rawProjects = (data ?? []) as unknown as Omit<ProjectRow, "displayStatus" | "tally">[];
+
+  const roundIds = rawProjects
+    .filter((p) => p.status === "dispatched" || p.status === "revision_required")
+    .map((p) => p.id);
+  const { data: reviewRows } = roundIds.length
+    ? await supabase.from("stakeholder_reviews").select("project_id, review_cycle, status").in("project_id", roundIds)
+    : { data: [] };
+  const cycleById = new Map(rawProjects.map((p) => [p.id, p.review_cycle]));
+  const currentRoundOf = (id: string) =>
+    (reviewRows ?? []).filter((r) => r.project_id === id && r.review_cycle === cycleById.get(id)) as { status: string }[];
+
+  const projects: ProjectRow[] = rawProjects
+    .map((p) => {
+      const round = currentRoundOf(p.id);
+      const displayStatus = p.status === "revision_required" ? resolveStaffStatus(p.status, round) : p.status;
+      const inRound = displayStatus === "dispatched" || displayStatus === "revision_required";
+      return { ...p, displayStatus, tally: inRound && round.length > 0 ? summarizeRound(round) : undefined };
+    })
+    .filter((p) => !roundAwareFilter || p.displayStatus === statusFilter);
   const todayIso = new Date().toISOString().slice(0, 10);
   const hasFilter = !!(q || status || org || sort || order);
 
@@ -262,12 +295,13 @@ function ProjectsLayout({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
-                  {overdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">Overdue</span>}
+                  {overdue && <OverduePill />}
                   {p.payment_override && (
                     <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700">Override</span>
                   )}
-                  <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_CLASSES[p.status]}`}>
-                    {STATUS_LABELS[p.status]}
+                  {p.tally && <ReviewTallyChip summary={p.tally} />}
+                  <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_CLASSES[p.displayStatus]}`}>
+                    {STATUS_LABELS[p.displayStatus]}
                   </span>
                 </div>
               </Link>

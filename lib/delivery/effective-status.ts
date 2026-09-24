@@ -27,3 +27,23 @@ export function resolveEffectiveStatus(
   const hasOutstanding = currentCycleReviews.some((r) => OUTSTANDING_STATUSES.has(r.status));
   return hasOutstanding ? status : "converting";
 }
+
+/**
+ * Like resolveEffectiveStatus, for the consultant/admin surfaces. The stored
+ * status flips to `revision_required` on the first rejection (#120) even while
+ * other reviewers are still pending — but nothing is actionable until the
+ * round closes, so until then it reads as still awaiting stakeholders. The
+ * stored status and every gate keyed off it are unchanged; only the display is.
+ *
+ * Deliberately separate from resolveEffectiveStatus so the stakeholder portal,
+ * which shares that helper, is unaffected.
+ */
+export function resolveStaffStatus(
+  status: ProjectStatus,
+  currentCycleReviews: ReviewStatusRow[]
+): ProjectStatus {
+  if (status === "revision_required" && currentCycleReviews.some((r) => r.status === "pending")) {
+    return "dispatched";
+  }
+  return resolveEffectiveStatus(status, currentCycleReviews);
+}

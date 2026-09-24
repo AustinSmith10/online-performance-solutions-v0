@@ -57,7 +57,7 @@ export function SubmissionDetailsCard({
   }, [state.success, router]);
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white">
+    <div className="rounded-xl border border-zinc-200 bg-white">
       <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
         <h2 className="text-sm font-semibold text-zinc-900">Submitted details</h2>
         {!locked && !editing && (

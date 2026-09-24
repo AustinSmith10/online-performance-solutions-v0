@@ -36,7 +36,7 @@ export function PendingReviewModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-amber-700"
+        className="press inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1"
       >
         Review
         <svg
@@ -55,10 +55,10 @@ export function PendingReviewModal({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30"
+          className="modal-backdrop fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain backdrop-blur-sm bg-black/30 p-4 sm:pt-20"
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
-          <div className="mx-4 w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-xl">
+          <div className="modal-panel w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
             <div className="flex items-start justify-between border-b border-zinc-100 px-6 py-4">
               <div className="min-w-0 pr-4">
                 <h2 className="text-base font-semibold text-zinc-900">Brief Review</h2>
@@ -67,7 +67,7 @@ export function PendingReviewModal({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                className="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1"
                 aria-label="Close"
               >
                 <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">

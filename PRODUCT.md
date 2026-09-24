@@ -24,6 +24,8 @@ OPS ("Online Performance Solution", DDEG) shepherds an engineering **Performance
 - Project page = header card (status, source, overdue, revision, dates, project number) + stage rail + "Right now" focus card in a left rail, and Details / Documents / Stakeholders reference tabs on the right; Audit trail is a second primary tab.
 - Runs in a desktop browser for consultants and admins; mobile web is secondary.
 
+- Consultant dashboard ("My projects", `app/(consultant)/ops`): the entry point. Summary tiles, a "Right now" banner for pending assignments and revisions/overdue, and four lists (Active, With stakeholders, Archive, Available jobs). Consultants accept or decline admin-pushed assignments inline and can self-assign available jobs.
+
 ## Capabilities and Constraints
 
 - Next.js (breaking-changes version; see AGENTS.md), Tailwind v4, Supabase.

@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -14,7 +15,9 @@ export const SESSION_DURATION: Record<UserRole, number> = {
 
 export const SESSION_EXPIRY_COOKIE = "ops-session-expires";
 
-export async function getSessionUser() {
+// cache(): a layout and the page beneath it both call requireRole, so within one
+// request they share this lookup instead of repeating the auth + profile round trips.
+export const getSessionUser = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -33,7 +36,7 @@ export async function getSessionUser() {
     .maybeSingle();
 
   return profile ?? null;
-}
+});
 
 export async function requireRole(...roles: UserRole[]) {
   const profile = await getSessionUser();

@@ -466,11 +466,9 @@ export default async function ClientProjectDetailPage({
       >
         <div className="space-y-3">
           {consultantRevisionNote && (
-            <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                Note from your consultant
-              </p>
-              <p className="mt-1 text-sm text-blue-900">{consultantRevisionNote}</p>
+            <div>
+              <p className="text-xs font-semibold text-amber-900">Note from your consultant</p>
+              <p className="mt-1 text-sm text-amber-900">{consultantRevisionNote}</p>
             </div>
           )}
           <PortalApprovalForm
@@ -535,28 +533,28 @@ export default async function ClientProjectDetailPage({
 
   // ── Left rail reference card ──────────────────────────────────────────────
   const leftRailExtras = !isDeleted && project.status !== "draft" && (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Reference</p>
+    <div className="hidden rounded-xl border border-zinc-200 bg-white p-4 text-sm md:block">
+      <p className="mb-2 text-sm font-semibold text-zinc-900">Reference</p>
       <dl className="space-y-1.5 text-zinc-700">
         {templateName && (
           <div className="flex justify-between gap-3">
-            <dt className="text-zinc-400">Report type</dt>
+            <dt className="text-zinc-500">Report type</dt>
             <dd className="text-right">{templateName}</dd>
           </div>
         )}
         <div className="flex justify-between gap-3">
-          <dt className="text-zinc-400">Submitted</dt>
-          <dd>{submittedLabel}</dd>
+          <dt className="text-zinc-500">Submitted</dt>
+          <dd className="tabular-nums">{submittedLabel}</dd>
         </div>
         {dueLabel && (
           <div className="flex justify-between gap-3">
-            <dt className="text-zinc-400">Due</dt>
-            <dd>{dueLabel}</dd>
+            <dt className="text-zinc-500">Due</dt>
+            <dd className="tabular-nums">{dueLabel}</dd>
           </div>
         )}
         <div className="flex justify-between gap-3">
-          <dt className="text-zinc-400">PO number</dt>
-          <dd>{project.po_number || "—"}</dd>
+          <dt className="text-zinc-500">PO number</dt>
+          <dd className="tabular-nums">{project.po_number || "—"}</dd>
         </div>
       </dl>
     </div>
@@ -564,8 +562,8 @@ export default async function ClientProjectDetailPage({
 
   // ── Overview tab ───────────────────────────────────────────────────────────
   const overviewTab = (
-    <div className="space-y-3">
-      <div className="rounded-lg border border-zinc-200 bg-white p-5">
+    <div className="space-y-4">
+      <div className="rounded-xl border border-zinc-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-zinc-900">What&apos;s happening</h2>
         <p className="mt-2 text-sm leading-relaxed text-zinc-600">
           {isDeleted
@@ -593,7 +591,7 @@ export default async function ClientProjectDetailPage({
           Once a consultant has picked it up, the client can no longer
           re-check documents (mirrors isLocked below). */}
       {!isDeleted && project.status !== "draft" && !isLocked && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-5">
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <h2 className="mb-1 text-sm font-semibold text-zinc-900">Re-check documents</h2>
           <p className="mb-3 text-sm text-zinc-500">
             Added a document since submitting, or think something was misread? Re-run extraction
@@ -607,7 +605,7 @@ export default async function ClientProjectDetailPage({
 
   // ── Documents tab ──────────────────────────────────────────────────────────
   const documentsTab = (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {files.length > 0 && (
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <div className="mb-3 flex items-center gap-2">
@@ -616,17 +614,17 @@ export default async function ClientProjectDetailPage({
                 <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7.914a2 2 0 00-.586-1.414l-3.914-3.914A2 2 0 0012.086 2H4zm7 1.5V6a1 1 0 001 1h2.5L11 3.5zM6 9a1 1 0 000 2h8a1 1 0 100-2H6zm0 4a1 1 0 100 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
               </svg>
             </div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Your files</p>
+            <p className="text-sm font-semibold text-zinc-900">Your files</p>
           </div>
-          <div className="space-y-1.5">
+          <div className="divide-y divide-zinc-100 border-t border-zinc-100">
             {files.map((f) => (
-              <div key={f.id as string} className="space-y-1">
-                <div className="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2">
+              <div key={f.id as string} className="space-y-1 py-2 last:pb-0">
+                <div className="flex items-center gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium text-zinc-900">
                       {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-zinc-400">
+                    <p className="mt-0.5 text-xs text-zinc-500">
                       {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                     </p>
                   </div>
@@ -690,13 +688,13 @@ export default async function ClientProjectDetailPage({
       )}
 
       {files.length === 0 && !latestPbdb && !latestPbdr && (
-        <p className="rounded-lg border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">
+        <p className="rounded-xl border border-zinc-200 bg-white px-5 py-6 text-sm text-zinc-500">
           No documents uploaded yet.
         </p>
       )}
 
       {!isDeleted && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-4">
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <FileUploadForm projectId={id} />
         </div>
       )}
@@ -705,7 +703,7 @@ export default async function ClientProjectDetailPage({
         <DeleteProjectButton projectId={project.id} />
       )}
       {!isDeleted && !["draft", "submitted"].includes(project.status) && (
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-zinc-500">
           This report has been assigned to a consultant and can no longer be deleted. Contact{" "}
           <a href={SUPPORT_MAILTO} className="underline hover:text-zinc-600">DDEG</a> if you need to cancel.
         </p>
@@ -722,7 +720,7 @@ export default async function ClientProjectDetailPage({
   }[];
 
   const reviewTab = (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5">
+    <div className="rounded-xl border border-zinc-200 bg-white p-4">
       <h2 className="text-sm font-semibold text-zinc-900">Review history</h2>
       {reviewHistory.length === 0 && !clientReviewOpen && (
         <p className="mt-2 text-sm text-zinc-500">No review requested yet.</p>
@@ -747,7 +745,7 @@ export default async function ClientProjectDetailPage({
                       <span className="text-amber-700">Changes requested</span>
                     )}
                   </span>
-                  <span className="text-xs text-zinc-400">
+                  <span className="text-xs tabular-nums text-zinc-500">
                     {new Date(ev.responded_at).toLocaleDateString("en-AU")}
                   </span>
                 </div>
@@ -780,7 +778,22 @@ export default async function ClientProjectDetailPage({
           <ClientHeaderCard
             title={title}
             subtitle={subtitleParts.length > 0 ? subtitleParts.join(" · ") : undefined}
-            statusLabel={isDeleted ? "In recovery bin" : project.status === "draft" ? "Draft" : currentStageLabel ?? undefined}
+            statusLabel={
+              isDeleted
+                ? "In recovery bin"
+                : project.status === "draft"
+                ? "Draft"
+                : clientReviewOpen
+                ? "Your review needed"
+                : currentStageLabel ?? undefined
+            }
+            tone={
+              !isDeleted && clientReviewOpen
+                ? "amber"
+                : !isDeleted && TERMINAL_STATUSES.has(project.status) && latestPbdr
+                ? "green"
+                : "neutral"
+            }
             roundBadge={project.review_cycle}
           />
         }

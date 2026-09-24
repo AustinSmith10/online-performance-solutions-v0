@@ -17,6 +17,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ProjectStatus } from "@/types";
+import { OverduePill } from "@/components/OverduePill";
+import { ReviewTallyChip } from "@/components/ReviewTallyChip";
+import type { RoundSummary } from "@/lib/stakeholders/round-summary";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -34,7 +37,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
   draft: "bg-zinc-100 text-zinc-500",
   submitted: "bg-blue-100 text-blue-700",
-  assigned: "bg-yellow-100 text-yellow-700",
+  assigned: "bg-zinc-200 text-zinc-700",
   in_progress: "bg-purple-100 text-purple-700",
   dispatched: "bg-amber-100 text-amber-700",
   revision_required: "bg-red-100 text-red-700",
@@ -65,6 +68,7 @@ export type ActiveProjectItem = {
   client: string | null;
   consultant: string | null;
   status: ProjectStatus;
+  tally?: RoundSummary;
   dueLabel: string | null;
   overdue: boolean;
   awaitingStakeholder: boolean;
@@ -155,7 +159,7 @@ function ProjectRow({ p }: { p: ActiveProjectItem }) {
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        {p.overdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">Overdue</span>}
+        {p.overdue && <OverduePill />}
         {p.overridePending && (
           <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700">Override</span>
         )}
@@ -167,6 +171,7 @@ function ProjectRow({ p }: { p: ActiveProjectItem }) {
             Flagged doc
           </span>
         )}
+        {p.tally && <ReviewTallyChip summary={p.tally} />}
         <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_CLASSES[p.status]}`}>
           {STATUS_LABELS[p.status]}
         </span>

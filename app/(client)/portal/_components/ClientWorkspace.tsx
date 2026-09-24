@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UnsavedChangesProvider, useRequestNavigate } from "@/components/UnsavedChangesProvider";
 import type { Stage } from "@/components/workspace/StageRail";
 import { StageRail } from "@/components/workspace/StageRail";
@@ -59,6 +59,32 @@ function ClientWorkspaceInner({
 }) {
   const [refTab, setRefTab] = useState<RefTab>(defaultRefTab);
   const requestNavigate = useRequestNavigate();
+  // Tab that arrow-key navigation wants focused. Focus moves in an effect once
+  // refTab really is that tab, so a cancelled unsaved-changes prompt leaves
+  // focus on the still-selected tab.
+  const focusAfterSwitch = useRef<RefTab | null>(null);
+
+  useEffect(() => {
+    if (focusAfterSwitch.current === refTab) {
+      document.getElementById(`ref-tab-${refTab}`)?.focus();
+    }
+    focusAfterSwitch.current = null;
+  }, [refTab]);
+
+  // Arrow keys / Home / End move between tabs (ARIA tab pattern); the
+  // selected tab is the only one in the tab order.
+  function onTabKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const i = REF_TABS.findIndex((t) => t.id === refTab);
+    let next = i;
+    if (e.key === "ArrowRight") next = (i + 1) % REF_TABS.length;
+    else if (e.key === "ArrowLeft") next = (i - 1 + REF_TABS.length) % REF_TABS.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = REF_TABS.length - 1;
+    else return;
+    e.preventDefault();
+    focusAfterSwitch.current = REF_TABS[next].id;
+    requestNavigate(() => setRefTab(REF_TABS[next].id));
+  }
 
   const refContent: Record<RefTab, React.ReactNode> = {
     overview: overviewTab,
@@ -80,13 +106,18 @@ function ClientWorkspaceInner({
 
         {/* Right column: reference tabs */}
         <div className="min-w-0">
-          <div className="flex gap-1 rounded-lg bg-zinc-100 p-1">
+          <div role="tablist" aria-label="Project reference" onKeyDown={onTabKeyDown} className="flex gap-1 rounded-lg bg-zinc-100 p-1">
             {REF_TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
+                role="tab"
+                id={`ref-tab-${t.id}`}
+                aria-selected={refTab === t.id}
+                aria-controls="ref-tabpanel"
+                tabIndex={refTab === t.id ? 0 : -1}
                 onClick={() => requestNavigate(() => setRefTab(t.id))}
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium press-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${
                   refTab === t.id
                     ? "bg-white text-zinc-900 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-700"
@@ -96,7 +127,7 @@ function ClientWorkspaceInner({
               </button>
             ))}
           </div>
-          <div className="mt-3 space-y-3">{refContent[refTab]}</div>
+          <div key={refTab} role="tabpanel" id="ref-tabpanel" aria-labelledby={`ref-tab-${refTab}`} className="pane-in mt-4 space-y-4">{refContent[refTab]}</div>
         </div>
       </div>
     </div>

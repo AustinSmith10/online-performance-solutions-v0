@@ -1,12 +1,15 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ReviewRow } from "./_components/RevisionReviewDrawer";
+import type { ReviewRow } from "../_components/RevisionReviewDrawer";
 import { RealtimeSubscriptionRefresher } from "@/components/RealtimeSubscriptionRefresher";
-import { DeclinedBanner } from "./_components/DeclinedBanner";
-import { OnboardingFlow } from "./_components/OnboardingFlow";
-import { Dashboard } from "./_components/Dashboard";
-import type { DashboardData, DashboardProject } from "./_components/dashboardTypes";
-import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
+import { DeclinedBanner } from "../_components/DeclinedBanner";
+import { OnboardingFlow } from "../_components/OnboardingFlow";
+import { Dashboard } from "../_components/Dashboard";
+import type { DashboardData, DashboardProject } from "../_components/dashboardTypes";
+import { SECTION_KEYS, daysOverdue, matchesQuery, paginate, parsePage, parseSection, sortByAttention, type SectionKey } from "../_components/dashboardList";
+import type { TabSlice } from "../_components/dashboardTypes";
+import { resolveStaffStatus } from "@/lib/delivery/effective-status";
+import { summarizeRound } from "@/lib/stakeholders/round-summary";
 import type { ProjectStatus } from "@/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -25,7 +28,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
   draft: "bg-zinc-100 text-zinc-500",
   submitted: "bg-blue-100 text-blue-700",
-  assigned: "bg-yellow-100 text-yellow-700",
+  assigned: "bg-zinc-200 text-zinc-700",
   in_progress: "bg-purple-100 text-purple-700",
   dispatched: "bg-amber-100 text-amber-700",
   revision_required: "bg-red-100 text-red-700",
@@ -69,14 +72,20 @@ type AvailableProject = {
 export default async function ConsultantOpsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ declined?: string; tour?: string }>;
+  searchParams: Promise<{ declined?: string; tour?: string; tab?: string; page?: string; q?: string }>;
 }) {
-  const { declined, tour } = await searchParams;
+  const { declined, tour, tab: tabParam, page: pageParam, q: qParam } = await searchParams;
+  const tab = parseSection(tabParam);
+  const q = (qParam ?? "").trim().slice(0, 100);
 
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
 
-  const { data, error } = await supabase
+  // Independent reads run together: this page is dynamic and every tab, page and
+  // search navigation re-renders it, so sequential round trips add up quickly
+  // (the server and database are in different regions).
+  const [{ data, error }, { data: rawAvailable }] = await Promise.all([
+    supabase
     .from("projects")
     .select(`
       id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle, accepted_at, paused_previous_status,
@@ -86,7 +95,15 @@ export default async function ConsultantOpsPage({
     .eq("assigned_consultant_id", user.id)
     .not("status", "eq", "draft")
     .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false }),
+    supabase
+    .from("projects")
+    .select("id, extracted_fields, po_number, created_at, expected_delivery_date, clients(name)")
+    .eq("status", "submitted")
+    .is("assigned_consultant_id", null)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true }),
+  ]);
 
   if (error) console.error("[ops] project list query failed:", error);
   const allAssigned = (data ?? []) as unknown as ProjectRow[];
@@ -108,6 +125,7 @@ export default async function ConsultantOpsPage({
     string,
     { id: string; original_filename: string | null; version: number; created_at: string }
   > = {};
+  const revisionTask = (async () => {
   if (revisionRequired.length > 0) {
     const revisionIds = revisionRequired.map((p) => p.id);
 
@@ -140,6 +158,7 @@ export default async function ConsultantOpsPage({
       pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version, created_at: f.created_at };
     }
   }
+  })();
   // Single source of truth for "what stage is this project really at" — every
   // list, tab bucket, and label below derives from this instead of separately
   // recomputing "are all reviews resolved," which is what let this landing
@@ -147,8 +166,13 @@ export default async function ConsultantOpsPage({
   // project still being "dispatched" in the DB until an admin/consultant
   // explicitly clicks Convert (conversion no longer auto-fires on full
   // approval).
-  const dispatchedIds = projects.filter((p) => p.status === "dispatched").map((p) => p.id);
+  // revision_required is included: a first rejection flips it before every
+  // reviewer has responded, and the round is only really closed once none are pending.
+  const dispatchedIds = projects
+    .filter((p) => p.status === "dispatched" || p.status === "revision_required")
+    .map((p) => p.id);
   const reviewsByProjectId = new Map<string, { status: string }[]>();
+  const dispatchedTask = (async () => {
   if (dispatchedIds.length > 0) {
     const { data: reviewRows } = await supabase
       .from("stakeholder_reviews")
@@ -163,8 +187,23 @@ export default async function ConsultantOpsPage({
       );
     }
   }
+  })();
+  // #115: a single aggregated query for "which of this consultant's projects
+  // has at least one stakeholder-confirmed verification mismatch" — not N+1
+  // lookups per row.
+  const mismatchTask = allAssigned.length
+    ? supabase
+        .from("project_files")
+        .select("project_id")
+        .in("project_id", allAssigned.map((p) => p.id))
+        .not("verification_mismatch_reasons", "is", null)
+        .not("verification_confirmed_at", "is", null)
+    : Promise.resolve({ data: [] as { project_id: string }[] });
+
+  // The three lookups only depend on the project list, so run them together.
+  const [, , { data: mismatchRows }] = await Promise.all([revisionTask, dispatchedTask, mismatchTask]);
   const effectiveStatusMap = new Map<string, ProjectStatus>(
-    projects.map((p) => [p.id, resolveEffectiveStatus(p.status, reviewsByProjectId.get(p.id) ?? [])])
+    projects.map((p) => [p.id, resolveStaffStatus(p.status, reviewsByProjectId.get(p.id) ?? [])])
   );
   const effectiveStatusOf = (p: ProjectRow) => effectiveStatusMap.get(p.id) ?? p.status;
 
@@ -192,36 +231,21 @@ export default async function ConsultantOpsPage({
     (["delivered", "complete"] as ProjectStatus[]).includes(p.status)
   );
 
-  // Available jobs — submitted, unassigned, not deleted
-  const { data: rawAvailable } = await supabase
-    .from("projects")
-    .select("id, extracted_fields, po_number, created_at, expected_delivery_date, clients(name)")
-    .eq("status", "submitted")
-    .is("assigned_consultant_id", null)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: true });
-
+  // Available jobs — submitted, unassigned, not deleted (fetched above)
   const availableProjects = (rawAvailable ?? []) as unknown as AvailableProject[];
 
-  // #115: a single aggregated query for "which of this consultant's projects
-  // has at least one stakeholder-confirmed verification mismatch" — not N+1
-  // lookups per row.
-  const { data: mismatchRows } = allAssigned.length
-    ? await supabase
-        .from("project_files")
-        .select("project_id")
-        .in("project_id", allAssigned.map((p) => p.id))
-        .not("verification_mismatch_reasons", "is", null)
-        .not("verification_confirmed_at", "is", null)
-    : { data: [] };
   const mismatchProjectIds = new Set((mismatchRows ?? []).map((r) => r.project_id as string));
 
   function toDashboardProject(p: ProjectRow): DashboardProject {
-    const isOverdue =
-      !!p.expected_delivery_date && p.expected_delivery_date < todayIso && !TERMINAL_STATUSES.has(p.status);
+    const overdueDays = TERMINAL_STATUSES.has(p.status) ? 0 : daysOverdue(p.expected_delivery_date, todayIso);
+    const isOverdue = overdueDays > 0;
     const isPending = !p.accepted_at;
-    const isRevision = p.status === "revision_required";
     const effectiveStatus = effectiveStatusOf(p);
+    const isRevision = effectiveStatus === "revision_required";
+    const tally =
+      effectiveStatus === "dispatched" || effectiveStatus === "revision_required"
+        ? summarizeRound(reviewsByProjectId.get(p.id) ?? [])
+        : undefined;
     return {
       id: p.id,
       href: `/ops/projects/${p.id}`,
@@ -233,8 +257,10 @@ export default async function ConsultantOpsPage({
       expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
       submittedLabel: formatAuDate(p.created_at),
       isOverdue,
+      daysOverdue: overdueDays,
       isPending,
       isRevision,
+      tally,
       hasVerificationMismatch: mismatchProjectIds.has(p.id),
       pendingAssignment: isPending ? { projectId: p.id } : undefined,
       revisionReview:
@@ -248,22 +274,79 @@ export default async function ConsultantOpsPage({
     };
   }
 
+  const built = new Map<string, DashboardProject>();
+  const build = (p: ProjectRow) => {
+    let d = built.get(p.id);
+    if (!d) built.set(p.id, (d = toDashboardProject(p)));
+    return d;
+  };
+  const rowMatches = (p: ProjectRow) => matchesQuery(q, [projectLabel(p), p.clients?.name, clientName(p.submitter)]);
+  const availableLabel = (p: AvailableProject) => {
+    const addr = p.extracted_fields?.["EXTRACT_ADDRESS"] ?? null;
+    return addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
+  };
+
+  // Paging is server-side: only the current tab's current page is sent to the
+  // client. The banners always need every revision/overdue project, so those
+  // travel separately as `attention` regardless of page or search.
+  const toLight = (p: ProjectRow) => {
+    const d = TERMINAL_STATUSES.has(p.status) ? 0 : daysOverdue(p.expected_delivery_date, todayIso);
+    return { p, isRevision: effectiveStatusOf(p) === "revision_required", isOverdue: d > 0, daysOverdue: d };
+  };
+  const sortedActive = sortByAttention(activeAccepted.map(toLight)).map((x) => x.p);
+  const sortedStakeholders = sortByAttention(withStakeholders.map(toLight)).map((x) => x.p);
+
+  const rowsForTab = (key: SectionKey): ProjectRow[] =>
+    key === "active"
+      ? [...pendingAssignments, ...sortedActive]
+      : key === "stakeholders"
+        ? sortedStakeholders
+        : key === "archive"
+          ? done
+          : [];
+  const tabRows = rowsForTab(tab);
+  const paged = paginate(tabRows.filter(rowMatches), parsePage(pageParam));
+  const availableMatches = availableProjects.filter((p) => matchesQuery(q, [availableLabel(p), p.clients?.name]));
+  const pagedAvailable = paginate(availableMatches, parsePage(pageParam));
+  const isAvailableTab = tab === "available";
+
+  const toAvailable = (p: AvailableProject) => ({
+    id: p.id,
+    label: availableLabel(p),
+    clientName: p.clients?.name ?? null,
+    submittedLabel: formatAuDate(p.created_at),
+    expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
+  });
+  // Page 1 of every tab, so the client can switch tabs without a round trip.
+  const preloaded = Object.fromEntries(
+    SECTION_KEYS.map((key): [SectionKey, TabSlice] => {
+      if (key === "available") {
+        const first = paginate(availableProjects, 1);
+        return [key, { rows: [], available: first.items.map(toAvailable), total: first.total, pageCount: first.pageCount }];
+      }
+      const first = paginate(rowsForTab(key), 1);
+      return [key, { rows: first.items.map(build), available: [], total: first.total, pageCount: first.pageCount }];
+    })
+  ) as Record<SectionKey, TabSlice>;
+
   const dashboardData: DashboardData = {
-    pendingAssignments: pendingAssignments.map(toDashboardProject),
-    active: activeAccepted.map(toDashboardProject),
-    withStakeholders: withStakeholders.map(toDashboardProject),
-    archive: done.map(toDashboardProject),
-    available: availableProjects.map((p) => {
-      const addr = p.extracted_fields?.["EXTRACT_ADDRESS"] ?? null;
-      const label = addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
-      return {
-        id: p.id,
-        label,
-        clientName: p.clients?.name ?? null,
-        submittedLabel: formatAuDate(p.created_at),
-        expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
-      };
-    }),
+    tab,
+    q,
+    page: isAvailableTab ? pagedAvailable.page : paged.page,
+    pageCount: isAvailableTab ? pagedAvailable.pageCount : paged.pageCount,
+    total: isAvailableTab ? pagedAvailable.total : paged.total,
+    counts: {
+      active: pendingAssignments.length + activeAccepted.length,
+      stakeholders: withStakeholders.length,
+      archive: done.length,
+      available: availableProjects.length,
+      pending: pendingAssignments.length,
+    },
+    pendingAssignments: pendingAssignments.map(build),
+    attention: sortedActive.map(build).filter((d) => d.isRevision || d.isOverdue),
+    rows: paged.items.map(build),
+    available: pagedAvailable.items.map(toAvailable),
+    preloaded,
   };
 
   return (

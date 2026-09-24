@@ -64,7 +64,7 @@ export function DocumentPreviewModal({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1"
               >
                 Close
               </button>

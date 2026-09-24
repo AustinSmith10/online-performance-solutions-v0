@@ -6,7 +6,8 @@ import { ActiveProjectsList, type ActiveProjectItem } from "./_components/Active
 import { OnboardingTourProvider } from "@/components/onboarding-tour/context";
 import { TourHighlight } from "@/components/onboarding-tour/TourHighlight";
 import { ADMIN_TOUR_STEPS } from "@/lib/onboarding/steps";
-import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
+import { resolveStaffStatus } from "@/lib/delivery/effective-status";
+import { summarizeRound } from "@/lib/stakeholders/round-summary";
 import type { ProjectStatus } from "@/types";
 
 const IN_FLIGHT_STATUSES: ProjectStatus[] = [
@@ -184,7 +185,11 @@ export default async function AdminDashboardPage({
   // the project detail page about a fully-approved project still being
   // "dispatched" in the DB until an admin/consultant explicitly clicks
   // Convert (conversion no longer auto-fires on full approval).
-  const dispatchedIds = allActive.filter((p) => p.status === "dispatched").map((p) => p.id);
+  // revision_required is included: the first rejection flips it before every
+  // reviewer has responded, and the round only closes once none are pending.
+  const dispatchedIds = allActive
+    .filter((p) => p.status === "dispatched" || p.status === "revision_required")
+    .map((p) => p.id);
   const reviewsByProjectId = new Map<string, { status: string }[]>();
   if (dispatchedIds.length > 0) {
     const { data: reviewRows } = await supabase
@@ -214,19 +219,26 @@ export default async function AdminDashboardPage({
     : { data: [] };
   const mismatchProjectIds = new Set((mismatchRows ?? []).map((r) => r.project_id as string));
 
-  const activeProjectItems: ActiveProjectItem[] = allActive.map((p) => ({
+  const activeProjectItems: ActiveProjectItem[] = allActive.map((p) => {
+    const status = resolveStaffStatus(p.status, reviewsByProjectId.get(p.id) ?? []);
+    return {
     id: p.id,
     href: `/admin/projects/${p.id}`,
     label: projectLabel(p),
     client: p.clients?.name ?? null,
     consultant: consultantName(p.consultant),
-    status: resolveEffectiveStatus(p.status, reviewsByProjectId.get(p.id) ?? []),
+    status,
+    tally:
+      status === "dispatched" || status === "revision_required"
+        ? summarizeRound(reviewsByProjectId.get(p.id) ?? [])
+        : undefined,
     dueLabel: p.expected_delivery_date ? new Date(p.expected_delivery_date).toLocaleDateString("en-AU") : null,
     overdue: !!(p.expected_delivery_date && p.expected_delivery_date < todayIso),
     awaitingStakeholder: pendingProjectIds.has(p.id),
     overridePending: p.payment_override,
     hasVerificationMismatch: mismatchProjectIds.has(p.id),
-  }));
+    };
+  });
 
   return (
     <OnboardingTourProvider
