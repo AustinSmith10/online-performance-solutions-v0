@@ -134,7 +134,7 @@ export function useReviewHeroAction(revisionItems: DashboardProject[], overdueIt
             <span className="flex min-w-0 items-center gap-1.5 truncate text-sm text-red-900">
               <span className="min-w-0 truncate">{item.label}</span>
               {item.isOverdue && (
-                <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-red-700">
                   Overdue
                 </span>
               )}

@@ -32,7 +32,7 @@ export function Tile({
   return (
     <div className={`rounded-xl border p-4 ${classes}`}>
       <p className="text-2xl font-semibold tabular-nums">{value}</p>
-      <p className="mt-0.5 text-xs font-medium opacity-80">{label}</p>
+      <p className="mt-0.5 text-xs font-medium">{label}</p>
     </div>
   );
 }
@@ -63,7 +63,7 @@ export function CompactHero({
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-baseline gap-2">
           <span className={`shrink-0 whitespace-nowrap text-sm font-semibold ${titleClasses}`}>Right now</span>
-          <span className="truncate text-xs text-zinc-500">{subtitle}</span>
+          <span className="truncate text-xs text-zinc-600">{subtitle}</span>
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
