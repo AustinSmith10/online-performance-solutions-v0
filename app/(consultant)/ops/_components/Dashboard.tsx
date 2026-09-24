@@ -184,7 +184,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Tile tone={pendingAssignments.length > 0 ? "amber" : "zinc"} label="Needs your response" value={pendingAssignments.length} />
-            <Tile tone="neutral" label="Active" value={active.length} />
+            <Tile tone={active.length > 0 ? "neutral" : "zinc"} label="Active" value={active.length} />
             <Tile tone="zinc" label="With stakeholders" value={withStakeholders.length} />
             <Tile tone={available.length > 0 ? "green" : "zinc"} label="Available jobs" value={available.length} />
           </div>
