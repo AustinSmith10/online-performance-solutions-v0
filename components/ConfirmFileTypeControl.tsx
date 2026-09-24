@@ -43,7 +43,7 @@ export function ConfirmFileTypeControl({
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
         Needs review
       </span>
       <select

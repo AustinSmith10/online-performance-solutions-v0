@@ -8,10 +8,10 @@
 export function VerificationMismatchNote({ reasons }: { reasons: string[] }) {
   return (
     <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2">
-      <p className="text-[11px] font-semibold text-amber-800">
+      <p className="text-xs font-semibold text-amber-800">
         Stakeholder confirmed this file despite a flagged mismatch
       </p>
-      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-amber-800">
+      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-amber-800">
         {reasons.map((r, i) => (
           <li key={i}>{r}</li>
         ))}
