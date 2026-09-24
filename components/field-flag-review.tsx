@@ -114,7 +114,7 @@ function CandidatePreviewButton({
       href={href}
       filename={filename}
       buttonLabel="Preview"
-      buttonClassName="ml-1 rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50"
+      buttonClassName="ml-1 rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
     />
   );
 }
@@ -169,7 +169,7 @@ export function FieldFlagReview({
   // into.
   const ackBlock = requiresAcknowledgment ? (
     acknowledgedAt ? (
-      <p className="text-[11px] text-green-700">
+      <p className="text-xs text-green-700">
         ✓ Acknowledged by {acknowledgedByEmail ?? "a consultant"} on{" "}
         {formatAuDate(acknowledgedAt)}
       </p>
@@ -282,7 +282,7 @@ export function FieldFlagReview({
           ))}
         </div>
         {resolvedByEmail && (
-          <p className="text-[11px] text-zinc-400">
+          <p className="text-xs text-zinc-400">
             Resolved by {resolvedByEmail}
             {resolvedAt && ` on ${formatAuDate(resolvedAt)}`}
           </p>
@@ -319,7 +319,7 @@ export function FieldFlagReview({
                 ({c.source_document})
               </span>
               {c.value === currentValue && (
-                <span className="ml-1 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                <span className="ml-1 rounded-full bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700">
                   accepted
                 </span>
               )}
@@ -331,7 +331,7 @@ export function FieldFlagReview({
           ))}
         </div>
         {resolvedByEmail && (
-          <p className="text-[11px] text-zinc-400">
+          <p className="text-xs text-zinc-400">
             Resolved by {resolvedByEmail}
             {resolvedAt && ` on ${formatAuDate(resolvedAt)}`}
           </p>
@@ -393,7 +393,7 @@ export function FieldFlagReview({
             ))}
           </select>
           {suggestedCandidate?.reason && (
-            <p className="text-[11px] italic text-orange-700">{suggestedCandidate.reason}</p>
+            <p className="text-xs italic text-orange-700">{suggestedCandidate.reason}</p>
           )}
         </div>
       ) : (
@@ -427,7 +427,7 @@ export function FieldFlagReview({
                       "default" (#105) — label it as the submitter's choice so the
                       consultant knows what they're verifying against the source. */}
                   {c.value === currentValue && (
-                    <span className="ml-1 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                    <span className="ml-1 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
                       Submitter&apos;s choice
                     </span>
                   )}
@@ -435,7 +435,7 @@ export function FieldFlagReview({
                     filename={c.source_document}
                     sourceUrlsByFilename={sourceUrlsByFilename}
                   />
-                  {c.reason && <span className="block text-[11px] italic text-orange-700">{c.reason}</span>}
+                  {c.reason && <span className="block text-xs italic text-orange-700">{c.reason}</span>}
                 </span>
               </label>
             ))}
