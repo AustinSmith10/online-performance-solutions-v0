@@ -789,8 +789,11 @@ export async function ProjectWorkspace({
           </span>
         )}
         {isOverdue && (
-          <span className="self-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-            Overdue
+          <span className="inline-flex items-center gap-1 self-center rounded-full border border-red-300 bg-white px-2 py-0.5 text-xs font-medium text-red-700">
+            <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
+            </svg>
+            Overdue{daysOverdue > 0 ? ` · ${daysOverdue}d` : ""}
           </span>
         )}
         {isDeleted && (
