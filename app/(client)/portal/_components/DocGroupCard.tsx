@@ -45,7 +45,7 @@ export function DocGroupCard({
             </svg>
           )}
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
       </div>
 
       <div className="space-y-1.5">
@@ -67,7 +67,7 @@ export function DocGroupCard({
                     v{f.version}
                   </span>
                 )}
-                <span className="text-xs text-zinc-400">{f.date}</span>
+                <span className="text-xs text-zinc-500">{f.date}</span>
                 {f.badge && (
                   <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
                     {f.badge}

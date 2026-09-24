@@ -73,7 +73,7 @@ export function StepperIcon({ name, className }: { name: string; className?: str
 export const STEPPER_CIRCLE_STYLES: Record<StepperStage["visual"], string> = {
   complete: "bg-green-600 border-green-600 text-white",
   current: "bg-blue-600 border-blue-600 text-white",
-  upcoming: "bg-white border-zinc-300 text-zinc-400",
+  upcoming: "bg-white border-zinc-300 text-zinc-500",
   "revision-current": "bg-blue-600 border-blue-600 text-white",
   "revision-pending": "bg-amber-50 border-amber-400 text-amber-700",
 };
@@ -81,7 +81,7 @@ export const STEPPER_CIRCLE_STYLES: Record<StepperStage["visual"], string> = {
 export const STEPPER_LABEL_STYLES: Record<StepperStage["visual"], string> = {
   complete: "text-zinc-900",
   current: "text-zinc-900 font-medium",
-  upcoming: "text-zinc-400",
+  upcoming: "text-zinc-500",
   "revision-current": "text-zinc-900 font-medium",
   "revision-pending": "text-zinc-900",
 };

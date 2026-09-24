@@ -536,26 +536,26 @@ export default async function ClientProjectDetailPage({
   // ── Left rail reference card ──────────────────────────────────────────────
   const leftRailExtras = !isDeleted && project.status !== "draft" && (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Reference</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Reference</p>
       <dl className="space-y-1.5 text-zinc-700">
         {templateName && (
           <div className="flex justify-between gap-3">
-            <dt className="text-zinc-400">Report type</dt>
+            <dt className="text-zinc-500">Report type</dt>
             <dd className="text-right">{templateName}</dd>
           </div>
         )}
         <div className="flex justify-between gap-3">
-          <dt className="text-zinc-400">Submitted</dt>
+          <dt className="text-zinc-500">Submitted</dt>
           <dd>{submittedLabel}</dd>
         </div>
         {dueLabel && (
           <div className="flex justify-between gap-3">
-            <dt className="text-zinc-400">Due</dt>
+            <dt className="text-zinc-500">Due</dt>
             <dd>{dueLabel}</dd>
           </div>
         )}
         <div className="flex justify-between gap-3">
-          <dt className="text-zinc-400">PO number</dt>
+          <dt className="text-zinc-500">PO number</dt>
           <dd>{project.po_number || "—"}</dd>
         </div>
       </dl>
@@ -616,7 +616,7 @@ export default async function ClientProjectDetailPage({
                 <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7.914a2 2 0 00-.586-1.414l-3.914-3.914A2 2 0 0012.086 2H4zm7 1.5V6a1 1 0 001 1h2.5L11 3.5zM6 9a1 1 0 000 2h8a1 1 0 100-2H6zm0 4a1 1 0 100 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
               </svg>
             </div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Your files</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Your files</p>
           </div>
           <div className="space-y-1.5">
             {files.map((f) => (
@@ -626,7 +626,7 @@ export default async function ClientProjectDetailPage({
                     <p className="truncate text-xs font-medium text-zinc-900">
                       {fileReqLabelMap.get(f.file_type as string) ?? FILE_TYPE_LABELS[f.file_type as string] ?? f.file_type}
                     </p>
-                    <p className="mt-0.5 text-xs text-zinc-400">
+                    <p className="mt-0.5 text-xs text-zinc-500">
                       {new Date(f.created_at as string).toLocaleDateString("en-AU")}
                     </p>
                   </div>
@@ -705,7 +705,7 @@ export default async function ClientProjectDetailPage({
         <DeleteProjectButton projectId={project.id} />
       )}
       {!isDeleted && !["draft", "submitted"].includes(project.status) && (
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-zinc-500">
           This report has been assigned to a consultant and can no longer be deleted. Contact{" "}
           <a href={SUPPORT_MAILTO} className="underline hover:text-zinc-600">DDEG</a> if you need to cancel.
         </p>
@@ -747,7 +747,7 @@ export default async function ClientProjectDetailPage({
                       <span className="text-amber-700">Changes requested</span>
                     )}
                   </span>
-                  <span className="text-xs text-zinc-400">
+                  <span className="text-xs text-zinc-500">
                     {new Date(ev.responded_at).toLocaleDateString("en-AU")}
                   </span>
                 </div>

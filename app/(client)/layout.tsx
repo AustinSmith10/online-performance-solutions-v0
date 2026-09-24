@@ -41,7 +41,7 @@ export default async function ClientLayout({ children }: { children: React.React
               <NotificationTrayServer projectBasePath="/portal/projects" align="right" />
               <Link
                 href="/portal/profile"
-                className="hidden max-w-[160px] truncate text-xs text-zinc-400 hover:text-zinc-700 sm:block"
+                className="hidden max-w-[160px] truncate text-xs text-zinc-500 hover:text-zinc-700 sm:block"
               >
                 {[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
               </Link>

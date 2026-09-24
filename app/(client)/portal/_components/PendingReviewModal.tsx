@@ -67,7 +67,7 @@ export function PendingReviewModal({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                className="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600"
                 aria-label="Close"
               >
                 <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">

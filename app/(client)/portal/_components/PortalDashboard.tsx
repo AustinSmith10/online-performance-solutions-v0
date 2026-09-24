@@ -199,7 +199,7 @@ function FilterPanel({
       <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
         {statuses.length > 0 && (
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Status</p>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Status</p>
             <div className="space-y-0.5">
               {statuses.map((s) => (
                 <CheckboxRow key={s} checked={filters.statuses.includes(s)} label={s} onChange={() => toggle("statuses", s)} />
@@ -210,7 +210,7 @@ function FilterPanel({
 
         {steps.length > 0 && (
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Delivery step</p>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Delivery step</p>
             <div className="space-y-0.5">
               {steps.map((s) => (
                 <CheckboxRow key={s.key} checked={filters.steps.includes(s.key)} label={s.label} onChange={() => toggle("steps", s.key)} />
@@ -220,7 +220,7 @@ function FilterPanel({
         )}
 
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Submitted date</p>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Submitted date</p>
           <div className="flex items-center gap-1.5">
             <input
               type="date"
@@ -228,7 +228,7 @@ function FilterPanel({
               onChange={(e) => onChange({ ...filters, submittedFrom: e.target.value })}
               className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
             />
-            <span className="text-xs text-zinc-400">to</span>
+            <span className="text-xs text-zinc-500">to</span>
             <input
               type="date"
               value={filters.submittedTo}
@@ -239,7 +239,7 @@ function FilterPanel({
         </div>
 
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Expected delivery date</p>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Expected delivery date</p>
           <div className="flex items-center gap-1.5">
             <input
               type="date"
@@ -247,7 +247,7 @@ function FilterPanel({
               onChange={(e) => onChange({ ...filters, expectedFrom: e.target.value })}
               className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1 text-sm focus:border-zinc-400 focus:outline-none"
             />
-            <span className="text-xs text-zinc-400">to</span>
+            <span className="text-xs text-zinc-500">to</span>
             <input
               type="date"
               value={filters.expectedTo}
@@ -262,7 +262,7 @@ function FilterPanel({
         <button type="button" onClick={() => onChange(EMPTY_FILTERS)} className="text-xs text-zinc-500 hover:text-zinc-800 hover:underline">
           Clear all
         </button>
-        <span className="text-xs text-zinc-400">{isFilterActive(filters) ? "Filters applied" : "No filters"}</span>
+        <span className="text-xs text-zinc-500">{isFilterActive(filters) ? "Filters applied" : "No filters"}</span>
       </div>
     </div>
   );
@@ -507,7 +507,7 @@ export function PortalDashboard({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by project or address…"
-              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
             />
             <select
               value={sortBy}
