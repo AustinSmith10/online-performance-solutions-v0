@@ -29,15 +29,15 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }
         aria-hidden="true"
         onClick={onClose}
         className={[
-          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-[opacity,visibility] duration-200",
-          isOpen ? "visible opacity-100" : "pointer-events-none invisible opacity-0",
+          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-[opacity,visibility] ease-[var(--ease-out)]",
+          isOpen ? "visible opacity-100 duration-200" : "pointer-events-none invisible opacity-0 duration-150",
         ].join(" ")}
       />
 
       <div
         className={[
-          "fixed inset-0 z-50 flex items-center justify-center p-4 transition-[opacity,visibility] duration-200",
-          isOpen ? "visible opacity-100" : "pointer-events-none invisible opacity-0",
+          "fixed inset-0 z-50 flex items-center justify-center p-4 transition-[opacity,visibility] ease-[var(--ease-out)]",
+          isOpen ? "visible opacity-100 duration-200" : "pointer-events-none invisible opacity-0 duration-150",
         ].join(" ")}
       >
         <div
@@ -49,8 +49,8 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }
           className={[
             "flex w-full max-w-lg flex-col bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)] outline-none rounded-xl",
             "max-h-[90vh]",
-            "transform transition-transform duration-200 ease-out",
-            isOpen ? "scale-100" : "scale-95",
+            "transform transition-transform ease-[var(--ease-out)] motion-reduce:transition-none",
+            isOpen ? "scale-100 duration-200" : "scale-95 duration-150 motion-reduce:scale-100",
           ].join(" ")}
         >
           <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4">
@@ -63,7 +63,7 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }
             <button
               onClick={onClose}
               aria-label="Close panel"
-              className="mt-0.5 shrink-0 rounded p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+              className="press mt-0.5 shrink-0 rounded p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -79,7 +79,7 @@ export function Drawer({ isOpen, onClose, title, subtitle, projectId, children }
             <Link
               href={`/ops/projects/${projectId}`}
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+              className="press inline-flex items-center gap-1.5 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
             >
               Open full project profile →
             </Link>

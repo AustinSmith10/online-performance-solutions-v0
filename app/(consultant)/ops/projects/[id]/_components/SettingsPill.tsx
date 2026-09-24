@@ -31,7 +31,7 @@ export function SettingsPill({ children, title = "Delivery Config" }: { children
       {open && (
         <div
           ref={popoverRef}
-          className="fixed bottom-20 right-5 z-50 w-80 max-w-[calc(100vw-2.5rem)] rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_8px_30px_rgb(0_0_0/0.10)]"
+          className="popover-br fixed bottom-20 right-5 z-50 w-80 max-w-[calc(100vw-2.5rem)] rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_8px_30px_rgb(0_0_0/0.10)]"
         >
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
