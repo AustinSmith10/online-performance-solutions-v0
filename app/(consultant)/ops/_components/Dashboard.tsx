@@ -5,14 +5,16 @@
 // "Right now" banner, rounded-xl project rows) so consultants and clients
 // read as the same product.
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { InlineAssignmentActions } from "./InlineAssignmentActions";
 import { RevisionReviewDrawer } from "./RevisionReviewDrawer";
 import { SelfAssignButton } from "./SelfAssignButton";
 import { useAssignmentHeroAction, useReviewHeroAction } from "./HeroActions";
 import { TourHighlight } from "@/components/onboarding-tour/TourHighlight";
 import type { DashboardData, DashboardProject } from "./dashboardTypes";
+import type { SectionKey } from "./dashboardList";
 
 export function Tile({
   tone,
@@ -113,7 +115,7 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
               <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
               </svg>
-              Overdue
+              Overdue{p.daysOverdue > 0 ? ` · ${p.daysOverdue}d` : ""}
             </span>
           )}
           {p.hasVerificationMismatch && (
@@ -144,61 +146,93 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
   );
 }
 
-type SectionKey = "active" | "stakeholders" | "archive" | "available";
-
-// Needs-attention first: revisions, then overdue, then the rest. Array.sort is
-// stable, so the original (newest-first) order holds within each group.
-function attentionRank(p: DashboardProject) {
-  return p.isRevision ? 0 : p.isOverdue ? 1 : 2;
-}
-const byAttention = (a: DashboardProject, b: DashboardProject) => attentionRank(a) - attentionRank(b);
-
-function matches(query: string, parts: (string | null | undefined)[]) {
-  const q = query.trim().toLowerCase();
-  return !q || parts.some((x) => x?.toLowerCase().includes(q));
-}
-
 export function Dashboard({ data }: { data: DashboardData }) {
-  const { pendingAssignments, active, withStakeholders, archive, available } = data;
-  const [section, setSection] = useState<SectionKey>("active");
-  const [query, setQuery] = useState("");
+  const { pendingAssignments, attention, counts, tab, q, page, pageCount, total } = data;
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const [isNavigating, startTransition] = useTransition();
+  // While a navigation is in flight the clicked tab highlights immediately;
+  // `tab` (from the server) decides which rows are actually on screen.
+  const [pendingTab, setPendingTab] = useState<SectionKey | null>(null);
+  const section = isNavigating && pendingTab ? pendingTab : tab;
+  const [search, setSearch] = useState(q);
+  const [sentQuery, setSentQuery] = useState(q);
+  const [prevQ, setPrevQ] = useState(q);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  const revisions = active.filter((p) => p.isRevision);
+  // Back/forward can change ?q= without this component typing it.
+  if (q !== prevQ) {
+    setPrevQ(q);
+    if (q !== sentQuery) {
+      setSentQuery(q);
+      setSearch(q);
+    }
+  }
+
+  // URL is the source of truth for tab / page / search (server-side paging).
+  const go = useCallback(
+    (changes: Record<string, string | null>, mode: "push" | "replace" = "push") => {
+      const next = new URLSearchParams(params.toString());
+      for (const [k, v] of Object.entries(changes)) {
+        if (v === null || v === "") next.delete(k);
+        else next.set(k, v);
+      }
+      const qs = next.toString();
+      startTransition(() => {
+        (mode === "push" ? router.push : router.replace)(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      });
+    },
+    [params, pathname, router]
+  );
+  const goRef = useRef(go);
+  useEffect(() => {
+    goRef.current = go;
+  });
+
+  // Debounced search: typing updates the URL ~300ms after the last keystroke.
+  useEffect(() => {
+    const term = search.trim();
+    if (term === sentQuery) return;
+    const t = setTimeout(() => {
+      setSentQuery(term);
+      goRef.current({ q: term || null, page: null }, "replace");
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search, sentQuery]);
+
+  const revisions = attention.filter((p) => p.isRevision);
   // Overdue-but-not-revision projects join the revision hero below rather than
   // getting a third slot — a revision-required project that's also overdue
   // stays counted once, in revisions, not here.
-  const overdueOnly = active.filter((p) => p.isOverdue && !p.isRevision);
+  const overdueOnly = attention.filter((p) => p.isOverdue && !p.isRevision);
 
   const assignmentHero = useAssignmentHeroAction(pendingAssignments);
   const reviewHero = useReviewHeroAction(revisions, overdueOnly);
   const heroCount = [assignmentHero, reviewHero].filter(Boolean).length;
   const heroGridClass = heroCount === 2 ? "md:grid-cols-2" : "";
 
-  const activeCount = pendingAssignments.length + active.length;
   const sections: { key: SectionKey; label: string; count: number }[] = [
-    { key: "active", label: "Active", count: activeCount },
-    { key: "stakeholders", label: "With stakeholders", count: withStakeholders.length },
-    { key: "archive", label: "Archive", count: archive.length },
-    { key: "available", label: "Available jobs", count: available.length },
+    { key: "active", label: "Active", count: counts.active },
+    { key: "stakeholders", label: "With stakeholders", count: counts.stakeholders },
+    { key: "archive", label: "Archive", count: counts.archive },
+    { key: "available", label: "Available jobs", count: counts.available },
   ];
 
   const selectSection = (key: SectionKey) => {
-    setSection(key);
-    setQuery("");
+    setPendingTab(key);
+    setSearch("");
+    setSentQuery("");
+    go({ tab: key === "active" ? null : key, page: null, q: null });
   };
 
-  const rows: DashboardProject[] =
-    section === "active"
-      ? [...pendingAssignments, ...[...active].sort(byAttention)]
-      : section === "stakeholders"
-        ? [...withStakeholders].sort(byAttention)
-        : section === "archive"
-          ? archive
-          : [];
-  const filteredRows = rows.filter((p) => matches(query, [p.label, p.clientName, p.submitterName]));
-  const filteredAvailable = available.filter((p) => matches(query, [p.label, p.clientName]));
-  const listLen = section === "available" ? available.length : rows.length;
-  const shownCount = section === "available" ? filteredAvailable.length : filteredRows.length;
+  const goToPage = (n: number) => {
+    go({ page: n <= 1 ? null : String(n) });
+    panelRef.current?.scrollIntoView({ block: "start" });
+  };
+
+  const tabTotal = counts[tab];
+  const showSearch = tabTotal > 6 || q !== "" || search !== "";
 
   return (
     <div className="space-y-5">
@@ -215,10 +249,10 @@ export function Dashboard({ data }: { data: DashboardData }) {
       <TourHighlight id="consultant_dashboard_summary">
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Tile tone={pendingAssignments.length > 0 ? "amber" : "zinc"} label="Needs your response" value={pendingAssignments.length} />
-            <Tile tone={activeCount > 0 ? "neutral" : "zinc"} label="Active" value={activeCount} />
-            <Tile tone="zinc" label="With stakeholders" value={withStakeholders.length} />
-            <Tile tone={available.length > 0 ? "green" : "zinc"} label="Available jobs" value={available.length} />
+            <Tile tone={counts.pending > 0 ? "amber" : "zinc"} label="Needs your response" value={counts.pending} />
+            <Tile tone={counts.active > 0 ? "neutral" : "zinc"} label="Active" value={counts.active} />
+            <Tile tone="zinc" label="With stakeholders" value={counts.stakeholders} />
+            <Tile tone={counts.available > 0 ? "green" : "zinc"} label="Available jobs" value={counts.available} />
           </div>
 
           {/* Two hero slots: pending assignment (a decision only you can make) and
@@ -290,33 +324,42 @@ export function Dashboard({ data }: { data: DashboardData }) {
 
       </div>
 
-      <div key={section} id="dash-panel" role="tabpanel" aria-labelledby={`dash-tab-${section}`} tabIndex={-1} className="pane-in space-y-3 outline-none">
-        {listLen > 6 && (
+      <div
+        ref={panelRef}
+        key={tab}
+        id="dash-panel"
+        role="tabpanel"
+        aria-labelledby={`dash-tab-${tab}`}
+        aria-busy={isNavigating}
+        tabIndex={-1}
+        className={`pane-in scroll-mt-28 space-y-3 outline-none transition-opacity duration-150 ${isNavigating ? "opacity-60" : ""}`}
+      >
+        {showSearch && (
           <div>
-            <label htmlFor="dash-search" className="sr-only">Search {sections.find((x) => x.key === section)?.label} projects</label>
+            <label htmlFor="dash-search" className="sr-only">Search {sections.find((x) => x.key === tab)?.label} projects</label>
             <input
               id="dash-search"
               type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search address, project number or client"
               className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             />
-            {query.trim() && (
+            {q && (
               <p className="mt-1.5 text-xs text-zinc-600" role="status" aria-live="polite">
-                {shownCount} of {listLen} shown
+                {total} of {tabTotal} shown
               </p>
             )}
           </div>
         )}
 
-        {listLen === 0 ? (
-          <EmptyState {...EMPTY[section]} action={section !== "available" && available.length > 0 ? { label: `Browse available jobs (${available.length})`, onClick: () => selectSection("available") } : undefined} />
-        ) : shownCount === 0 ? (
-          <EmptyState title="No matches" subtitle={`Nothing in this list matches “${query.trim()}”.`} action={{ label: "Clear search", onClick: () => setQuery("") }} />
-        ) : section === "available" ? (
+        {tabTotal === 0 ? (
+          <EmptyState {...EMPTY[tab]} action={tab !== "available" && counts.available > 0 ? { label: `Browse available jobs (${counts.available})`, onClick: () => selectSection("available") } : undefined} />
+        ) : total === 0 ? (
+          <EmptyState title="No matches" subtitle={`Nothing in this list matches “${q}”.`} action={{ label: "Clear search", onClick: () => { setSearch(""); setSentQuery(""); go({ q: null, page: null }, "replace"); } }} />
+        ) : tab === "available" ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {filteredAvailable.map((p) => (
+            {data.available.map((p) => (
               <div key={p.id} className="rounded-xl border border-blue-200 bg-blue-50 p-4">
                 <p className="truncate text-sm font-semibold text-zinc-900" title={p.label}>{p.label}</p>
                 <p className="mt-0.5 truncate text-xs text-zinc-600">{p.clientName ?? "—"}</p>
@@ -331,7 +374,32 @@ export function Dashboard({ data }: { data: DashboardData }) {
             ))}
           </div>
         ) : (
-          filteredRows.map((p) => <ProjectRow key={p.id} p={p} />)
+          data.rows.map((p) => <ProjectRow key={p.id} p={p} />)
+        )}
+
+        {pageCount > 1 && total > 0 && (
+          <nav aria-label="Pagination" className="flex items-center justify-between gap-3 pt-1">
+            <p className="text-xs text-zinc-600" aria-live="polite">
+              Page {page} of {pageCount} · {total} {total === 1 ? "project" : "projects"}
+            </p>
+            <div className="flex gap-2">
+              {(["Previous", "Next"] as const).map((label) => {
+                const target = label === "Previous" ? page - 1 : page + 1;
+                const disabled = target < 1 || target > pageCount;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => goToPage(target)}
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-[background-color,transform] duration-150 hover:bg-zinc-50 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
         )}
       </div>
     </div>

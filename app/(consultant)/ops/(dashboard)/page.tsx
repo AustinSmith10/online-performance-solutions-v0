@@ -6,6 +6,7 @@ import { DeclinedBanner } from "../_components/DeclinedBanner";
 import { OnboardingFlow } from "../_components/OnboardingFlow";
 import { Dashboard } from "../_components/Dashboard";
 import type { DashboardData, DashboardProject } from "../_components/dashboardTypes";
+import { daysOverdue, matchesQuery, paginate, parsePage, parseSection, sortByAttention } from "../_components/dashboardList";
 import { resolveEffectiveStatus } from "@/lib/delivery/effective-status";
 import type { ProjectStatus } from "@/types";
 
@@ -69,9 +70,11 @@ type AvailableProject = {
 export default async function ConsultantOpsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ declined?: string; tour?: string }>;
+  searchParams: Promise<{ declined?: string; tour?: string; tab?: string; page?: string; q?: string }>;
 }) {
-  const { declined, tour } = await searchParams;
+  const { declined, tour, tab: tabParam, page: pageParam, q: qParam } = await searchParams;
+  const tab = parseSection(tabParam);
+  const q = (qParam ?? "").trim().slice(0, 100);
 
   const user = await requireRole("consultant", "super_admin");
   const supabase = createAdminClient();
@@ -217,8 +220,8 @@ export default async function ConsultantOpsPage({
   const mismatchProjectIds = new Set((mismatchRows ?? []).map((r) => r.project_id as string));
 
   function toDashboardProject(p: ProjectRow): DashboardProject {
-    const isOverdue =
-      !!p.expected_delivery_date && p.expected_delivery_date < todayIso && !TERMINAL_STATUSES.has(p.status);
+    const overdueDays = TERMINAL_STATUSES.has(p.status) ? 0 : daysOverdue(p.expected_delivery_date, todayIso);
+    const isOverdue = overdueDays > 0;
     const isPending = !p.accepted_at;
     const isRevision = p.status === "revision_required";
     const effectiveStatus = effectiveStatusOf(p);
@@ -233,6 +236,7 @@ export default async function ConsultantOpsPage({
       expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
       submittedLabel: formatAuDate(p.created_at),
       isOverdue,
+      daysOverdue: overdueDays,
       isPending,
       isRevision,
       hasVerificationMismatch: mismatchProjectIds.has(p.id),
@@ -248,22 +252,64 @@ export default async function ConsultantOpsPage({
     };
   }
 
+  const built = new Map<string, DashboardProject>();
+  const build = (p: ProjectRow) => {
+    let d = built.get(p.id);
+    if (!d) built.set(p.id, (d = toDashboardProject(p)));
+    return d;
+  };
+  const rowMatches = (p: ProjectRow) => matchesQuery(q, [projectLabel(p), p.clients?.name, clientName(p.submitter)]);
+  const availableLabel = (p: AvailableProject) => {
+    const addr = p.extracted_fields?.["EXTRACT_ADDRESS"] ?? null;
+    return addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
+  };
+
+  // Paging is server-side: only the current tab's current page is sent to the
+  // client. The banners always need every revision/overdue project, so those
+  // travel separately as `attention` regardless of page or search.
+  const toLight = (p: ProjectRow) => {
+    const d = TERMINAL_STATUSES.has(p.status) ? 0 : daysOverdue(p.expected_delivery_date, todayIso);
+    return { p, isRevision: p.status === "revision_required", isOverdue: d > 0, daysOverdue: d };
+  };
+  const sortedActive = sortByAttention(activeAccepted.map(toLight)).map((x) => x.p);
+  const sortedStakeholders = sortByAttention(withStakeholders.map(toLight)).map((x) => x.p);
+
+  const tabRows: ProjectRow[] =
+    tab === "active"
+      ? [...pendingAssignments, ...sortedActive]
+      : tab === "stakeholders"
+        ? sortedStakeholders
+        : tab === "archive"
+          ? done
+          : [];
+  const paged = paginate(tabRows.filter(rowMatches), parsePage(pageParam));
+  const availableMatches = availableProjects.filter((p) => matchesQuery(q, [availableLabel(p), p.clients?.name]));
+  const pagedAvailable = paginate(availableMatches, parsePage(pageParam));
+  const isAvailableTab = tab === "available";
+
   const dashboardData: DashboardData = {
-    pendingAssignments: pendingAssignments.map(toDashboardProject),
-    active: activeAccepted.map(toDashboardProject),
-    withStakeholders: withStakeholders.map(toDashboardProject),
-    archive: done.map(toDashboardProject),
-    available: availableProjects.map((p) => {
-      const addr = p.extracted_fields?.["EXTRACT_ADDRESS"] ?? null;
-      const label = addr ?? (p.po_number ? `PO ${p.po_number}` : p.id.slice(0, 8));
-      return {
-        id: p.id,
-        label,
-        clientName: p.clients?.name ?? null,
-        submittedLabel: formatAuDate(p.created_at),
-        expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
-      };
-    }),
+    tab,
+    q,
+    page: isAvailableTab ? pagedAvailable.page : paged.page,
+    pageCount: isAvailableTab ? pagedAvailable.pageCount : paged.pageCount,
+    total: isAvailableTab ? pagedAvailable.total : paged.total,
+    counts: {
+      active: pendingAssignments.length + activeAccepted.length,
+      stakeholders: withStakeholders.length,
+      archive: done.length,
+      available: availableProjects.length,
+      pending: pendingAssignments.length,
+    },
+    pendingAssignments: pendingAssignments.map(build),
+    attention: sortedActive.map(build).filter((d) => d.isRevision || d.isOverdue),
+    rows: paged.items.map(build),
+    available: pagedAvailable.items.map((p) => ({
+      id: p.id,
+      label: availableLabel(p),
+      clientName: p.clients?.name ?? null,
+      submittedLabel: formatAuDate(p.created_at),
+      expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,
+    })),
   };
 
   return (
