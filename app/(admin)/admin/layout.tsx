@@ -28,6 +28,14 @@ const ALL_NAV_ITEMS: { href: string; label: string; group?: string; key?: AdminN
   { href: "/admin/settings", label: "Settings", group: "Admin", key: "settings" },
 ];
 
+// Phone-platform layer, matching app/(client)/layout.tsx's PLATFORM: no grey
+// tap flash, no double-tap-zoom delay, no long-press text selection on
+// button labels, and 16px form fields on touch so iOS Safari never zooms on
+// focus. No effect on desktop/mouse input.
+const PLATFORM =
+  "[-webkit-tap-highlight-color:transparent] [&_a]:touch-manipulation [&_button]:touch-manipulation [&_button]:select-none " +
+  "[@media(pointer:coarse)]:[&_input]:text-base [@media(pointer:coarse)]:[&_select]:text-base [@media(pointer:coarse)]:[&_textarea]:text-base";
+
 export default async function AdminShellLayout({
   children,
 }: {
@@ -50,7 +58,7 @@ export default async function AdminShellLayout({
   const emailsEnabled = await getEmailsEnabled(supabase);
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50 lg:h-screen lg:flex-row lg:overflow-hidden">
+    <div className={`flex min-h-dvh flex-col bg-zinc-50 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] lg:h-dvh lg:flex-row lg:overflow-hidden ${PLATFORM}`}>
       {/* Mobile top bar + drawer (hidden on desktop) */}
       <MobileNav
         title="OPS Admin"
