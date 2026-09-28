@@ -955,7 +955,7 @@ function HeroCard({
           )}
         </div>
         {!single && expanded && (
-          <div className="mt-2.5 w-full space-y-1 border-t border-zinc-100 pt-2.5">
+          <div className="rise-in mt-2.5 w-full space-y-1 border-t border-zinc-100 pt-2.5">
             {category.items.map((item) => (
               <div key={item.id} className="flex items-center justify-between gap-3 rounded-md bg-zinc-50 px-2.5 py-1.5">
                 <div className="min-w-0">
@@ -1001,7 +1001,7 @@ function HeroCard({
         </div>
       </div>
       {!single && expanded && (
-        <div className="mt-2.5 space-y-1 border-t border-zinc-900/10 pt-2.5">
+        <div className="rise-in mt-2.5 space-y-1 border-t border-zinc-900/10 pt-2.5">
           {category.items.map((item) => (
             <div key={item.id} className="flex items-center justify-between gap-3 rounded-md bg-white/70 px-2.5 py-1.5">
               <div className="min-w-0">
@@ -1284,7 +1284,7 @@ export function ActionPanel({
             <Link
               href={drawerAnchorId ? `/admin/projects/${drawerProjectId}#${drawerAnchorId}` : `/admin/projects/${drawerProjectId}`}
               onClick={closeDrawer}
-              className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
+              className="press inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-zinc-700"
             >
               Open full project profile →
             </Link>

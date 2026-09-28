@@ -182,7 +182,7 @@ function ProjectRow({ p }: { p: ActiveProjectItem }) {
 
 function CheckboxRow({ checked, label, onChange }: { checked: boolean; label: string; onChange: (v: boolean) => void }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm text-zinc-700 hover:bg-zinc-50">
+    <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm text-zinc-700 transition-colors duration-150 hover:bg-zinc-50">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-3.5 w-3.5 rounded border-zinc-300" />
       {label}
     </label>
@@ -285,7 +285,7 @@ function FilterPanel({
             onSaveView(viewName.trim());
             setViewName("");
           }}
-          className="shrink-0 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="press shrink-0 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Save view
         </button>
@@ -511,7 +511,7 @@ export function ActiveProjectsList({ projects, storageKey }: { projects: ActiveP
               Showing {visible.length} of {filtered.length}
             </span>
             {visibleCount < filtered.length && (
-              <button type="button" onClick={() => setVisibleCount((v) => v + PAGE_SIZE)} className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-50">
+              <button type="button" onClick={() => setVisibleCount((v) => v + PAGE_SIZE)} className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50">
                 Load more
               </button>
             )}
