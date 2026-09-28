@@ -230,7 +230,7 @@ function SetNumberAndAssignDrawerContent({
             </svg>
           ) : "1"}
         </span>
-        <span className={`text-xs font-medium ${step === 1 ? "text-zinc-900" : "text-zinc-400"}`}>
+        <span className={`text-xs font-medium ${step === 1 ? "text-zinc-900" : "text-zinc-500"}`}>
           Set project number
         </span>
         <span className="text-zinc-300">→</span>
@@ -241,7 +241,7 @@ function SetNumberAndAssignDrawerContent({
         >
           2
         </span>
-        <span className={`text-xs font-medium ${step === 2 ? "text-zinc-900" : "text-zinc-400"}`}>
+        <span className={`text-xs font-medium ${step === 2 ? "text-zinc-900" : "text-zinc-500"}`}>
           Assign consultant
         </span>
       </div>
@@ -253,22 +253,22 @@ function SetNumberAndAssignDrawerContent({
           </p>
           <form action={action} onSubmit={field.markSubmitted} className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700">
+              <label className="block text-xs font-medium text-zinc-700">
                 Project number
+                <input
+                  name="project_number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  placeholder="e.g. 250001"
+                  required
+                  disabled={pending}
+                  {...field.inputProps}
+                  className={`mt-1 ${projectNumberInputClass(field.showError)}`}
+                />
               </label>
-              <input
-                name="project_number"
-                type="text"
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                placeholder="e.g. 250001"
-                required
-                disabled={pending}
-                {...field.inputProps}
-                className={projectNumberInputClass(field.showError)}
-              />
-              <p className="mt-1 text-xs text-zinc-400">
+              <p className="mt-1 text-xs text-zinc-500">
                 Exactly six digits. The suffix <span className="font-mono">-{resolveNumberSuffix(project.templates?.number_suffix)}</span> is appended automatically.
               </p>
             </div>
@@ -301,7 +301,7 @@ function SetNumberAndAssignDrawerContent({
               isReassign={false}
             />
             {consultants.length === 0 && (
-              <p className="mt-2 text-xs text-zinc-400">
+              <p className="mt-2 text-xs text-zinc-500">
                 No consultants available — invite one from the users page.
               </p>
             )}
@@ -407,7 +407,7 @@ function OverdueDrawerContent({
       {/* Action: assign consultant (submitted, unassigned) */}
       {project.status === "submitted" && (
         <div className="space-y-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
             Assign a consultant
           </p>
           <AssignForm
@@ -418,7 +418,7 @@ function OverdueDrawerContent({
             onSuccess={onSuccess}
           />
           {consultants.length === 0 && (
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-500">
               No consultants available — invite one from the users page.
             </p>
           )}
@@ -428,7 +428,7 @@ function OverdueDrawerContent({
       {/* Action: dispatch failed — retry (in_progress with qa_completed_by set) */}
       {project.status === "in_progress" && !!project.qa_completed_by && (
         <div className="space-y-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
             Dispatch to stakeholders
           </p>
           <p className="text-xs text-zinc-500">
@@ -441,7 +441,7 @@ function OverdueDrawerContent({
       {/* Action: pending stakeholder responses (dispatched) */}
       {project.status === "dispatched" && projectReviews.length > 0 && (
         <div className="space-y-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
             Pending responses ({projectReviews.length})
           </p>
           <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200">
@@ -539,7 +539,7 @@ function OverdueDrawerContent({
       {!["submitted", "dispatched"].includes(project.status) && (
         project.assigned_consultant_id ? (
           <div className="rounded-xl border border-zinc-200 px-4 py-3">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
               Assigned consultant
             </p>
             <p className="text-sm font-medium text-zinc-900">{consultantName(project.consultant)}</p>
@@ -756,7 +756,7 @@ function ErrorDrawerContent({
           <RetryConversionForm projectId={error.project_id} />
         </div>
       ) : (
-        <p className="text-xs text-zinc-400">No project linked — no retry available.</p>
+        <p className="text-xs text-zinc-500">No project linked — no retry available.</p>
       )}
 
       <div className="flex items-center gap-2 border-t border-zinc-100 pt-4">
@@ -814,7 +814,7 @@ function EmailFailureDrawerContent({
         <p className="text-xs font-medium uppercase tracking-wide text-red-500">Delivery failed</p>
         <p className="mt-1 break-words text-sm text-red-900">To: {failure.to_email}</p>
         <p className="mt-1 break-words text-sm text-zinc-700">{failure.subject}</p>
-        <p className="mt-1 text-xs text-zinc-400">Source: {failure.source}</p>
+        <p className="mt-1 text-xs text-zinc-500">Source: {failure.source}</p>
         {failure.error && (
           <p className="mt-2 break-words rounded bg-red-100 px-2 py-1.5 font-mono text-xs text-red-700">
             {failure.error}
@@ -864,16 +864,17 @@ function EmailFailureDrawerContent({
 // one-line rows *inside the same card* when it has more than one — never
 // act on the first, ignore the rest.
 
-type Tone = "red" | "blue" | "orange" | "amber";
+type Tone = "red" | "blue" | "amber";
 type HeroIconKey = "clock" | "inbox" | "people" | "card" | "alert";
 type HeroItem = { id: string; label: string; meta: string; actionLabel: string; open: () => DrawerState };
 type HeroCategory = { key: string; tone: Tone; label: string; icon: HeroIconKey; subtitle: string; items: HeroItem[]; totalCount?: number };
 
-const HERO_TONE: Record<Tone, { box: string; title: string; button: string; iconBg: string }> = {
-  red: { box: "border-red-200 bg-red-50", title: "text-red-900", button: "border-red-300 bg-white text-red-700 hover:bg-red-100", iconBg: "bg-red-500" },
-  blue: { box: "border-blue-200 bg-blue-50", title: "text-blue-900", button: "border-blue-300 bg-white text-blue-700 hover:bg-blue-100", iconBg: "bg-blue-500" },
-  orange: { box: "border-orange-200 bg-orange-50", title: "text-orange-900", button: "border-orange-300 bg-white text-orange-700 hover:bg-orange-100", iconBg: "bg-orange-500" },
-  amber: { box: "border-amber-200 bg-amber-50", title: "text-amber-900", button: "border-amber-300 bg-white text-amber-700 hover:bg-amber-100", iconBg: "bg-amber-500" },
+// One warning family (amber), per DESIGN.md — "Awaiting Stakeholder" no
+// longer gets its own orange tone alongside "Payment Pending"'s amber.
+const HERO_TONE: Record<Tone, { box: string; edge: string; title: string; button: string; iconBg: string }> = {
+  red: { box: "border-red-200 bg-red-50", edge: "border-l-red-400", title: "text-red-900", button: "border-red-300 bg-white text-red-700 hover:bg-red-100", iconBg: "bg-red-500" },
+  blue: { box: "border-blue-200 bg-blue-50", edge: "border-l-blue-400", title: "text-blue-900", button: "border-blue-300 bg-white text-blue-700 hover:bg-blue-100", iconBg: "bg-blue-500" },
+  amber: { box: "border-amber-200 bg-amber-50", edge: "border-l-amber-400", title: "text-amber-900", button: "border-amber-300 bg-white text-amber-700 hover:bg-amber-100", iconBg: "bg-amber-500" },
 };
 
 function HeroIconGlyph({ icon, className }: { icon: HeroIconKey; className?: string }) {
@@ -913,13 +914,18 @@ function HeroIconGlyph({ icon, className }: { icon: HeroIconKey; className?: str
   }
 }
 
+// The most urgent category becomes the page's one dominant object (the
+// "Right now" pattern used everywhere else in the product); the rest recede
+// into compact rows below it instead of competing at equal weight.
 function HeroCard({
   category,
+  primary,
   expanded,
   onToggleExpand,
   onOpen,
 }: {
   category: HeroCategory;
+  primary: boolean;
   expanded: boolean;
   onToggleExpand: () => void;
   onOpen: (drawer: DrawerState) => void;
@@ -927,15 +933,58 @@ function HeroCard({
   const t = HERO_TONE[category.tone];
   const single = category.items.length === 1 ? category.items[0] : null;
 
+  if (!primary) {
+    return (
+      <div className={`flex flex-wrap items-center gap-3 rounded-lg border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2 ${t.edge}`}>
+        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white ${t.iconBg}`}>
+          <HeroIconGlyph icon={category.icon} className="h-3 w-3" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <span className="whitespace-nowrap text-sm font-medium text-zinc-900">{category.label}</span>{" "}
+          <span className="truncate text-xs text-zinc-500">{category.subtitle}</span>
+        </div>
+        <div className="shrink-0">
+          {single ? (
+            <button type="button" onClick={() => onOpen(single.open())} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+              {single.actionLabel}
+            </button>
+          ) : (
+            <button type="button" onClick={onToggleExpand} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+              Review ({category.totalCount ?? category.items.length}) {expanded ? "▲" : "▼"}
+            </button>
+          )}
+        </div>
+        {!single && expanded && (
+          <div className="mt-2.5 w-full space-y-1 border-t border-zinc-100 pt-2.5">
+            {category.items.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-3 rounded-md bg-zinc-50 px-2.5 py-1.5">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium text-zinc-900">{item.label}</p>
+                  <p className="truncate text-xs text-zinc-500">{item.meta}</p>
+                </div>
+                <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-700 underline decoration-dotted underline-offset-2 hover:text-zinc-900">
+                  {item.actionLabel}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className={`rounded-lg border px-4 py-2.5 ${t.box}`}>
+    <div className={`rounded-xl border-2 px-4 py-3 ${t.box}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex min-w-0 shrink-0 items-center gap-1.5">
-            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white ${t.iconBg}`}>
-              <HeroIconGlyph icon={category.icon} className="h-3 w-3" />
+            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white ${t.iconBg}`}>
+              <HeroIconGlyph icon={category.icon} className="h-3.5 w-3.5" />
             </span>
-            <span className={`whitespace-nowrap text-sm font-semibold ${t.title}`}>{category.label}</span>
+            <span className="flex min-w-0 flex-col">
+              <span className={`text-xs font-semibold uppercase tracking-wide ${t.title}`}>Right now</span>
+              <span className={`whitespace-nowrap text-base font-semibold ${t.title}`}>{category.label}</span>
+            </span>
           </span>
           <span className="truncate text-xs text-zinc-500">{category.subtitle}</span>
         </div>
@@ -957,7 +1006,7 @@ function HeroCard({
             <div key={item.id} className="flex items-center justify-between gap-3 rounded-md bg-white/70 px-2.5 py-1.5">
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium text-zinc-900">{item.label}</p>
-                <p className="truncate text-[11px] text-zinc-500">{item.meta}</p>
+                <p className="truncate text-xs text-zinc-500">{item.meta}</p>
               </div>
               <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-700 underline decoration-dotted underline-offset-2 hover:text-zinc-900">
                 {item.actionLabel}
@@ -1094,7 +1143,7 @@ export function ActionPanel({
       ? [
           {
             key: "awaiting",
-            tone: "orange" as const,
+            tone: "amber" as const,
             label: "Awaiting Stakeholder",
             icon: "people" as const,
             subtitle: `${awaitingStakeholder.length} project${awaitingStakeholder.length !== 1 ? "s" : ""} awaiting stakeholder response`,
@@ -1173,18 +1222,47 @@ export function ActionPanel({
       : []),
   ];
 
+  // Rank by urgency instead of the fixed query order above, so the busiest
+  // category becomes the page's one "Right now" anchor (Product Principle
+  // 1) instead of six equal-weight tiles. Overdue leads (a broken delivery
+  // date is the product's own headline urgency signal), then technical
+  // breakage that's actively costing time, then things waiting on a human.
+  const CATEGORY_RANK: Record<string, number> = {
+    overdue: 0,
+    error: 1,
+    "email-failure": 2,
+    awaiting: 3,
+    unassigned: 4,
+    override: 5,
+  };
+  const rankedCategories = [...heroCategories].sort(
+    (a, b) => (CATEGORY_RANK[a.key] ?? 99) - (CATEGORY_RANK[b.key] ?? 99)
+  );
+  const [primaryCategory, ...secondaryCategories] = rankedCategories;
+
   return (
     <>
       {actionCount > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Action required
           </h2>
-          <div className={`grid grid-cols-1 items-start gap-3 ${heroCategories.length > 1 ? "sm:grid-cols-2" : ""}`}>
-            {heroCategories.map((cat) => (
+          <div className="space-y-2">
+            {primaryCategory && (
+              <HeroCard
+                key={primaryCategory.key}
+                category={primaryCategory}
+                primary
+                expanded={expandedKey === primaryCategory.key}
+                onToggleExpand={() => setExpandedKey((k) => (k === primaryCategory.key ? null : primaryCategory.key))}
+                onOpen={setDrawer}
+              />
+            )}
+            {secondaryCategories.map((cat) => (
               <HeroCard
                 key={cat.key}
                 category={cat}
+                primary={false}
                 expanded={expandedKey === cat.key}
                 onToggleExpand={() => setExpandedKey((k) => (k === cat.key ? null : cat.key))}
                 onOpen={setDrawer}

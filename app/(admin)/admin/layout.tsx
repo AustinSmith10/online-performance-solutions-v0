@@ -80,23 +80,23 @@ export default async function AdminShellLayout({
           <SidebarNavLinks items={NAV_ITEMS} />
         </nav>
         <div className="border-t border-zinc-200 p-3">
-          <p className="mb-2 truncate px-2 text-xs text-zinc-400">
+          <p className="mb-2 truncate px-2 text-xs text-zinc-500">
             {[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
           </p>
           <Link
             href="/admin/profile"
-            className="mb-0.5 block rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+            className="mb-0.5 block rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
           >
             My profile
           </Link>
           <ReplayTourButton
             href="/admin/dashboard"
-            className="mb-0.5 block w-full rounded px-2 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+            className="mb-0.5 block w-full rounded px-2 py-1 text-left text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
           />
           <form action={logout}>
             <button
               type="submit"
-              className="w-full rounded px-2 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+              className="w-full rounded px-2 py-1 text-left text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
             >
               Sign out
             </button>

@@ -141,7 +141,7 @@ function accentClass(p: ActiveProjectItem): string {
   if (p.overdue) return "border-l-red-400";
   if (p.consultant === null) return "border-l-amber-400";
   if (p.awaitingStakeholder) return "border-l-blue-400";
-  if (p.overridePending) return "border-l-purple-400";
+  if (p.overridePending) return "border-l-amber-400";
   return "border-l-zinc-200";
 }
 
@@ -149,30 +149,30 @@ function ProjectRow({ p }: { p: ActiveProjectItem }) {
   return (
     <Link
       href={p.href}
-      className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 ${accentClass(p)} hover:bg-zinc-50`}
+      className={`flex flex-col gap-2 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3 ${accentClass(p)} hover:bg-zinc-50`}
     >
       <div className="min-w-0 flex-1">
-        <span className="truncate text-sm font-medium text-zinc-900">{p.label}</span>
+        <span className="block truncate text-sm font-medium text-zinc-900">{p.label}</span>
         <p className="mt-0.5 truncate text-xs text-zinc-500">
           {p.client ?? "—"} · {p.consultant ?? "Unassigned"}
           {p.dueLabel ? ` · Due ${p.dueLabel}` : ""}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:flex-nowrap">
         {p.overdue && <OverduePill />}
         {p.overridePending && (
-          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700">Override</span>
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Override</span>
         )}
         {p.hasVerificationMismatch && (
           <span
-            className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+            className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
             title="A stakeholder confirmed a file despite a flagged verification mismatch"
           >
             Flagged doc
           </span>
         )}
         {p.tally && <ReviewTallyChip summary={p.tally} />}
-        <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_CLASSES[p.status]}`}>
+        <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLASSES[p.status]}`}>
           {STATUS_LABELS[p.status]}
         </span>
       </div>
@@ -225,7 +225,7 @@ function FilterPanel({
     <div ref={ref} className="absolute left-0 top-9 z-50 w-[22rem] rounded-xl border border-zinc-200 bg-white p-4 shadow-xl">
       <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Status</p>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Status</p>
           <div className="grid grid-cols-2 gap-x-2">
             {IN_FLIGHT_STATUSES.map((s) => (
               <CheckboxRow key={s} checked={filters.statuses.includes(s)} label={STATUS_LABELS[s]} onChange={() => toggle("statuses", s)} />
@@ -235,7 +235,7 @@ function FilterPanel({
 
         {clients.length > 0 && (
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Client</p>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Client</p>
             <div className="grid grid-cols-2 gap-x-2">
               {clients.map((c) => (
                 <CheckboxRow key={c} checked={filters.clients.includes(c)} label={c} onChange={() => toggle("clients", c)} />
@@ -245,7 +245,7 @@ function FilterPanel({
         )}
 
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Consultant</p>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Consultant</p>
           <div className="grid grid-cols-2 gap-x-2">
             <CheckboxRow checked={filters.consultants.includes(UNASSIGNED)} label="Unassigned" onChange={() => toggle("consultants", UNASSIGNED)} />
             {consultants.map((c) => (
@@ -255,7 +255,7 @@ function FilterPanel({
         </div>
 
         <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Flags</p>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Flags</p>
           <div className="grid grid-cols-2 gap-x-2">
             <CheckboxRow checked={filters.overdueOnly} label="Overdue" onChange={(v) => onChange({ ...filters, overdueOnly: v })} />
             <CheckboxRow checked={filters.awaitingOnly} label="Awaiting stakeholder" onChange={(v) => onChange({ ...filters, awaitingOnly: v })} />
@@ -268,7 +268,7 @@ function FilterPanel({
         <button type="button" onClick={() => onChange(EMPTY_FILTERS)} className="text-xs text-zinc-500 hover:text-zinc-800 hover:underline">
           Clear all
         </button>
-        <span className="text-xs text-zinc-400">{isFilterActive(filters) ? "Filters applied" : "No filters"}</span>
+        <span className="text-xs text-zinc-500">{isFilterActive(filters) ? "Filters applied" : "No filters"}</span>
       </div>
 
       <div className="mt-3 flex items-center gap-1.5 border-t border-zinc-100 pt-3">
@@ -276,7 +276,7 @@ function FilterPanel({
           value={viewName}
           onChange={(e) => setViewName(e.target.value)}
           placeholder="Name this view…"
-          className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1.5 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+          className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1.5 text-sm placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
         />
         <button
           type="button"
@@ -434,7 +434,7 @@ export function ActiveProjectsList({ projects, storageKey }: { projects: ActiveP
             >
               <span className={`mr-1.5 opacity-0 group-hover:opacity-100 ${activePresetId === preset.id ? "text-zinc-400" : "text-zinc-300"}`}>⠿</span>
               {preset.label}
-              <span className={`ml-1.5 ${activePresetId === preset.id ? "opacity-70" : "text-zinc-400"}`}>
+              <span className={`ml-1.5 ${activePresetId === preset.id ? "opacity-70" : "text-zinc-500"}`}>
                 ({projects.filter((p) => matchesFilters(p, preset.filters)).length})
               </span>
               {!preset.builtin && (
@@ -487,11 +487,11 @@ export function ActiveProjectsList({ projects, storageKey }: { projects: ActiveP
         value={filters.search}
         onChange={(e) => updateFilters({ ...filters, search: e.target.value })}
         placeholder="Search project, address, client…"
-        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
       />
 
       {projects.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">No active projects.</div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">No active projects.</div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center">
           <p className="text-sm font-medium text-zinc-900">No projects match these filters</p>

@@ -267,7 +267,7 @@ function PasswordSection({
 
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-5">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-zinc-900">Password</h2>
           <p className="mt-0.5 text-xs text-zinc-500">Manage your account password.</p>
@@ -276,7 +276,7 @@ function PasswordSection({
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            className="self-start whitespace-nowrap rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
           >
             Change password
           </button>
@@ -365,8 +365,13 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-zinc-700">{label}</label>
-      <div className="mt-1">{children}</div>
+      {/* Wrapping the input in the label (rather than a separate htmlFor/id
+          pair) associates them for screen readers and click-to-focus with
+          no id plumbing needed here. */}
+      <label className="block text-sm font-medium text-zinc-700">
+        {label}
+        <div className="mt-1">{children}</div>
+      </label>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );

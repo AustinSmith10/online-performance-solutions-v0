@@ -19,8 +19,11 @@ interface Props {
 // body can both use this without a footer they don't need.
 export function Drawer({ isOpen, onClose, title, subtitle, footer, successMessage, children }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
-  // Close on Escape
+  // Close on Escape — bubble phase, so a nested dialog (e.g. WaiveForm's
+  // confirm) that stops propagation in the capture phase gets first refusal
+  // and this only fires when nothing nested is open.
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -34,9 +37,40 @@ export function Drawer({ isOpen, onClose, title, subtitle, footer, successMessag
     return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
 
-  // Focus trap — move focus into the panel on open
+  // Move focus into the panel on open, and back to whatever triggered it on
+  // close — otherwise focus is left stranded on an inert/hidden node.
   useEffect(() => {
-    if (isOpen) panelRef.current?.focus();
+    if (isOpen) {
+      previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+      panelRef.current?.focus();
+    } else {
+      previouslyFocusedRef.current?.focus();
+      previouslyFocusedRef.current = null;
+    }
+  }, [isOpen]);
+
+  // Trap Tab inside the panel while open, so keyboard users can't tab out
+  // into content that's supposed to be behind the modal.
+  useEffect(() => {
+    if (!isOpen) return;
+    function handler(e: KeyboardEvent) {
+      if (e.key !== "Tab" || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
   }, [isOpen]);
 
   // Auto-close after success
@@ -58,8 +92,10 @@ export function Drawer({ isOpen, onClose, title, subtitle, footer, successMessag
         ].join(" ")}
       />
 
-      {/* Centered modal */}
+      {/* Centered modal — inert while closed so focus and screen readers
+          can't land on a visually-hidden panel */}
       <div
+        inert={isOpen ? undefined : true}
         className={[
           "fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200",
           isOpen ? "opacity-100" : "pointer-events-none opacity-0",

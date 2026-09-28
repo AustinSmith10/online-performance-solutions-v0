@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { waiveStakeholderResponse, type WaiveState } from "@/app/actions/stakeholders";
 import { requestEvidenceUploadUrl } from "@/app/actions/evidence";
 import { createClient } from "@/lib/supabase/client";
@@ -46,12 +46,43 @@ export function WaiveForm({ reviewId, projectId, stakeholderName, requireEvidenc
   const [state, formAction, pending] = useActionState<WaiveState, FormData>(orchestrate, {});
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Escape closes only this confirmation, not a parent Drawer it's nested
+  // in. Registered in the capture phase, which always runs before the
+  // parent Drawer's bubble-phase Escape listener, regardless of mount
+  // order — stopPropagation here then keeps that bubble listener from
+  // firing at all.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handler, true);
+    return () => document.removeEventListener("keydown", handler, true);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) panelRef.current?.focus();
+    else triggerRef.current?.focus();
+  }, [open]);
 
   return (
     <>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Waive response for ${stakeholderName}`}
+            tabIndex={-1}
+            className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl outline-none"
+          >
             <p className="text-base font-semibold text-zinc-900">
               Waive response for {stakeholderName}?
             </p>
@@ -117,6 +148,7 @@ export function WaiveForm({ reviewId, projectId, stakeholderName, requireEvidenc
       )}
 
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
