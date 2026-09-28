@@ -21,7 +21,7 @@ import { matchDevelopmentName, type MetricsPickRow } from "@/lib/documents/metri
 import { ClientWorkspace } from "../../_components/ClientWorkspace";
 import { ClientHeaderCard } from "../../_components/ClientHeaderCard";
 import { FocusCard } from "@/components/workspace/FocusCard";
-import { REQUEST_STAGES } from "../../_components/requestStages";
+import { REQUEST_STAGES, REQUEST_STAGES_STAFF } from "../../_components/requestStages";
 import { FileSlot } from "./FileSlot";
 import { canContinue } from "./continueGate";
 import { useDraftPipelinePolling } from "./useDraftPipelinePolling";
@@ -43,7 +43,10 @@ interface Props {
   projectBasePath?: string;
   startOverHref?: string;
   showExtractionBanner?: boolean;
-  beforeTemplateFields?: React.ReactNode;
+  /** "New report request" is the client's own wording; staff acting on a client's behalf get a role-aware title instead. */
+  headerTitle?: string;
+  /** Swaps "Awaiting your review" for "Awaiting approval" in the stage rail — staff aren't the one being asked to review. */
+  viewerRole?: "client" | "staff";
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -197,9 +200,10 @@ interface ReviewStepProps {
   projectBasePath: string;
   startOverHref: string;
   showBanner?: boolean;
+  viewerRole?: "client" | "staff";
 }
 
-function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgId, adminClientId, projectBasePath, startOverHref, showBanner }: ReviewStepProps) {
+function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgId, adminClientId, projectBasePath, startOverHref, showBanner, viewerRole = "client" }: ReviewStepProps) {
   const {
     poNumber,
     tokenGroups,
@@ -317,7 +321,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
               subtitle="Review the extracted details on the right, then confirm and submit."
             />
           }
-          stages={REQUEST_STAGES}
+          stages={viewerRole === "staff" ? REQUEST_STAGES_STAFF : REQUEST_STAGES}
           focusCard={
             <FocusCard tone="neutral" title="Confirm & submit" subtitle="The last thing before we get started.">
               <div className="space-y-4">
@@ -514,7 +518,8 @@ export function SubmissionForm({
   projectBasePath = "/portal/projects",
   startOverHref = "/portal/submit",
   showExtractionBanner = false,
-  beforeTemplateFields,
+  headerTitle = "New report request",
+  viewerRole = "client",
 }: Props) {
   const [submitState, submitAction, submitPending] = useActionState(submitProject, {});
 
@@ -769,6 +774,7 @@ export function SubmissionForm({
         projectBasePath={projectBasePath}
         startOverHref={startOverHref}
         showBanner={showExtractionBanner}
+        viewerRole={viewerRole}
       />
     );
   }
@@ -779,10 +785,10 @@ export function SubmissionForm({
     <ClientWorkspace
       header={
         <ClientHeaderCard
-          title="New report request"
+          title={headerTitle}
         />
       }
-      stages={REQUEST_STAGES}
+      stages={viewerRole === "staff" ? REQUEST_STAGES_STAFF : REQUEST_STAGES}
       focusCard={
         <FocusCard tone="neutral" title="Start your request" subtitle="upload the appropriate pdf files">
           <RequestForm
@@ -802,7 +808,6 @@ export function SubmissionForm({
             continueError={continueError}
             continueDuplicateId={continueDuplicateId}
             onContinue={handleContinue}
-            beforeTemplateFields={beforeTemplateFields}
           />
         </FocusCard>
       }
@@ -847,7 +852,6 @@ function RequestForm({
   continueError,
   continueDuplicateId,
   onContinue,
-  beforeTemplateFields,
 }: {
   projectBasePath: string;
   showTemplateDropdown: boolean;
@@ -865,14 +869,12 @@ function RequestForm({
   continueError: string | null;
   continueDuplicateId: string | null;
   onContinue: () => void;
-  beforeTemplateFields?: React.ReactNode;
 }) {
   const disabled = continuePending;
   const hasAnyFiles = files.length > 0;
 
   return (
     <div className="space-y-6">
-      {beforeTemplateFields}
       {/* Template selector — locked once files exist, since switching
           templates mid-pipeline would orphan the in-flight uploads. */}
       {showTemplateDropdown ? (
