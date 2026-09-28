@@ -17,6 +17,7 @@ export interface ConsultantOption {
   last_name: string | null;
   email: string;
   availability: ConsultantAvailability;
+  disciplines: string[] | null;
 }
 
 interface Props {

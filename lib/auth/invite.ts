@@ -53,7 +53,8 @@ export async function createAccount(
   role: UserRole,
   firstName: string,
   lastName: string,
-  orgId?: string
+  orgId?: string,
+  disciplines?: string[]
 ) {
   const supabase = createAdminClient();
 
@@ -84,6 +85,7 @@ export async function createAccount(
     last_name: lastName,
     client_id: orgId ?? null,
     invited_at: new Date().toISOString(),
+    ...(role === "consultant" ? { disciplines } : {}),
   });
 
   if (insertError) return { error: insertError.message };

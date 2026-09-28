@@ -149,6 +149,7 @@ export interface User {
   role: UserRole;
   client_id: string | null;
   availability: ConsultantAvailability;
+  disciplines: string[] | null;
   is_active: boolean;
   is_locked: boolean;
   totp_enabled: boolean;

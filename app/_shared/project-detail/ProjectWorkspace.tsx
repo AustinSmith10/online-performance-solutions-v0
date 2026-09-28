@@ -73,6 +73,7 @@ import { AdminDeleteButton } from "@/app/(admin)/admin/projects/[id]/_components
 import { AdminProjectNumberForm } from "@/app/(admin)/admin/projects/[id]/_components/AdminProjectNumberForm";
 import { ConsultantCard } from "@/app/(admin)/admin/projects/[id]/_components/ConsultantCard";
 import { OverduePill } from "@/components/OverduePill";
+import { consultantHasDiscipline } from "@/lib/consultants/disciplines";
 import { formatProjectNumber, resolveNumberSuffix } from "@/lib/projects/project-number";
 import { daysOverdue as daysOverdueBetween } from "@/app/(consultant)/ops/_components/dashboardList";
 
@@ -366,7 +367,7 @@ export async function ProjectWorkspace({
     isAdmin
       ? supabase
           .from("users")
-          .select("id, first_name, last_name, email, availability")
+          .select("id, first_name, last_name, email, availability, disciplines")
           .eq("role", "consultant")
           .eq("is_locked", false)
           .order("first_name")
@@ -413,6 +414,10 @@ export async function ProjectWorkspace({
   ]);
 
   const consultants = (rawConsultants ?? []) as unknown as ConsultantOption[];
+  // Only consultants tagged for this project's discipline can be assigned —
+  // the same hard rule the dashboard's assign drawer applies, enforced again
+  // (with no override) server-side in performAssignment.
+  const disciplineConsultants = consultants.filter((c) => consultantHasDiscipline(c.disciplines, numberSuffix));
   const pauseData = (rawPauseData ?? { paused_at: null, paused_previous_status: null, pause_reason: null }) as unknown as {
     paused_at: string | null;
     paused_previous_status: string | null;
@@ -1032,10 +1037,10 @@ export async function ProjectWorkspace({
   } else if (isAdmin && !project.assigned) {
     focusCard = (
       <FocusCard tone="neutral" title="Assign a consultant" subtitle="Unlocks PBDB generation for the assignee.">
-        <AssignForm projectId={id} consultants={consultants} currentConsultantId="" isReassign={false} />
-        {consultants.length === 0 && (
+        <AssignForm projectId={id} consultants={disciplineConsultants} currentConsultantId="" isReassign={false} />
+        {disciplineConsultants.length === 0 && (
           <p className="mt-3 text-sm text-zinc-500">
-            No consultants available.{" "}
+            No consultants tagged for this discipline.{" "}
             <Link href="/admin/users/invite" className="underline hover:text-zinc-700">
               Create account →
             </Link>
@@ -1316,7 +1321,7 @@ export async function ProjectWorkspace({
       {isAdmin && project.assigned && (
         <ConsultantCard
           projectId={id}
-          consultants={consultants}
+          consultants={disciplineConsultants}
           currentConsultantId={project.assigned.id}
           assignedName={assignedName}
           availability={project.assigned.availability}

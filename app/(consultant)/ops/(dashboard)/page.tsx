@@ -9,6 +9,8 @@ import type { DashboardData, DashboardProject } from "../_components/dashboardTy
 import { SECTION_KEYS, daysOverdue, matchesQuery, paginate, parsePage, parseSection, sortByAttention, type SectionKey } from "../_components/dashboardList";
 import type { TabSlice } from "../_components/dashboardTypes";
 import { resolveStaffStatus } from "@/lib/delivery/effective-status";
+import { resolveNumberSuffix } from "@/lib/projects/project-number";
+import { consultantHasDiscipline } from "@/lib/consultants/disciplines";
 import { summarizeRound } from "@/lib/stakeholders/round-summary";
 import type { ProjectStatus } from "@/types";
 
@@ -67,6 +69,7 @@ type AvailableProject = {
   created_at: string;
   expected_delivery_date: string | null;
   clients: { name: string } | null;
+  templates: { number_suffix: string | null } | { number_suffix: string | null }[] | null;
 };
 
 export default async function ConsultantOpsPage({
@@ -98,7 +101,7 @@ export default async function ConsultantOpsPage({
     .order("created_at", { ascending: false }),
     supabase
     .from("projects")
-    .select("id, extracted_fields, po_number, created_at, expected_delivery_date, clients(name)")
+    .select("id, extracted_fields, po_number, created_at, expected_delivery_date, clients(name), templates(number_suffix)")
     .eq("status", "submitted")
     .is("assigned_consultant_id", null)
     .is("deleted_at", null)
@@ -232,7 +235,20 @@ export default async function ConsultantOpsPage({
   );
 
   // Available jobs — submitted, unassigned, not deleted (fetched above)
-  const availableProjects = (rawAvailable ?? []) as unknown as AvailableProject[];
+  // Available jobs are filtered to this viewer's disciplines — a hard rule
+  // enforced again server-side in performAssignment, not just a UI courtesy.
+  // A super_admin browsing /ops has no `disciplines` of their own (that's a
+  // consultant-role concept); they see the unfiltered pool, same as before,
+  // since they can't self-assign as a consultant anyway.
+  const viewerDisciplines = (user as { disciplines?: string[] | null }).disciplines ?? null;
+  const allAvailableProjects = (rawAvailable ?? []) as unknown as AvailableProject[];
+  const availableProjects =
+    user.role === "consultant"
+      ? allAvailableProjects.filter((p) => {
+          const t = Array.isArray(p.templates) ? p.templates[0] : p.templates;
+          return consultantHasDiscipline(viewerDisciplines, resolveNumberSuffix(t?.number_suffix ?? null));
+        })
+      : allAvailableProjects;
 
   const mismatchProjectIds = new Set((mismatchRows ?? []).map((r) => r.project_id as string));
 

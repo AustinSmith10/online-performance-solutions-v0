@@ -52,6 +52,7 @@ export default async function UserDetailPage({
     phone: u.phone,
     company_role: u.company_role,
     state_territory: u.state_territory,
+    disciplines: u.disciplines,
   };
 
   // Reflects the most recent invite attempt only — a later successful resend

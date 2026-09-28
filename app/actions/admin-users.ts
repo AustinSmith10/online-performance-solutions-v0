@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { createAccount, sendWelcomeEmail } from "@/lib/auth/invite";
+import { validateDisciplines } from "@/lib/consultants/disciplines";
 import { auditLog } from "@/lib/audit/log";
 import type { ConsultantAvailability, UserRole } from "@/types";
 
@@ -439,6 +440,7 @@ export type CreateAccountState = {
     last_name?: string[];
     role?: string[];
     client_id?: string[];
+    disciplines?: string[];
     form?: string[];
   };
 };
@@ -472,7 +474,17 @@ export async function createUserAccount(
     return { errors: { client_id: ["Client required for stakeholder accounts"] } };
   }
 
-  const result = await createAccount(email, role, first_name, last_name, client_id || undefined);
+  // Every consultant account must be tagged with at least one discipline at
+  // setup — it's what "Available jobs" and admin assignment filter on from
+  // the moment the account exists, so there's no valid intermediate state.
+  let disciplines: string[] | undefined;
+  if (role === "consultant") {
+    const parsed = validateDisciplines(formData.getAll("disciplines") as string[]);
+    if (!parsed.ok) return { errors: { disciplines: [parsed.error] } };
+    disciplines = parsed.value;
+  }
+
+  const result = await createAccount(email, role, first_name, last_name, client_id || undefined, disciplines);
   if (!result.userId) return { errors: { form: [result.error ?? "Failed to create account"] } };
 
   await auditLog("user.account_created", caller.id, caller.email, {
@@ -522,6 +534,46 @@ export async function setConsultantAvailability(
 
   revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");
+}
+
+export type UpdateDisciplinesState = { error?: string; success?: boolean };
+
+/**
+ * Changes which disciplines a consultant is tagged for. Only affects future
+ * self-assignment and admin assignment (both gated in performAssignment) —
+ * projects already assigned to this consultant are unaffected.
+ */
+export async function updateConsultantDisciplines(
+  userId: string,
+  _prev: UpdateDisciplinesState,
+  formData: FormData
+): Promise<UpdateDisciplinesState> {
+  const actor = await requireRole("super_admin", "admin");
+
+  const parsed = validateDisciplines(formData.getAll("disciplines") as string[]);
+  if (!parsed.ok) return { error: parsed.error };
+
+  const supabase = createAdminClient();
+  const { data: target } = await supabase
+    .from("users")
+    .select("role, disciplines")
+    .eq("id", userId)
+    .eq("role", "consultant")
+    .maybeSingle();
+  if (!target) return { error: "Consultant not found." };
+
+  const { error } = await supabase
+    .from("users")
+    .update({ disciplines: parsed.value })
+    .eq("id", userId);
+  if (error) return { error: error.message };
+
+  await auditLog("user.disciplines_changed", actor.id, actor.email, {
+    metadata: { target_user_id: userId, from: target.disciplines ?? [], to: parsed.value },
+  });
+
+  revalidatePath(`/admin/users/${userId}`);
+  return { success: true };
 }
 
 const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];

@@ -4,6 +4,7 @@ import { useActionState, useState, useEffect, useRef } from "react";
 import { Drawer } from "@/components/Drawer";
 import { createUserAccount, type CreateAccountState } from "@/app/actions/admin-users";
 import type { Client } from "@/types";
+import { DISCIPLINES } from "@/lib/projects/project-number";
 
 export function CreateAccountModal({
   orgs,
@@ -13,6 +14,7 @@ export function CreateAccountModal({
   callerRole: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [role, setRole] = useState("stakeholder");
   const [state, action, pending] = useActionState<CreateAccountState, FormData>(
     createUserAccount,
     {}
@@ -88,7 +90,8 @@ export function CreateAccountModal({
             <label className="mb-1 block text-sm font-medium text-zinc-700">Role</label>
             <select
               name="role"
-              defaultValue="stakeholder"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
               className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             >
               <option value="stakeholder">Stakeholder</option>
@@ -99,6 +102,24 @@ export function CreateAccountModal({
               <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
             ))}
           </div>
+
+          {role === "consultant" && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">Disciplines</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {DISCIPLINES.map((d) => (
+                  <label key={d.suffix} className="flex items-center gap-2 rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 has-[:checked]:border-zinc-400 has-[:checked]:bg-zinc-50">
+                    <input type="checkbox" name="disciplines" value={d.suffix} className="h-3.5 w-3.5 rounded border-zinc-300" />
+                    {d.name}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-zinc-500">At least one, required — this is what &quot;Available jobs&quot; and assignment filter on.</p>
+              {state.errors?.disciplines?.map((e) => (
+                <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+              ))}
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700">

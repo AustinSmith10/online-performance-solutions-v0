@@ -5,6 +5,8 @@ import { notify } from "@/lib/notifications/notify";
 import { auditLog } from "@/lib/audit/log";
 import { ConsultantAssignedEmail } from "@/lib/email/templates/ConsultantAssignedEmail";
 import { computeExpectedDeliveryDate } from "@/lib/delivery/expected-delivery-date";
+import { resolveNumberSuffix, disciplineNameForSuffix } from "@/lib/projects/project-number";
+import { consultantHasDiscipline } from "@/lib/consultants/disciplines";
 
 export async function performAssignment(
   projectId: string,
@@ -17,12 +19,12 @@ export async function performAssignment(
   const [projectResult, consultantResult] = await Promise.all([
     supabase
       .from("projects")
-      .select("id, project_number, site_address, extracted_fields, status, client_id, expected_delivery_date, clients(name, delivery_working_days, state_territory)")
+      .select("id, project_number, site_address, extracted_fields, status, client_id, expected_delivery_date, clients(name, delivery_working_days, state_territory), templates(number_suffix)")
       .eq("id", projectId)
       .single(),
     supabase
       .from("users")
-      .select("id, first_name, last_name, email")
+      .select("id, first_name, last_name, email, disciplines")
       .eq("id", consultantId)
       .eq("role", "consultant")
       .single(),
@@ -35,8 +37,28 @@ export async function performAssignment(
     status: string;
     expected_delivery_date: string | null;
     clients: { name: string; delivery_working_days: number; state_territory: string | null } | null;
+    templates: { number_suffix: string | null } | { number_suffix: string | null }[] | null;
   };
-  const consultant = consultantResult.data;
+  const consultant = consultantResult.data as typeof consultantResult.data & {
+    disciplines: string[] | null;
+  };
+
+  // Hard rule, not just a UI filter: a consultant may only be assigned (by
+  // themselves or by an admin) to a project whose template discipline is in
+  // their own disciplines. The two UI pickers this feeds (self-assign's
+  // "Available jobs" list, and the admin assign dropdown) pre-filter to the
+  // same rule, but this is the real gate — it still applies to a form
+  // submitted directly, and there is no admin override.
+  const templatesRow = Array.isArray(project.templates) ? project.templates[0] : project.templates;
+  const projectDiscipline = resolveNumberSuffix(templatesRow?.number_suffix ?? null);
+  if (!consultantHasDiscipline(consultant.disciplines, projectDiscipline)) {
+    const disciplineName = disciplineNameForSuffix(projectDiscipline) ?? projectDiscipline;
+    throw new Error(
+      `This project needs a ${disciplineName} consultant. ${
+        [consultant.first_name, consultant.last_name].filter(Boolean).join(" ") || consultant.email
+      } isn't tagged for ${disciplineName}.`
+    );
+  }
 
   // Calculate delivery date now if it wasn't set during submission (e.g. draft assigned directly)
   let deliveryDate = project.expected_delivery_date as string | null;

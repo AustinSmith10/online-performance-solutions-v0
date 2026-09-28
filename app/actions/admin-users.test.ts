@@ -8,10 +8,11 @@ vi.mock("@/lib/auth/session");
 vi.mock("@/lib/audit/log");
 vi.mock("@/lib/auth/invite");
 
-import { updateUserEmail, resetUserTotp, requireUserTotp } from "./admin-users";
+import { updateUserEmail, resetUserTotp, requireUserTotp, createUserAccount, updateConsultantDisciplines } from "./admin-users";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { auditLog } from "@/lib/audit/log";
+import { createAccount } from "@/lib/auth/invite";
 
 const PLAIN_ADMIN = { id: "actor-1", email: "admin@ops.test", role: "admin" };
 const SUPER_ADMIN = { id: "actor-2", email: "super@ops.test", role: "super_admin" };
@@ -179,5 +180,102 @@ describe("requireUserTotp", () => {
     vi.mocked(createAdminClient).mockReturnValue(makeSupabase({ users: usersTable }) as never);
 
     await expect(requireUserTotp("user-1")).resolves.toBeUndefined();
+  });
+});
+
+describe("createUserAccount — consultant disciplines required", () => {
+  function form(fields: Record<string, string>) {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+    return fd;
+  }
+
+  const base = { email: "new@ops.test", first_name: "New", last_name: "Consultant" };
+
+  it("rejects a consultant account with no discipline selected", async () => {
+    vi.mocked(requireRole).mockResolvedValue(PLAIN_ADMIN as never);
+
+    const res = await createUserAccount({}, form({ ...base, role: "consultant" }));
+
+    expect(res.errors?.disciplines?.[0]).toMatch(/at least one discipline/i);
+    expect(createAccount).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid discipline letter even if one was checked", async () => {
+    vi.mocked(requireRole).mockResolvedValue(PLAIN_ADMIN as never);
+    const fd = form({ ...base, role: "consultant" });
+    fd.append("disciplines", "X");
+
+    const res = await createUserAccount({}, fd);
+
+    expect(res.errors?.disciplines?.[0]).toMatch(/isn't a discipline/);
+  });
+
+  it("creates a consultant with the selected disciplines", async () => {
+    vi.mocked(requireRole).mockResolvedValue(PLAIN_ADMIN as never);
+    vi.mocked(createAccount).mockResolvedValue({ userId: "new-user-1" });
+    const fd = form({ ...base, role: "consultant" });
+    fd.append("disciplines", "f");
+    fd.append("disciplines", "a");
+
+    await createUserAccount({}, fd);
+
+    expect(createAccount).toHaveBeenCalledWith("new@ops.test", "consultant", "New", "Consultant", undefined, ["F", "A"]);
+  });
+
+  it("does not require or pass disciplines for a stakeholder account", async () => {
+    vi.mocked(requireRole).mockResolvedValue(PLAIN_ADMIN as never);
+    vi.mocked(createAccount).mockResolvedValue({ userId: "new-user-2" });
+
+    await createUserAccount({}, form({ ...base, role: "stakeholder", client_id: "22222222-2222-4222-a222-222222222222" }));
+
+    expect(createAccount).toHaveBeenCalledWith(
+      "new@ops.test",
+      "stakeholder",
+      "New",
+      "Consultant",
+      "22222222-2222-4222-a222-222222222222",
+      undefined
+    );
+  });
+});
+
+describe("updateConsultantDisciplines", () => {
+  it("rejects an empty selection", async () => {
+    vi.mocked(requireRole).mockResolvedValue(PLAIN_ADMIN as never);
+
+    const res = await updateConsultantDisciplines("user-1", {}, new FormData());
+
+    expect(res.error).toMatch(/at least one discipline/i);
+  });
+
+  it("saves the new set and audits the change", async () => {
+    vi.mocked(requireRole).mockResolvedValue(PLAIN_ADMIN as never);
+    const usersTable = singleTable({ role: "consultant", disciplines: ["S"] });
+    vi.mocked(createAdminClient).mockReturnValue(makeSupabase({ users: usersTable }) as never);
+    const fd = new FormData();
+    fd.append("disciplines", "f");
+
+    const res = await updateConsultantDisciplines("user-1", {}, fd);
+
+    expect(res).toEqual({ success: true });
+    expect(usersTable.update).toHaveBeenCalledWith({ disciplines: ["F"] });
+    expect(auditLog).toHaveBeenCalledWith(
+      "user.disciplines_changed",
+      "actor-1",
+      "admin@ops.test",
+      expect.objectContaining({ metadata: expect.objectContaining({ from: ["S"], to: ["F"] }) })
+    );
+  });
+
+  it("reports a target that isn't a consultant as not found", async () => {
+    vi.mocked(requireRole).mockResolvedValue(PLAIN_ADMIN as never);
+    vi.mocked(createAdminClient).mockReturnValue(makeSupabase({ users: singleTable(null) }) as never);
+    const fd = new FormData();
+    fd.append("disciplines", "f");
+
+    const res = await updateConsultantDisciplines("user-1", {}, fd);
+
+    expect(res.error).toMatch(/not found/i);
   });
 });

@@ -29,6 +29,7 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "user.profile_updated",
       "user.soft_deleted",
       "user.recovered",
+      "user.disciplines_changed",
     ],
   },
   project: {
@@ -169,6 +170,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "user.profile_updated": "Account profile updated",
   "user.soft_deleted": "Account deleted",
   "user.recovered": "Account restored from recovery bin",
+  "user.disciplines_changed": "Consultant disciplines changed",
   "project.draft_created": "New report request started",
   "project.submitted": "Project submitted",
   "project.review_confirmed": "Client confirmed report details reviewed",

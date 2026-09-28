@@ -147,7 +147,7 @@ export default async function AdminDashboardPage({
     // Consultants for the assign drawer
     supabase
       .from("users")
-      .select("id, first_name, last_name, email, availability")
+      .select("id, first_name, last_name, email, availability, disciplines")
       .eq("role", "consultant")
       .order("first_name"),
   ]);

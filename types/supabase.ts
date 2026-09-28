@@ -1733,6 +1733,7 @@ export type Database = {
           company_role: string | null
           created_at: string
           deleted_at: string | null
+          disciplines: string[] | null
           email: string
           failed_login_count: number
           first_name: string | null
@@ -1755,6 +1756,7 @@ export type Database = {
           company_role?: string | null
           created_at?: string
           deleted_at?: string | null
+          disciplines?: string[] | null
           email: string
           failed_login_count?: number
           first_name?: string | null
@@ -1777,6 +1779,7 @@ export type Database = {
           company_role?: string | null
           created_at?: string
           deleted_at?: string | null
+          disciplines?: string[] | null
           email?: string
           failed_login_count?: number
           first_name?: string | null

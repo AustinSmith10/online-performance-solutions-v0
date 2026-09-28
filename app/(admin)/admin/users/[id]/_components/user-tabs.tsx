@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useActionState } from "react";
-import { updateUserProfile, type EditUserState } from "@/app/actions/admin-users";
+import { updateUserProfile, type EditUserState, updateConsultantDisciplines, type UpdateDisciplinesState } from "@/app/actions/admin-users";
+import { DISCIPLINES } from "@/lib/projects/project-number";
 import { EditIconButton } from "@/components/EditIconButton";
 import {
   UnsavedChangesProvider,
@@ -19,7 +20,7 @@ const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
 
 const AU_STATES = ["ACT", "NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"];
 
-type Tab = "profile" | "availability";
+type Tab = "profile" | "availability" | "disciplines";
 
 // Minimal DTO — only the fields this component actually renders/edits.
 // Do not widen this to the full `User` row; see issue #157.
@@ -33,6 +34,7 @@ export interface UserTabsUser {
   phone: string | null;
   company_role: string | null;
   state_territory: string | null;
+  disciplines: string[] | null;
 }
 
 type Props = {
@@ -71,6 +73,7 @@ function UserTabsInner({ user, clients, availabilityActions }: Props) {
         {([
           { id: "profile" as Tab, label: "Profile" },
           { id: "availability" as Tab, label: "Availability" },
+          { id: "disciplines" as Tab, label: "Disciplines" },
         ]).map((t) => (
           <button
             key={t.id}
@@ -110,7 +113,52 @@ function UserTabsInner({ user, clients, availabilityActions }: Props) {
           })}
         </div>
       )}
+
+      {tab === "disciplines" && <DisciplinesSection userId={user.id} disciplines={user.disciplines} />}
     </div>
+  );
+}
+
+function DisciplinesSection({ userId, disciplines }: { userId: string; disciplines: string[] | null }) {
+  const [state, action, pending] = useActionState<UpdateDisciplinesState, FormData>(
+    updateConsultantDisciplines.bind(null, userId),
+    {}
+  );
+  const current = new Set(disciplines ?? []);
+
+  return (
+    <form action={action} className="max-w-sm space-y-4">
+      <p className="text-sm text-zinc-500">
+        Which report types this consultant can self-assign or be assigned — &quot;Available jobs&quot; and the admin
+        assign picker both filter on this.
+      </p>
+      <div className="grid grid-cols-2 gap-1.5">
+        {DISCIPLINES.map((d) => (
+          <label
+            key={d.suffix}
+            className="flex items-center gap-2 rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 has-[:checked]:border-zinc-400 has-[:checked]:bg-zinc-50"
+          >
+            <input
+              type="checkbox"
+              name="disciplines"
+              value={d.suffix}
+              defaultChecked={current.has(d.suffix)}
+              className="h-3.5 w-3.5 rounded border-zinc-300"
+            />
+            {d.name}
+          </label>
+        ))}
+      </div>
+      {state.error && <p className="text-xs text-red-600">{state.error}</p>}
+      {state.success && !pending && <p className="text-xs text-green-700">Saved</p>}
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+      >
+        {pending ? "Saving…" : "Save"}
+      </button>
+    </form>
   );
 }
 

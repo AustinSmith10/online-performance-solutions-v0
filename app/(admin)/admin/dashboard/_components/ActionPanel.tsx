@@ -21,6 +21,7 @@ import {
 import { useProjectNumberField, projectNumberInputClass } from "@/hooks/useProjectNumberField";
 import type { ConsultantAvailability, ProjectStatus } from "@/types";
 import { resolveNumberSuffix } from "@/lib/projects/project-number";
+import { consultantHasDiscipline } from "@/lib/consultants/disciplines";
 
 // ── Types (serialisable — passed from server component) ──────────────────────
 
@@ -59,6 +60,16 @@ export interface ConsultantOption {
   last_name: string | null;
   email: string;
   availability: ConsultantAvailability;
+  disciplines: string[] | null;
+}
+
+// Every drawer here assigns to one particular project — filter the global
+// consultant list down to the ones tagged for that project's discipline
+// before it ever reaches AssignForm. This is the UI courtesy; the real gate
+// is performAssignment's server-side check, which has no admin override.
+function forDiscipline(consultants: ConsultantOption[], suffix: string | null | undefined): ConsultantOption[] {
+  const projectSuffix = resolveNumberSuffix(suffix);
+  return consultants.filter((c) => consultantHasDiscipline(c.disciplines, projectSuffix));
 }
 
 export interface EmailFailure {
@@ -285,7 +296,7 @@ function SetNumberAndAssignDrawerContent({
             <p className="mb-3 text-sm font-medium text-zinc-700">Assign a consultant</p>
             <AssignForm
               projectId={project.id}
-              consultants={consultants}
+              consultants={forDiscipline(consultants, project.templates?.number_suffix)}
               currentConsultantId=""
               isReassign={false}
             />
@@ -324,7 +335,7 @@ function AssignDrawerContent({
         <p className="mb-3 text-sm font-medium text-zinc-700">Assign a consultant</p>
         <AssignForm
           projectId={project.id}
-          consultants={consultants}
+          consultants={forDiscipline(consultants, project.templates?.number_suffix)}
           currentConsultantId={project.assigned_consultant_id ?? ""}
           isReassign={false}
           onSuccess={onSuccess}
@@ -401,7 +412,7 @@ function OverdueDrawerContent({
           </p>
           <AssignForm
             projectId={project.id}
-            consultants={consultants}
+            consultants={forDiscipline(consultants, project.templates?.number_suffix)}
             currentConsultantId={project.assigned_consultant_id ?? ""}
             isReassign={false}
             onSuccess={onSuccess}
