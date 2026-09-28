@@ -1683,10 +1683,7 @@ export async function ProjectWorkspace({
     <>
       <div>
         <h3 className="text-sm font-semibold text-zinc-900">PBDB delivery timing</h3>
-        <p className="mt-1 mb-3 text-xs leading-relaxed text-zinc-500">
-          Sets how long to wait after QA is complete before the PBDB dispatches to stakeholders
-          for review — independent of the PBDR delivery timing below.
-        </p>
+        <p className="mt-1 mb-3 text-xs text-zinc-500">When the PBDB goes out for review, after QA.</p>
         <ProjectDeliveryDelayPresetSelect
           projectId={id}
           initialValue={project.pbdb_delivery_delay_preset}
@@ -1697,10 +1694,7 @@ export async function ProjectWorkspace({
       </div>
       <div className="border-t border-zinc-100 pt-3">
         <h3 className="text-sm font-semibold text-zinc-900">Delivery timing</h3>
-        <p className="mt-1 mb-3 text-xs leading-relaxed text-zinc-500">
-          Sets how long to wait after every stakeholder approves before the final report (PBDR)
-          goes out to the client.
-        </p>
+        <p className="mt-1 mb-3 text-xs text-zinc-500">When the PBDR goes to the client, after every approval.</p>
         <ProjectDeliveryDelayPresetSelect
           projectId={id}
           initialValue={project.delivery_delay_preset}
@@ -1710,19 +1704,16 @@ export async function ProjectWorkspace({
         />
         {project.expected_delivery_date && (
           <p className="mt-1 text-xs text-zinc-500">
-            Project due date (contractual): {fmtDMY(new Date(project.expected_delivery_date))} — the
-            send date above is separate.
+            Contractual due date: {fmtDMY(new Date(project.expected_delivery_date))} (separate from the send date above).
           </p>
         )}
         {deliveryLocked ? (
-          <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-xs leading-relaxed text-zinc-500">
-            All stakeholders already approved, so this delivery is using whatever was set
-            beforehand — changing it now won&apos;t affect this PBDR.
+          <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-xs text-zinc-500">
+            All stakeholders approved — this no longer affects the PBDR.
           </p>
         ) : (
-          <p className="mt-2.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs leading-relaxed text-amber-700">
-            Set this before the last stakeholder approves — it locks in at that point and can&apos;t
-            be changed retroactively.
+          <p className="mt-2.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-700">
+            Locks in once the last stakeholder approves — set it before then.
           </p>
         )}
       </div>
@@ -1734,9 +1725,7 @@ export async function ProjectWorkspace({
       {latestPbdb && (
         <div className="border-t border-zinc-100 pt-3">
           <p className="text-xs font-medium text-zinc-600">Client document colour</p>
-          <p className="mt-1 mb-2 text-xs text-zinc-500">
-            Black text, or the original red token colour, when the client downloads the PBDB.
-          </p>
+          <p className="mt-1 mb-2 text-xs text-zinc-500">Text colour on the client&apos;s downloaded PBDB.</p>
           <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
         </div>
       )}
@@ -1786,35 +1775,29 @@ export async function ProjectWorkspace({
         </div>
       )}
       {sharedSettings}
-      {isAdmin &&
-        (project.status === "paused" ? (
+      {/* Delete lives only in the permanent rail card now (leftRailExtras,
+          below) — issue #177's fix for delete being too hard to find applies
+          here too, so it shouldn't also live in a second place the admin has
+          to already know to open. Pause is reversible, not "dangerous", so
+          it no longer needs the red danger-zone framing either. */}
+      {isAdmin && project.status === "paused" ? (
+        <div className="border-t border-zinc-100 pt-4">
+          <h3 className="mb-1 text-sm font-semibold text-zinc-900">Project controls</h3>
+          <p className="text-xs text-zinc-500">Paused — resume from the panel on the left.</p>
+        </div>
+      ) : (
+        isAdmin && !TERMINAL_STATUSES.has(project.status) && (
           <div className="border-t border-zinc-100 pt-4">
-            <h3 className="mb-1 text-sm font-semibold text-zinc-900">Project controls</h3>
-            <p className="text-xs text-zinc-500">Paused — resume from the panel on the left.</p>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-red-100 bg-red-50/40 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700">Danger zone</p>
-            <div className="space-y-2">
-              {!TERMINAL_STATUSES.has(project.status) && (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-zinc-900">Pause project</p>
-                    <p className="text-xs text-zinc-500">Delivery date shifts by the days paused, on resume.</p>
-                  </div>
-                  <PauseForm projectId={id} />
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-zinc-900">Delete project</p>
-                  <p className="text-xs text-zinc-500">Recovery bin for 30 days, then purged.</p>
-                </div>
-                <AdminDeleteButton projectId={id} />
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-zinc-900">Pause project</p>
+                <p className="text-xs text-zinc-500">Delivery date shifts by the days paused, on resume.</p>
               </div>
+              <PauseForm projectId={id} />
             </div>
           </div>
-        ))}
+        )
+      )}
     </>
   );
 
