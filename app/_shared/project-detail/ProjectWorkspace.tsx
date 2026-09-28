@@ -836,7 +836,7 @@ export async function ProjectWorkspace({
           <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 002.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0112.888 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
           </svg>
-          <span className="font-medium text-zinc-900">Rev {currentRevNumber}</span>
+          <span className="font-medium tabular-nums text-zinc-900">Rev {currentRevNumber}</span>
         </span>
         {isAdmin && (
           <HeaderStatInline
@@ -877,14 +877,14 @@ export async function ProjectWorkspace({
         <div className="flex justify-end gap-2">
           <a
             href={`/api/download/audit-export/project/${id}?format=csv`}
-            className="rounded border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+            className="rounded-md border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
           >
             Export CSV
           </a>
           <a
             href={`/api/download/audit-export/project/${id}?format=pdf`}
             title="A locked-down PDF rendering, for when the export must not be trivially editable"
-            className="rounded border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+            className="rounded-md border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
           >
             Export PDF
           </a>
@@ -1246,7 +1246,7 @@ export async function ProjectWorkspace({
               buttonClassName="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
             >
               <p className="text-sm font-medium text-zinc-900">PBDR</p>
-              <p className="mt-0.5 text-xs text-zinc-500">
+              <p className="mt-0.5 text-xs tabular-nums text-zinc-500">
                 Rev {pbdrGrouping.active.revNumber} · {new Date(pbdrGrouping.active.createdAt).toLocaleDateString("en-AU")}
               </p>
             </DownloadCard>
@@ -1553,7 +1553,7 @@ export async function ProjectWorkspace({
           return (
             <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
               <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
-                <span className="text-xs font-semibold text-zinc-700">Rev {cycle - 1}</span>
+                <span className="text-xs font-semibold tabular-nums text-zinc-700">Rev {cycle - 1}</span>
                 {pbdbForCycle ? (
                   <span className="text-xs text-zinc-500">
                     · PBDB sent {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
@@ -1966,7 +1966,7 @@ function Row({
   return (
     <div className={`flex items-baseline gap-4 px-5 py-3 ${hint ? "cursor-help" : ""}`} title={hint}>
       <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
-      <span className={`min-w-0 flex-1 text-sm text-zinc-900 ${wrap ? "" : "truncate"}`}>{value}</span>
+      <span className={`min-w-0 flex-1 text-sm text-zinc-900 tabular-nums ${wrap ? "" : "truncate"}`}>{value}</span>
     </div>
   );
 }
