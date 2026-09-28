@@ -7,6 +7,18 @@ interface NavItem {
   href: string;
   label: string;
   group?: string;
+  /** Optional pending count, rendered as a chip when > 0. */
+  count?: number;
+}
+
+// Small tabular count chip for pending work (e.g. the email queue).
+function CountChip({ count }: { count?: number }) {
+  if (!count) return null;
+  return (
+    <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-zinc-200 px-1.5 text-xs font-medium tabular-nums leading-5 text-zinc-700">
+      {count}
+    </span>
+  );
 }
 
 // Picks the most specific (longest) href that matches the current pathname,
@@ -53,7 +65,7 @@ export function SidebarNavLinks({
       {sections.map(({ group, items: groupItems }) => (
         <div key={group ?? "_ungrouped"} className="mb-3 last:mb-0">
           {group && (
-            <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-zinc-600">
               {group}
             </p>
           )}
@@ -64,13 +76,15 @@ export function SidebarNavLinks({
                 key={item.href}
                 href={item.href}
                 onClick={onItemClick}
-                className={
+                aria-current={active ? "page" : undefined}
+                className={`flex items-center rounded-md px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 [@media(pointer:coarse)]:min-h-11 ${
                   active
-                    ? "block rounded px-3 py-2 text-sm font-medium bg-zinc-100 text-zinc-900"
-                    : "block rounded px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                }
+                    ? "bg-zinc-200 font-semibold text-zinc-900"
+                    : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                }`}
               >
                 {item.label}
+                <CountChip count={item.count} />
               </Link>
             );
           })}
@@ -97,11 +111,12 @@ export function TopNavLinks({ items }: { items: NavItem[] }) {
             aria-current={active ? "page" : undefined}
             className={
               active
-                ? "shrink-0 border-b-2 border-zinc-900 py-2 text-sm font-medium text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
-                : "shrink-0 border-b-2 border-transparent py-2 text-sm text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                ? "shrink-0 border-b-2 border-zinc-900 py-2 [@media(pointer:coarse)]:py-3 text-sm font-medium text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                : "shrink-0 border-b-2 border-transparent py-2 [@media(pointer:coarse)]:py-3 text-sm text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             }
           >
             {item.label}
+            <CountChip count={item.count} />
           </Link>
         );
       })}

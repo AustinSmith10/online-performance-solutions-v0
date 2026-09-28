@@ -13,7 +13,7 @@ import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { ReplayTourButton } from "@/components/onboarding-tour/ReplayTourButton";
 import { Logo } from "@/components/Logo";
 
-const ALL_NAV_ITEMS: { href: string; label: string; group?: string; key?: AdminNavKey }[] = [
+const ALL_NAV_ITEMS: { href: string; label: string; group?: string; key?: AdminNavKey; count?: number }[] = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/clients", label: "Clients", group: "Work", key: "clients" },
   { href: "/admin/projects", label: "Projects", group: "Work", key: "projects" },
@@ -44,7 +44,7 @@ export default async function AdminShellLayout({
 
   const pendingQueueCount = await getPendingEmailQueueCount(supabase);
   NAV_ITEMS = NAV_ITEMS.map((item) =>
-    item.href === "/admin/email-queue" ? { ...item, label: `${item.label} (${pendingQueueCount})` } : item
+    item.href === "/admin/email-queue" ? { ...item, count: pendingQueueCount } : item
   );
 
   const emailsEnabled = await getEmailsEnabled(supabase);
@@ -80,7 +80,7 @@ export default async function AdminShellLayout({
           <SidebarNavLinks items={NAV_ITEMS} />
         </nav>
         <div className="border-t border-zinc-200 p-3">
-          <p className="mb-2 truncate px-2 text-xs text-zinc-500">
+          <p className="mb-2 truncate px-2 text-xs text-zinc-600">
             {[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email}
           </p>
           <Link

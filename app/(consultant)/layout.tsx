@@ -35,7 +35,7 @@ export default async function ConsultantLayout({
 
   const NAV_ITEMS = [
     { href: "/ops", label: "Workspace" },
-    { href: "/ops/email-queue", label: `Email Queue (${pendingQueueCount})` },
+    { href: "/ops/email-queue", label: "Email Queue", count: pendingQueueCount },
   ];
 
   return (
@@ -52,28 +52,28 @@ export default async function ConsultantLayout({
             <div className="flex shrink-0 items-center gap-2">
               <ReplayTourButton
                 href="/ops"
-                className="flex h-6 w-6 items-center justify-center rounded-full border border-zinc-300 text-xs font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-300 text-xs font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
               >
                 ?
               </ReplayTourButton>
               <NotificationTrayServer projectBasePath="/ops/projects" align="right" />
               <Link
                 href="/ops/profile"
-                className="hidden max-w-[160px] truncate text-xs text-zinc-500 hover:text-zinc-700 sm:block"
+                className="hidden max-w-[160px] truncate rounded py-2 text-xs text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 sm:block"
               >
                 {userName}
               </Link>
               <form action={logout}>
                 <button
                   type="submit"
-                  className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                  className="rounded px-2 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
                 >
                   Sign out
                 </button>
               </form>
             </div>
           </div>
-          <nav className="flex gap-4 border-t border-zinc-100 py-1 tabular-nums sm:hidden">
+          <nav className="flex gap-4 border-t border-zinc-100 tabular-nums sm:hidden">
             <TopNavLinks items={NAV_ITEMS} />
           </nav>
         </div>
