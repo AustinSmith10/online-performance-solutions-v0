@@ -1800,7 +1800,7 @@ export async function ProjectWorkspace({
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-zinc-900">Pause project</p>
-                    <p className="truncate text-xs text-zinc-500">Delivery date shifts by the days paused, on resume.</p>
+                    <p className="text-xs text-zinc-500">Delivery date shifts by the days paused, on resume.</p>
                   </div>
                   <PauseForm projectId={id} />
                 </div>
@@ -1808,7 +1808,7 @@ export async function ProjectWorkspace({
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-zinc-900">Delete project</p>
-                  <p className="truncate text-xs text-zinc-500">Recovery bin for 30 days, then purged.</p>
+                  <p className="text-xs text-zinc-500">Recovery bin for 30 days, then purged.</p>
                 </div>
                 <AdminDeleteButton projectId={id} />
               </div>
@@ -1933,11 +1933,17 @@ export async function ProjectWorkspace({
           <span className="font-semibold">
             Overdue by {daysOverdue} day{daysOverdue !== 1 ? "s" : ""}.
           </span>{" "}
-          {project.status === "submitted"
+          {/* Branches on effectiveStatus (resolveStaffStatus), not raw
+              project.status — the stored status flips to revision_required
+              on the first rejection even while other reviewers are still
+              pending, which used to make this banner announce "action
+              needed" a round early, while the header pill still read
+              Awaiting Approval. */}
+          {effectiveStatus === "submitted"
             ? "No consultant has been assigned — assign one from the panel on the left."
-            : project.status === "dispatched" && pendingReviews.length > 0
+            : effectiveStatus === "dispatched" && pendingReviews.length > 0
             ? `${pendingReviews.length} stakeholder${pendingReviews.length !== 1 ? "s" : ""} yet to respond — see the panel on the left.`
-            : project.status === "revision_required"
+            : effectiveStatus === "revision_required"
             ? "A revision has been requested — the consultant must upload a corrected document."
             : `Expected delivery date has passed.`}
         </div>

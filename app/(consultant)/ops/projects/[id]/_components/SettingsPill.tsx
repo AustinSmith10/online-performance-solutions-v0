@@ -31,9 +31,9 @@ export function SettingsPill({ children, title = "Delivery Config" }: { children
       {open && (
         <div
           ref={popoverRef}
-          className="popover-br fixed bottom-20 right-5 z-50 w-80 max-w-[calc(100vw-2.5rem)] rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_8px_30px_rgb(0_0_0/0.10)]"
+          className="popover-br fixed bottom-20 right-5 z-50 flex max-h-[calc(100vh-7rem)] w-80 max-w-[calc(100vw-2.5rem)] flex-col rounded-xl border border-zinc-200 bg-white shadow-[0_8px_30px_rgb(0_0_0/0.10)]"
         >
-          <div className="mb-3 flex items-center justify-between">
+          <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 p-4 pb-3">
             <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
             <button
               type="button"
@@ -46,7 +46,11 @@ export function SettingsPill({ children, title = "Delivery Config" }: { children
               </svg>
             </button>
           </div>
-          <div className="space-y-4">{children}</div>
+          {/* Content can outgrow the viewport (payment gate + delivery
+              timing + danger zone) — scroll it inside a fixed-height panel
+              rather than letting it run off the top of the screen with no
+              way to reach it. */}
+          <div className="space-y-4 overflow-y-auto p-4 pt-3">{children}</div>
         </div>
       )}
 
