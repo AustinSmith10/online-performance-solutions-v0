@@ -816,7 +816,7 @@ function EmailFailureDrawerContent({
         <p className="mt-1 break-words text-sm text-zinc-700">{failure.subject}</p>
         <p className="mt-1 text-xs text-zinc-500">Source: {failure.source}</p>
         {failure.error && (
-          <p className="mt-2 break-words rounded bg-red-100 px-2 py-1.5 font-mono text-xs text-red-700">
+          <p className="mt-2 break-words rounded-md bg-red-100 px-2 py-1.5 font-mono text-xs text-red-700">
             {failure.error}
           </p>
         )}

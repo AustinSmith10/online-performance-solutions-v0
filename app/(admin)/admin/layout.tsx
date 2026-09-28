@@ -85,18 +85,18 @@ export default async function AdminShellLayout({
           </p>
           <Link
             href="/admin/profile"
-            className="mb-0.5 block rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+            className="mb-0.5 block rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700"
           >
             My profile
           </Link>
           <ReplayTourButton
             href="/admin/dashboard"
-            className="mb-0.5 block w-full rounded px-2 py-1 text-left text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+            className="mb-0.5 block w-full rounded-md px-2 py-1 text-left text-xs text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700"
           />
           <form action={logout}>
             <button
               type="submit"
-              className="w-full rounded px-2 py-1 text-left text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+              className="w-full rounded-md px-2 py-1 text-left text-xs text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700"
             >
               Sign out
             </button>
