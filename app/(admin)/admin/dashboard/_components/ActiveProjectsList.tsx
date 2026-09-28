@@ -149,16 +149,16 @@ function ProjectRow({ p }: { p: ActiveProjectItem }) {
   return (
     <Link
       href={p.href}
-      className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 ${accentClass(p)} hover:bg-zinc-50`}
+      className={`flex flex-col gap-2 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3 ${accentClass(p)} hover:bg-zinc-50`}
     >
       <div className="min-w-0 flex-1">
-        <span className="truncate text-sm font-medium text-zinc-900">{p.label}</span>
+        <span className="block truncate text-sm font-medium text-zinc-900">{p.label}</span>
         <p className="mt-0.5 truncate text-xs text-zinc-500">
           {p.client ?? "—"} · {p.consultant ?? "Unassigned"}
           {p.dueLabel ? ` · Due ${p.dueLabel}` : ""}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:flex-nowrap">
         {p.overdue && <OverduePill />}
         {p.overridePending && (
           <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700">Override</span>

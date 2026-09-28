@@ -242,22 +242,22 @@ function SetNumberAndAssignDrawerContent({
           </p>
           <form action={action} onSubmit={field.markSubmitted} className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700">
+              <label className="block text-xs font-medium text-zinc-700">
                 Project number
+                <input
+                  name="project_number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  placeholder="e.g. 250001"
+                  required
+                  disabled={pending}
+                  {...field.inputProps}
+                  className={`mt-1 ${projectNumberInputClass(field.showError)}`}
+                />
               </label>
-              <input
-                name="project_number"
-                type="text"
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                placeholder="e.g. 250001"
-                required
-                disabled={pending}
-                {...field.inputProps}
-                className={projectNumberInputClass(field.showError)}
-              />
-              <p className="mt-1 text-xs text-zinc-400">
+              <p className="mt-1 text-xs text-zinc-500">
                 Exactly six digits. The suffix <span className="font-mono">-{resolveNumberSuffix(project.templates?.number_suffix)}</span> is appended automatically.
               </p>
             </div>
