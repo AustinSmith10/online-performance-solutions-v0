@@ -50,11 +50,11 @@ export function PbdrPreviewButton({ projectId }: { projectId: string }) {
           // the 100dvh panel is offset past the viewport (same trap as #177 for
           // DocumentPreviewModal).
         <div
-          className="fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
+          className="modal-backdrop fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
           onClick={() => setOpen(false)}
         >
           <div
-            className="flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+            className="modal-panel flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
@@ -82,7 +82,7 @@ export function PbdrPreviewButton({ projectId }: { projectId: string }) {
                   {!stalled && pct !== null && (
                     <div className="mx-auto mt-3 w-48">
                       <ProgressTrack pct={pct} tone="zinc" />
-                      <p className="mt-1 text-xs text-zinc-400">{pct}%</p>
+                      <p className="mt-1 text-xs tabular-nums text-zinc-400">{pct}%</p>
                     </div>
                   )}
                 </div>
