@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "OPS | Online Performance Solution",
   description: "DDEG Online Performance Solution platform",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  // The app is white top-to-bottom (see DESIGN.md) with no working dark
+  // theme — every panel is an explicit bg-white regardless of OS
+  // preference — so one value matching that, not a prefers-color-scheme
+  // pair, is what actually matches what renders.
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({
