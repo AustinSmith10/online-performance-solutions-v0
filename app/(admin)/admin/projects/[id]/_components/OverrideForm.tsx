@@ -23,8 +23,8 @@ function ReconcileButton({ projectId }: { projectId: string }) {
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl text-center">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+          <div className="modal-panel mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl text-center">
             <p className="text-base font-semibold text-zinc-900">Mark override as reconciled?</p>
             <p className="mt-2 text-sm text-zinc-500">
               This confirms payment has been collected and clears the override flag.
@@ -94,8 +94,8 @@ export function OverrideForm({ projectId, alreadyOverridden, paymentResolved }: 
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+          <div className="modal-panel mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
             <p className="text-base font-semibold text-zinc-900">Apply payment override?</p>
             <p className="mt-1 text-sm text-zinc-500">
               This bypasses the credit gate and flags the project as Override — Payment Pending.

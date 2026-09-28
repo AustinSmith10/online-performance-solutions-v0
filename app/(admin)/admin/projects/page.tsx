@@ -191,7 +191,7 @@ function ProjectsLayout({
         </div>
         <Link
           href="/admin/projects/submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          className="press rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
         >
           Submit request
         </Link>
@@ -225,7 +225,7 @@ function ProjectsLayout({
           />
           <button
             type="submit"
-            className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+            className="press rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Search
           </button>
@@ -291,7 +291,7 @@ function ProjectsLayout({
               <Link
                 key={p.id}
                 href={`/admin/projects/${p.id}`}
-                className={`flex flex-col gap-2 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-inset ${accentClass({ status: p.status, payment_override: p.payment_override, overdue })} hover:bg-zinc-50`}
+                className={`flex flex-col gap-2 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 transition-colors duration-150 sm:flex-row sm:items-center sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-inset ${accentClass({ status: p.status, payment_override: p.payment_override, overdue })} hover:bg-zinc-50`}
               >
                 <div className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-zinc-900">{label}</span>

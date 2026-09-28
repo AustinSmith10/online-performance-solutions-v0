@@ -74,14 +74,14 @@ export function WaiveForm({ reviewId, projectId, stakeholderName, requireEvidenc
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
           <div
             ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-label={`Waive response for ${stakeholderName}`}
             tabIndex={-1}
-            className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl outline-none"
+            className="modal-panel mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl outline-none"
           >
             <p className="text-base font-semibold text-zinc-900">
               Waive response for {stakeholderName}?

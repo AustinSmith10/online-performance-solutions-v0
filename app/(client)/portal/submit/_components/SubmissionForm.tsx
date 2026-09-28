@@ -371,7 +371,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                 <button
                   type="submit"
                   disabled={submitPending || !reviewedConfirmed}
-                  className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+                  className="press flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                 >
                   {submitPending && <Spinner className="h-4 w-4" />}
                   {submitPending ? "Submitting…" : "Submit report request"}
@@ -941,7 +941,7 @@ function RequestForm({
         type="button"
         onClick={onContinue}
         disabled={!selectedTemplateId || !ready || continuePending}
-        className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="press flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {continuePending && <Spinner className="h-4 w-4" />}
         {continuePending ? "Preparing your request…" : "Continue"}

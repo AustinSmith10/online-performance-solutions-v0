@@ -90,7 +90,7 @@ export function ProjectDeliveryDelayPresetSelect({
           type="button"
           onClick={handleSave}
           disabled={pending || !dirty}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="press rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {pending ? "Saving…" : "Save"}
         </button>
