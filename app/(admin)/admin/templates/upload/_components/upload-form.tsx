@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { uploadTemplate, type UploadTemplateState } from "@/app/actions/templates";
+import { DISCIPLINES, DEFAULT_NUMBER_SUFFIX } from "@/lib/projects/project-number";
 
 interface Props {
   orgs: { id: string; name: string }[];
@@ -48,6 +49,25 @@ export function UploadTemplateForm({ orgs, defaultOrgId }: Props) {
           placeholder="e.g. Stockland PBDB v3"
           className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
         />
+      </div>
+
+      <div>
+        <label htmlFor="number_suffix" className="mb-1.5 block text-sm font-medium text-zinc-700">
+          Discipline
+        </label>
+        <select
+          id="number_suffix"
+          name="number_suffix"
+          defaultValue={DEFAULT_NUMBER_SUFFIX}
+          required
+          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+        >
+          {DISCIPLINES.map((d) => (
+            <option key={d.suffix} value={d.suffix}>
+              {d.name} ({d.suffix})
+            </option>
+          ))}
+        </select>
       </div>
 
       <div>

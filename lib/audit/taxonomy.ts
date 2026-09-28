@@ -122,6 +122,7 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "template.restored",
       "template.reuploaded",
       "template.reactivated",
+      "template.number_suffix_changed",
       "template.mapping_updated",
       "template.token_added",
       "template.token_deleted",
@@ -233,6 +234,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "template.restored": "Template restored",
   "template.reuploaded": "Template file replaced",
   "template.reactivated": "Template reactivated",
+  "template.number_suffix_changed": "Template project-number suffix changed",
   "template.mapping_updated": "Template mappings updated",
   "template.token_added": "Extraction token added",
   "template.token_deleted": "Extraction token removed",
@@ -559,6 +561,11 @@ export function formatDetails(
     case "template.reuploaded":
     case "template.reactivated":
       if (s(metadata.name)) parts.push(s(metadata.name));
+      break;
+
+    case "template.number_suffix_changed":
+      if (s(metadata.name)) parts.push(s(metadata.name));
+      if (s(metadata.from) && s(metadata.to)) parts.push(`-${s(metadata.from)} → -${s(metadata.to)}`);
       break;
 
     case "template.mapping_updated": {

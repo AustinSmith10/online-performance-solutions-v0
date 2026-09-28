@@ -5,6 +5,7 @@ import { setRevisionHistoryRows, setCoverRevisionNumber } from "@/lib/documents/
 import { stripRedTokenColor } from "@/lib/documents/color-strip";
 import { convertDocxToPdf } from "@/lib/documents/pdf";
 import { buildPbdrFilename } from "@/lib/documents/naming";
+import { getProjectNumberSuffix } from "@/lib/projects/project-number";
 import {
   peekNextRevNumber,
   recordRevisionEvent,
@@ -235,7 +236,8 @@ export async function deliverPbdr(
       revisionIndex,
       address,
       conversionStart,
-      timeZone
+      timeZone,
+      await getProjectNumberSuffix(supabase, projectId)
     );
 
     pdfStoragePath = `${project.client_id as string}/${projectId}/pbdr/${pbdrFilename}`;

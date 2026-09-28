@@ -73,6 +73,7 @@ import { AdminDeleteButton } from "@/app/(admin)/admin/projects/[id]/_components
 import { AdminProjectNumberForm } from "@/app/(admin)/admin/projects/[id]/_components/AdminProjectNumberForm";
 import { ConsultantCard } from "@/app/(admin)/admin/projects/[id]/_components/ConsultantCard";
 import { OverduePill } from "@/components/OverduePill";
+import { formatProjectNumber, resolveNumberSuffix } from "@/lib/projects/project-number";
 import { daysOverdue as daysOverdueBetween } from "@/app/(consultant)/ops/_components/dashboardList";
 
 export type ProjectWorkspaceRole = "consultant" | "admin";
@@ -197,7 +198,7 @@ export async function ProjectWorkspace({
   const projectQuery = supabase
     .from("projects")
     .select(
-      `id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, pbdb_delivery_delay_preset, delivery_recipient_email, qa_completed_by, accepted_at, pbdb_downloaded_at, credit_deducted, payment_override, payment_override_reason, payment_override_at, deleted_at, clients(id, name, state_territory, client_config, revision_notes_required), assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability), submitter:users!projects_submitted_by_fkey(id, first_name, last_name, email, phone, company_role)`
+      `id, extracted_fields, status, po_number, project_number, template_id, review_cycle, created_at, expected_delivery_date, source, strip_token_color, delivery_delay_preset, pbdb_delivery_delay_preset, delivery_recipient_email, qa_completed_by, accepted_at, pbdb_downloaded_at, credit_deducted, payment_override, payment_override_reason, payment_override_at, deleted_at, templates(number_suffix), clients(id, name, state_territory, client_config, revision_notes_required), assigned:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, availability), submitter:users!projects_submitted_by_fkey(id, first_name, last_name, email, phone, company_role)`
     )
     .eq("id", id);
   // The two settings lookups don't depend on the project, so they run with the
@@ -220,6 +221,7 @@ export async function ProjectWorkspace({
     po_number: string | null;
     project_number: string | null;
     template_id: string | null;
+    templates: { number_suffix: string | null } | null;
     review_cycle: number;
     created_at: string;
     expected_delivery_date: string | null;
@@ -261,6 +263,7 @@ export async function ProjectWorkspace({
   };
 
   const project = data as unknown as ProjectDetail;
+  const numberSuffix = resolveNumberSuffix(project.templates?.number_suffix);
   const todayIso = new Date().toISOString().slice(0, 10);
 
   // Admin-pushed assignment awaiting the consultant's response — accept/decline
@@ -672,7 +675,7 @@ export async function ProjectWorkspace({
   const sysValues: { label: string; value: string; hint?: string }[] = [
     {
       label: "Project number",
-      value: project.project_number ? `${project.project_number}-S` : "Not yet set",
+      value: project.project_number ? formatProjectNumber(project.project_number, numberSuffix) : "Not yet set",
       hint: "The DDEG project number. It isn't unique across projects — check the site address to confirm this is the right job.",
     },
     {
@@ -851,7 +854,7 @@ export async function ProjectWorkspace({
           title="The PBDR's contractual due date — separate from the PBDB/PBDR send date, which the delivery-timing control sets."
         />
         <HeaderStatInline
-          value={project.project_number ? `#${project.project_number}-S` : "Project number not yet set"}
+          value={project.project_number ? `#${formatProjectNumber(project.project_number, numberSuffix)}` : "Project number not yet set"}
           valueClassName={project.project_number ? "font-mono" : undefined}
           title={
             project.project_number
@@ -1019,11 +1022,11 @@ export async function ProjectWorkspace({
   } else if (step2Locked) {
     focusCard = isAdmin ? (
       <FocusCard tone="neutral" title="Set the project number" subtitle="Unlocks consultant assignment and PBDB generation.">
-        <AdminProjectNumberForm projectId={id} currentNumber={null} />
+        <AdminProjectNumberForm projectId={id} currentNumber={null} suffix={numberSuffix} />
       </FocusCard>
     ) : (
       <FocusCard tone="neutral" title="Set the project number" subtitle="Unlocks PBDB generation.">
-        <ProjectNumberForm projectId={id} projectNumber={project.project_number} bare />
+        <ProjectNumberForm projectId={id} projectNumber={project.project_number} suffix={numberSuffix} bare />
       </FocusCard>
     );
   } else if (isAdmin && !project.assigned) {
@@ -1307,9 +1310,9 @@ export async function ProjectWorkspace({
     <>
       {isAdmin
         ? project.project_number && (
-            <AdminProjectNumberForm projectId={id} currentNumber={project.project_number} />
+            <AdminProjectNumberForm projectId={id} currentNumber={project.project_number} suffix={numberSuffix} />
           )
-        : !step2Locked && <ProjectNumberCard projectId={id} projectNumber={project.project_number} />}
+        : !step2Locked && <ProjectNumberCard projectId={id} projectNumber={project.project_number} suffix={numberSuffix} />}
       {isAdmin && project.assigned && (
         <ConsultantCard
           projectId={id}

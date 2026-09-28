@@ -11,10 +11,13 @@ import { StepIndicator } from "./StepIndicator";
 export function ProjectNumberForm({
   projectId,
   projectNumber,
+  suffix,
   bare = false,
 }: {
   projectId: string;
   projectNumber: string | null;
+  /** Discipline letter from the project's template. */
+  suffix: string;
   /** Skip the outer border + numbered step header — for use inside a container that already frames it (e.g. FocusCard). */
   bare?: boolean;
 }) {
@@ -43,7 +46,7 @@ export function ProjectNumberForm({
       {completed && !editing ? (
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-green-700">
-              Project number set: {projectNumber}-S
+              Project number set: {projectNumber}-{suffix}
             </p>
             <EditIconButton
               onClick={() => setEditing(true)}
@@ -74,7 +77,7 @@ export function ProjectNumberForm({
                 className={projectNumberInputClass(field.showError, "max-w-xs")}
               />
               <p className="mt-1 text-xs text-zinc-500">
-                Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically in generated documents.
+                Exactly six digits. The suffix <span className="font-mono">-{suffix}</span> is appended automatically in generated documents.
               </p>
             </div>
             <div className="flex items-center gap-3">

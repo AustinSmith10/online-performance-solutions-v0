@@ -10,6 +10,7 @@ import {
   type RevisionHistoryRow,
 } from "@/lib/documents/revision-history";
 import { buildPbdbFilename } from "@/lib/documents/naming";
+import { formatProjectNumber } from "@/lib/projects/project-number";
 import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
 import { getBusinessTimezone } from "@/lib/settings/timezone";
 import { formatDateAU } from "@/lib/time";
@@ -41,7 +42,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     await Promise.all([
       supabase
         .from("templates")
-        .select("id, storage_path, name")
+        .select("id, storage_path, name, number_suffix")
         .eq("id", project.template_id as string)
         .eq("status", "active")
         .single(),
@@ -174,8 +175,8 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
   const context: Record<string, unknown> = {
     ...orgValues,
     ...extractedFields,
-    // PROJECT_NO includes the -S suffix per naming convention
-    PROJECT_NO: `${project.project_number as string}-S`,
+    // PROJECT_NO includes the template's discipline suffix (default S)
+    PROJECT_NO: formatProjectNumber(project.project_number as string, template.number_suffix as string | null),
     // All dates in the document use DD/MM/YYYY, in the business timezone.
     SYS_GEN_DATE: formatDateAU(genDate, timeZone),
     SYS_SUB_DATE: formatDateAU(subDate, timeZone),
@@ -214,7 +215,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
 
   await writeProgress(supabase, projectId, PROGRESS_MILESTONES[2]); // 70
 
-  // Filename: {projectNumber}-S PBDB Rev{n} {address} {date} For QA.docx
+  // Filename: {projectNumber}-{suffix} PBDB Rev{n} {address} {date} For QA.docx
   const rawAddress = (extractedFields["EXTRACT_ADDRESS"] ?? "").trim();
   const address = formatAddress(rawAddress);
   const filename = buildPbdbFilename(
@@ -223,7 +224,7 @@ export async function generatePbdb(projectId: string, actorId: string): Promise<
     address,
     genDate,
     timeZone,
-    { forQa: true }
+    { forQa: true, suffix: template.number_suffix as string | null }
   );
 
   // Regenerating on the same day with an unchanged revision produces an identical

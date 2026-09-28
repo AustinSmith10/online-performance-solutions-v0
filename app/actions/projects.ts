@@ -23,6 +23,7 @@ import { expediteDelivery, expeditePbdbDispatch, scheduleOrDeliverPbdb } from "@
 import { getCurrentRevNumber, peekNextRevNumber, getLatestRevisionHistoryRow } from "@/lib/documents/revision-history";
 import { forceCloseRound, forcedCloseWouldBump } from "@/lib/stakeholders/review-round";
 import { buildPbdbFilename } from "@/lib/documents/naming";
+import { getProjectNumberSuffix } from "@/lib/projects/project-number";
 import { appendRevisionHistoryRow, setCoverRevisionNumber } from "@/lib/documents/revision-table";
 import { scanDocxStructure } from "@/lib/documents/docx-structure-scan";
 import { getOrCreateDispatchPdf, type DispatchPdfProject } from "@/lib/documents/pbdb-pdf";
@@ -1243,6 +1244,7 @@ export async function uploadQaPbdb(
 
   const storedFilename = buildPbdbFilename(projectNum, expectedRev, address, uploadDate, timeZone, {
     forQa: true,
+    suffix: await getProjectNumberSuffix(supabase, projectId),
   });
 
   // Soft mismatch check (#109) — never blocks the upload, just flags the

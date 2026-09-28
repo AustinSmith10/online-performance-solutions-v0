@@ -12,6 +12,9 @@ import { ExtractionOnlyPanel } from "./_components/ExtractionOnlyPanel";
 import { FileRequirementsSection } from "./_components/FileRequirementsSection";
 import { SectionLabelsForm } from "./_components/SectionLabelsForm";
 import { TemplateTabs } from "./_components/TemplateTabs";
+import { DisciplinePill } from "./_components/DisciplinePill";
+import { DisciplineSettingsForm } from "./_components/DisciplineSettingsForm";
+import { resolveNumberSuffix } from "@/lib/projects/project-number";
 import { AddFileRequirementForm } from "./_components/AddFileRequirementForm";
 import { ClientProfileSection, type ClientProfileRow } from "./_components/ClientProfileSection";
 import { TemplateReviewersSection } from "./_components/TemplateReviewersSection";
@@ -45,6 +48,7 @@ type TemplateDetail = {
   created_at: string;
   deleted_at: string | null;
   section_labels: { extract: string; org: string; client: string };
+  number_suffix: string | null;
   org: { id: string; name: string; client_config: Record<string, string> } | null;
 };
 
@@ -63,7 +67,7 @@ export default async function TemplatePage({
   const [{ data: tmpl }, { data: mappings, error: mappingsError }, { data: fileReqs }] = await Promise.all([
     supabase
       .from("templates")
-      .select("id, name, status, storage_path, created_at, deleted_at, section_labels, org:client_id(id, name, client_config)")
+      .select("id, name, status, storage_path, created_at, deleted_at, section_labels, number_suffix, org:client_id(id, name, client_config)")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -176,6 +180,7 @@ export default async function TemplatePage({
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-base font-semibold text-zinc-900">{template.name}</h1>
               <StatusBadge status={template.status} />
+<DisciplinePill suffix={resolveNumberSuffix(template.number_suffix)} />
             </div>
           </div>
 
@@ -390,20 +395,23 @@ export default async function TemplatePage({
           {
             label: "Settings",
             content: (
-              <div className="rounded-xl border border-zinc-200 bg-white">
-                <div className="border-b border-zinc-100 px-5 py-4">
-                  <h2 className="text-sm font-semibold text-zinc-900">Replace file</h2>
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    Upload a new .docx to replace the current file and re-extract tokens.
-                  </p>
-                </div>
-                <div className="px-5 py-4 space-y-4">
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-                    <span className="font-semibold">Reverts the template to draft.</span>{" "}
-                    Existing tokens keep their labels and settings — only new or removed ones need attention
-                    before reactivating.
+              <div className="space-y-5">
+                <DisciplineSettingsForm templateId={id} suffix={resolveNumberSuffix(template.number_suffix)} />
+                <div className="rounded-xl border border-zinc-200 bg-white">
+                  <div className="border-b border-zinc-100 px-5 py-4">
+                    <h2 className="text-sm font-semibold text-zinc-900">Replace file</h2>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      Upload a new .docx to replace the current file and re-extract tokens.
+                    </p>
                   </div>
-                  <ReuploadForm templateId={id} />
+                  <div className="px-5 py-4 space-y-4">
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                      <span className="font-semibold">Reverts the template to draft.</span>{" "}
+                      Existing tokens keep their labels and settings — only new or removed ones need attention
+                      before reactivating.
+                    </div>
+                    <ReuploadForm templateId={id} />
+                  </div>
                 </div>
               </div>
             ),

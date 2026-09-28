@@ -92,7 +92,7 @@ export default async function AdminDashboardPage({
         id, project_number, po_number, site_address, status, expected_delivery_date,
         payment_override, payment_override_at, payment_override_reason, assigned_consultant_id,
         review_buffer_fired_at, qa_completed_by, created_at, review_cycle,
-        clients(name),
+        clients(name), templates(number_suffix),
         consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email, phone)
       `)
       .is("deleted_at", null)

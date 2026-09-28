@@ -192,3 +192,24 @@ describe("dispatchPdfFilenameFor", () => {
     expect(dispatchPdfFilenameFor("plain.docx")).toBe("plain.pdf");
   });
 });
+
+describe("discipline suffix in filenames", () => {
+  it("PBDB uses the template's suffix and defaults to S", () => {
+    expect(buildPbdbFilename("250012", 1, "1 Test St", DATE_MAR_15, TZ, { suffix: "E" })).toBe(
+      "250012-E PBDB Rev1 1 Test St 2024 03 15.docx"
+    );
+    expect(buildPbdbFilename("250012", 1, "1 Test St", DATE_MAR_15, TZ)).toBe(
+      "250012-S PBDB Rev1 1 Test St 2024 03 15.docx"
+    );
+    expect(buildPbdbFilename("250012", 1, "1 Test St", DATE_MAR_15, TZ, { suffix: "bad" })).toContain("250012-S PBDB");
+  });
+
+  it("PBDR uses the template's suffix and defaults to S", () => {
+    expect(buildPbdrFilename("250012", 0, "1 Test St", DATE_MAR_15, TZ, "E")).toBe(
+      "250012-E_PBDR_R0_1_Test_St_2024_03_15.pdf"
+    );
+    expect(buildPbdrFilename("250012", 0, "1 Test St", DATE_MAR_15, TZ)).toBe(
+      "250012-S_PBDR_R0_1_Test_St_2024_03_15.pdf"
+    );
+  });
+});

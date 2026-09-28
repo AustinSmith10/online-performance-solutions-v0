@@ -20,6 +20,7 @@ import {
 } from "@/app/actions/admin-users";
 import { useProjectNumberField, projectNumberInputClass } from "@/hooks/useProjectNumberField";
 import type { ConsultantAvailability, ProjectStatus } from "@/types";
+import { resolveNumberSuffix } from "@/lib/projects/project-number";
 
 // ── Types (serialisable — passed from server component) ──────────────────────
 
@@ -38,6 +39,8 @@ export interface DashboardProject {
   review_buffer_fired_at: string | null;
   qa_completed_by: string | null;
   clients: { name: string } | null;
+  /** The project's template, for the discipline suffix shown in the number help text. */
+  templates?: { number_suffix: string | null } | null;
   consultant: { first_name: string | null; last_name: string | null; email: string; phone: string | null } | null;
 }
 
@@ -255,7 +258,7 @@ function SetNumberAndAssignDrawerContent({
                 className={projectNumberInputClass(field.showError)}
               />
               <p className="mt-1 text-xs text-zinc-400">
-                Exactly six digits. The suffix <span className="font-mono">-S</span> is appended automatically.
+                Exactly six digits. The suffix <span className="font-mono">-{resolveNumberSuffix(project.templates?.number_suffix)}</span> is appended automatically.
               </p>
             </div>
             {state.error && (
