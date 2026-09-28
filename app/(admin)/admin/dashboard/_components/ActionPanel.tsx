@@ -945,11 +945,11 @@ function HeroCard({
         </div>
         <div className="shrink-0">
           {single ? (
-            <button type="button" onClick={() => onOpen(single.open())} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+            <button type="button" onClick={() => onOpen(single.open())} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50">
               {single.actionLabel}
             </button>
           ) : (
-            <button type="button" onClick={onToggleExpand} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+            <button type="button" onClick={onToggleExpand} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50">
               Review ({category.totalCount ?? category.items.length}) {expanded ? "▲" : "▼"}
             </button>
           )}
@@ -962,7 +962,7 @@ function HeroCard({
                   <p className="truncate text-xs font-medium text-zinc-900">{item.label}</p>
                   <p className="truncate text-xs text-zinc-500">{item.meta}</p>
                 </div>
-                <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-700 underline decoration-dotted underline-offset-2 hover:text-zinc-900">
+                <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-700 underline decoration-dotted underline-offset-2 transition-colors duration-150 hover:text-zinc-900">
                   {item.actionLabel}
                 </button>
               </div>
@@ -990,11 +990,11 @@ function HeroCard({
         </div>
         <div className="shrink-0">
           {single ? (
-            <button type="button" onClick={() => onOpen(single.open())} className={`rounded-md border px-3 py-1.5 text-xs font-medium ${t.button}`}>
+            <button type="button" onClick={() => onOpen(single.open())} className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${t.button}`}>
               {single.actionLabel}
             </button>
           ) : (
-            <button type="button" onClick={onToggleExpand} className={`rounded-md border px-3 py-1.5 text-xs font-medium ${t.button}`}>
+            <button type="button" onClick={onToggleExpand} className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${t.button}`}>
               Review ({category.totalCount ?? category.items.length}) {expanded ? "▲" : "▼"}
             </button>
           )}
@@ -1008,7 +1008,7 @@ function HeroCard({
                 <p className="truncate text-xs font-medium text-zinc-900">{item.label}</p>
                 <p className="truncate text-xs text-zinc-500">{item.meta}</p>
               </div>
-              <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-700 underline decoration-dotted underline-offset-2 hover:text-zinc-900">
+              <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-700 underline decoration-dotted underline-offset-2 transition-colors duration-150 hover:text-zinc-900">
                 {item.actionLabel}
               </button>
             </div>
