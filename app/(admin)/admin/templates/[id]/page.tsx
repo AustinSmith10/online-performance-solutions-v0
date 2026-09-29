@@ -266,18 +266,6 @@ export default async function TemplatePage({
         </div>
       )}
 
-      {canActivate && yellowFlags.length === 0 && rows.length > 0 && (
-        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          All {rows.length} tokens configured — template is ready to activate.
-        </div>
-      )}
-
-      {canActivate && yellowFlags.length > 0 && rows.length > 0 && (
-        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          All {rows.length} tokens configured — template can be activated (review missing org fields above).
-        </div>
-      )}
-
       {/* Tabbed content */}
       <TemplateTabs
         tabs={[
@@ -300,6 +288,11 @@ export default async function TemplatePage({
                     <h2 className="text-sm font-semibold text-zinc-900">
                       Template tokens ({templateRows.length})
                     </h2>
+                    {extractionOnlyRows.length > 0 && (
+                      <p className="mt-0.5 text-xs tabular-nums text-zinc-500">
+                        {rows.length} in total, including {extractionOnlyRows.length} extraction-only
+                      </p>
+                    )}
                   </div>
                   {templateRows.length === 0 ? (
                     <p className="px-5 py-8 text-center text-sm text-zinc-500">

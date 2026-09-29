@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   deleteFileRequirement,
@@ -282,6 +283,12 @@ function RequirementCard({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3 pt-0.5">
+          <Link
+            href={`/admin/templates/${templateId}/file-requirements/${requirement.id}`}
+            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900"
+          >
+            Reference sample
+          </Link>
           <EditIconButton
             onClick={() => setEditing(true)}
             label={`Edit ${requirement.name}`}
