@@ -9,13 +9,13 @@ export default async function NewOrganisationPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-6">
-        <BackLink href="/admin/clients">Organisations</BackLink>
+        <BackLink href="/admin/clients">Clients</BackLink>
         <h1 className="mt-2 text-xl font-semibold text-zinc-900">
-          New organisation
+          New client
         </h1>
       </div>
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-6">
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
         <CreateOrgForm />
       </div>
     </div>

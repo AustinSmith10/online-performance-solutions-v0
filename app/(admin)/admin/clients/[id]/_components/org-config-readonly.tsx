@@ -131,10 +131,10 @@ function EditableRow({
               </span>
             )}
           </dd>
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+          <div className="flex items-center gap-1 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100">
             {linkedEntry ? (
               <form action={boundUnlink}>
-                <button type="submit" className="text-xs text-zinc-400 hover:text-zinc-700">
+                <button type="submit" className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900">
                   Unlink
                 </button>
               </form>
@@ -145,7 +145,7 @@ function EditableRow({
                   setLinkStakeholderId("");
                   setMode("editLink");
                 }}
-                className="text-xs text-zinc-400 hover:text-zinc-700"
+                className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900"
               >
                 Link to roster
               </button>
@@ -156,7 +156,7 @@ function EditableRow({
                 setMode("editText");
               }}
               label={`Edit ${labelFromToken(token)}`}
-              className="text-zinc-300 hover:text-zinc-600"
+              className="text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
             />
           </div>
         </div>
@@ -200,7 +200,7 @@ function EditableRow({
           <option value="company">Company</option>
         </select>
         <div className="flex items-center gap-1.5">
-          <button type="submit" disabled={linkPending} aria-label="Save" className="text-green-600 hover:text-green-700 disabled:opacity-50">
+          <button type="submit" disabled={linkPending} aria-label="Save" className="rounded-md p-1 text-green-600 hover:bg-green-50 hover:text-green-700 disabled:opacity-50">
             <CheckIcon />
           </button>
           <button
@@ -208,7 +208,7 @@ function EditableRow({
             onClick={() => setMode("view")}
             disabled={linkPending}
             aria-label="Cancel"
-            className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
+            className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
           >
             <XIcon />
           </button>
@@ -241,7 +241,7 @@ function EditableRow({
           type="submit"
           disabled={pending}
           aria-label="Save"
-          className="text-green-600 hover:text-green-700 disabled:opacity-50"
+          className="rounded-md p-1 text-green-600 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
         >
           <CheckIcon />
         </button>
@@ -250,7 +250,7 @@ function EditableRow({
           onClick={() => setMode("view")}
           disabled={pending}
           aria-label="Cancel"
-          className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
+          className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
         >
           <XIcon />
         </button>

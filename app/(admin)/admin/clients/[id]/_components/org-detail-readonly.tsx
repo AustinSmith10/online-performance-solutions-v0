@@ -152,7 +152,7 @@ function EditableRow({ org, field }: { org: OrgDetailReadonlyOrg; field: FieldDe
               setEditing(true);
             }}
             label={`Edit ${field.label}`}
-            className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
+            className="text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
           />
         </div>
       </div>
@@ -198,7 +198,7 @@ function EditableRow({ org, field }: { org: OrgDetailReadonlyOrg; field: FieldDe
           type="submit"
           disabled={pending}
           aria-label="Save"
-          className="text-green-600 hover:text-green-700 disabled:opacity-50"
+          className="rounded-md p-1 text-green-600 hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
         >
           <CheckIcon />
         </button>
@@ -210,7 +210,7 @@ function EditableRow({ org, field }: { org: OrgDetailReadonlyOrg; field: FieldDe
           }}
           disabled={pending}
           aria-label="Cancel"
-          className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
+          className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
         >
           <XIcon />
         </button>

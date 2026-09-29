@@ -29,7 +29,7 @@ export function StakeholderList({
     <div className="space-y-6">
       {stakeholders.length === 0 ? (
         <p className="text-sm text-zinc-500">
-          No default stakeholders configured. Add at least one below.
+          No default reviewers configured. Add at least one below.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -101,7 +101,7 @@ function StakeholderRowItem({
           <button
             type="submit"
             disabled={pending}
-            className="text-xs text-red-600 hover:underline disabled:opacity-50"
+            className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 transition-colors duration-150 hover:bg-red-100 disabled:opacity-50"
           >
             Remove
           </button>

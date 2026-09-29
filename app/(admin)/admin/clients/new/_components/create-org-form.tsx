@@ -26,7 +26,7 @@ export function CreateOrgForm() {
           disabled={pending}
           className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
-          {pending ? "Creating…" : "Create organisation"}
+          {pending ? "Creating…" : "Create client"}
         </button>
       </div>
     </form>

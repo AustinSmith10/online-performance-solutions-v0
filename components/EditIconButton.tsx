@@ -4,7 +4,8 @@
 // "Edit" button wherever clicking it reveals editable input field(s).
 // `className` fully replaces (not appends to) the color/visibility styling,
 // so it never fights the default on conflicting utilities (e.g. text color) —
-// pass hover-reveal classes (e.g. "opacity-0 group-hover:opacity-100 ...")
+// pass hover-reveal classes gated on `(hover: hover)` so touch (no hover) always
+// sees the control (e.g. "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 ...")
 // when embedding inside a dense row list that has a `group` ancestor; leave
 // the default (always-visible, neutral) for standalone card/section headers.
 export function EditIconButton({
@@ -22,7 +23,7 @@ export function EditIconButton({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`shrink-0 rounded p-1 transition-opacity focus-visible:opacity-100 ${className}`}
+      className={`shrink-0 rounded-md p-1 transition-opacity [@media(pointer:coarse)]:p-2 focus-visible:opacity-100 ${className}`}
     >
       <PencilIcon />
     </button>

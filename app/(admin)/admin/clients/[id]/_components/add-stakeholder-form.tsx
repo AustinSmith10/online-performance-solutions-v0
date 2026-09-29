@@ -12,7 +12,7 @@ export function AddStakeholderForm({ orgId }: { orgId: string }) {
 
   return (
     <form action={formAction} className="space-y-3">
-      <p className="text-sm font-medium text-zinc-700">Add stakeholder</p>
+      <p className="text-sm font-medium text-zinc-700">Add reviewer</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <input
           name="name"
