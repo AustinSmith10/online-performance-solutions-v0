@@ -91,6 +91,7 @@ function UserTabsInner({ user, clients, availabilityActions }: Props) {
         ))}
       </div>
 
+      <div key={tab} className="pane-in">
       {tab === "profile" && profileContent}
 
       {tab === "availability" && (
@@ -107,6 +108,7 @@ function UserTabsInner({ user, clients, availabilityActions }: Props) {
       )}
 
       {tab === "disciplines" && <DisciplinesSection userId={user.id} disciplines={user.disciplines} />}
+      </div>
     </div>
   );
 }
@@ -159,8 +161,8 @@ function DisciplinesSection({ userId, disciplines }: { userId: string; disciplin
           </label>
         ))}
       </div>
-      {state.error && <p className="text-xs text-red-600">{state.error}</p>}
-      {state.success && !pending && <p className="text-xs text-green-700">Saved</p>}
+      {state.error && <p className="rise-in text-xs text-red-600">{state.error}</p>}
+      {state.success && !pending && <p className="rise-in text-xs text-green-700">Saved</p>}
       <button
         type="submit"
         disabled={pending}
@@ -267,7 +269,7 @@ function EditableRow({ user, field }: { user: UserTabsUser; field: FieldDef }) {
   }
 
   return (
-    <form action={formAction} className="flex items-center gap-3 py-2.5">
+    <form action={formAction} className="pane-in flex items-center gap-3 py-2.5">
       <label className="w-28 shrink-0 text-xs text-zinc-500 sm:w-40">{field.label}</label>
       <div className="min-w-0 flex-1">
         {field.kind === "select" ? (
@@ -300,7 +302,7 @@ function EditableRow({ user, field }: { user: UserTabsUser; field: FieldDef }) {
           />
         )}
         {errors?.map((e) => (
-          <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+          <p key={e} className="rise-in mt-1 text-xs text-red-600">{e}</p>
         ))}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">

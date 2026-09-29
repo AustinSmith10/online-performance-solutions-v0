@@ -61,7 +61,7 @@ function EmailField({ user }: { user: UserHeaderMetaUser }) {
   }
 
   return (
-    <form action={formAction} className="inline-flex items-center gap-1.5">
+    <form action={formAction} className="pane-in inline-flex items-center gap-1.5">
       <input
         name="email"
         type="email"
@@ -89,7 +89,7 @@ function EmailField({ user }: { user: UserHeaderMetaUser }) {
         <XIcon />
       </button>
       {state.errors?.email?.map((e) => (
-        <p key={e} className="text-xs text-red-600">{e}</p>
+        <p key={e} className="rise-in text-xs text-red-600">{e}</p>
       ))}
     </form>
   );
@@ -130,7 +130,7 @@ function ClientField({ user, clients }: { user: UserHeaderMetaUser; clients: Pic
   }
 
   return (
-    <form action={formAction} className="inline-flex items-center gap-1.5">
+    <form action={formAction} className="pane-in inline-flex items-center gap-1.5">
       <select
         name="client_id"
         defaultValue={user.client_id ?? ""}
@@ -161,7 +161,7 @@ function ClientField({ user, clients }: { user: UserHeaderMetaUser; clients: Pic
         <XIcon />
       </button>
       {state.errors?.client_id?.map((e) => (
-        <p key={e} className="text-xs text-red-600">{e}</p>
+        <p key={e} className="rise-in text-xs text-red-600">{e}</p>
       ))}
     </form>
   );

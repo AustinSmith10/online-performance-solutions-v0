@@ -188,7 +188,7 @@ export function UserHeaderActions({
         title="Reset password?"
       >
         {resetState.link ? (
-          <div className="flex flex-col gap-2">
+          <div className="pane-in flex flex-col gap-2">
             <p className="text-sm text-zinc-600">Reset link generated.</p>
             <input
               readOnly

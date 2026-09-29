@@ -55,7 +55,7 @@ export function CreateAccountModal({
               className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             />
             {state.errors?.email?.map((e) => (
-              <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+              <p key={e} className="rise-in mt-1 text-xs text-red-600">{e}</p>
             ))}
           </div>
 
@@ -69,7 +69,7 @@ export function CreateAccountModal({
                 className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
               />
               {state.errors?.first_name?.map((e) => (
-                <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+                <p key={e} className="rise-in mt-1 text-xs text-red-600">{e}</p>
               ))}
             </div>
             <div>
@@ -81,7 +81,7 @@ export function CreateAccountModal({
                 className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
               />
               {state.errors?.last_name?.map((e) => (
-                <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+                <p key={e} className="rise-in mt-1 text-xs text-red-600">{e}</p>
               ))}
             </div>
           </div>
@@ -99,7 +99,7 @@ export function CreateAccountModal({
               {callerRole === "super_admin" && <option value="admin">Admin</option>}
             </select>
             {state.errors?.role?.map((e) => (
-              <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+              <p key={e} className="rise-in mt-1 text-xs text-red-600">{e}</p>
             ))}
           </div>
 
@@ -116,7 +116,7 @@ export function CreateAccountModal({
               </div>
               <p className="mt-1 text-xs text-zinc-500">At least one, required — this is what &quot;Available jobs&quot; and assignment filter on.</p>
               {state.errors?.disciplines?.map((e) => (
-                <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+                <p key={e} className="rise-in mt-1 text-xs text-red-600">{e}</p>
               ))}
             </div>
           )}
@@ -138,12 +138,12 @@ export function CreateAccountModal({
               ))}
             </select>
             {state.errors?.client_id?.map((e) => (
-              <p key={e} className="mt-1 text-xs text-red-600">{e}</p>
+              <p key={e} className="rise-in mt-1 text-xs text-red-600">{e}</p>
             ))}
           </div>
 
           {state.errors?.form?.map((e) => (
-            <p key={e} className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{e}</p>
+            <p key={e} className="rise-in rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{e}</p>
           ))}
 
           <div className="flex justify-end gap-3 pt-2">
