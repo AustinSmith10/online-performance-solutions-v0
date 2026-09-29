@@ -168,14 +168,14 @@ export default async function TemplatePage({
 
       {/* Header card */}
       <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${TEMPLATE_ACCENT[template.status] ?? "border-l-zinc-300"} bg-white p-5`}>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           {/* Avatar */}
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-600">
             {template.name.slice(0, 2).toUpperCase()}
           </div>
 
           {/* Identity */}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-40">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-base font-semibold text-zinc-900">{template.name}</h1>
               <StatusBadge status={template.status} />
@@ -184,7 +184,7 @@ export default async function TemplatePage({
           </div>
 
           {/* Action buttons */}
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
             {template.deleted_at ? (
               <RestoreButton templateId={id} />
             ) : (
@@ -206,7 +206,7 @@ export default async function TemplatePage({
         <p className="mt-3.5 border-t border-zinc-100 pt-3 text-sm leading-relaxed text-zinc-500">
           {template.org && (
             <>
-              Organisation{" "}
+              Client{" "}
               <Link href={`/admin/clients/${template.org.id}`} className="font-medium text-zinc-900 hover:underline">
                 {template.org.name}
               </Link>

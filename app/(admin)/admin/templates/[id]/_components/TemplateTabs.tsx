@@ -22,13 +22,14 @@ function TabsInner({ tabs }: { tabs: Tab[] }) {
 
   return (
     <div>
-      <div className="flex border-b border-zinc-200">
+      <div className="border-b border-zinc-200">
+        <div className="-mx-1 flex overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((tab, i) => (
           <button
             key={i}
             type="button"
             onClick={() => requestNavigate(() => setActive(i))}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 transition-colors duration-150 ${
               active === i
                 ? "border-zinc-900 text-zinc-900"
                 : "border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300"
@@ -37,6 +38,7 @@ function TabsInner({ tabs }: { tabs: Tab[] }) {
             {tab.label}
           </button>
         ))}
+        </div>
       </div>
       <div className="pt-6 space-y-6">
         {tabs[active].content}

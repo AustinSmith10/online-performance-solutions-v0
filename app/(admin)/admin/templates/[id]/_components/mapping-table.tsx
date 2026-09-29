@@ -152,8 +152,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
               onDragOver={(e) => onDragOver(e, index)}
               onDrop={(e) => onDrop(e, index)}
               onDragEnd={onDragEnd}
-              style={{ display: "grid", gridTemplateColumns: "28px 172px 1fr" }}
-              className={`rounded-lg border overflow-hidden transition-colors ${
+              className={`grid grid-cols-1 sm:grid-cols-[28px_172px_1fr] rounded-lg border overflow-hidden transition-colors ${
                 !row.is_mapped
                   ? "border-red-200 bg-red-50/30"
                   : isDragOver
@@ -161,12 +160,12 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                   : "border-zinc-200 bg-white"
               }`}
             >
-              <div className="flex items-center justify-center border-r border-zinc-100 bg-zinc-50 cursor-grab select-none text-zinc-300 hover:text-zinc-500 text-base">
+              <div className="hidden items-center justify-center border-r border-zinc-100 bg-zinc-50 sm:flex cursor-grab select-none text-zinc-500 hover:text-zinc-700 text-base">
                 ⠿
               </div>
 
-              <div className="flex flex-col gap-2 justify-center border-r border-zinc-100 px-4 py-4">
-                <p className="font-mono text-xs text-zinc-500 break-all">
+              <div className="flex flex-col gap-2 justify-center border-b border-zinc-100 px-4 py-4 sm:border-b-0 sm:border-r">
+                <p className="font-mono text-xs text-zinc-500 break-words">
                   {"{" + row.placeholder_token + "}"}
                 </p>
                 <span className={`self-start rounded-full px-2 py-0.5 text-xs font-medium ${SOURCE_STYLES[source]}`}>
@@ -349,8 +348,7 @@ function ActivatedMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit
             onDragOver={(e) => onDragOver(e, index)}
             onDrop={(e) => onDrop(e, index)}
             onDragEnd={onDragEnd}
-            style={{ display: "grid", gridTemplateColumns: "28px 172px 1fr" }}
-            className={`rounded-lg border overflow-hidden transition-colors ${
+            className={`grid grid-cols-1 sm:grid-cols-[28px_172px_1fr] rounded-lg border overflow-hidden transition-colors ${
               !row.is_mapped
                 ? "border-red-200 bg-red-50/30"
                 : isDragOver
@@ -359,13 +357,13 @@ function ActivatedMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit
             }`}
           >
             {/* Drag handle */}
-            <div className="flex items-center justify-center border-r border-zinc-100 bg-zinc-50 cursor-grab select-none text-zinc-300 hover:text-zinc-500 text-base">
+            <div className="hidden items-center justify-center border-r border-zinc-100 bg-zinc-50 sm:flex cursor-grab select-none text-zinc-500 hover:text-zinc-700 text-base">
               ⠿
             </div>
 
             {/* Identity */}
-            <div className="flex flex-col gap-2 justify-center border-r border-zinc-100 px-4 py-4">
-              <p className="font-mono text-xs text-zinc-500 break-all">
+            <div className="flex flex-col gap-2 justify-center border-b border-zinc-100 px-4 py-4 sm:border-b-0 sm:border-r">
+              <p className="font-mono text-xs text-zinc-500 break-words">
                 {"{" + row.placeholder_token + "}"}
               </p>
               <span className={`self-start rounded-full px-2 py-0.5 text-xs font-medium ${SOURCE_STYLES[source]}`}>
@@ -532,13 +530,12 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
 function MissingOrgCard({ token }: { token: string }) {
   return (
     <div
-      style={{ display: "grid", gridTemplateColumns: "28px 172px 1fr" }}
-      className="rounded-lg border border-amber-200 bg-amber-50/40 overflow-hidden"
+      className="grid grid-cols-1 sm:grid-cols-[28px_172px_1fr] rounded-lg border border-amber-200 bg-amber-50/40 overflow-hidden"
     >
-      <div className="flex items-center justify-center border-r border-amber-100 bg-amber-50 select-none text-amber-300 text-base">
+      <div className="hidden items-center justify-center border-r border-amber-100 bg-amber-50 sm:flex select-none text-amber-300 text-base">
         —
       </div>
-      <div className="flex flex-col gap-2 justify-center border-r border-amber-100 px-4 py-4">
+      <div className="flex flex-col gap-2 justify-center border-b border-amber-100 px-4 py-4 sm:border-b-0 sm:border-r">
         <p className="font-mono text-xs text-zinc-400 line-through">
           {"{" + token + "}"}
         </p>
@@ -549,7 +546,7 @@ function MissingOrgCard({ token }: { token: string }) {
       </div>
       <div className="flex items-center px-4 py-4">
         <p className="text-xs text-zinc-400">
-          Configured in this organisation but not found in the uploaded .docx — will not be populated in generated documents.
+          Configured for this client but not found in the uploaded .docx — will not be populated in generated documents.
         </p>
       </div>
     </div>

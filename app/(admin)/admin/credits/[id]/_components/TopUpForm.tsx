@@ -29,7 +29,7 @@ export function TopUpForm({ orgId }: Props) {
       )}
 
       <form action={action} className="space-y-3">
-        <div className="flex items-end gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div>
             <label htmlFor="amount" className="mb-1 block text-xs font-medium text-zinc-600">
               Credits to add
@@ -42,10 +42,10 @@ export function TopUpForm({ orgId }: Props) {
               max={10000}
               required
               placeholder="e.g. 10"
-              className="w-32 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+              className="w-full rounded-md sm:w-32 border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
             />
           </div>
-          <div className="flex-1">
+          <div className="sm:flex-1">
             <label htmlFor="notes" className="mb-1 block text-xs font-medium text-zinc-600">
               Notes (optional)
             </label>
