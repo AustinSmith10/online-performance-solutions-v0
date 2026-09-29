@@ -7,6 +7,7 @@ import type { User, Client } from "@/types";
 
 const SORT_COLS = ["invited_at", "first_name", "email"] as const;
 type SortCol = (typeof SORT_COLS)[number];
+const NATURAL_ORDER: Record<SortCol, "asc" | "desc"> = { first_name: "asc", email: "asc", invited_at: "desc" };
 const SORT_OPTIONS: { col: SortCol; label: string }[] = [
   { col: "first_name", label: "Name" },
   { col: "invited_at", label: "Invited" },
@@ -17,8 +18,10 @@ function sortHref(params: Record<string, string | undefined>, col: SortCol): str
   for (const [k, v] of Object.entries(params)) if (v) p.set(k, v);
   const isActive = (params.sort ?? "invited_at") === col;
   p.set("sort", col);
-  p.set("order", isActive && params.order !== "asc" ? "asc" : "desc");
-  return `/admin/clients?${p.toString()}`;
+  // Active pill flips direction; a newly chosen one starts in its natural
+  // direction (names A→Z, dates newest first).
+  p.set("order", isActive ? (params.order === "asc" ? "desc" : "asc") : NATURAL_ORDER[col]);
+  return `/admin/stakeholders?${p.toString()}`;
 }
 
 function SortPills({ params, sortCol, sortOrder }: { params: Record<string, string | undefined>; sortCol: SortCol; sortOrder: "asc" | "desc" }) {
