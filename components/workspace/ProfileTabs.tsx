@@ -50,7 +50,7 @@ function ProfileTabsInner({ header, tabs }: { header: React.ReactNode; tabs: Tab
           ))}
           </div>
         </div>
-        <div className="pt-6 space-y-3">{active?.content}</div>
+        <div key={active?.id} className="pane-in pt-6 space-y-3">{active?.content}</div>
       </div>
     </div>
   );

@@ -243,8 +243,8 @@ export default async function OrganisationDetailPage({
                 type="submit"
                 className={
                   orgData.is_frozen
-                    ? "rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
-                    : "rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                    ? "press-subtle rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors duration-150 hover:bg-zinc-50"
+                    : "press-subtle rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition-colors duration-150 hover:bg-red-50"
                 }
               >
                 {orgData.is_frozen ? "Unfreeze" : "Freeze"}

@@ -68,7 +68,7 @@ export function MetricsTablesPanel({ clientId, tables, rowsByTable, templateToke
             </button>
 
             {expandedId === table.id && (
-              <div className="border-t border-zinc-100 p-5">
+              <div className="rise-in border-t border-zinc-100 p-5">
                 <MetricsTableEditor
                   clientId={clientId}
                   table={table}
@@ -99,7 +99,7 @@ function DeleteTableButton({
 
   if (confirming) {
     return (
-      <div className="mt-6 flex items-center gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3">
+      <div className="pane-in mt-6 flex items-center gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3">
         <p className="text-xs text-red-800">
           Delete &ldquo;{tableName}&rdquo; and all its rows? This cannot be undone.
         </p>
@@ -120,7 +120,7 @@ function DeleteTableButton({
         >
           Cancel
         </button>
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="rise-in text-xs text-red-600">{error}</p>}
       </div>
     );
   }

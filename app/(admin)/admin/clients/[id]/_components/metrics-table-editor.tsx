@@ -199,7 +199,7 @@ function AutofillConfigPanel({
         </div>
 
         {enabled && (
-          <div className="space-y-4 border-t border-zinc-200 pt-4">
+          <div className="rise-in space-y-4 border-t border-zinc-200 pt-4">
             <div>
               <div className="mb-2 flex items-center gap-2">
                 <StepBadge state={templateState} number={1} />
@@ -358,12 +358,12 @@ function AutofillConfigPanel({
             {pending ? "Saving…" : "Save changes"}
           </button>
           {enabled && templateId && matchToken && matchColumnId && validOutputCount > 0 && (
-            <span className="text-xs text-zinc-500">
+            <span className="rise-in text-xs text-zinc-500">
               {validOutputCount} field{validOutputCount === 1 ? "" : "s"} will auto-fill from {rows.length}{" "}
               row{rows.length === 1 ? "" : "s"}
             </span>
           )}
-          {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+          {state.error && <p className="rise-in text-sm text-red-600">{state.error}</p>}
         </div>
       </form>
     </div>
@@ -418,7 +418,7 @@ function RowLine({ clientId, table, row }: { clientId: string; table: MetricsTab
             >
               Cancel
             </button>
-            {state.error && <p className="w-full text-xs text-red-600">{state.error}</p>}
+            {state.error && <p className="rise-in w-full text-xs text-red-600">{state.error}</p>}
           </form>
         </td>
       </tr>
@@ -448,7 +448,7 @@ function RowLine({ clientId, table, row }: { clientId: string; table: MetricsTab
             ×
           </button>
         </div>
-        {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
+        {deleteError && <p className="rise-in text-xs text-red-600">{deleteError}</p>}
       </td>
     </tr>
   );
@@ -487,7 +487,7 @@ function NewRowLine({ clientId, table }: { clientId: string; table: MetricsTable
           >
             {pending ? "Adding…" : "+ Add row"}
           </button>
-          {state.error && <p className="w-full text-xs text-red-600">{state.error}</p>}
+          {state.error && <p className="rise-in w-full text-xs text-red-600">{state.error}</p>}
         </form>
       </td>
     </tr>
