@@ -25,7 +25,7 @@ const AVAILABILITY_CLASSES: Record<ConsultantAvailability, string> = {
   at_capacity: "bg-zinc-100 text-zinc-600",
 };
 
-const ALL_SORT_COLS = ["created_at", "email", "role", "org"] as const;
+const ALL_SORT_COLS = ["created_at", "email", "role"] as const;
 const CONSULTANT_SORT_COLS = ["first_name", "email", "availability"] as const;
 type AllSortCol = (typeof ALL_SORT_COLS)[number];
 type ConsultantSortCol = (typeof CONSULTANT_SORT_COLS)[number];
@@ -33,7 +33,6 @@ type ConsultantSortCol = (typeof CONSULTANT_SORT_COLS)[number];
 const ALL_SORT_OPTIONS: { col: AllSortCol; label: string }[] = [
   { col: "email", label: "User" },
   { col: "role", label: "Role" },
-  { col: "org", label: "Client" },
   { col: "created_at", label: "Joined" },
 ];
 const CONSULTANT_SORT_OPTIONS: { col: ConsultantSortCol; label: string }[] = [
@@ -281,9 +280,7 @@ export default async function UsersPage({
   const sortCol: AllSortCol = ALL_SORT_COLS.includes(sort as AllSortCol) ? (sort as AllSortCol) : "created_at";
   const params = { q, role, status, sort, order, tab };
 
-  query = sortCol === "org"
-    ? query.order("name", { referencedTable: "clients", ascending: sortOrder === "asc" })
-    : query.order(sortCol, { ascending: sortOrder === "asc" });
+  query = query.order(sortCol, { ascending: sortOrder === "asc" });
 
   query = query.neq("role", "stakeholder");
 
