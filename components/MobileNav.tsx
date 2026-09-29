@@ -69,7 +69,7 @@ export function MobileNav({
           <button
             ref={openButtonRef}
             onClick={() => setOpen(true)}
-            className={`ml-1 flex h-11 w-11 items-center justify-center rounded-md text-zinc-600 hover:bg-zinc-100 ${FOCUS_RING}`}
+            className={`press ml-1 flex h-11 w-11 items-center justify-center rounded-md text-zinc-600 hover:bg-zinc-100 ${FOCUS_RING}`}
             aria-label="Open navigation"
             aria-expanded={open}
             aria-controls="mobile-nav-drawer"
@@ -84,7 +84,7 @@ export function MobileNav({
       {/* Backdrop */}
       <div
         aria-hidden="true"
-        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 motion-reduce:transition-none lg:hidden ${
+        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 ease-[var(--ease-out)] lg:hidden ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={() => setOpen(false)}
@@ -97,8 +97,10 @@ export function MobileNav({
         aria-modal="true"
         aria-label="Navigation"
         inert={!open}
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col overscroll-contain bg-white pl-[env(safe-area-inset-left)] shadow-xl transition-transform duration-200 motion-reduce:transition-none lg:hidden ${
-          open ? "translate-x-0" : "-translate-x-full"
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col overscroll-contain bg-white pl-[env(safe-area-inset-left)] shadow-xl transition-[transform,opacity] ease-[var(--ease-out)] motion-reduce:translate-x-0 motion-reduce:duration-150 lg:hidden ${
+          open
+            ? "translate-x-0 duration-[240ms]"
+            : "-translate-x-full duration-[180ms] motion-reduce:opacity-0"
         }`}
       >
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 px-4 box-content pt-[env(safe-area-inset-top)]">
@@ -106,7 +108,7 @@ export function MobileNav({
           <button
             ref={closeButtonRef}
             onClick={() => setOpen(false)}
-            className={`flex h-11 w-11 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 ${FOCUS_RING}`}
+            className={`press flex h-11 w-11 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 ${FOCUS_RING}`}
             aria-label="Close navigation"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -123,7 +125,7 @@ export function MobileNav({
             <Link
               href={profileHref}
               onClick={() => setOpen(false)}
-              className={`mb-1 flex min-h-11 items-center rounded-md px-3 text-sm text-zinc-700 hover:bg-zinc-100 ${FOCUS_RING}`}
+              className={`press-subtle mb-1 flex min-h-11 items-center rounded-md px-3 text-sm text-zinc-700 hover:bg-zinc-100 ${FOCUS_RING}`}
             >
               My profile
             </Link>
@@ -131,7 +133,7 @@ export function MobileNav({
           <form action={logoutAction}>
             <button
               type="submit"
-              className={`flex min-h-11 w-full items-center rounded-md px-3 text-left text-sm text-zinc-700 hover:bg-zinc-100 ${FOCUS_RING}`}
+              className={`press-subtle flex min-h-11 w-full items-center rounded-md px-3 text-left text-sm text-zinc-700 hover:bg-zinc-100 ${FOCUS_RING}`}
             >
               Sign out
             </button>

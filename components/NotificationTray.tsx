@@ -29,11 +29,20 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-const DOT_COLOR: Record<TrayEntry["kind"], string> = {
-  notification: "#3b82f6",
-  hard_error: "#dc2626",
-  needs_attention: "#d97706",
+const DOT_CLASS: Record<TrayEntry["kind"], string> = {
+  notification: "bg-zinc-900",
+  hard_error: "bg-red-600",
+  needs_attention: "bg-amber-600",
 };
+
+const KIND_LABEL: Record<TrayEntry["kind"], string> = {
+  notification: "Unread",
+  hard_error: "Error",
+  needs_attention: "Needs attention",
+};
+
+const FOCUS_RING =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400";
 
 // ── Dismissed-ID persistence (localStorage) ───────────────────────────────────
 // Only read notifications can be dismissed. Unread notifications, and all
@@ -81,8 +90,12 @@ export function NotificationTray({
   // entries that were already cleared don't flash back on mount.
   const [entries, setEntries] = useState<TrayEntry[]>(() => applyDismissed(initialEntries));
   const [openAtPathname, setOpenAtPathname] = useState<string | null>(null);
-  const [useFixed, setUseFixed] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+  const badgeRef = useRef<HTMLSpanElement>(null);
+  const prevBadgeCount = useRef<number | null>(null);
   const pathname = usePathname();
   // NotificationTray is often rendered twice per layout (mobile nav +
   // desktop sidebar). Supabase reuses/collides on a channel of an already-
@@ -97,8 +110,18 @@ export function NotificationTray({
         setOpenAtPathname(null);
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpenAtPathname(null);
+        bellRef.current?.focus();
+      }
+    }
     document.addEventListener("mousedown", handleMouseDown);
-    return () => document.removeEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [open]);
 
   const badgeCount = entries.filter((e) => e.kind !== "notification" || !e.isRead).length;
@@ -110,12 +133,15 @@ export function NotificationTray({
       if (includeNeedsAttention) requests.push(fetch("/api/system-errors"));
       responses = await Promise.all(requests);
     } catch {
+      setRefreshFailed(true);
       // Background poll — a transient network blip (e.g. the server
       // restarting during a deploy) is not worth surfacing. The next
       // interval tick retries. Swallowing here also keeps it from
       // becoming an unhandled rejection in Sentry.
       return;
     }
+
+    setRefreshFailed(responses.some((r) => !r.ok));
 
     const merged: TrayEntry[] = [];
     if (responses[0].ok) {
@@ -220,7 +246,6 @@ export function NotificationTray({
 
   function handleToggle() {
     if (!open) {
-      setUseFixed(typeof window !== "undefined" && window.innerWidth < 640);
       void refresh();
       setOpenAtPathname(pathname);
     } else {
@@ -228,252 +253,203 @@ export function NotificationTray({
     }
   }
 
+  // One small pulse when the unread count goes up (never on mount, never on
+  // decrease, and not at all under reduced motion — the number already changes).
+  useEffect(() => {
+    const prev = prevBadgeCount.current;
+    prevBadgeCount.current = badgeCount;
+    if (prev === null || badgeCount <= prev) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    badgeRef.current?.animate(
+      [{ transform: "scale(1)" }, { transform: "scale(1.15)" }, { transform: "scale(1)" }],
+      { duration: 240, easing: "cubic-bezier(0.77, 0, 0.175, 1)" }
+    );
+  }, [badgeCount]);
+
   const hasReadNotification = entries.some((e) => e.kind === "notification" && e.isRead);
   const hasUnreadNotification = entries.some((e) => e.kind === "notification" && !e.isRead);
 
+  const hasUnreadError = entries.some((e) => e.kind !== "notification");
+  const unreadLabel = badgeCount > 0 ? `Notifications, ${badgeCount} unread` : "Notifications";
+
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
-      <button onClick={handleToggle} aria-label="Notifications" style={bellButton}>
+    <div ref={ref} className="relative inline-block">
+      <button
+        ref={bellRef}
+        type="button"
+        onClick={handleToggle}
+        aria-label={unreadLabel}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-controls={open ? panelId : undefined}
+        className={`press relative flex h-9 w-9 items-center justify-center rounded-md text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11 ${FOCUS_RING}`}
+      >
         <BellIcon />
         {badgeCount > 0 && (
-          <span style={badge}>{badgeCount > 99 ? "99+" : badgeCount}</span>
+          <span
+            ref={badgeRef}
+            aria-hidden="true"
+            className={`absolute right-0 top-0 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-xs font-semibold leading-none tabular-nums text-white ring-2 ring-white ${
+              hasUnreadError ? "bg-red-600" : "bg-zinc-900"
+            }`}
+          >
+            {badgeCount > 99 ? "99+" : badgeCount}
+          </span>
         )}
       </button>
 
       {open && (
-        <div style={useFixed
-          ? { ...tray, position: "fixed", top: "64px", right: "8px", left: "auto" }
-          : { ...tray, ...(align === "right" ? { right: 0, left: "auto" } : { left: 0 }) }
-        }>
-          <div style={trayHeader}>
-            <span style={trayTitle}>Notifications</span>
-            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+        <div
+          id={panelId}
+          role="dialog"
+          aria-label="Notifications"
+          className={`tray-pop fixed inset-x-2 top-[calc(env(safe-area-inset-top)+4rem)] z-50 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg sm:absolute sm:inset-x-auto sm:top-[calc(100%+8px)] sm:w-[360px] ${
+            align === "right" ? "sm:right-0" : "origin-top-left sm:left-0"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-4 py-2.5">
+            <h2 className="text-sm font-semibold tracking-tight text-zinc-900">Notifications</h2>
+            <div className="flex items-center gap-1">
               {hasUnreadNotification && (
-                <button onClick={() => void markAllRead()} style={markAllBtn}>
+                <button
+                  type="button"
+                  onClick={() => void markAllRead()}
+                  className={`press rounded-md px-2 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 [@media(pointer:coarse)]:min-h-11 ${FOCUS_RING}`}
+                >
                   Mark all read
                 </button>
               )}
               {hasReadNotification && (
-                <button onClick={handleClear} style={clearBtn}>
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className={`press rounded-md px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-11 ${FOCUS_RING}`}
+                >
                   Clear
                 </button>
-              )}
-              {includeNeedsAttention && (
-                <Link href="/admin/system-health" style={markAllBtn}>
-                  Details →
-                </Link>
               )}
             </div>
           </div>
 
-          <div style={list}>
+          {refreshFailed && (
+            <div
+              role="status"
+              className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"
+            >
+              <span>Couldn&apos;t refresh. Showing what was last loaded.</span>
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                className={`press shrink-0 rounded-md px-2 py-1 font-medium underline-offset-2 hover:underline ${FOCUS_RING}`}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          <ul className="max-h-[min(24rem,calc(100dvh-9rem))] overflow-y-auto overscroll-contain">
             {entries.length === 0 ? (
-              <p style={empty}>Nothing needs attention</p>
+              <li className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-500">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+                <p className="text-sm font-medium text-zinc-700">You&apos;re all caught up</p>
+                <p className="text-xs text-zinc-500">New notifications will show up here.</p>
+              </li>
             ) : (
-              entries.map((e) => (
-                <div
-                  key={e.id}
-                  role="button"
-                  tabIndex={0}
-                  style={{
-                    ...item,
-                    backgroundColor: e.kind === "notification" && !e.isRead ? "#f0f9ff" : "#fff",
-                  }}
-                  onClick={() => {
-                    if (e.kind === "notification" && !e.isRead) void markOneRead(e.id);
-                  }}
-                  onKeyDown={(ev) => {
-                    if (ev.key === "Enter" && e.kind === "notification" && !e.isRead) {
-                      void markOneRead(e.id);
-                    }
-                  }}
-                >
-                  <div
-                    style={{
-                      ...dot,
-                      backgroundColor:
-                        e.kind === "notification" && e.isRead ? "transparent" : DOT_COLOR[e.kind],
+              entries.map((e) => {
+                const unread = e.kind !== "notification" || !e.isRead;
+                const canMarkRead = e.kind === "notification" && !e.isRead;
+                return (
+                  <li
+                    key={e.id}
+                    onClick={() => {
+                      if (canMarkRead) void markOneRead(e.id);
                     }}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={itemTitle}>{e.title}</p>
-                    {e.message !== e.title && <p style={itemText}>{e.message}</p>}
-                    <div style={itemMeta}>
-                      <span style={itemTime}>{timeAgo(e.timestamp)}</span>
-                      {e.href && (
-                        <Link href={e.href} style={viewLink}>
-                          View →
-                        </Link>
+                    className={`flex gap-3 border-b border-zinc-100 px-4 py-3 transition-colors duration-150 ease-[var(--ease-out)] last:border-b-0 ${
+                      unread ? "bg-zinc-50" : "bg-white"
+                    }`}
+                  >
+                    <span
+                      aria-hidden={!unread}
+                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full transition-opacity duration-150 ease-[var(--ease-out)] ${
+                        DOT_CLASS[e.kind]
+                      } ${unread ? "opacity-100" : "opacity-0"}`}
+                    >
+                      {unread && <span className="sr-only">{KIND_LABEL[e.kind]}</span>}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-snug text-zinc-900">{e.title}</p>
+                      {e.message !== e.title && (
+                        <p className="mt-0.5 text-xs leading-relaxed text-zinc-600">{e.message}</p>
+                      )}
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="text-xs tabular-nums text-zinc-500">{timeAgo(e.timestamp)}</span>
+                        {e.href && (
+                          <Link
+                            href={e.href}
+                            className={`-my-1 rounded py-1 text-xs font-medium text-zinc-900 underline-offset-2 hover:underline ${FOCUS_RING}`}
+                          >
+                            View
+                          </Link>
+                        )}
+                        {canMarkRead && (
+                          <button
+                            type="button"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              void markOneRead(e.id);
+                            }}
+                            className={`-my-1 rounded py-1 text-xs font-medium text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline ${FOCUS_RING}`}
+                          >
+                            Mark read
+                          </button>
+                        )}
+                      </div>
+                      {e.resolvable && (
+                        <button
+                          type="button"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            void resolveEntry(e.id);
+                          }}
+                          className={`press mt-2 inline-flex items-center gap-1.5 rounded-md border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100 [@media(pointer:coarse)]:min-h-11 ${FOCUS_RING}`}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                          Mark resolved
+                        </button>
                       )}
                     </div>
-                    {e.resolvable && (
-                      <button
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          void resolveEntry(e.id);
-                        }}
-                        style={resolveBtn}
-                      >
-                        ✓ Mark resolved
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
+                  </li>
+                );
+              })
             )}
-          </div>
+          </ul>
+
+          {includeNeedsAttention && (
+            <div className="border-t border-zinc-100 px-4 py-2">
+              <Link
+                href="/admin/system-health"
+                className={`-mx-2 inline-flex rounded-md px-2 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 ${FOCUS_RING}`}
+              >
+                System health
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-const bellButton: React.CSSProperties = {
-  position: "relative",
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  padding: "6px",
-  borderRadius: "6px",
-  display: "flex",
-  alignItems: "center",
-  color: "#ca8a04",
-};
-
-const badge: React.CSSProperties = {
-  position: "absolute",
-  top: "2px",
-  right: "2px",
-  backgroundColor: "#dc2626",
-  color: "#fff",
-  borderRadius: "9999px",
-  fontSize: "12px",
-  fontWeight: "600",
-  fontVariantNumeric: "tabular-nums",
-  minWidth: "18px",
-  height: "18px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "0 3px",
-  lineHeight: 1,
-};
-
-const tray: React.CSSProperties = {
-  position: "absolute",
-  left: 0,
-  top: "calc(100% + 8px)",
-  width: "360px",
-  maxWidth: "calc(100vw - 16px)",
-  backgroundColor: "#fff",
-  border: "1px solid #e4e4e7",
-  borderRadius: "8px",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-  zIndex: 50,
-  overflow: "hidden",
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-};
-
-const trayHeader: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "12px 16px",
-  borderBottom: "1px solid #f4f4f5",
-};
-
-const trayTitle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: "600",
-  color: "#18181b",
-};
-
-const markAllBtn: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  fontSize: "12px",
-  color: "#3b82f6",
-  padding: 0,
-};
-
-const clearBtn: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  fontSize: "12px",
-  color: "#a1a1aa",
-  padding: 0,
-};
-
-const list: React.CSSProperties = { maxHeight: "400px", overflowY: "auto" };
-
-const empty: React.CSSProperties = {
-  textAlign: "center",
-  color: "#a1a1aa",
-  fontSize: "13px",
-  padding: "32px 16px",
-  margin: 0,
-};
-
-const item: React.CSSProperties = {
-  display: "flex",
-  gap: "10px",
-  padding: "12px 16px",
-  borderBottom: "1px solid #f4f4f5",
-  cursor: "default",
-};
-
-const dot: React.CSSProperties = {
-  width: "8px",
-  height: "8px",
-  borderRadius: "9999px",
-  marginTop: "5px",
-  flexShrink: 0,
-};
-
-const itemTitle: React.CSSProperties = {
-  fontSize: "13px",
-  fontWeight: 600,
-  color: "#18181b",
-  margin: "0 0 2px",
-  lineHeight: "1.4",
-};
-
-const itemText: React.CSSProperties = {
-  fontSize: "12px",
-  color: "#71717a",
-  margin: "0 0 4px",
-  lineHeight: "1.5",
-};
-
-const itemMeta: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-};
-
-const itemTime: React.CSSProperties = { fontSize: "11px", color: "#a1a1aa" };
-
-const viewLink: React.CSSProperties = { fontSize: "11px", color: "#3b82f6" };
-
-const resolveBtn: React.CSSProperties = {
-  marginTop: "8px",
-  display: "inline-flex",
-  alignItems: "center",
-  cursor: "pointer",
-  fontSize: "11px",
-  fontWeight: 600,
-  color: "#15803d",
-  backgroundColor: "#f0fdf4",
-  border: "1px solid #bbf7d0",
-  borderRadius: "6px",
-  padding: "4px 10px",
-};
-
 function BellIcon() {
   return (
     <svg
+      aria-hidden="true"
       width="20"
       height="20"
       viewBox="0 0 24 24"

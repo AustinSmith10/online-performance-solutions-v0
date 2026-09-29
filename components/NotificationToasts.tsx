@@ -32,7 +32,11 @@ const TOAST_LIFETIME_MS = 5_500;
 interface Toast {
   entry: TrayEntry;
   createdAt: number;
+  leaving?: boolean;
 }
+
+// Matches .toast-item[data-leaving] in globals.css.
+const TOAST_EXIT_MS = 150;
 
 export function NotificationToasts({
   userId,
@@ -46,6 +50,8 @@ export function NotificationToasts({
   align?: "left" | "right";
 }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // Hovering or focusing the stack holds toasts open so they can be read.
+  const [paused, setPaused] = useState(false);
   const router = useRouter();
   const seenIds = useRef<Set<string> | null>(null);
 
@@ -127,30 +133,68 @@ export function NotificationToasts({
     };
   }, [includeNeedsAttention, projectBasePath, pushToast]);
 
-  // Auto-dismiss.
+  // The stack unmounts when empty, so a pointer that was over it never fires
+  // mouseleave — clear the hold or the next toast would never auto-dismiss.
   useEffect(() => {
-    if (toasts.length === 0) return;
-    const timer = setInterval(() => {
-      const cutoff = Date.now() - TOAST_LIFETIME_MS;
-      setToasts((prev) => prev.filter((t) => t.createdAt > cutoff));
-    }, 500);
-    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets a pointer-hold whose mouseleave can never fire once the stack unmounts
+    if (toasts.length === 0) setPaused(false);
   }, [toasts.length]);
 
+  // Marks matching toasts as leaving (fade + slide out), then unmounts them.
+  const exitToasts = useCallback((match: (t: Toast) => boolean) => {
+    const ids: string[] = [];
+    setToasts((prev) =>
+      prev.map((t) => {
+        if (t.leaving || !match(t)) return t;
+        ids.push(t.entry.id);
+        return { ...t, leaving: true };
+      })
+    );
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => !(t.leaving && ids.includes(t.entry.id))));
+    }, TOAST_EXIT_MS);
+  }, []);
+
+  // Auto-dismiss.
+  useEffect(() => {
+    if (toasts.length === 0 || paused) return;
+    const timer = setInterval(() => {
+      const cutoff = Date.now() - TOAST_LIFETIME_MS;
+      exitToasts((t) => t.createdAt <= cutoff);
+    }, 500);
+    return () => clearInterval(timer);
+  }, [toasts.length, paused, exitToasts]);
+
+  function resume() {
+    // Restart every toast's lifetime so nothing vanishes the instant the pointer leaves.
+    setToasts((prev) => prev.map((t) => ({ ...t, createdAt: Date.now() })));
+    setPaused(false);
+  }
+
   function handleClick(toast: Toast) {
-    setToasts((prev) => prev.filter((t) => t !== toast));
+    exitToasts((t) => t.entry.id === toast.entry.id);
     if (toast.entry.href) router.push(toast.entry.href);
   }
 
   function dismiss(toast: Toast, e: React.MouseEvent) {
     e.stopPropagation();
-    setToasts((prev) => prev.filter((t) => t !== toast));
+    exitToasts((t) => t.entry.id === toast.entry.id);
   }
 
   if (toasts.length === 0) return null;
 
   return (
-    <div style={{ ...stack, ...(align === "right" ? { right: "16px" } : { left: "16px" }) }}>
+    <div
+      role="status"
+      aria-live="polite"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={resume}
+      onFocus={() => setPaused(true)}
+      onBlur={resume}
+      className={`fixed top-[calc(env(safe-area-inset-top)+0.5rem)] z-[100] flex w-80 max-w-[calc(100vw-1rem)] flex-col gap-2 sm:top-4 ${
+        align === "right" ? "right-2 sm:right-4" : "left-2 sm:left-4"
+      }`}
+    >
       {toasts.map((t) => {
         const icon = KIND_ICON[t.entry.kind];
         // Rows without a natural "headline — detail" split (see
@@ -158,23 +202,44 @@ export function NotificationToasts({
         // the same sentence twice reads as a bug, so collapse to one line.
         const hasSubtitle = t.entry.title !== t.entry.message;
         return (
-          <div key={t.entry.id} role="button" tabIndex={0} onClick={() => handleClick(t)} style={toast}>
-            <div style={{ ...iconCircle, backgroundColor: icon.bg }}>
-              <svg width="16" height="16" viewBox="0 0 20 20" fill={icon.fg}>
-                <path fillRule="evenodd" clipRule="evenodd" d={icon.path} />
-              </svg>
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={toastTitle}>{t.entry.title}</p>
-              {hasSubtitle && <p style={toastText}>{t.entry.message}</p>}
-            </div>
+          <div
+            key={t.entry.id}
+            data-leaving={t.leaving ? "true" : undefined}
+            className={`toast-item flex items-start rounded-lg border border-zinc-200 bg-white shadow-lg ${
+              align === "right" ? "[--toast-x:16px]" : "[--toast-x:-16px]"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => handleClick(t)}
+              className={`press-subtle flex min-w-0 flex-1 items-start gap-3 rounded-l-lg py-3 pl-3.5 pr-1 text-left hover:bg-zinc-50 ${FOCUS_RING}`}
+            >
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${icon.bg}`}
+                aria-hidden="true"
+              >
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" className={icon.fg}>
+                  <path fillRule="evenodd" clipRule="evenodd" d={icon.path} />
+                </svg>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold leading-snug text-zinc-900">
+                  {t.entry.title}
+                </span>
+                {hasSubtitle && (
+                  <span className="mt-0.5 block text-xs leading-relaxed text-zinc-600">
+                    {t.entry.message}
+                  </span>
+                )}
+              </span>
+            </button>
             <button
               type="button"
               onClick={(e) => dismiss(t, e)}
-              aria-label="Dismiss"
-              style={dismissBtn}
+              aria-label="Dismiss notification"
+              className={`press flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11 ${FOCUS_RING}`}
             >
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
               </svg>
             </button>
@@ -185,7 +250,10 @@ export function NotificationToasts({
   );
 }
 
-// Mirrors the tray's dot colors (DOT_COLOR in tray.ts) so the two surfaces
+const FOCUS_RING =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400";
+
+// Mirrors the tray's dot colors (DOT_CLASS in NotificationTray.tsx) so the two surfaces
 // read as one system: same severity, same hue, just a richer glyph here.
 const CHECK_PATH =
   "M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z";
@@ -195,65 +263,7 @@ const ERROR_PATH =
   "M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z";
 
 const KIND_ICON: Record<TrayEntry["kind"], { bg: string; fg: string; path: string }> = {
-  notification: { bg: "#dbeafe", fg: "#2563eb", path: CHECK_PATH },
-  needs_attention: { bg: "#fef3c7", fg: "#d97706", path: ALERT_PATH },
-  hard_error: { bg: "#fee2e2", fg: "#dc2626", path: ERROR_PATH },
-};
-
-const stack: React.CSSProperties = {
-  position: "fixed",
-  top: "16px",
-  zIndex: 100,
-  display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  width: "320px",
-  maxWidth: "calc(100vw - 32px)",
-};
-
-const toast: React.CSSProperties = {
-  display: "flex",
-  gap: "10px",
-  alignItems: "flex-start",
-  padding: "12px 14px",
-  backgroundColor: "#fff",
-  border: "1px solid #e4e4e7",
-  borderRadius: "8px",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-  cursor: "pointer",
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-};
-
-const iconCircle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: "28px",
-  height: "28px",
-  borderRadius: "9999px",
-  flexShrink: 0,
-};
-
-const toastTitle: React.CSSProperties = {
-  fontSize: "13px",
-  fontWeight: 600,
-  color: "#18181b",
-  margin: 0,
-  lineHeight: "1.4",
-};
-
-const toastText: React.CSSProperties = {
-  fontSize: "12px",
-  color: "#71717a",
-  margin: "2px 0 0",
-  lineHeight: "1.5",
-};
-
-const dismissBtn: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  padding: "2px",
-  color: "#a1a1aa",
-  flexShrink: 0,
+  notification: { bg: "bg-zinc-100", fg: "text-zinc-900", path: CHECK_PATH },
+  needs_attention: { bg: "bg-amber-100", fg: "text-amber-700", path: ALERT_PATH },
+  hard_error: { bg: "bg-red-100", fg: "text-red-600", path: ERROR_PATH },
 };

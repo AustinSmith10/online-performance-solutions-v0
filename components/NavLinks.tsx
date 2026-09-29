@@ -77,7 +77,7 @@ export function SidebarNavLinks({
                 href={item.href}
                 onClick={onItemClick}
                 aria-current={active ? "page" : undefined}
-                className={`flex items-center rounded-md px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 [@media(pointer:coarse)]:min-h-11 ${
+                className={`press-subtle flex items-center rounded-md px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 [@media(pointer:coarse)]:min-h-11 ${
                   active
                     ? "bg-zinc-200 font-semibold text-zinc-900"
                     : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
@@ -111,8 +111,8 @@ export function TopNavLinks({ items }: { items: NavItem[] }) {
             aria-current={active ? "page" : undefined}
             className={
               active
-                ? "shrink-0 border-b-2 border-zinc-900 py-2 [@media(pointer:coarse)]:py-3 text-sm font-medium text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
-                : "shrink-0 border-b-2 border-transparent py-2 [@media(pointer:coarse)]:py-3 text-sm text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                ? "shrink-0 border-b-2 border-zinc-900 py-2 transition-colors duration-150 [@media(pointer:coarse)]:py-3 text-sm font-medium text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                : "shrink-0 border-b-2 border-transparent py-2 transition-colors duration-150 [@media(pointer:coarse)]:py-3 text-sm text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             }
           >
             {item.label}
