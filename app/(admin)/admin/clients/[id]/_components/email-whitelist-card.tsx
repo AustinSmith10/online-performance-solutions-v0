@@ -70,7 +70,7 @@ export function EmailWhitelistCard({ orgId, domains }: Props) {
                     <form action={removeAction}>
                       <button
                         type="submit"
-                        className="rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 hover:text-red-700"
+                        className="rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 hover:text-red-700"
                       >
                         Delete
                       </button>

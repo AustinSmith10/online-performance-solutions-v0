@@ -22,7 +22,7 @@ export function MetricsTablesPanel({ clientId, tables, rowsByTable, templateToke
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-zinc-200 bg-white p-6">
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-zinc-900">Data tables</h2>
@@ -50,11 +50,11 @@ export function MetricsTablesPanel({ clientId, tables, rowsByTable, templateToke
         <p className="px-1 text-sm text-zinc-500">No tables yet — create one above.</p>
       ) : (
         tables.map((table) => (
-          <div key={table.id} className="rounded-lg border border-zinc-200 bg-white">
+          <div key={table.id} className="rounded-xl border border-zinc-200 bg-white">
             <button
               type="button"
               onClick={() => setExpandedId(expandedId === table.id ? null : table.id)}
-              className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left"
+              className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
             >
               <div>
                 <p className="text-sm font-medium text-zinc-900">{table.name}</p>
@@ -64,11 +64,11 @@ export function MetricsTablesPanel({ clientId, tables, rowsByTable, templateToke
                   {(rowsByTable[table.id] ?? []).length === 1 ? "" : "s"}
                 </p>
               </div>
-              <span className="text-xs text-zinc-400">{expandedId === table.id ? "Hide" : "Show"}</span>
+              <span className="text-xs text-zinc-500">{expandedId === table.id ? "Hide" : "Show"}</span>
             </button>
 
             {expandedId === table.id && (
-              <div className="border-t border-zinc-100 p-6">
+              <div className="border-t border-zinc-100 p-5">
                 <MetricsTableEditor
                   clientId={clientId}
                   table={table}
@@ -109,7 +109,7 @@ function DeleteTableButton({
             const result = await deleteMetricsTable(clientId, tableId);
             if (result.error) setError(result.error);
           }}
-          className="shrink-0 rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+          className="shrink-0 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
         >
           Delete
         </button>

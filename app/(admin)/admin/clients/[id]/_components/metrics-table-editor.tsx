@@ -90,13 +90,13 @@ function StepBadge({ state, number }: { state: StepState; number: number }) {
   }
   if (state === "active") {
     return (
-      <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-zinc-900 text-[10px] font-medium text-white">
+      <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-medium text-white">
         {number}
       </span>
     );
   }
   return (
-    <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border border-zinc-300 text-[10px] font-medium text-zinc-400">
+    <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border border-zinc-300 text-xs font-medium text-zinc-500">
       {number}
     </span>
   );
@@ -193,26 +193,13 @@ function AutofillConfigPanel({
               name="autofill_enabled"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-300"
+              className="h-4 w-4 rounded-sm border-zinc-300"
             />
           </label>
         </div>
 
         {enabled && (
           <div className="space-y-4 border-t border-zinc-200 pt-4">
-            <div className="flex items-center gap-2">
-              <StepBadge state={templateState} number={1} />
-              <span className="text-[11px] text-zinc-400">Template</span>
-              <div className={`h-px flex-1 ${templateState === "complete" ? "bg-green-600" : "bg-zinc-200"}`} />
-              <StepBadge state={matchState} number={2} />
-              <span className="text-[11px] text-zinc-400">Match</span>
-              <div className={`h-px flex-1 ${matchState === "complete" ? "bg-green-600" : "bg-zinc-200"}`} />
-              <StepBadge state={fieldsState} number={3} />
-              <span className={`text-[11px] ${fieldsState === "pending" ? "text-zinc-400" : "text-zinc-900"}`}>
-                Fields
-              </span>
-            </div>
-
             <div>
               <div className="mb-2 flex items-center gap-2">
                 <StepBadge state={templateState} number={1} />
@@ -223,7 +210,7 @@ function AutofillConfigPanel({
                   name="template_id"
                   value={templateId}
                   onChange={(e) => selectTemplate(e.target.value)}
-                  className="w-full max-w-sm rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full max-w-sm rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 >
                   <option value="">Select a template…</option>
                   {templateTokenGroups.map((g) => (
@@ -260,13 +247,13 @@ function AutofillConfigPanel({
                         ))}
                       </select>
                       {matchToken && (
-                        <p className="mt-1 font-mono text-[11px] text-zinc-400">{matchToken}</p>
+                        <p className="mt-1 font-mono text-xs text-zinc-500">{matchToken}</p>
                       )}
                     </div>
-                    <div className="flex flex-col items-center gap-0.5 pt-[18px] text-zinc-400">
+                    <div className="flex flex-col items-center gap-0.5 pt-[18px] text-zinc-500">
                       <LinkIcon linked={Boolean(matchToken && matchColumnId)} />
                       <span aria-hidden="true">→</span>
-                      <span className="text-[10px]">matches</span>
+                      <span className="text-xs">matches</span>
                     </div>
                     <div className="min-w-0 max-w-full">
                       <label className="mb-1 block text-xs text-zinc-600">Table column</label>
@@ -318,7 +305,7 @@ function AutofillConfigPanel({
                               </option>
                             ))}
                           </select>
-                          <div className="flex w-4 shrink-0 flex-col items-center gap-0.5 text-zinc-400">
+                          <div className="flex w-4 shrink-0 flex-col items-center gap-0.5 text-zinc-500">
                             <LinkIcon linked={Boolean(out.token && out.columnId)} />
                             <span className="text-xs" aria-hidden="true">←</span>
                           </div>
@@ -339,7 +326,7 @@ function AutofillConfigPanel({
                             type="button"
                             onClick={() => removeOutput(index)}
                             disabled={outputs.length === 1}
-                            className="w-6 shrink-0 rounded p-1 text-center text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                            className="w-6 shrink-0 rounded-md p-1 text-center text-zinc-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-500"
                             aria-label="Remove field"
                             title="Remove field"
                           >
@@ -413,14 +400,14 @@ function RowLine({ clientId, table, row }: { clientId: string; table: MetricsTab
                   type={col.data_type === "number" ? "number" : col.data_type === "date" ? "date" : "text"}
                   name={`col_${col.id}`}
                   defaultValue={formatCell(row.data[col.id])}
-                  className="w-32 rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-32 rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
             ))}
             <button
               type="submit"
               disabled={pending}
-              className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {pending ? "Saving…" : "Save"}
             </button>
@@ -441,7 +428,7 @@ function RowLine({ clientId, table, row }: { clientId: string; table: MetricsTab
   return (
     <tr>
       {table.columns.map((col) => (
-        <td key={col.id} className="py-2 pr-4 text-zinc-900">
+        <td key={col.id} className="py-2 pr-4 tabular-nums text-zinc-900">
           {formatCell(row.data[col.id])}
         </td>
       ))}
@@ -454,7 +441,7 @@ function RowLine({ clientId, table, row }: { clientId: string; table: MetricsTab
               const result = await deleteMetricsRow(clientId, table.id, row.id);
               if (result.error) setDeleteError(result.error);
             }}
-            className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600"
+            className="rounded-md p-1 text-zinc-500 hover:bg-red-50 hover:text-red-600"
             aria-label="Delete row"
             title="Delete row"
           >
@@ -489,7 +476,7 @@ function NewRowLine({ clientId, table }: { clientId: string; table: MetricsTable
               <input
                 type={col.data_type === "number" ? "number" : col.data_type === "date" ? "date" : "text"}
                 name={`col_${col.id}`}
-                className="w-32 rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-32 rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
           ))}

@@ -43,10 +43,10 @@ function labelFromToken(token: string): string {
 export function OrgConfigReadonly({ orgId, tokens, currentConfig, roster, tokenLinks }: Props) {
   if (tokens.length === 0) {
     return (
-      <div className="rounded-lg border border-zinc-200 bg-white p-6">
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
         <h2 className="mb-1 text-sm font-semibold text-zinc-900">Org config</h2>
         <p className="text-sm text-zinc-500">
-          No <code className="rounded bg-zinc-100 px-1 text-xs">ORG_</code> tokens found in this
+          No <code className="rounded-sm bg-zinc-100 px-1 text-xs">ORG_</code> tokens found in this
           org&apos;s templates yet. Upload a template first.
         </p>
       </div>
@@ -54,11 +54,11 @@ export function OrgConfigReadonly({ orgId, tokens, currentConfig, roster, tokenL
   }
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-6">
+    <div className="rounded-xl border border-zinc-200 bg-white p-5">
       <div className="mb-4">
         <h2 className="text-sm font-semibold text-zinc-900">Org config</h2>
         <p className="mt-0.5 text-xs text-zinc-500">
-          Values for <code className="rounded bg-zinc-100 px-1">ORG_</code> tokens used in this org&apos;s templates.
+          Values for <code className="rounded-sm bg-zinc-100 px-1">ORG_</code> tokens used in this org&apos;s templates.
         </p>
       </div>
       <dl className="divide-y divide-zinc-100">
@@ -124,9 +124,9 @@ function EditableRow({
         <dt className="text-sm text-zinc-500">{labelFromToken(token)}</dt>
         <div className="flex items-center gap-2">
           <dd className="text-right text-sm font-medium text-zinc-900">
-            {displayValue || <span className="text-zinc-400">—</span>}
+            {displayValue || <span className="text-zinc-500">—</span>}
             {linkedEntry && (
-              <span className="ml-1.5 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
+              <span className="ml-1.5 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">
                 linked
               </span>
             )}
@@ -156,7 +156,7 @@ function EditableRow({
                 setMode("editText");
               }}
               label={`Edit ${labelFromToken(token)}`}
-              className="text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+              className="text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
             />
           </div>
         </div>
@@ -169,7 +169,7 @@ function EditableRow({
       <form action={linkFormAction} className="flex flex-wrap items-center gap-2 py-2.5">
         <label className="w-44 shrink-0 text-sm text-zinc-500">
           {labelFromToken(token)}
-          <span className="ml-1 block font-mono text-xs font-normal text-zinc-400">{`{${token}}`}</span>
+          <span className="ml-1 block font-mono text-xs font-normal text-zinc-500">{`{${token}}`}</span>
         </label>
         <select
           name="stakeholderId"
@@ -222,7 +222,7 @@ function EditableRow({
     <form action={formAction} className="flex items-center gap-3 py-2.5">
       <label className="w-44 shrink-0 text-sm text-zinc-500">
         {labelFromToken(token)}
-        <span className="ml-1 block font-mono text-xs font-normal text-zinc-400">{`{${token}}`}</span>
+        <span className="ml-1 block font-mono text-xs font-normal text-zinc-500">{`{${token}}`}</span>
       </label>
       <div className="min-w-0 flex-1">
         <input

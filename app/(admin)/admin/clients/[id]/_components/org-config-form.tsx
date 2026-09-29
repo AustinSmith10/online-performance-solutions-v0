@@ -25,7 +25,7 @@ export function OrgConfigForm({ orgId, tokens, currentConfig, highlight }: Props
   if (tokens.length === 0) {
     return (
       <p className="text-sm text-zinc-500">
-        No <code className="rounded bg-zinc-100 px-1 text-xs">ORG_</code> tokens found in this
+        No <code className="rounded-sm bg-zinc-100 px-1 text-xs">ORG_</code> tokens found in this
         org&apos;s templates yet. Upload a template first.
       </p>
     );
@@ -37,7 +37,7 @@ export function OrgConfigForm({ orgId, tokens, currentConfig, highlight }: Props
         <div key={token}>
           <label className="mb-1 block text-sm font-medium text-zinc-700">
             {labelFromToken(token)}
-            <span className="ml-2 font-mono text-xs font-normal text-zinc-400">{`{${token}}`}</span>
+            <span className="ml-2 font-mono text-xs font-normal text-zinc-500">{`{${token}}`}</span>
           </label>
           <input
             name={token}

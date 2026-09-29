@@ -347,7 +347,7 @@ export default async function OrganisationDetailPage({
                       {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
                     </Link>
                     {(u.first_name || u.last_name) && (
-                      <span className="ml-2 text-xs text-zinc-400">{u.email}</span>
+                      <span className="ml-2 text-xs text-zinc-500">{u.email}</span>
                     )}
                   </td>
                   <td className="py-2 capitalize text-zinc-600">{u.role.replace("_", " ")}</td>
@@ -395,7 +395,7 @@ export default async function OrganisationDetailPage({
   );
 
   const dangerContent = (
-    <div className="rounded-xl border border-red-200 bg-red-50 p-5 space-y-4">
+    <div className="rounded-lg border border-red-200 bg-red-50 p-5 space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <p className="text-sm font-medium text-zinc-900">Delete client</p>

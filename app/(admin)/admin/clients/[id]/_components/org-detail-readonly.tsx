@@ -94,7 +94,7 @@ interface Props {
 
 export function OrgDetailReadonly({ org }: Props) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-6">
+    <div className="rounded-xl border border-zinc-200 bg-white p-5">
       <h2 className="mb-4 text-sm font-semibold text-zinc-900">Client details</h2>
       <dl className="divide-y divide-zinc-100">
         {FIELDS.map((field) => (
@@ -152,7 +152,7 @@ function EditableRow({ org, field }: { org: OrgDetailReadonlyOrg; field: FieldDe
               setEditing(true);
             }}
             label={`Edit ${field.label}`}
-            className="text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
+            className="text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
           />
         </div>
       </div>

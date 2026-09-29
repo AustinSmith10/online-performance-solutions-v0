@@ -126,7 +126,7 @@ function ModalBody(props: Props & { onClose: () => void }) {
           type="button"
           onClick={props.onClose}
           aria-label="Close"
-          className="ml-3 shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+          className="ml-3 shrink-0 rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600"
         >
           ✕
         </button>
@@ -237,7 +237,7 @@ function CreateStep({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Site inventory"
-          className="w-full max-w-sm rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+          className="w-full max-w-sm rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
         />
       </div>
 
@@ -251,7 +251,7 @@ function CreateStep({
           {drafts.map((draft, index) => (
             <div
               key={index}
-              className={`flex items-center gap-2 rounded border px-2 py-1.5 ${
+              className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${
                 draft.include ? "border-zinc-200 bg-white" : "border-zinc-100 bg-zinc-50 opacity-60"
               }`}
             >
@@ -259,7 +259,7 @@ function CreateStep({
                 type="checkbox"
                 checked={draft.include}
                 onChange={(e) => updateDraft(index, { include: e.target.checked })}
-                className="h-4 w-4 shrink-0 rounded border-zinc-300"
+                className="h-4 w-4 shrink-0 rounded-sm border-zinc-300"
                 aria-label={`Include ${headers[index]}`}
               />
               <div className="min-w-0 flex-1">
@@ -268,9 +268,9 @@ function CreateStep({
                   value={draft.label}
                   onChange={(e) => updateDraft(index, { label: e.target.value })}
                   disabled={!draft.include}
-                  className="w-full rounded border border-zinc-200 px-2 py-1 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 disabled:bg-transparent"
+                  className="w-full rounded-md border border-zinc-200 px-2 py-1 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 disabled:bg-transparent"
                 />
-                <p className="mt-0.5 truncate font-mono text-[10px] text-zinc-400">
+                <p className="mt-0.5 truncate font-mono text-xs text-zinc-500">
                   from “{headers[index]}”
                   {preview.sampleRows && preview.sampleRows.length > 0 && (
                     <> · e.g. {preview.sampleRows[0][index] || "—"}</>
@@ -281,7 +281,7 @@ function CreateStep({
                 value={draft.type}
                 onChange={(e) => updateDraft(index, { type: e.target.value as ColumnDataType })}
                 disabled={!draft.include}
-                className="w-28 shrink-0 rounded border border-zinc-200 px-2 py-1 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 disabled:bg-transparent"
+                className="w-28 shrink-0 rounded-md border border-zinc-200 px-2 py-1 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 disabled:bg-transparent"
               >
                 {(Object.keys(TYPE_LABELS) as ColumnDataType[]).map((t) => (
                   <option key={t} value={t}>
@@ -352,12 +352,12 @@ function AppendStep({
     <div className="space-y-4">
       <div className="space-y-1.5">
         {columns.map((col, colIndex) => (
-          <div key={col.id} className="flex items-center gap-2 rounded border border-zinc-200 bg-white px-2 py-1.5">
+          <div key={col.id} className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1.5">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm text-zinc-900">{col.name}</p>
-              <p className="text-[10px] uppercase tracking-wide text-zinc-400">{TYPE_LABELS[col.data_type]}</p>
+              <p className="text-xs uppercase tracking-wide text-zinc-500">{TYPE_LABELS[col.data_type]}</p>
             </div>
-            <span className="text-xs text-zinc-400" aria-hidden="true">
+            <span className="text-xs text-zinc-500" aria-hidden="true">
               ←
             </span>
             <select
@@ -365,7 +365,7 @@ function AppendStep({
               onChange={(e) =>
                 setSelection((s) => s.map((v, i) => (i === colIndex ? Number(e.target.value) : v)))
               }
-              className="w-48 shrink-0 rounded border border-zinc-200 px-2 py-1 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              className="w-48 shrink-0 rounded-md border border-zinc-200 px-2 py-1 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             >
               <option value={-1}>Skip — leave blank</option>
               {headers.map((h, i) => (
@@ -409,7 +409,7 @@ function CommitFooter({
     <div className="space-y-2 border-t border-zinc-100 pt-4">
       {state.error && <p className="text-sm text-red-600">{state.error}</p>}
       {state.rowErrors && state.rowErrors.length > 0 && (
-        <div className="rounded border border-red-200 bg-red-50 p-3">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
           <p className="mb-1 text-xs font-medium text-red-800">
             Nothing was imported — fix these {state.rowErrors.length} issue(s) and try again:
           </p>

@@ -31,14 +31,14 @@ function sortHref(params: Record<string, string | undefined>, col: SortCol): str
 function SortPills({ params, sortCol, sortOrder }: { params: Record<string, string | undefined>; sortCol: SortCol; sortOrder: "asc" | "desc" }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-xs text-zinc-400">Sort:</span>
+      <span className="text-xs text-zinc-500">Sort:</span>
       {SORT_OPTIONS.map((o) => {
         const active = sortCol === o.col;
         return (
           <a
             key={o.col}
             href={sortHref(params, o.col)}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors duration-150 ${
               active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
             }`}
           >
@@ -127,14 +127,14 @@ export default async function OrganisationsPage({
           </select>
           <button
             type="submit"
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-zinc-700"
           >
             Search
           </button>
           {hasFilter && (
             <Link
               href="/admin/clients"
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
+              className="press-subtle rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 transition-colors duration-150 hover:bg-zinc-100"
             >
               Clear
             </Link>
@@ -154,23 +154,23 @@ export default async function OrganisationsPage({
               <Link
                 key={org.id}
                 href={`/admin/clients/${org.id}`}
-                className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 hover:bg-zinc-50 ${
+                className={`flex items-center gap-3 border-l-[3px] border-y border-r border-zinc-200 bg-white px-3 py-2.5 transition-colors duration-150 hover:bg-zinc-50 focus-visible:relative focus-visible:z-10 ${
                   org.is_frozen ? "border-l-red-400" : "border-l-zinc-200"
                 }`}
               >
                 <div className="min-w-0 flex-1">
                   <span className="truncate text-sm font-medium text-zinc-900">{org.name}</span>
-                  <span className="ml-2 text-xs text-zinc-400">{org.slug}</span>
+                  <span className="ml-2 text-xs text-zinc-500">{org.slug}</span>
                   <p className="mt-0.5 truncate text-xs text-zinc-500">
                     {PAYMENT_METHOD_LABELS[org.payment_method] ?? org.payment_method} · {org.state_territory ?? "—"}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-sm tabular-nums text-zinc-600">{org.credit_balance.toLocaleString()}</span>
+                  <span className="text-sm tabular-nums text-zinc-600" title="Credit balance" aria-label={`Credit balance ${org.credit_balance.toLocaleString()}`}>{org.credit_balance.toLocaleString()}</span>
                   {org.is_frozen ? (
-                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Frozen</span>
+                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Frozen</span>
                   ) : (
-                    <span className="whitespace-nowrap rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-medium text-green-700">Active</span>
+                    <span className="whitespace-nowrap rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Active</span>
                   )}
                 </div>
               </Link>
