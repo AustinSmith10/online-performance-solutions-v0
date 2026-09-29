@@ -268,7 +268,7 @@ function ExtractionTokenCard({
             type="button"
             onClick={handleDelete}
             disabled={isDeletePending}
-            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
+            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40 [@media(pointer:coarse)]:px-2 [@media(pointer:coarse)]:py-2"
           >
             Remove
           </button>

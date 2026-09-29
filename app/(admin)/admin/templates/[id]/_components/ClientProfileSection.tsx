@@ -162,9 +162,10 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
                 )}
                 <button
                   type="button"
+                  aria-pressed={item.client_visible}
                   onClick={() => toggleVisible(index)}
                   disabled={visibilitySaving[item.placeholder_token] === "saving"}
-                  className={`text-xs font-medium transition-colors disabled:opacity-60 ${
+                  className={`text-xs font-medium transition-colors disabled:opacity-60 [@media(pointer:coarse)]:-my-2 [@media(pointer:coarse)]:py-3 ${
                     item.client_visible
                       ? "text-green-700 hover:text-green-900"
                       : "text-zinc-500 hover:text-zinc-600"
