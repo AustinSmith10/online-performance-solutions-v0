@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   approveQueueEntry,
@@ -11,6 +11,7 @@ import {
   getReviewCyclesForProject,
   getSuggestedReviewsForSender,
   type ProjectSearchResult,
+  type QueueActionState,
   type ReviewCycleOption,
 } from "@/app/actions/email-queue";
 import type { CandidateReview } from "@/lib/email-queue/candidate-reviews";
@@ -36,15 +37,47 @@ const TABS: { key: QueueStatus; label: string }[] = [
 // Only approved/rejected are actually final.
 const RESOLVABLE_STATUSES: QueueStatus[] = ["pending", "awaiting_clarification"];
 
-const CATEGORY_COLORS: Record<QueueCategory, string> = {
-  new_submission: "bg-blue-50 text-blue-700",
-  thread_reply: "bg-violet-50 text-violet-700",
-  stakeholder_response: "bg-emerald-50 text-emerald-700",
+// How long a resolve waits (undoable) before it is actually sent to the server.
+const UNDO_MS = 6000;
+// Confirmation toasts clear themselves, unless the message implies follow-up work.
+const INFO_TOAST_MS = 5000;
+
+const EMPTY_TEXT: Record<QueueStatus, string> = {
+  pending: "Nothing pending.",
+  awaiting_clarification: "Nothing awaiting a reply.",
+  approved: "Nothing approved yet.",
+  rejected: "Nothing rejected.",
 };
 
+const BTN_FOCUS =
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900";
+const BTN_PRIMARY = `press rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-zinc-700 ${BTN_FOCUS} disabled:opacity-50 [@media(pointer:coarse)]:min-h-10`;
+const BTN_SECONDARY = `press rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50 ${BTN_FOCUS} disabled:opacity-50 [@media(pointer:coarse)]:min-h-10`;
+const BTN_GHOST = `press rounded-md px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors duration-150 hover:bg-zinc-200 ${BTN_FOCUS} disabled:opacity-50 [@media(pointer:coarse)]:min-h-10`;
+const BTN_DANGER = `press rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition-colors duration-150 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-50 [@media(pointer:coarse)]:min-h-10`;
+const BTN_DANGER_SOLID = `press rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-50 [@media(pointer:coarse)]:min-h-10`;
+const FIELD =
+  "rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500";
+
+// One resolve, waiting out its undo window. `run` is the real server call.
+type Commit = {
+  rowId: string;
+  message: string;
+  // Implies follow-up work, so the confirmation stays until dismissed.
+  persistent?: boolean;
+  run: () => Promise<QueueActionState>;
+};
+type OnCommit = (commit: Omit<Commit, "rowId">) => void;
+
+type Toast =
+  | { kind: "undo"; message: string }
+  | { kind: "info"; message: string; persistent?: boolean }
+  | { kind: "error"; message: string };
+
+// Category is not workflow state, so the badge stays neutral.
 function CategoryBadge({ category }: { category: QueueCategory }) {
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[category]}`}>
+    <span className="inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
       {CATEGORY_LABEL[category]}
     </span>
   );
@@ -53,14 +86,19 @@ function CategoryBadge({ category }: { category: QueueCategory }) {
 function ListRow({ row, active, onSelect }: { row: QueueRow; active: boolean; onSelect: () => void }) {
   return (
     <button
+      type="button"
+      data-row-id={row.id}
       onClick={onSelect}
-      className={`w-full border-b border-zinc-100 px-3 py-2.5 text-left ${
+      aria-current={active ? "true" : undefined}
+      className={`w-full border-b border-zinc-100 px-3 py-2.5 text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:min-h-14 ${
         active ? "bg-zinc-100" : "hover:bg-zinc-50"
       }`}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="truncate text-sm font-medium text-zinc-900">{row.fromName ?? row.fromEmail}</p>
-        <span className="shrink-0 text-[10px] text-zinc-400">{formatDateTime(row.receivedAt).split(",")[0]}</span>
+        <span className="shrink-0 text-xs tabular-nums text-zinc-500">
+          {formatDateTime(row.receivedAt).split(",")[0]}
+        </span>
       </div>
       <p className="truncate text-xs text-zinc-600">{row.subject || "(no subject)"}</p>
       <div className="mt-1">
@@ -73,13 +111,13 @@ function ListRow({ row, active, onSelect }: { row: QueueRow; active: boolean; on
 function ReassignPanel({
   row,
   onCancel,
-  onDone,
+  onCommit,
 }: {
   row: QueueRow;
   onCancel: () => void;
-  onDone: () => void;
+  onCommit: OnCommit;
 }) {
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [category, setCategory] = useState<QueueCategory>(row.proposedCategory);
   const [projectQuery, setProjectQuery] = useState(row.proposedTarget?.projectLabel ?? "");
   const [projectOptions, setProjectOptions] = useState<ProjectSearchResult[]>(
@@ -92,7 +130,6 @@ function ReassignPanel({
       : []
   );
   const [reviewId, setReviewId] = useState(row.proposedTarget?.reviewId ?? "");
-  const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<CandidateReview[]>([]);
 
   // Suggested reviews for this exact sender — mainly useful for
@@ -140,26 +177,16 @@ function ReassignPanel({
 
   const effectiveReviewOptions = category === "stakeholder_response" && projectId ? reviewOptions : [];
 
-  const router = useRouter();
-
   function handleReassign() {
-    setError(null);
-    startTransition(async () => {
-      const result = await reassignQueueEntry(
-        row.id,
-        category,
-        category === "new_submission" ? null : projectId || null,
-        category === "stakeholder_response" ? reviewId || null : null
-      );
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      if (result.redirectTo) {
-        router.push(result.redirectTo);
-        return;
-      }
-      onDone();
+    onCommit({
+      message: "Reassigned & approved",
+      run: () =>
+        reassignQueueEntry(
+          row.id,
+          category,
+          category === "new_submission" ? null : projectId || null,
+          category === "stakeholder_response" ? reviewId || null : null
+        ),
     });
   }
 
@@ -183,7 +210,7 @@ function ReassignPanel({
                 key={c.reviewId}
                 type="button"
                 onClick={() => applySuggestion(c)}
-                className={`rounded-full border px-2.5 py-1 text-xs ${
+                className={`press rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-150 ${BTN_FOCUS} [@media(pointer:coarse)]:min-h-10 ${
                   reviewId === c.reviewId
                     ? "border-zinc-900 bg-zinc-900 text-white"
                     : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100"
@@ -197,14 +224,15 @@ function ReassignPanel({
       )}
 
       <div>
-        <label className="block text-xs font-medium text-zinc-700">Category</label>
+        <label htmlFor={`reassign-category-${row.id}`} className="block text-xs font-medium text-zinc-700">Category</label>
         <select
+          id={`reassign-category-${row.id}`}
           value={category}
           onChange={(e) => {
             setCategory(e.target.value as QueueCategory);
             setReviewId("");
           }}
-          className="mt-1 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+          className={`mt-1 ${FIELD}`}
         >
           <option value="new_submission">New submission</option>
           <option value="thread_reply">Thread reply</option>
@@ -214,8 +242,9 @@ function ReassignPanel({
 
       {category !== "new_submission" && (
         <div>
-          <label className="block text-xs font-medium text-zinc-700">Step 1 — project</label>
+          <label htmlFor={`reassign-project-${row.id}`} className="block text-xs font-medium text-zinc-700">Step 1 — project</label>
           <input
+            id={`reassign-project-${row.id}`}
             value={projectQuery}
             onChange={(e) => {
               setProjectQuery(e.target.value);
@@ -223,11 +252,11 @@ function ReassignPanel({
               setReviewId("");
             }}
             placeholder="Search address / PO / project #…"
-            className="mt-1 block w-56 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+            className={`mt-1 block w-56 max-w-full ${FIELD}`}
           />
           {projectQuery && !projectId && (
             <div className="mt-1 max-h-40 w-56 overflow-y-auto rounded-md border border-zinc-200 bg-white shadow-sm">
-              {projectOptions.length === 0 && <p className="px-2 py-1.5 text-xs text-zinc-400">No matches.</p>}
+              {projectOptions.length === 0 && <p className="px-2 py-1.5 text-xs text-zinc-500">No matches.</p>}
               {projectOptions.map((p) => (
                 <button
                   key={p.id}
@@ -237,7 +266,7 @@ function ReassignPanel({
                     setProjectQuery(p.label);
                     setReviewId("");
                   }}
-                  className="block w-full truncate px-2 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50"
+                  className="block w-full truncate px-2 py-1.5 text-left text-xs text-zinc-700 transition-colors duration-150 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:min-h-10"
                 >
                   {p.label}
                 </button>
@@ -249,12 +278,13 @@ function ReassignPanel({
 
       {category === "stakeholder_response" && (
         <div>
-          <label className="block text-xs font-medium text-zinc-700">Step 2 — review cycle</label>
+          <label htmlFor={`reassign-review-${row.id}`} className="block text-xs font-medium text-zinc-700">Step 2 — review cycle</label>
           <select
+            id={`reassign-review-${row.id}`}
             value={reviewId}
             disabled={!projectId}
             onChange={(e) => setReviewId(e.target.value)}
-            className="mt-1 rounded-md border border-zinc-300 px-2 py-1.5 text-sm disabled:bg-zinc-100"
+            className={`mt-1 ${FIELD} disabled:bg-zinc-100`}
           >
             <option value="">{projectId ? "Select…" : "Pick a project first"}</option>
             {effectiveReviewOptions.map((r) => (
@@ -267,25 +297,13 @@ function ReassignPanel({
       )}
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isPending}
-          className="rounded-md px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-200"
-        >
+        <button type="button" onClick={onCancel} className={BTN_GHOST}>
           Cancel
         </button>
-        <button
-          type="button"
-          disabled={!canSubmit || isPending}
-          onClick={handleReassign}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white disabled:opacity-30"
-        >
-          {isPending ? "Working…" : "Reassign & approve"}
+        <button type="button" disabled={!canSubmit} onClick={handleReassign} className={BTN_PRIMARY}>
+          Reassign & approve
         </button>
       </div>
-
-      {error && <p className="w-full text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -337,8 +355,9 @@ function ClarificationPanel({
           {suggestions.map((c) => `${c.projectLabel} — ${c.reviewLabel}`).join("; ")}
         </p>
       )}
-      <label className="text-xs font-medium text-zinc-700">Message to {row.fromEmail}</label>
+      <label htmlFor={`clarify-${row.id}`} className="text-xs font-medium text-zinc-700">Message to {row.fromEmail}</label>
       <textarea
+        id={`clarify-${row.id}`}
         value={message}
         onChange={(e) => {
           setTouched(true);
@@ -346,85 +365,101 @@ function ClarificationPanel({
         }}
         rows={6}
         placeholder={suggestions === null ? "Loading a suggested draft…" : undefined}
-        className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+        className={`w-full ${FIELD}`}
       />
       {!touched && suggestions !== null && (
-        <p className="text-xs text-zinc-400">Pre-filled — edit freely before sending.</p>
+        <p className="text-xs text-zinc-500">Pre-filled. Edit freely before sending.</p>
       )}
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isPending}
-          className="rounded-md px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-200"
-        >
+        <button type="button" onClick={onCancel} disabled={isPending} className={BTN_GHOST}>
           Cancel
         </button>
         <button
           type="button"
           disabled={isPending || !message.trim()}
           onClick={handleSend}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white disabled:opacity-30"
+          className={BTN_PRIMARY}
         >
-          {isPending ? "Sending…" : "Send"}
+          {isPending ? "Sending…" : "Send request"}
         </button>
       </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-xs text-red-700">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
 
-function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: (message: string) => void }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+function RejectPanel({
+  onCancel,
+  onCommit,
+  row,
+}: {
+  row: QueueRow;
+  onCancel: () => void;
+  onCommit: OnCommit;
+}) {
+  const [reason, setReason] = useState("");
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg bg-zinc-50 p-4">
+      <label htmlFor={`reject-${row.id}`} className="text-xs font-medium text-zinc-700">
+        Reason (optional, kept on the record)
+      </label>
+      <input
+        id={`reject-${row.id}`}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="e.g. Not a real submission"
+        className={`w-full ${FIELD}`}
+      />
+      <div className="flex gap-2">
+        <button type="button" onClick={onCancel} className={BTN_GHOST}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onCommit({ message: "Rejected", run: () => rejectQueueEntry(row.id, reason) })
+          }
+          className={BTN_DANGER_SOLID}
+        >
+          Reject email
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ResolveActions({
+  row,
+  onCommit,
+  onResolved,
+}: {
+  row: QueueRow;
+  onCommit: OnCommit;
+  onResolved: (message: string) => void;
+}) {
   const [reassigning, setReassigning] = useState(false);
   const [clarifying, setClarifying] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState(false);
 
   function handleApprove() {
-    setError(null);
-    startTransition(async () => {
-      const result = await approveQueueEntry(row.id);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      if (result.redirectTo) {
-        router.push(result.redirectTo);
-        return;
-      }
-      onResolved(
-        row.proposedCategory === "stakeholder_response"
-          ? "Filed — needs manual review resolution"
-          : "Approved"
-      );
-    });
-  }
-
-  function handleReject() {
-    setError(null);
-    startTransition(async () => {
-      const result = await rejectQueueEntry(row.id, rejectReason);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      onResolved("Rejected");
+    onCommit({
+      message: row.proposedCategory === "stakeholder_response" ? "Filed, needs manual review resolution" : "Approved",
+      persistent: row.proposedCategory === "stakeholder_response",
+      run: () => approveQueueEntry(row.id),
     });
   }
 
   if (reassigning) {
-    return (
-      <ReassignPanel
-        row={row}
-        onCancel={() => setReassigning(false)}
-        onDone={() => {
-          setReassigning(false);
-          onResolved("Reassigned & approved");
-        }}
-      />
-    );
+    return <ReassignPanel row={row} onCancel={() => setReassigning(false)} onCommit={onCommit} />;
+  }
+
+  if (rejecting) {
+    return <RejectPanel row={row} onCancel={() => setRejecting(false)} onCommit={onCommit} />;
   }
 
   if (clarifying) {
@@ -440,61 +475,42 @@ function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: (messa
     );
   }
 
+  const noTarget = row.proposedCategory !== "new_submission" && !row.proposedTarget;
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button
+        type="button"
         onClick={handleApprove}
-        disabled={isPending || (row.proposedCategory !== "new_submission" && !row.proposedTarget)}
-        title={
-          row.proposedCategory !== "new_submission" && !row.proposedTarget
-            ? "No proposed target — use Reassign instead"
-            : undefined
-        }
-        className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white disabled:opacity-30"
+        disabled={noTarget}
+        title={noTarget ? "No proposed target. Use Reassign instead." : undefined}
+        className={BTN_PRIMARY}
       >
-        {isPending
-          ? "Working…"
-          : row.proposedCategory === "stakeholder_response"
-          ? "File as proposed"
-          : "Approve as proposed"}
+        {row.proposedCategory === "stakeholder_response" ? "File as proposed" : "Approve as proposed"}
       </button>
-      {row.proposedCategory === "stakeholder_response" && (
-        <p className="w-full text-xs text-zinc-500">
-          Files the reply against the proposed review for manual resolution — it doesn&apos;t change the
-          review&apos;s status itself.
-        </p>
-      )}
-      <button
-        onClick={() => setReassigning(true)}
-        disabled={isPending}
-        className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
-      >
+      <button type="button" onClick={() => setReassigning(true)} className={BTN_SECONDARY}>
         Reassign
       </button>
       {!row.proposedTarget && (
         <button
+          type="button"
           onClick={() => setClarifying(true)}
-          disabled={isPending || row.status === "awaiting_clarification"}
+          disabled={row.status === "awaiting_clarification"}
           title="Ask the sender which project/review this is regarding"
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-30"
+          className={BTN_SECONDARY}
         >
           {row.status === "awaiting_clarification" ? "Clarification requested" : "Request clarification"}
         </button>
       )}
-      <input
-        value={rejectReason}
-        onChange={(e) => setRejectReason(e.target.value)}
-        placeholder="Rejection reason (optional)"
-        className="rounded-md border border-zinc-300 px-2 py-1.5 text-xs"
-      />
-      <button
-        onClick={handleReject}
-        disabled={isPending}
-        className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-50"
-      >
-        Reject
+      <button type="button" onClick={() => setRejecting(true)} className={`${BTN_DANGER} sm:ml-auto`}>
+        Reject…
       </button>
-      {error && <p className="w-full text-xs text-red-600">{error}</p>}
+      {row.proposedCategory === "stakeholder_response" && (
+        <p className="w-full text-xs text-zinc-500">
+          Files the reply against the proposed review for manual resolution. It doesn&apos;t change the
+          review&apos;s status itself.
+        </p>
+      )}
     </div>
   );
 }
@@ -502,23 +518,121 @@ function ResolveActions({ row, onResolved }: { row: QueueRow; onResolved: (messa
 export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
   const router = useRouter();
   const [tab, setTab] = useState<QueueStatus>("pending");
-  const [toast, setToast] = useState<string | null>(null);
-  const visible = rows.filter((r) => r.status === tab);
+  const [toast, setToast] = useState<Toast | null>(null);
+  // Rows resolved this session that the server hasn't caught up on yet, or
+  // that are waiting out their undo window. Hidden so the list stays honest.
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  // Below md the list and the detail are separate screens.
+  const [showDetail, setShowDetail] = useState(false);
+  const liveRows = rows.filter((r) => !hidden.has(r.id));
+  const visible = liveRows.filter((r) => r.status === tab);
   const [selectedId, setSelectedId] = useState<string>(visible[0]?.id ?? "");
+  const pendingRef = useRef<{ commit: Commit; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const focusRowRef = useRef(false);
 
-  // The row the toast is confirming disappears from view the moment
-  // router.refresh() re-fetches (its status just changed) — so the
-  // confirmation lives here, outside the row/panel that's about to vanish,
-  // instead of inline where it'd be gone before anyone read it.
+  // The row a confirmation is about disappears from view the moment it is
+  // resolved, so confirmations live here, outside the row that is about to
+  // vanish, instead of inline where they'd be gone before anyone read them.
   useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
+    if (!toast || toast.kind !== "info" || toast.persistent) return;
+    const t = setTimeout(() => setToast(null), INFO_TOAST_MS);
     return () => clearTimeout(t);
   }, [toast]);
 
+  // After auto-advance the resolve button that had focus is gone; put focus
+  // on the newly selected row so keyboard use isn't dumped back at the top.
+  useEffect(() => {
+    if (!focusRowRef.current) return;
+    focusRowRef.current = false;
+    if (selectedId) document.querySelector<HTMLElement>(`[data-row-id="${selectedId}"]`)?.focus();
+  }, [selectedId, hidden]);
+
+  const unhide = useCallback((id: string) => {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const execute = useCallback(
+    async (commit: Commit) => {
+      let res: QueueActionState;
+      try {
+        res = await commit.run();
+      } catch {
+        res = { error: "Something went wrong. Nothing was changed." };
+      }
+      if (res.error) {
+        unhide(commit.rowId);
+        setSelectedId(commit.rowId);
+        setToast({ kind: "error", message: res.error });
+        return;
+      }
+      if (res.redirectTo) {
+        router.push(res.redirectTo);
+        return;
+      }
+      router.refresh();
+      setToast({ kind: "info", message: commit.message, persistent: commit.persistent });
+    },
+    [router, unhide]
+  );
+
+  // Sends the waiting resolve right now (a newer one started, the admin left
+  // the page, or the tab was hidden), so a pending action is never silently lost.
+  const flushPending = useCallback(() => {
+    const p = pendingRef.current;
+    if (!p) return;
+    clearTimeout(p.timer);
+    pendingRef.current = null;
+    void execute(p.commit);
+  }, [execute]);
+
+  useEffect(() => {
+    const onHide = () => {
+      if (document.hidden) flushPending();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      flushPending();
+    };
+  }, [flushPending]);
+
+  function startCommit(row: QueueRow, partial: Omit<Commit, "rowId">) {
+    flushPending();
+    const commit: Commit = { ...partial, rowId: row.id };
+
+    // Auto-advance: next row down, else the one above, else nothing.
+    const i = visible.findIndex((r) => r.id === row.id);
+    const next = visible[i + 1] ?? visible[i - 1] ?? null;
+    focusRowRef.current = true;
+    setHidden((prev) => new Set(prev).add(row.id));
+    setSelectedId(next?.id ?? "");
+    if (!next) setShowDetail(false);
+
+    setToast({ kind: "undo", message: commit.message });
+    const timer = setTimeout(() => {
+      pendingRef.current = null;
+      void execute(commit);
+    }, UNDO_MS);
+    pendingRef.current = { commit, timer };
+  }
+
+  function undo() {
+    const p = pendingRef.current;
+    if (!p) return;
+    clearTimeout(p.timer);
+    pendingRef.current = null;
+    unhide(p.commit.rowId);
+    setSelectedId(p.commit.rowId);
+    setToast(null);
+  }
+
   function handleResolved(message: string) {
     router.refresh();
-    setToast(message);
+    setToast({ kind: "info", message });
   }
 
   // Re-anchor the selection to the first row whenever the active tab
@@ -529,9 +643,22 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
   if (tab !== prevTab) {
     setPrevTab(tab);
     setSelectedId(visible[0]?.id ?? "");
+    setShowDetail(false);
   }
 
   const selected = visible.find((r) => r.id === selectedId) ?? null;
+
+  function onTabKeyDown(e: React.KeyboardEvent, index: number) {
+    let to = -1;
+    if (e.key === "ArrowRight") to = (index + 1) % TABS.length;
+    else if (e.key === "ArrowLeft") to = (index - 1 + TABS.length) % TABS.length;
+    else if (e.key === "Home") to = 0;
+    else if (e.key === "End") to = TABS.length - 1;
+    if (to < 0) return;
+    e.preventDefault();
+    setTab(TABS[to].key);
+    document.getElementById(`queue-tab-${TABS[to].key}`)?.focus();
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -543,45 +670,77 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-white">
-        <div className="flex gap-1 border-b border-zinc-200 px-4 pt-2">
-          {TABS.map((t) => (
+        <div role="tablist" aria-label="Queue status" className="flex gap-1 overflow-x-auto border-b border-zinc-200 px-4 pt-2">
+          {TABS.map((t, i) => (
             <button
               key={t.key}
+              id={`queue-tab-${t.key}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
+              aria-controls="queue-panel"
+              tabIndex={tab === t.key ? 0 : -1}
               onClick={() => setTab(t.key)}
-              className={`rounded-t-md px-3 py-2 text-sm font-medium ${
+              onKeyDown={(e) => onTabKeyDown(e, i)}
+              className={`shrink-0 rounded-t-md px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:min-h-11 ${
                 tab === t.key ? "border-b-2 border-zinc-900 text-zinc-900" : "text-zinc-500 hover:text-zinc-700"
               }`}
             >
               {t.label}
-              <span className="ml-1.5 text-xs text-zinc-400">
-                ({rows.filter((r) => r.status === t.key).length})
+              <span className="ml-1.5 text-xs tabular-nums text-zinc-500">
+                ({liveRows.filter((r) => r.status === t.key).length})
               </span>
             </button>
           ))}
         </div>
 
-        <div className="flex h-[32rem]">
-          <div className="w-80 shrink-0 overflow-y-auto border-r border-zinc-200">
-            {visible.length === 0 && <p className="p-4 text-xs text-zinc-400">Nothing in {tab}.</p>}
+        <div
+          id="queue-panel"
+          role="tabpanel"
+          aria-labelledby={`queue-tab-${tab}`}
+          className="flex md:h-[32rem]"
+        >
+          <div
+            className={`w-full shrink-0 overflow-y-auto border-zinc-200 md:block md:w-80 md:border-r ${
+              showDetail ? "hidden" : "block max-h-[70dvh] md:max-h-none"
+            }`}
+          >
+            {visible.length === 0 && <p className="p-4 text-sm text-zinc-500">{EMPTY_TEXT[tab]}</p>}
             {visible.map((row) => (
-              <ListRow key={row.id} row={row} active={row.id === selectedId} onSelect={() => setSelectedId(row.id)} />
+              <ListRow
+                key={row.id}
+                row={row}
+                active={row.id === selectedId}
+                onSelect={() => {
+                  setSelectedId(row.id);
+                  setShowDetail(true);
+                }}
+              />
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className={`min-w-0 flex-1 overflow-y-auto p-4 md:block md:p-6 ${showDetail ? "block" : "hidden"}`}>
+            <button
+              type="button"
+              onClick={() => setShowDetail(false)}
+              className="press mb-3 inline-flex w-fit items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 md:hidden [@media(pointer:coarse)]:min-h-10"
+            >
+              <span aria-hidden="true">←</span>
+              Back to list
+            </button>
             {!selected ? (
-              <p className="text-sm text-zinc-400">Select an email.</p>
+              <p className="text-sm text-zinc-500">Select an email.</p>
             ) : (
               <>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-semibold text-zinc-900">{selected.subject || "(no subject)"}</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="break-words text-base font-semibold text-zinc-900">{selected.subject || "(no subject)"}</h2>
                   <CategoryBadge category={selected.proposedCategory} />
                 </div>
-                <p className="mt-1 text-xs text-zinc-500">
+                <p className="mt-1 break-words text-xs tabular-nums text-zinc-500">
                   {selected.fromName ? `${selected.fromName} · ` : ""}
                   {selected.fromEmail} · {formatDateTime(selected.receivedAt)}
                 </p>
-                <p className="mt-1 text-xs text-zinc-400">
+                <p className="mt-1 text-xs text-zinc-500">
                   {selected.attachments.length} attachment{selected.attachments.length === 1 ? "" : "s"} ·{" "}
                   {MATCH_REASON_LABEL[selected.matchReason]}
                 </p>
@@ -595,12 +754,12 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
                           href={a.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50"
+                          className={`rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-600 transition-colors duration-150 hover:bg-zinc-50 ${BTN_FOCUS}`}
                         >
                           {a.filename}
                         </a>
                       ) : (
-                        <span key={i} className="rounded-md border border-zinc-200 bg-zinc-100 px-2 py-1 text-xs text-zinc-400">
+                        <span key={i} className="rounded-md border border-zinc-200 bg-zinc-100 px-2 py-1 text-xs text-zinc-500">
                           {a.filename} (unavailable)
                         </span>
                       )
@@ -608,7 +767,7 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
                   </div>
                 )}
 
-                <p className="mt-4 max-w-xl whitespace-pre-wrap rounded-lg bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-700">
+                <p className="mt-4 max-w-xl whitespace-pre-wrap break-words rounded-lg bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-700">
                   {selected.textBody?.trim() || "(empty message body)"}
                 </p>
 
@@ -650,8 +809,15 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
                     {selected.status === "rejected" && selected.rejectionReason ? `: ${selected.rejectionReason}` : ""}
                   </p>
                 ) : (
-                  <div className="mt-6 max-w-xl border-t border-zinc-200 pt-4">
-                    <ResolveActions row={selected} onResolved={handleResolved} />
+                  <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-6 border-t border-zinc-200 bg-white px-4 py-4 md:-mx-6 md:-mb-6 md:px-6">
+                    <div className="max-w-xl">
+                    <ResolveActions
+                      key={selected.id}
+                      row={selected}
+                      onCommit={(partial) => startCommit(selected, partial)}
+                      onResolved={handleResolved}
+                    />
+                    </div>
                   </div>
                 )}
               </>
@@ -661,15 +827,40 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
       </div>
 
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg">
-          <svg className="h-4 w-4 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-              clipRule="evenodd"
-            />
-          </svg>
-          {toast}
+        <div
+          role={toast.kind === "error" ? "alert" : "status"}
+          className="toast-item fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-50 flex items-center gap-3 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg sm:left-auto sm:max-w-md"
+        >
+          {toast.kind === "error" ? (
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
+          ) : (
+            <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                fillRule="evenodd"
+                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+          )}
+          <span className="min-w-0 flex-1 break-words">{toast.message}</span>
+          {toast.kind === "undo" && (
+            <button
+              type="button"
+              onClick={undo}
+              className="press shrink-0 rounded-md px-2 py-1 text-sm font-semibold text-white underline-offset-2 transition-colors duration-150 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [@media(pointer:coarse)]:min-h-10"
+            >
+              Undo
+            </button>
+          )}
+          {(toast.kind === "error" || (toast.kind === "info" && toast.persistent)) && (
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="press shrink-0 rounded-md px-2 py-1 text-sm font-medium text-zinc-300 transition-colors duration-150 hover:bg-zinc-700 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [@media(pointer:coarse)]:min-h-10"
+            >
+              Dismiss
+            </button>
+          )}
         </div>
       )}
     </div>
