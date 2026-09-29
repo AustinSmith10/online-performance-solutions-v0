@@ -12,6 +12,12 @@ import {
   type MetricsColumn,
 } from "@/app/actions/client-metrics";
 
+// This modal is portalled to <body>, outside the admin shell, so it repeats the
+// shell's phone-platform layer (see app/(admin)/admin/layout.tsx PLATFORM).
+const PLATFORM =
+  "[-webkit-tap-highlight-color:transparent] [&_button]:touch-manipulation [&_button]:select-none " +
+  "[@media(pointer:coarse)]:[&_input]:text-base [@media(pointer:coarse)]:[&_select]:text-base [@media(pointer:coarse)]:[&_textarea]:text-base";
+
 const TYPE_LABELS: Record<ColumnDataType, string> = {
   text: "Text",
   number: "Number",
@@ -61,7 +67,7 @@ export function MetricsSpreadsheetModal(props: Props) {
         className="modal-backdrop fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
       />
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${PLATFORM}`}
         aria-modal="true"
         role="dialog"
       >
