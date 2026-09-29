@@ -54,6 +54,7 @@ export function NotificationToasts({
   const [paused, setPaused] = useState(false);
   const router = useRouter();
   const seenIds = useRef<Set<string> | null>(null);
+  const exitTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   const pushToast = useCallback((entry: TrayEntry) => {
     setToasts((prev) => [...prev, { entry, createdAt: Date.now() }]);
@@ -150,9 +151,16 @@ export function NotificationToasts({
         return { ...t, leaving: true };
       })
     );
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      exitTimers.current.delete(timer);
       setToasts((prev) => prev.filter((t) => !(t.leaving && ids.includes(t.entry.id))));
     }, TOAST_EXIT_MS);
+    exitTimers.current.add(timer);
+  }, []);
+
+  useEffect(() => {
+    const timers = exitTimers.current;
+    return () => timers.forEach(clearTimeout);
   }, []);
 
   // Auto-dismiss.
@@ -180,8 +188,6 @@ export function NotificationToasts({
     e.stopPropagation();
     exitToasts((t) => t.entry.id === toast.entry.id);
   }
-
-  if (toasts.length === 0) return null;
 
   return (
     <div

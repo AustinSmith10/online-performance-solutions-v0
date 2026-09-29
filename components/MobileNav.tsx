@@ -36,6 +36,17 @@ export function MobileNav({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
 
+  // Widening past the lg breakpoint hides the drawer's trigger; close it so
+  // the scroll lock below can't outlive it.
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = (e: MediaQueryListEvent) => {
+      if (e.matches) setOpen(false);
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   // Escape closes; page scroll locks while open; focus moves into the drawer
   // on open and returns to the hamburger on close.
   useEffect(() => {

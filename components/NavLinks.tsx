@@ -12,10 +12,12 @@ interface NavItem {
 }
 
 // Small tabular count chip for pending work (e.g. the email queue).
-function CountChip({ count }: { count?: number }) {
+function CountChip({ count, active }: { count?: number; active?: boolean }) {
   if (!count) return null;
   return (
-    <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-zinc-200 px-1.5 text-xs font-medium tabular-nums leading-5 text-zinc-700">
+    <span className={`ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums leading-5 ${
+        active ? "bg-zinc-900 text-white" : "bg-zinc-200 text-zinc-700"
+      }`}>
       {count}
     </span>
   );
@@ -84,7 +86,7 @@ export function SidebarNavLinks({
                 }`}
               >
                 {item.label}
-                <CountChip count={item.count} />
+                <CountChip count={item.count} active={active} />
               </Link>
             );
           })}
@@ -116,7 +118,7 @@ export function TopNavLinks({ items }: { items: NavItem[] }) {
             }
           >
             {item.label}
-            <CountChip count={item.count} />
+            <CountChip count={item.count} active={active} />
           </Link>
         );
       })}

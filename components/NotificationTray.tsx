@@ -133,11 +133,12 @@ export function NotificationTray({
       if (includeNeedsAttention) requests.push(fetch("/api/system-errors"));
       responses = await Promise.all(requests);
     } catch {
-      setRefreshFailed(true);
       // Background poll — a transient network blip (e.g. the server
-      // restarting during a deploy) is not worth surfacing. The next
-      // interval tick retries. Swallowing here also keeps it from
-      // becoming an unhandled rejection in Sentry.
+      // restarting during a deploy) is not an error to throw. Swallowing it
+      // keeps it from becoming an unhandled rejection in Sentry; the tray
+      // shows a quiet "Couldn't refresh" line instead and the next interval
+      // tick retries.
+      setRefreshFailed(true);
       return;
     }
 
@@ -280,7 +281,6 @@ export function NotificationTray({
         onClick={handleToggle}
         aria-label={unreadLabel}
         aria-expanded={open}
-        aria-haspopup="dialog"
         aria-controls={open ? panelId : undefined}
         className={`press relative flex h-9 w-9 items-center justify-center rounded-md text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11 ${FOCUS_RING}`}
       >
@@ -301,7 +301,7 @@ export function NotificationTray({
       {open && (
         <div
           id={panelId}
-          role="dialog"
+          role="region"
           aria-label="Notifications"
           className={`tray-pop fixed inset-x-2 top-[calc(env(safe-area-inset-top)+4rem)] z-50 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg sm:absolute sm:inset-x-auto sm:top-[calc(100%+8px)] sm:w-[360px] ${
             align === "right" ? "sm:right-0" : "origin-top-left sm:left-0"
