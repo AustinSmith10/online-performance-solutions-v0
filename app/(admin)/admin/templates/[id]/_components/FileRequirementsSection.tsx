@@ -59,6 +59,7 @@ function RequirementCard({
   requirement: FileRequirement;
 }) {
   const [editing, setEditing] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [isDeletePending, startDeleteTransition] = useTransition();
   const [isSavePending, startSaveTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | undefined>();
@@ -286,7 +287,8 @@ function RequirementCard({
             label={`Edit ${requirement.name}`}
           />
           <button
-            onClick={handleDelete}
+            type="button"
+            onClick={() => setConfirmingRemove(true)}
             disabled={isDeletePending}
             className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40 [@media(pointer:coarse)]:px-2 [@media(pointer:coarse)]:py-2"
           >
@@ -294,6 +296,27 @@ function RequirementCard({
           </button>
         </div>
       </div>
+
+      {confirmingRemove && (
+        <div className="pane-in mt-3 flex flex-wrap items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+          <p className="text-xs text-red-800">Remove this file requirement? This can&apos;t be undone.</p>
+          <button
+            type="button"
+            onClick={() => { setConfirmingRemove(false); handleDelete(); }}
+            disabled={isDeletePending}
+            className="press-subtle rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            Remove
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmingRemove(false)}
+            className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-100"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Attribute chips */}
       <div className="mt-3 flex flex-wrap gap-1.5">
