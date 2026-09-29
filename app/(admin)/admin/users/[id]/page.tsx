@@ -101,11 +101,11 @@ export default async function UserDetailPage({
 
   const header = (
     <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${accentColor} bg-white p-5`}>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-600">
           {initials}
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-40">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-base font-semibold text-zinc-900">{displayName}</h1>
             <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 capitalize">
@@ -186,7 +186,7 @@ export default async function UserDetailPage({
             <form action={resetTotpAction}>
               <button
                 type="submit"
-                className="ml-4 shrink-0 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                className="press-subtle ml-4 shrink-0 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
               >
                 Disable 2FA
               </button>
@@ -195,7 +195,7 @@ export default async function UserDetailPage({
             <form action={requireTotpAction}>
               <button
                 type="submit"
-                className="ml-4 shrink-0 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                className="press-subtle ml-4 shrink-0 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
               >
                 Require 2FA
               </button>
@@ -218,7 +218,7 @@ export default async function UserDetailPage({
             <button
               type="submit"
               disabled={!u.is_locked}
-              className="ml-4 shrink-0 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
+              className="press-subtle ml-4 shrink-0 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400"
             >
               Unlock account
             </button>

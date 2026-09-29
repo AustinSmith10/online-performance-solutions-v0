@@ -30,7 +30,7 @@ export function UserHeaderMeta({ user, clients }: Props) {
       <EmailField user={user} />
       {showClient && (
         <>
-          <span>·</span>
+          <span aria-hidden="true" className="hidden sm:inline">·</span>
           <ClientField user={user} clients={clients} />
         </>
       )}
@@ -54,7 +54,7 @@ function EmailField({ user }: { user: UserHeaderMetaUser }) {
         <EditIconButton
           onClick={() => setEditing(true)}
           label="Edit email"
-          className="text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
+          className="text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
         />
       </span>
     );
@@ -75,7 +75,7 @@ function EmailField({ user }: { user: UserHeaderMetaUser }) {
         type="submit"
         disabled={pending}
         aria-label="Save"
-        className="text-green-600 hover:text-green-700 disabled:opacity-50"
+        className="rounded-md p-1 text-green-600 hover:bg-green-50 hover:text-green-700 disabled:opacity-50 [@media(pointer:coarse)]:p-2"
       >
         <CheckIcon />
       </button>
@@ -84,7 +84,7 @@ function EmailField({ user }: { user: UserHeaderMetaUser }) {
         onClick={() => setEditing(false)}
         disabled={pending}
         aria-label="Cancel"
-        className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
+        className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 [@media(pointer:coarse)]:p-2"
       >
         <XIcon />
       </button>
@@ -113,7 +113,7 @@ function ClientField({ user, clients }: { user: UserHeaderMetaUser; clients: Pic
         {user.client_id ? (
           <Link
             href={`/admin/clients/${user.client_id}`}
-            className="font-medium text-zinc-900 hover:underline"
+            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900"
           >
             {clientName}
           </Link>
@@ -123,7 +123,7 @@ function ClientField({ user, clients }: { user: UserHeaderMetaUser; clients: Pic
         <EditIconButton
           onClick={() => setEditing(true)}
           label="Edit client"
-          className="text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
+          className="text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
         />
       </span>
     );
@@ -147,7 +147,7 @@ function ClientField({ user, clients }: { user: UserHeaderMetaUser; clients: Pic
         type="submit"
         disabled={pending}
         aria-label="Save"
-        className="text-green-600 hover:text-green-700 disabled:opacity-50"
+        className="rounded-md p-1 text-green-600 hover:bg-green-50 hover:text-green-700 disabled:opacity-50 [@media(pointer:coarse)]:p-2"
       >
         <CheckIcon />
       </button>
@@ -156,7 +156,7 @@ function ClientField({ user, clients }: { user: UserHeaderMetaUser; clients: Pic
         onClick={() => setEditing(false)}
         disabled={pending}
         aria-label="Cancel"
-        className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
+        className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 [@media(pointer:coarse)]:p-2"
       >
         <XIcon />
       </button>

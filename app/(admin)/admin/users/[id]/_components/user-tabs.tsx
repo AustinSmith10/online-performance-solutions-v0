@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import { updateUserProfile, type EditUserState, updateConsultantDisciplines, type UpdateDisciplinesState } from "@/app/actions/admin-users";
 import { DISCIPLINES } from "@/lib/projects/project-number";
 import { EditIconButton } from "@/components/EditIconButton";
@@ -69,7 +70,7 @@ function UserTabsInner({ user, clients, availabilityActions }: Props) {
 
   return (
     <div>
-      <div className="flex gap-1 border-b border-zinc-200 mb-6">
+      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-zinc-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {([
           { id: "profile" as Tab, label: "Profile" },
           { id: "availability" as Tab, label: "Availability" },
@@ -79,7 +80,7 @@ function UserTabsInner({ user, clients, availabilityActions }: Props) {
             key={t.id}
             type="button"
             onClick={() => requestNavigate(() => setTab(t.id))}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab === t.id
                 ? "border-zinc-900 text-zinc-900"
                 : "border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300"
@@ -98,16 +99,7 @@ function UserTabsInner({ user, clients, availabilityActions }: Props) {
             const isActive = user.availability === status;
             return (
               <form key={status} action={availabilityActions[status]}>
-                <button
-                  type="submit"
-                  className={
-                    isActive
-                      ? "rounded-md border-2 border-zinc-900 bg-zinc-900 px-4 py-2 text-sm font-medium text-white"
-                      : "rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-                  }
-                >
-                  {AVAILABILITY_LABELS[status]}
-                </button>
+                <AvailabilityButton isActive={isActive} label={AVAILABILITY_LABELS[status]} />
               </form>
             );
           })}
@@ -116,6 +108,24 @@ function UserTabsInner({ user, clients, availabilityActions }: Props) {
 
       {tab === "disciplines" && <DisciplinesSection userId={user.id} disciplines={user.disciplines} />}
     </div>
+  );
+}
+
+function AvailabilityButton({ isActive, label }: { isActive: boolean; label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      aria-pressed={isActive}
+      disabled={pending}
+      className={`press-subtle rounded-md px-4 py-2 text-sm font-medium disabled:opacity-60 ${
+        isActive
+          ? "border-2 border-zinc-900 bg-zinc-900 text-white"
+          : "border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -143,7 +153,7 @@ function DisciplinesSection({ userId, disciplines }: { userId: string; disciplin
               name="disciplines"
               value={d.suffix}
               defaultChecked={current.has(d.suffix)}
-              className="h-3.5 w-3.5 rounded border-zinc-300"
+              className="h-3.5 w-3.5 rounded-sm border-zinc-300"
             />
             {d.name}
           </label>
@@ -154,7 +164,7 @@ function DisciplinesSection({ userId, disciplines }: { userId: string; disciplin
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+        className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
       >
         {pending ? "Saving…" : "Save"}
       </button>
@@ -220,7 +230,7 @@ function ProfileSection({
 
   return (
     <div>
-      <p className="mb-4 text-sm text-zinc-500">Profile information</p>
+      <p className="mb-4 text-sm text-zinc-500">Details</p>
       <div className="divide-y divide-zinc-100">
         {fields.map((field) => (
           <EditableRow key={field.key} user={user} field={field} />
@@ -245,12 +255,12 @@ function EditableRow({ user, field }: { user: UserTabsUser; field: FieldDef }) {
   if (!editing) {
     return (
       <div className="group flex items-baseline gap-4 py-2.5">
-        <span className="w-40 shrink-0 text-xs text-zinc-400">{field.label}</span>
+        <span className="w-28 shrink-0 text-xs text-zinc-500 sm:w-40">{field.label}</span>
         <span className="min-w-0 flex-1 text-sm text-zinc-900">{displayValue(user, field)}</span>
         <EditIconButton
           onClick={() => setEditing(true)}
           label={`Edit ${field.label}`}
-          className="text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
+          className="text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
         />
       </div>
     );
@@ -258,7 +268,7 @@ function EditableRow({ user, field }: { user: UserTabsUser; field: FieldDef }) {
 
   return (
     <form action={formAction} className="flex items-center gap-3 py-2.5">
-      <label className="w-40 shrink-0 text-xs text-zinc-400">{field.label}</label>
+      <label className="w-28 shrink-0 text-xs text-zinc-500 sm:w-40">{field.label}</label>
       <div className="min-w-0 flex-1">
         {field.kind === "select" ? (
           <select
@@ -298,7 +308,7 @@ function EditableRow({ user, field }: { user: UserTabsUser; field: FieldDef }) {
           type="submit"
           disabled={pending}
           aria-label="Save"
-          className="text-green-600 hover:text-green-700 disabled:opacity-50"
+          className="rounded-md p-1 text-green-600 hover:bg-green-50 hover:text-green-700 disabled:opacity-50 [@media(pointer:coarse)]:p-2"
         >
           <CheckIcon />
         </button>
@@ -307,7 +317,7 @@ function EditableRow({ user, field }: { user: UserTabsUser; field: FieldDef }) {
           onClick={() => setEditing(false)}
           disabled={pending}
           aria-label="Cancel"
-          className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
+          className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 [@media(pointer:coarse)]:p-2"
         >
           <XIcon />
         </button>

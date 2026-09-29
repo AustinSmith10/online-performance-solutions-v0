@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Drawer } from "@/components/Drawer";
 import {
   deleteUser,
   restoreUser,
@@ -78,14 +79,14 @@ export function UserHeaderActions({
 
   if (isDeleted) {
     return (
-      <form action={restoreDeletedAction} className="flex shrink-0 items-center gap-2">
+      <form action={restoreDeletedAction} className="flex flex-wrap items-center gap-2 sm:shrink-0">
         {restoreDeletedState.error && (
-          <p className="text-xs text-red-600">{restoreDeletedState.error}</p>
+          <p role="alert" className="text-xs text-red-600">{restoreDeletedState.error}</p>
         )}
         <button
           type="submit"
           disabled={restoreDeletedPending}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="press-subtle rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {restoreDeletedPending ? "Restoring…" : "Restore from recovery bin"}
         </button>
@@ -93,17 +94,19 @@ export function UserHeaderActions({
     );
   }
 
+  const BTN = "press-subtle rounded-md border bg-white px-3 py-1.5 text-xs font-medium disabled:opacity-50";
+
   return (
     <>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
         <form action={resendAction}>
           <button
             type="submit"
             disabled={resendPending}
-            className={`rounded-md border px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+            className={`${BTN} ${
               inviteFailed
                 ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
-                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+                : "border-zinc-200 text-zinc-600 hover:bg-zinc-50"
             }`}
           >
             {resendPending
@@ -115,14 +118,14 @@ export function UserHeaderActions({
               : "Resend invite"}
           </button>
           {resendState.error && (
-            <p className="mt-1 text-right text-xs text-red-600">{resendState.error}</p>
+            <p role="alert" className="mt-1 text-xs text-red-600">{resendState.error}</p>
           )}
         </form>
 
         <button
           type="button"
           onClick={() => setShowResetOverlay(true)}
-          className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+          className={`${BTN} border-zinc-200 text-zinc-600 hover:bg-zinc-50`}
         >
           Reset password
         </button>
@@ -132,7 +135,7 @@ export function UserHeaderActions({
             <button
               type="button"
               onClick={() => setShowDeactivateOverlay(true)}
-              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+              className={`${BTN} border-amber-300 text-amber-800 hover:bg-amber-50`}
             >
               Deactivate
             </button>
@@ -140,7 +143,7 @@ export function UserHeaderActions({
             <button
               type="button"
               onClick={() => setShowRestoreOverlay(true)}
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+              className={`${BTN} border-zinc-200 text-zinc-600 hover:bg-zinc-50`}
             >
               Restore
             </button>
@@ -151,194 +154,164 @@ export function UserHeaderActions({
           <button
             type="button"
             onClick={() => setShowSoftDeleteOverlay(true)}
-            className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+            className={`${BTN} border-red-300 text-red-700 hover:bg-red-50`}
           >
             Delete
           </button>
         )}
       </div>
 
-      {/* Delete overlay */}
-      {showSoftDeleteOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-              <svg className="h-6 w-6 text-red-600" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <p className="text-base font-semibold text-zinc-900 text-center">Delete this account?</p>
-            <p className="mt-2 text-sm text-zinc-500 text-center">
-              <span className="font-medium text-zinc-700">{userEmail}</span> will be moved to the
-              recovery bin and hidden from listings. This is separate from deactivation and can be
-              undone.
-            </p>
-            {softDeleteState.error && (
-              <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 text-center">
-                {softDeleteState.error}
-              </p>
-            )}
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowSoftDeleteOverlay(false)}
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-              >
-                Cancel
-              </button>
-              <form action={softDeleteAction} className="flex-1">
-                <button
-                  type="submit"
-                  disabled={softDeletePending}
-                  className="w-full rounded-lg border border-red-300 bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  {softDeletePending ? "Deleting…" : "Delete"}
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+      <Drawer
+        isOpen={showSoftDeleteOverlay}
+        onClose={() => (softDeletePending ? undefined : setShowSoftDeleteOverlay(false))}
+        title="Delete this account?"
+      >
+        <p className="text-sm text-zinc-600">
+          <span className="font-medium text-zinc-900">{userEmail}</span> will be moved to the
+          recovery bin and hidden from listings. This is separate from deactivation and can be
+          undone.
+        </p>
+        {softDeleteState.error && <ErrorNote>{softDeleteState.error}</ErrorNote>}
+        <ConfirmRow
+          onCancel={() => setShowSoftDeleteOverlay(false)}
+          action={softDeleteAction}
+          pending={softDeletePending}
+          label="Delete"
+          pendingLabel="Deleting…"
+          tone="danger"
+        />
+      </Drawer>
 
-      {/* Reset password overlay */}
-      {showResetOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
-            <p className="text-base font-semibold text-zinc-900 text-center">Reset password?</p>
-            {resetState.link ? (
-              <div className="mt-4 flex flex-col gap-2">
-                <p className="text-sm text-zinc-500 text-center">Reset link generated.</p>
-                <input
-                  readOnly
-                  value={resetState.link}
-                  className="w-full rounded border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs font-mono text-zinc-700"
-                  onFocus={(e) => e.currentTarget.select()}
-                />
-                <p className="text-xs text-zinc-400 text-center">Copy and share this with the user.</p>
-                <button
-                  type="button"
-                  onClick={() => setShowResetOverlay(false)}
-                  className="mt-2 w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-                >
-                  Done
-                </button>
-              </div>
-            ) : (
-              <>
-                <p className="mt-2 text-sm text-zinc-500 text-center">
-                  Generate a one-time reset link for{" "}
-                  <span className="font-medium text-zinc-700">{userEmail}</span>.
-                </p>
-                {resetState.error && (
-                  <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 text-center">
-                    {resetState.error}
-                  </p>
-                )}
-                <div className="mt-6 flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowResetOverlay(false)}
-                    className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Cancel
-                  </button>
-                  <form action={resetAction} className="flex-1">
-                    <button
-                      type="submit"
-                      disabled={resetPending}
-                      className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
-                    >
-                      {resetPending ? "Generating…" : "Generate link"}
-                    </button>
-                  </form>
-                </div>
-              </>
-            )}
+      <Drawer
+        isOpen={showResetOverlay}
+        onClose={() => setShowResetOverlay(false)}
+        title="Reset password?"
+      >
+        {resetState.link ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-zinc-600">Reset link generated.</p>
+            <input
+              readOnly
+              aria-label="Reset link"
+              value={resetState.link}
+              className="w-full rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2 font-mono text-xs text-zinc-700"
+              onFocus={(e) => e.currentTarget.select()}
+            />
+            <p className="text-xs text-zinc-500">Copy and share this with the user.</p>
+            <button
+              type="button"
+              onClick={() => setShowResetOverlay(false)}
+              className="press-subtle mt-2 w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            >
+              Done
+            </button>
           </div>
-        </div>
-      )}
-
-      {/* Deactivate overlay */}
-      {showDeactivateOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-              <svg className="h-6 w-6 text-red-600" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <p className="text-base font-semibold text-zinc-900 text-center">Deactivate account?</p>
-            <p className="mt-2 text-sm text-zinc-500 text-center">
-              <span className="font-medium text-zinc-700">{userEmail}</span> will be prevented from
-              logging in. This can be reversed.
+        ) : (
+          <>
+            <p className="text-sm text-zinc-600">
+              Generate a one-time reset link for{" "}
+              <span className="font-medium text-zinc-900">{userEmail}</span>.
             </p>
-            {deleteState.error && (
-              <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 text-center">
-                {deleteState.error}
-              </p>
-            )}
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowDeactivateOverlay(false)}
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-              >
-                Cancel
-              </button>
-              <form action={deleteAction} className="flex-1">
-                <button
-                  type="submit"
-                  disabled={deletePending}
-                  className="w-full rounded-lg border border-red-300 bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  {deletePending ? "Deactivating…" : "Deactivate"}
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+            {resetState.error && <ErrorNote>{resetState.error}</ErrorNote>}
+            <ConfirmRow
+              onCancel={() => setShowResetOverlay(false)}
+              action={resetAction}
+              pending={resetPending}
+              label="Generate link"
+              pendingLabel="Generating…"
+              tone="primary"
+            />
+          </>
+        )}
+      </Drawer>
 
-      {/* Restore overlay */}
-      {showRestoreOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <svg className="h-6 w-6 text-green-600" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <p className="text-base font-semibold text-zinc-900 text-center">Restore account?</p>
-            <p className="mt-2 text-sm text-zinc-500 text-center">
-              <span className="font-medium text-zinc-700">{userEmail}</span> will be able to log in
-              again.
-            </p>
-            {restoreState.error && (
-              <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 text-center">
-                {restoreState.error}
-              </p>
-            )}
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowRestoreOverlay(false)}
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-              >
-                Cancel
-              </button>
-              <form action={restoreAction} className="flex-1">
-                <button
-                  type="submit"
-                  disabled={restorePending}
-                  className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
-                >
-                  {restorePending ? "Restoring…" : "Restore account"}
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+      <Drawer
+        isOpen={showDeactivateOverlay}
+        onClose={() => (deletePending ? undefined : setShowDeactivateOverlay(false))}
+        title="Deactivate account?"
+      >
+        <p className="text-sm text-zinc-600">
+          <span className="font-medium text-zinc-900">{userEmail}</span> will be prevented from
+          logging in. This can be reversed.
+        </p>
+        {deleteState.error && <ErrorNote>{deleteState.error}</ErrorNote>}
+        <ConfirmRow
+          onCancel={() => setShowDeactivateOverlay(false)}
+          action={deleteAction}
+          pending={deletePending}
+          label="Deactivate"
+          pendingLabel="Deactivating…"
+          tone="danger"
+        />
+      </Drawer>
+
+      <Drawer
+        isOpen={showRestoreOverlay}
+        onClose={() => (restorePending ? undefined : setShowRestoreOverlay(false))}
+        title="Restore account?"
+      >
+        <p className="text-sm text-zinc-600">
+          <span className="font-medium text-zinc-900">{userEmail}</span> will be able to log in
+          again.
+        </p>
+        {restoreState.error && <ErrorNote>{restoreState.error}</ErrorNote>}
+        <ConfirmRow
+          onCancel={() => setShowRestoreOverlay(false)}
+          action={restoreAction}
+          pending={restorePending}
+          label="Restore account"
+          pendingLabel="Restoring…"
+          tone="primary"
+        />
+      </Drawer>
     </>
+  );
+}
+
+function ErrorNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p role="alert" className="rise-in mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+      {children}
+    </p>
+  );
+}
+
+function ConfirmRow({
+  onCancel,
+  action,
+  pending,
+  label,
+  pendingLabel,
+  tone,
+}: {
+  onCancel: () => void;
+  action: (formData: FormData) => void;
+  pending: boolean;
+  label: string;
+  pendingLabel: string;
+  tone: "danger" | "primary";
+}) {
+  return (
+    <div className="mt-5 flex gap-3">
+      <button
+        type="button"
+        onClick={onCancel}
+        disabled={pending}
+        className="press-subtle flex-1 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+      >
+        Cancel
+      </button>
+      <form action={action} className="flex-1">
+        <button
+          type="submit"
+          disabled={pending}
+          className={`press-subtle w-full rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
+            tone === "danger" ? "bg-red-600 hover:bg-red-700" : "bg-zinc-900 hover:bg-zinc-700"
+          }`}
+        >
+          {pending ? pendingLabel : label}
+        </button>
+      </form>
+    </div>
   );
 }
