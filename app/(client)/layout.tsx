@@ -49,7 +49,7 @@ export default async function ClientLayout({ children }: { children: React.React
             <div className="flex shrink-0 items-center gap-2">
               <ReplayTourButton
                 href="/portal"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-300 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-300 text-xs [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
               >
                 ?
               </ReplayTourButton>
@@ -63,7 +63,7 @@ export default async function ClientLayout({ children }: { children: React.React
               <form action={logout}>
                 <button
                   type="submit"
-                  className="rounded px-2 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                  className="rounded px-2 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
                 >
                   Sign out
                 </button>
@@ -71,7 +71,7 @@ export default async function ClientLayout({ children }: { children: React.React
             </div>
           </div>
           {/* Mobile: nav links in a second row */}
-          <nav className="flex gap-4 border-t border-zinc-100 py-1 sm:hidden">
+          <nav className="flex gap-4 border-t border-zinc-100 sm:hidden">
             <TopNavLinks items={[
               { href: "/portal", label: "My Reports" },
               { href: "/portal/history", label: "History" },
