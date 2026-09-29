@@ -44,11 +44,42 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
 
   useEffect(() => { queueMicrotask(() => setMounted(true)); }, []);
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+
+  // Escape closes; Tab is trapped inside the panel while it is open.
   useEffect(() => {
     if (!open) return;
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setOpen(false); return; }
+      if (e.key !== "Tab" || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
+  }, [open]);
+
+  // Move focus into the panel on open and back to whatever opened it on close.
+  useEffect(() => {
+    if (open) {
+      openerRef.current = document.activeElement as HTMLElement | null;
+      panelRef.current?.focus();
+    } else {
+      openerRef.current?.focus();
+      openerRef.current = null;
+    }
   }, [open]);
 
   const overlay = (
@@ -63,6 +94,8 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
 
       {/* Slide-in panel */}
       <div
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Extraction-only tokens"
@@ -77,7 +110,7 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
           transform: open ? "translateX(0)" : "translateX(100%)",
           transition: "transform 300ms var(--ease-in-out)",
         }}
-        className={`flex flex-col border-l border-zinc-200 bg-white ${PLATFORM}`}
+        className={`flex flex-col border-l border-zinc-200 bg-white outline-none ${PLATFORM}`}
       >
         {/* Panel header */}
         <div className="flex shrink-0 items-start justify-between border-b border-zinc-200 px-5 py-4">
