@@ -163,7 +163,7 @@ export function UserHeaderActions({
 
       <Drawer
         isOpen={showSoftDeleteOverlay}
-        onClose={() => (softDeletePending ? undefined : setShowSoftDeleteOverlay(false))}
+        onClose={() => setShowSoftDeleteOverlay(false)}
         title="Delete this account?"
       >
         <p className="text-sm text-zinc-600">
@@ -227,7 +227,7 @@ export function UserHeaderActions({
 
       <Drawer
         isOpen={showDeactivateOverlay}
-        onClose={() => (deletePending ? undefined : setShowDeactivateOverlay(false))}
+        onClose={() => setShowDeactivateOverlay(false)}
         title="Deactivate account?"
       >
         <p className="text-sm text-zinc-600">
@@ -241,13 +241,13 @@ export function UserHeaderActions({
           pending={deletePending}
           label="Deactivate"
           pendingLabel="Deactivating…"
-          tone="danger"
+          tone="warning"
         />
       </Drawer>
 
       <Drawer
         isOpen={showRestoreOverlay}
-        onClose={() => (restorePending ? undefined : setShowRestoreOverlay(false))}
+        onClose={() => setShowRestoreOverlay(false)}
         title="Restore account?"
       >
         <p className="text-sm text-zinc-600">
@@ -289,15 +289,14 @@ function ConfirmRow({
   pending: boolean;
   label: string;
   pendingLabel: string;
-  tone: "danger" | "primary";
+  tone: "danger" | "warning" | "primary";
 }) {
   return (
     <div className="mt-5 flex gap-3">
       <button
         type="button"
         onClick={onCancel}
-        disabled={pending}
-        className="press-subtle flex-1 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+        className="press-subtle flex-1 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
       >
         Cancel
       </button>
@@ -306,7 +305,11 @@ function ConfirmRow({
           type="submit"
           disabled={pending}
           className={`press-subtle w-full rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
-            tone === "danger" ? "bg-red-600 hover:bg-red-700" : "bg-zinc-900 hover:bg-zinc-700"
+            tone === "danger"
+              ? "bg-red-600 hover:bg-red-700"
+              : tone === "warning"
+              ? "bg-amber-700 hover:bg-amber-800"
+              : "bg-zinc-900 hover:bg-zinc-700"
           }`}
         >
           {pending ? pendingLabel : label}

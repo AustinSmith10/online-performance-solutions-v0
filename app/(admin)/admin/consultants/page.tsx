@@ -50,7 +50,8 @@ function SortPills({
           <Link
             key={o.col}
             href={sortHref(params, o.col)}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors duration-150 ${
+            aria-current={active ? "true" : undefined}
+            className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 ${
               active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
             }`}
           >
