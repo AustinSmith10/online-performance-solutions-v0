@@ -87,7 +87,7 @@ export function InviteUserForm({
 
       <div>
         <label className="mb-1 block text-sm font-medium text-zinc-700">
-          Client <span className="text-zinc-400">(required for stakeholder)</span>
+          Client <span className="text-zinc-500">(required for stakeholder)</span>
         </label>
         <select
           name="client_id"
@@ -116,7 +116,7 @@ export function InviteUserForm({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="press-subtle rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {pending ? "Creating account…" : "Create account"}
         </button>

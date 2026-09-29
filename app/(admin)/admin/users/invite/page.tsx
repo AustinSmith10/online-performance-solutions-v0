@@ -32,7 +32,7 @@ export default async function InviteUserPage({
         </p>
       </div>
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-6">
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
         <InviteUserForm orgs={orgs} preselectedOrgId={client_id} callerRole={caller.role as string} />
       </div>
     </div>

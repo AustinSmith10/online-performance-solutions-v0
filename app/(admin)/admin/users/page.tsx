@@ -20,7 +20,7 @@ const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
 
 const AVAILABILITY_CLASSES: Record<ConsultantAvailability, string> = {
   available: "bg-green-100 text-green-700",
-  on_leave: "bg-yellow-100 text-yellow-700",
+  on_leave: "bg-zinc-100 text-zinc-600",
   at_capacity: "bg-zinc-100 text-zinc-600",
 };
 
@@ -62,14 +62,14 @@ function SortPills<Col extends string>({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-xs text-zinc-400">Sort:</span>
+      <span className="text-xs text-zinc-500">Sort:</span>
       {options.map((o) => {
         const active = sortCol === o.col;
         return (
           <a
             key={o.col}
             href={sortHref(params, o.col)}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+            className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 ${
               active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
             }`}
           >
@@ -209,7 +209,7 @@ export default async function UsersPage({
               </select>
               <button
                 type="submit"
-                className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+                className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
               >
                 Search
               </button>
@@ -237,7 +237,7 @@ export default async function UsersPage({
                 <Link
                   key={u.id}
                   href={`/admin/users/${u.id}`}
-                  className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 hover:bg-zinc-50 ${
+                  className={`flex items-center gap-3 border-l-[3px] border-y border-r border-zinc-200 bg-white px-3 py-2.5 transition-colors duration-150 hover:bg-zinc-50 focus-visible:relative focus-visible:z-10 ${
                     u.is_locked ? "border-l-red-400" : u.availability === "at_capacity" ? "border-l-amber-400" : "border-l-zinc-200"
                   }`}
                 >
@@ -249,12 +249,12 @@ export default async function UsersPage({
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {u.email && failedInviteEmails.has(u.email) && (
-                      <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Invite failed</span>
+                      <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Invite failed</span>
                     )}
                     {u.is_locked ? (
-                      <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Locked</span>
+                      <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Locked</span>
                     ) : (
-                      <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${AVAILABILITY_CLASSES[u.availability as ConsultantAvailability] ?? "bg-zinc-100 text-zinc-600"}`}>
+                      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${AVAILABILITY_CLASSES[u.availability as ConsultantAvailability] ?? "bg-zinc-100 text-zinc-600"}`}>
                         {AVAILABILITY_LABELS[u.availability as ConsultantAvailability] ?? u.availability}
                       </span>
                     )}
@@ -335,7 +335,7 @@ export default async function UsersPage({
           </select>
           <button
             type="submit"
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Search
           </button>
@@ -362,7 +362,7 @@ export default async function UsersPage({
               <Link
                 key={u.id}
                 href={`/admin/users/${u.id}`}
-                className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 hover:bg-zinc-50 ${
+                className={`flex items-center gap-3 border-l-[3px] border-y border-r border-zinc-200 bg-white px-3 py-2.5 transition-colors duration-150 hover:bg-zinc-50 focus-visible:relative focus-visible:z-10 ${
                   u.is_locked ? "border-l-red-400" : u.role === "consultant" && u.availability === "at_capacity" ? "border-l-amber-400" : "border-l-zinc-200"
                 }`}
               >
@@ -370,22 +370,22 @@ export default async function UsersPage({
                   <span className="truncate text-sm font-medium text-zinc-900">
                     {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
                   </span>
-                  <p className="mt-0.5 truncate text-xs text-zinc-500">
+                  <p className="mt-0.5 truncate text-xs tabular-nums text-zinc-500">
                     {ROLE_LABELS[u.role] ?? u.role} · {u.clients?.name ?? "—"} · Joined {new Date(u.created_at).toLocaleDateString("en-AU")}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {u.email && failedInviteEmails.has(u.email) && (
-                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Invite failed</span>
+                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Invite failed</span>
                   )}
                   {u.is_locked ? (
-                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">Locked</span>
+                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Locked</span>
                   ) : u.role === "consultant" ? (
-                    <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${AVAILABILITY_CLASSES[u.availability as ConsultantAvailability] ?? "bg-zinc-100 text-zinc-600"}`}>
+                    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${AVAILABILITY_CLASSES[u.availability as ConsultantAvailability] ?? "bg-zinc-100 text-zinc-600"}`}>
                       {AVAILABILITY_LABELS[u.availability as ConsultantAvailability] ?? u.availability}
                     </span>
                   ) : (
-                    <span className="whitespace-nowrap rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-medium text-green-700">Active</span>
+                    <span className="whitespace-nowrap rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Active</span>
                   )}
                 </div>
               </Link>

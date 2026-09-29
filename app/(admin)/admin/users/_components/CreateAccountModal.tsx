@@ -33,7 +33,7 @@ export function CreateAccountModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+        className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
       >
         + Create account
       </button>
@@ -109,7 +109,7 @@ export function CreateAccountModal({
               <div className="grid grid-cols-2 gap-1.5">
                 {DISCIPLINES.map((d) => (
                   <label key={d.suffix} className="flex items-center gap-2 rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 has-[:checked]:border-zinc-400 has-[:checked]:bg-zinc-50">
-                    <input type="checkbox" name="disciplines" value={d.suffix} className="h-3.5 w-3.5 rounded border-zinc-300" />
+                    <input type="checkbox" name="disciplines" value={d.suffix} className="h-3.5 w-3.5 rounded-sm border-zinc-300" />
                     {d.name}
                   </label>
                 ))}
@@ -123,7 +123,7 @@ export function CreateAccountModal({
 
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700">
-              Client <span className="text-zinc-400">(required for stakeholder)</span>
+              Client <span className="text-zinc-500">(required for stakeholder)</span>
             </label>
             <select
               name="client_id"
@@ -150,14 +150,14 @@ export function CreateAccountModal({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              className="press-subtle rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={pending}
-              className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="press-subtle rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {pending ? "Creating…" : "Create account"}
             </button>
