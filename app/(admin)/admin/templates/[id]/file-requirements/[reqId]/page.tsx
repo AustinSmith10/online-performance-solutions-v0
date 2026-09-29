@@ -1,5 +1,5 @@
+import { BackLink } from "@/components/BackLink";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { EditForm } from "./_components/EditForm";
@@ -44,17 +44,9 @@ export default async function EditFileRequirementPage({
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
-      <div className="text-sm text-zinc-500">
-        <Link href="/admin/templates" className="hover:text-zinc-700">Templates</Link>
-        <span className="mx-1">›</span>
-        <Link href={`/admin/templates/${templateId}`} className="hover:text-zinc-700">
-          {tmpl.name}
-        </Link>
-        <span className="mx-1">›</span>
-        <span className="text-zinc-700">Edit requirement</span>
-      </div>
+      <BackLink href={`/admin/templates/${templateId}`}>{tmpl.name}</BackLink>
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-6">
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
         <h1 className="mb-6 text-lg font-semibold text-zinc-900">Edit File Requirement</h1>
         <EditForm
           templateId={templateId}

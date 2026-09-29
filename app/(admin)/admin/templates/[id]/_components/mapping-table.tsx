@@ -192,7 +192,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                         name={`label_${row.placeholder_token}`}
                         defaultValue={row.display_label ?? ""}
                         placeholder="e.g. Site address"
-                        className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                         required
                       />
                     </div>
@@ -205,7 +205,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                         defaultValue={row.extraction_hint ?? ""}
                         placeholder="Tell Claude what to look for and where in the submitted documents…"
                         rows={3}
-                        className="w-full resize-y rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                         required
                       />
                     </div>
@@ -216,7 +216,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                       <select
                         name={`comparison_mode_${row.placeholder_token}`}
                         defaultValue={row.comparison_mode ?? "exact"}
-                        className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                       >
                         {COMPARISON_MODE_OPTIONS.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
@@ -228,7 +228,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                         type="checkbox"
                         name={`required_${row.placeholder_token}`}
                         defaultChecked={row.is_required}
-                        className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+                        className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
                       />
                       Required — block submission if client cannot confirm this value
                     </label>
@@ -244,7 +244,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                         name={`label_${row.placeholder_token}`}
                         defaultValue={row.display_label ?? ""}
                         placeholder="e.g. Client name"
-                        className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                         required
                       />
                     </div>
@@ -254,12 +254,12 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                           type="checkbox"
                           name={`required_${row.placeholder_token}`}
                           defaultChecked={row.is_required}
-                          className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+                          className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
                         />
                         Required
                       </label>
                     ) : (
-                      <p className="mb-1.5 shrink-0 text-xs text-zinc-400">Auto-filled</p>
+                      <p className="mb-1.5 shrink-0 text-xs text-zinc-500">Auto-filled</p>
                     )}
                   </div>
                 )}
@@ -424,7 +424,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
               defaultValue={row.display_label ?? ""}
               placeholder="e.g. Site address"
               required
-              className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             />
           </div>
 
@@ -439,7 +439,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
                 placeholder="Tell Claude what to look for and where in the submitted documents…"
                 rows={3}
                 required
-                className="w-full resize-y rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
           )}
@@ -452,7 +452,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
               <select
                 name="comparison_mode"
                 defaultValue={row.comparison_mode ?? "exact"}
-                className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               >
                 {COMPARISON_MODE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
@@ -467,7 +467,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
                 type="checkbox"
                 name="is_required"
                 defaultChecked={row.is_required}
-                className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+                className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
               />
               Required
             </label>
@@ -479,7 +479,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
             <button
               type="submit"
               disabled={isSavePending}
-              className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {isSavePending ? "Saving…" : "Save"}
             </button>
@@ -503,13 +503,13 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
           {row.display_label ? (
             <p className="text-sm font-medium text-zinc-900 leading-snug">{row.display_label}</p>
           ) : (
-            <p className="text-sm italic text-zinc-400">No label set</p>
+            <p className="text-sm italic text-zinc-500">No label set</p>
           )}
           {isExtract && row.extraction_hint && (
             <p className="mt-1 text-xs text-zinc-500 line-clamp-2">{row.extraction_hint}</p>
           )}
           {!isExtract && !isClientInput && (
-            <p className="mt-1 text-xs text-zinc-400">Auto-filled</p>
+            <p className="mt-1 text-xs text-zinc-500">Auto-filled</p>
           )}
         </div>
         <EditIconButton onClick={() => setEditing(true)} label="Edit token" />
@@ -536,7 +536,7 @@ function MissingOrgCard({ token }: { token: string }) {
         —
       </div>
       <div className="flex flex-col gap-2 justify-center border-b border-amber-100 px-4 py-4 sm:border-b-0 sm:border-r">
-        <p className="font-mono text-xs text-zinc-400 line-through">
+        <p className="font-mono text-xs text-zinc-500 line-through">
           {"{" + token + "}"}
         </p>
         <span className="self-start rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700">
@@ -545,7 +545,7 @@ function MissingOrgCard({ token }: { token: string }) {
         <span className="text-xs font-medium text-amber-600">! Missing</span>
       </div>
       <div className="flex items-center px-4 py-4">
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-zinc-500">
           Configured for this client but not found in the uploaded .docx — will not be populated in generated documents.
         </p>
       </div>

@@ -15,10 +15,10 @@ const EVENT_LABELS: Record<CreditEventType, string> = {
 
 const EVENT_COLOURS: Record<CreditEventType, string> = {
   top_up: "text-green-700",
-  deduction: "text-red-700",
-  deferred_debit: "text-orange-700",
+  deduction: "text-zinc-900",
+  deferred_debit: "text-zinc-900",
   upfront_log: "text-zinc-500",
-  override: "text-yellow-700",
+  override: "text-amber-700",
 };
 
 export default async function OrgCreditsPage({
@@ -72,7 +72,7 @@ export default async function OrgCreditsPage({
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
               Credit balance
             </p>
-            <p className="mt-1 text-3xl font-semibold text-zinc-900">
+            <p className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900">
               {orgData.credit_balance.toLocaleString()}
             </p>
           </div>
@@ -83,7 +83,7 @@ export default async function OrgCreditsPage({
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Deferred tab
               </p>
-              <p className="mt-1 text-3xl font-semibold text-zinc-900">
+              <p className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900">
                 {orgData.deferred_balance.toLocaleString()}
               </p>
             </div>
@@ -91,7 +91,7 @@ export default async function OrgCreditsPage({
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Credit limit
               </p>
-              <p className="mt-1 text-3xl font-semibold text-zinc-900">
+              <p className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900">
                 {orgData.credit_limit > 0 ? orgData.credit_limit.toLocaleString() : "None"}
               </p>
             </div>
@@ -135,7 +135,7 @@ export default async function OrgCreditsPage({
         </div>
 
         {entries.length === 0 ? (
-          <p className="px-5 py-4 text-sm text-zinc-400">No ledger entries yet.</p>
+          <p className="px-5 py-4 text-sm text-zinc-500">No ledger entries yet.</p>
         ) : (
           <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
@@ -150,8 +150,8 @@ export default async function OrgCreditsPage({
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {entries.map((entry) => (
-                <tr key={entry.id} className="hover:bg-blue-50">
-                  <td className="px-4 py-3 text-xs text-zinc-500">
+                <tr key={entry.id} className="hover:bg-zinc-50">
+                  <td className="px-4 py-3 text-xs tabular-nums text-zinc-500">
                     {new Date(entry.created_at).toLocaleString("en-AU", {
                       day: "2-digit",
                       month: "short",
@@ -163,20 +163,20 @@ export default async function OrgCreditsPage({
                   <td className={`px-4 py-3 font-medium ${EVENT_COLOURS[entry.event_type]}`}>
                     {EVENT_LABELS[entry.event_type]}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right tabular-nums">
                     <span
                       className={
                         entry.amount > 0
                           ? "text-green-700"
                           : entry.amount < 0
-                          ? "text-red-700"
-                          : "text-zinc-400"
+                          ? "text-zinc-900"
+                          : "text-zinc-500"
                       }
                     >
                       {entry.amount > 0 ? `+${entry.amount}` : entry.amount === 0 ? "—" : entry.amount}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right text-zinc-900">{entry.balance_after}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-zinc-900">{entry.balance_after}</td>
                   <td className="px-4 py-3 text-zinc-500">{entry.notes ?? "—"}</td>
                 </tr>
               ))}

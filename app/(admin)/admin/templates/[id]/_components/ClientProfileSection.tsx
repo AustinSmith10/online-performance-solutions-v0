@@ -100,7 +100,7 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
 
   if (tokens.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-zinc-400">
+      <p className="py-8 text-center text-sm text-zinc-500">
         No extraction tokens found — add EXTRACT_ tokens in the Tokens tab first.
       </p>
     );
@@ -128,22 +128,22 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
               onDrop={(e) => onDrop(e, index)}
               onDragEnd={onDragEnd}
               style={{ display: "grid", gridTemplateColumns: "28px 1fr auto" }}
-              className={`rounded-lg border overflow-hidden transition-all ${
+              className={`rounded-lg border overflow-hidden transition-colors ${
                 isDragOver ? "border-blue-300" : "border-zinc-200 bg-white"
               } ${!item.client_visible ? "opacity-50" : ""}`}
             >
               {/* Drag handle */}
-              <div className="flex items-center justify-center border-r border-zinc-100 bg-zinc-50 cursor-grab select-none text-zinc-300 hover:text-zinc-500 text-base">
+              <div className="flex items-center justify-center border-r border-zinc-100 bg-zinc-50 cursor-grab select-none text-zinc-500 hover:text-zinc-500 text-base">
                 ⠿
               </div>
 
               {/* Token info */}
               <div className="min-w-0 px-4 py-3">
-                <p className={`text-sm font-medium ${item.display_label ? "text-zinc-900" : "italic text-zinc-400"}`}>
+                <p className={`text-sm font-medium ${item.display_label ? "text-zinc-900" : "italic text-zinc-500"}`}>
                   {item.display_label ?? "No label set"}
                 </p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <p className="font-mono text-xs text-zinc-400">{item.placeholder_token}</p>
+                  <p className="font-mono text-xs text-zinc-500">{item.placeholder_token}</p>
                   <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${
                     item.in_template ? "bg-blue-100 text-blue-700" : "bg-zinc-100 text-zinc-500"
                   }`}>
@@ -155,7 +155,7 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
               {/* Visibility toggle — saves immediately on click */}
               <div className="flex items-center gap-2 border-l border-zinc-100 px-4">
                 {visibilitySaving[item.placeholder_token] === "saving" && (
-                  <span className="text-xs text-zinc-400">Saving…</span>
+                  <span className="text-xs text-zinc-500">Saving…</span>
                 )}
                 {visibilitySaving[item.placeholder_token] === "error" && (
                   <span className="text-xs text-red-600">Failed — try again</span>
@@ -167,7 +167,7 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
                   className={`text-xs font-medium transition-colors disabled:opacity-60 ${
                     item.client_visible
                       ? "text-green-700 hover:text-green-900"
-                      : "text-zinc-400 hover:text-zinc-600"
+                      : "text-zinc-500 hover:text-zinc-600"
                   }`}
                 >
                   {item.client_visible ? "● Visible" : "○ Hidden"}
@@ -186,7 +186,7 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
         >
           {pending ? "Saving…" : "Save field order"}
         </button>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-zinc-500">
           Visibility saves instantly when toggled above — this button is only for the drag-to-reorder order.
         </p>
         {state.success && <p className="text-sm text-green-600">Saved.</p>}

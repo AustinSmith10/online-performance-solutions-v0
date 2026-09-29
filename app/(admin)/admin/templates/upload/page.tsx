@@ -27,12 +27,12 @@ export default async function UploadTemplatePage({
         <h1 className="mt-2 text-xl font-semibold text-zinc-900">Upload template</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Upload a .docx file containing{" "}
-          <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">{"{TOKEN}"}</code>{" "}
+          <code className="rounded-sm bg-zinc-100 px-1 py-0.5 text-xs">{"{TOKEN}"}</code>{" "}
           placeholders. OPS will extract all tokens and present a mapping table.
         </p>
       </div>
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-6">
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
         <UploadTemplateForm orgs={orgList} defaultOrgId={client_id} />
       </div>
     </div>

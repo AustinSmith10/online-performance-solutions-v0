@@ -63,7 +63,7 @@ export function EditForm({
           <p className="rounded-md border border-zinc-100 bg-zinc-50 px-3 py-2 font-mono text-sm text-zinc-500">
             {requirement.slug}
           </p>
-          <p className="mt-1 text-xs text-zinc-400">
+          <p className="mt-1 text-xs text-zinc-500">
             Cannot be changed after creation.
           </p>
         </div>
@@ -93,7 +93,7 @@ export function EditForm({
               type="checkbox"
               name="required"
               defaultChecked={requirement.required}
-              className="h-4 w-4 rounded border-zinc-300 accent-zinc-900"
+              className="h-4 w-4 rounded-sm border-zinc-300 accent-zinc-900"
             />
             Required — client cannot submit without this file
           </label>
@@ -102,7 +102,7 @@ export function EditForm({
               type="checkbox"
               name="no_duplicates"
               defaultChecked={requirement.no_duplicates}
-              className="h-4 w-4 rounded border-zinc-300 accent-zinc-900"
+              className="h-4 w-4 rounded-sm border-zinc-300 accent-zinc-900"
             />
             No duplicates — filenames within this slot must be unique
           </label>
@@ -111,7 +111,7 @@ export function EditForm({
               type="checkbox"
               name="extraction"
               defaultChecked={requirement.extraction}
-              className="h-4 w-4 rounded border-zinc-300 accent-zinc-900"
+              className="h-4 w-4 rounded-sm border-zinc-300 accent-zinc-900"
             />
             Extraction — send to AI for field extraction
           </label>

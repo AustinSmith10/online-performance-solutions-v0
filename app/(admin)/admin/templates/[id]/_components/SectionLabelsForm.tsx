@@ -142,10 +142,10 @@ function DraftSectionLabels({ templateId, labels }: Omit<Props, "isActivated">) 
                   name={section.labelField}
                   defaultValue={getLabelValue(labels, section.labelField)}
                   rows={2}
-                  className="w-full resize-none rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
                 {section.labelHint && (
-                  <p className="mt-1 text-xs text-zinc-400">{section.labelHint}</p>
+                  <p className="mt-1 text-xs text-zinc-500">{section.labelHint}</p>
                 )}
               </div>
             )}
@@ -157,11 +157,11 @@ function DraftSectionLabels({ templateId, labels }: Omit<Props, "isActivated">) 
                 defaultValue={getDescValue(labels, section.descField)}
                 rows={2}
                 placeholder="Add a short description…"
-                className="w-full resize-none rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
-              <p className="mt-1 text-xs text-zinc-400">{section.descHint}</p>
+              <p className="mt-1 text-xs text-zinc-500">{section.descHint}</p>
               {section.fixedNote && (
-                <p className="mt-1 text-xs text-zinc-400">{section.fixedNote}</p>
+                <p className="mt-1 text-xs text-zinc-500">{section.fixedNote}</p>
               )}
             </div>
           </div>
@@ -259,10 +259,10 @@ function SectionCard({
                   name={section.labelField}
                   defaultValue={currentLabel ?? ""}
                   rows={2}
-                  className="w-full resize-none rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
                 {section.labelHint && (
-                  <p className="mt-1 text-xs text-zinc-400">{section.labelHint}</p>
+                  <p className="mt-1 text-xs text-zinc-500">{section.labelHint}</p>
                 )}
               </div>
             )}
@@ -274,11 +274,11 @@ function SectionCard({
                 defaultValue={currentDesc}
                 rows={2}
                 placeholder="Add a short description…"
-                className="w-full resize-none rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
-              <p className="mt-1 text-xs text-zinc-400">{section.descHint}</p>
+              <p className="mt-1 text-xs text-zinc-500">{section.descHint}</p>
               {section.fixedNote && (
-                <p className="mt-1 text-xs text-zinc-400">{section.fixedNote}</p>
+                <p className="mt-1 text-xs text-zinc-500">{section.fixedNote}</p>
               )}
             </div>
 
@@ -287,7 +287,7 @@ function SectionCard({
               <button
                 type="submit"
                 disabled={isSavePending}
-                className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+                className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
               >
                 {isSavePending ? "Saving…" : "Save"}
               </button>
@@ -306,23 +306,23 @@ function SectionCard({
         <div className={`p-4 ${section.fixedHeading ? "" : "grid grid-cols-2 gap-4"}`}>
           {!section.fixedHeading && (
             <div>
-              <p className="mb-0.5 text-xs text-zinc-400">Heading</p>
+              <p className="mb-0.5 text-xs text-zinc-500">Heading</p>
               {currentLabel ? (
                 <p className="text-sm text-zinc-900">{currentLabel}</p>
               ) : (
-                <p className="text-sm italic text-zinc-400">Not set</p>
+                <p className="text-sm italic text-zinc-500">Not set</p>
               )}
             </div>
           )}
           <div>
-            <p className="mb-0.5 text-xs text-zinc-400">Subtitle</p>
+            <p className="mb-0.5 text-xs text-zinc-500">Subtitle</p>
             {currentDesc ? (
               <p className="text-sm text-zinc-900">{currentDesc}</p>
             ) : (
-              <p className="text-sm italic text-zinc-400">Not set</p>
+              <p className="text-sm italic text-zinc-500">Not set</p>
             )}
             {section.fixedNote && (
-              <p className="mt-1 text-xs text-zinc-400">{section.fixedNote}</p>
+              <p className="mt-1 text-xs text-zinc-500">{section.fixedNote}</p>
             )}
           </div>
         </div>

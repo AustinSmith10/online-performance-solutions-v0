@@ -237,11 +237,11 @@ export default async function TemplatePage({
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span className="font-semibold">{redFlags.length} token(s) with unrecognised prefix — </span>
           activation blocked. Tokens must start with{" "}
-          <code className="rounded bg-red-100 px-1">CLIENT_</code>,{" "}
-          <code className="rounded bg-red-100 px-1">EXTRACT_</code>,{" "}
-          <code className="rounded bg-red-100 px-1">ORG_</code>,{" "}
-          <code className="rounded bg-red-100 px-1">SYS_</code>, or{" "}
-          <code className="rounded bg-red-100 px-1">PROJECT_</code>.
+          <code className="rounded-sm bg-red-100 px-1">CLIENT_</code>,{" "}
+          <code className="rounded-sm bg-red-100 px-1">EXTRACT_</code>,{" "}
+          <code className="rounded-sm bg-red-100 px-1">ORG_</code>,{" "}
+          <code className="rounded-sm bg-red-100 px-1">SYS_</code>, or{" "}
+          <code className="rounded-sm bg-red-100 px-1">PROJECT_</code>.
         </div>
       )}
 
@@ -468,8 +468,8 @@ function StatCard({
 
   return (
     <div className={containerClass}>
-      <p className="text-[10px] text-zinc-400">{label}</p>
-      <p className={`mt-0.5 text-sm font-medium ${valueClass}`}>{value}</p>
+      <p className="text-xs text-zinc-500">{label}</p>
+      <p className={`mt-0.5 text-sm font-medium tabular-nums ${valueClass}`}>{value}</p>
     </div>
   );
 }

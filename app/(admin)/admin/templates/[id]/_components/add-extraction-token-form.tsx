@@ -71,9 +71,9 @@ export function AddExtractionTokenForm({ templateId, existingTokens, highlightTo
               type="text"
               required
               placeholder="EXTRACT_DEV_NAME"
-              className="w-full rounded border border-zinc-200 px-2 py-1.5 font-mono text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 uppercase"
+              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 font-mono text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 uppercase"
             />
-            <p className="mt-0.5 text-xs text-zinc-400">Must start with EXTRACT_</p>
+            <p className="mt-0.5 text-xs text-zinc-500">Must start with EXTRACT_</p>
           </div>
 
           <div>
@@ -85,9 +85,9 @@ export function AddExtractionTokenForm({ templateId, existingTokens, highlightTo
               type="text"
               required
               placeholder="e.g. Development name"
-              className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             />
-            <p className="mt-0.5 text-xs text-zinc-400">Shown to client if extraction confidence is low</p>
+            <p className="mt-0.5 text-xs text-zinc-500">Shown to client if extraction confidence is low</p>
           </div>
         </div>
 
@@ -100,7 +100,7 @@ export function AddExtractionTokenForm({ templateId, existingTokens, highlightTo
             required
             rows={3}
             placeholder="Tell Claude what to look for and where in the submitted documents…"
-            className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-y"
+            className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-y"
           />
         </div>
 
@@ -109,7 +109,7 @@ export function AddExtractionTokenForm({ templateId, existingTokens, highlightTo
             type="checkbox"
             name="is_required"
             id="extraction-required"
-            className="h-4 w-4 rounded border-zinc-300 accent-zinc-900"
+            className="h-4 w-4 rounded-sm border-zinc-300 accent-zinc-900"
           />
           <label htmlFor="extraction-required" className="text-xs text-zinc-700">
             Required — block submission if client cannot confirm this value
@@ -184,7 +184,7 @@ function ExtractionOnlyRow({ templateId, row, highlight }: { templateId: string;
                   type="text"
                   required
                   defaultValue={row.display_label ?? ""}
-                  className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
               <div className="flex items-end gap-2">
@@ -193,7 +193,7 @@ function ExtractionOnlyRow({ templateId, row, highlight }: { templateId: string;
                     type="checkbox"
                     name="is_required"
                     defaultChecked={row.is_required}
-                    className="h-4 w-4 rounded border-zinc-300 accent-zinc-900"
+                    className="h-4 w-4 rounded-sm border-zinc-300 accent-zinc-900"
                   />
                   Required
                 </label>
@@ -206,7 +206,7 @@ function ExtractionOnlyRow({ templateId, row, highlight }: { templateId: string;
                 required
                 rows={3}
                 defaultValue={row.extraction_hint ?? ""}
-                className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-y"
+                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-y"
               />
             </div>
             {saveError && (
@@ -242,16 +242,16 @@ function ExtractionOnlyRow({ templateId, row, highlight }: { templateId: string;
         {"}"}
       </td>
       <td className="px-5 py-3 text-xs text-zinc-700">
-        {row.display_label ?? <span className="text-zinc-400">—</span>}
+        {row.display_label ?? <span className="text-zinc-500">—</span>}
       </td>
       <td className="px-5 py-3 text-xs text-zinc-500 max-w-xs truncate" title={row.extraction_hint ?? ""}>
-        {row.extraction_hint ?? <span className="text-zinc-400">—</span>}
+        {row.extraction_hint ?? <span className="text-zinc-500">—</span>}
       </td>
       <td className="px-5 py-3 text-center text-xs">
         {row.is_required ? (
           <span className="text-zinc-900">✓</span>
         ) : (
-          <span className="text-zinc-300">—</span>
+          <span className="text-zinc-500">—</span>
         )}
       </td>
       <td className="px-5 py-3 text-right">

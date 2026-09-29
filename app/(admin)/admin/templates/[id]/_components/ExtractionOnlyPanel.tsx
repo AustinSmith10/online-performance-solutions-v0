@@ -102,7 +102,7 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {tokens.length === 0 && (
-            <p className="py-6 text-center text-xs text-zinc-400">No extraction-only tokens yet.</p>
+            <p className="py-6 text-center text-xs text-zinc-500">No extraction-only tokens yet.</p>
           )}
           {tokens.map((token) => (
             <ExtractionTokenCard
@@ -195,7 +195,7 @@ function ExtractionTokenCard({
               type="text"
               required
               defaultValue={token.display_label ?? ""}
-              className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             />
           </div>
           <div>
@@ -207,7 +207,7 @@ function ExtractionTokenCard({
               required
               rows={4}
               defaultValue={token.extraction_hint ?? ""}
-              className="w-full resize-y rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             />
           </div>
           <div>
@@ -217,7 +217,7 @@ function ExtractionTokenCard({
             <select
               name="comparison_mode"
               defaultValue={token.comparison_mode ?? "exact"}
-              className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             >
               {COMPARISON_MODE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -229,7 +229,7 @@ function ExtractionTokenCard({
               type="checkbox"
               name="is_required"
               defaultChecked={token.is_required}
-              className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+              className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
             />
             Required
           </label>
@@ -238,7 +238,7 @@ function ExtractionTokenCard({
             <button
               type="submit"
               disabled={isSavePending}
-              className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {isSavePending ? "Saving…" : "Save"}
             </button>
@@ -261,7 +261,7 @@ function ExtractionTokenCard({
       className={`rounded-lg border border-zinc-200 bg-white p-4 ${isDeletePending ? "opacity-40" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="font-mono text-xs text-zinc-400">{"{" + token.placeholder_token + "}"}</p>
+        <p className="font-mono text-xs text-zinc-500">{"{" + token.placeholder_token + "}"}</p>
         <div className="flex shrink-0 items-center gap-3">
           <EditIconButton onClick={() => setEditing(true)} label={`Edit ${token.placeholder_token}`} />
           <button
@@ -275,7 +275,7 @@ function ExtractionTokenCard({
         </div>
       </div>
       <p className="mt-1.5 text-sm font-medium text-zinc-900">
-        {token.display_label ?? <span className="text-zinc-400">No label set</span>}
+        {token.display_label ?? <span className="text-zinc-500">No label set</span>}
       </p>
       {token.extraction_hint && (
         <p className="mt-1 text-xs text-zinc-500 line-clamp-2">{token.extraction_hint}</p>
@@ -309,9 +309,9 @@ function AddTokenForm({ templateId }: { templateId: string }) {
           type="text"
           required
           placeholder="EXTRACT_DEV_NAME"
-          className="w-full rounded border border-zinc-200 px-2 py-1.5 font-mono text-xs uppercase text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+          className="w-full rounded-md border border-zinc-200 px-2 py-1.5 font-mono text-xs uppercase text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
         />
-        <p className="mt-0.5 text-xs text-zinc-400">Must start with EXTRACT_</p>
+        <p className="mt-0.5 text-xs text-zinc-500">Must start with EXTRACT_</p>
       </div>
 
       <div>
@@ -323,7 +323,7 @@ function AddTokenForm({ templateId }: { templateId: string }) {
           type="text"
           required
           placeholder="e.g. Development name"
-          className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+          className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
         />
       </div>
 
@@ -336,7 +336,7 @@ function AddTokenForm({ templateId }: { templateId: string }) {
           required
           rows={3}
           placeholder="Tell Claude what to look for and where in the submitted documents…"
-          className="w-full resize-y rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+          className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
         />
       </div>
 
@@ -345,19 +345,19 @@ function AddTokenForm({ templateId }: { templateId: string }) {
           type="checkbox"
           name="is_required"
           id="add-extraction-required"
-          className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+          className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
         />
         Required — block submission if client cannot confirm this value
       </label>
 
       {state.error && (
-        <p className="rounded bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>
+        <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>
       )}
 
       <button
         type="submit"
         disabled={pending}
-        className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+        className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
       >
         {pending ? "Adding…" : "Add token"}
       </button>

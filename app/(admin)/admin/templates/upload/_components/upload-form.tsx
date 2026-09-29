@@ -18,10 +18,11 @@ export function UploadTemplateForm({ orgs, defaultOrgId }: Props) {
   return (
     <form action={formAction} className="space-y-5">
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-zinc-700">
+        <label htmlFor="client_id" className="mb-1.5 block text-sm font-medium text-zinc-700">
           Client
         </label>
         <select
+          id="client_id"
           name="client_id"
           defaultValue={defaultOrgId ?? ""}
           required
@@ -39,10 +40,11 @@ export function UploadTemplateForm({ orgs, defaultOrgId }: Props) {
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-zinc-700">
+        <label htmlFor="template_name" className="mb-1.5 block text-sm font-medium text-zinc-700">
           Template name
         </label>
         <input
+          id="template_name"
           name="name"
           type="text"
           required
@@ -79,9 +81,9 @@ export function UploadTemplateForm({ orgs, defaultOrgId }: Props) {
           type="file"
           accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           required
-          className="block w-full text-sm text-zinc-600 file:mr-4 file:rounded file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-zinc-200"
+          className="block w-full text-sm text-zinc-600 file:mr-4 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-zinc-200"
         />
-        <p className="mt-1 text-xs text-zinc-400">Max 20 MB. Must contain {"{TOKEN}"} placeholders.</p>
+        <p className="mt-1 text-xs text-zinc-500">Max 20 MB. Must contain {"{TOKEN}"} placeholders.</p>
       </div>
 
       {state.error && (

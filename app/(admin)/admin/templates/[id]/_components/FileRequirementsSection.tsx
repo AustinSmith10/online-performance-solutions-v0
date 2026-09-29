@@ -34,7 +34,7 @@ interface Props {
 export function FileRequirementsSection({ templateId, requirements }: Props) {
   if (requirements.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-zinc-400">
+      <p className="py-8 text-center text-sm text-zinc-500">
         No file requirements yet — add one above.
       </p>
     );
@@ -104,7 +104,7 @@ function RequirementCard({
                 type="text"
                 required
                 defaultValue={requirement.name}
-                className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
             <div className="shrink-0">
@@ -117,7 +117,7 @@ function RequirementCard({
                 min={1}
                 max={20}
                 defaultValue={requirement.max_count}
-                className="w-16 rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-16 rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
           </div>
@@ -129,7 +129,7 @@ function RequirementCard({
                 type="checkbox"
                 name="required"
                 defaultChecked={requirement.required}
-                className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+                className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
               />
               Required
             </label>
@@ -138,7 +138,7 @@ function RequirementCard({
                 type="checkbox"
                 name="no_duplicates"
                 defaultChecked={requirement.no_duplicates}
-                className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+                className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
               />
               No duplicates
             </label>
@@ -147,7 +147,7 @@ function RequirementCard({
                 type="checkbox"
                 name="extraction"
                 defaultChecked={requirement.extraction}
-                className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+                className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
               />
               Extraction
             </label>
@@ -168,7 +168,7 @@ function RequirementCard({
                 type="text"
                 defaultValue={requirement.ai_judge_hint ?? ""}
                 placeholder="e.g. A Stockland Purchase Order — letterhead, PO number, cost table"
-                className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
             <div>
@@ -182,7 +182,7 @@ function RequirementCard({
                   "\n",
                 )}
                 placeholder={"Purchase Order\nPO Number"}
-                className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
             <div className="flex items-end gap-3">
@@ -195,7 +195,7 @@ function RequirementCard({
                   type="number"
                   min={1}
                   defaultValue={requirement.marker_page_count_min ?? ""}
-                  className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
               <div className="w-20">
@@ -207,7 +207,7 @@ function RequirementCard({
                   type="number"
                   min={1}
                   defaultValue={requirement.marker_page_count_max ?? ""}
-                  className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
               <div className="flex-1">
@@ -219,7 +219,7 @@ function RequirementCard({
                   type="text"
                   defaultValue={requirement.marker_regex ?? ""}
                   placeholder="PO-\d+"
-                  className="w-full rounded border border-zinc-200 px-2 py-1.5 font-mono text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full rounded-md border border-zinc-200 px-2 py-1.5 font-mono text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
             </div>
@@ -231,7 +231,7 @@ function RequirementCard({
             <button
               type="submit"
               disabled={isSavePending}
-              className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {isSavePending ? "Saving…" : "Save"}
             </button>
@@ -276,7 +276,7 @@ function RequirementCard({
           <p className="text-sm font-medium text-zinc-900">
             {requirement.name}
           </p>
-          <p className="mt-0.5 font-mono text-xs text-zinc-400">
+          <p className="mt-0.5 font-mono text-xs text-zinc-500">
             {requirement.slug}
           </p>
         </div>

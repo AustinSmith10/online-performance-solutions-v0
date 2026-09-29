@@ -55,7 +55,7 @@ export function AddFileRequirementForm({ templateId }: { templateId: string }) {
             value={name}
             onChange={handleNameChange}
             placeholder="e.g. Building Plans"
-            className="w-full rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+            className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
           />
         </div>
         <div className="flex-1">
@@ -66,7 +66,7 @@ export function AddFileRequirementForm({ templateId }: { templateId: string }) {
             value={slug}
             onChange={(e) => { setSlug(e.target.value); setSlugEdited(true); }}
             placeholder="building_plans"
-            className="w-full rounded border border-zinc-200 px-2 py-1.5 font-mono text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+            className="w-full rounded-md border border-zinc-200 px-2 py-1.5 font-mono text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
           />
         </div>
         <div className="shrink-0">
@@ -77,7 +77,7 @@ export function AddFileRequirementForm({ templateId }: { templateId: string }) {
             min={1}
             max={20}
             defaultValue={1}
-            className="w-16 rounded border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+            className="w-16 rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
           />
         </div>
       </div>
@@ -89,7 +89,7 @@ export function AddFileRequirementForm({ templateId }: { templateId: string }) {
             <input
               type="checkbox"
               name="required"
-              className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+              className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
             />
             Required
           </label>
@@ -97,7 +97,7 @@ export function AddFileRequirementForm({ templateId }: { templateId: string }) {
             <input
               type="checkbox"
               name="no_duplicates"
-              className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+              className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
             />
             No duplicates
           </label>
@@ -105,10 +105,10 @@ export function AddFileRequirementForm({ templateId }: { templateId: string }) {
             <input
               type="checkbox"
               name="extraction"
-              className="h-3.5 w-3.5 rounded border-zinc-300 accent-zinc-900"
+              className="h-3.5 w-3.5 rounded-sm border-zinc-300 accent-zinc-900"
             />
             Extraction
-            <span className="text-zinc-400">(send to AI)</span>
+            <span className="text-zinc-500">(send to AI)</span>
           </label>
         </div>
         <button
