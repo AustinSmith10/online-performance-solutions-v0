@@ -1,22 +1,28 @@
 "use client";
 
 import { useActionState } from "react";
+import { PILL_NEUTRAL } from "./pill";
 
 type BoundAction = (prevState: { error?: string }, formData: FormData) => Promise<{ error?: string }>;
 
-export function EntityRestoreButton({ action }: { action: BoundAction }) {
+export function EntityRestoreButton({ action, label }: { action: BoundAction; label?: string }) {
   const [state, formAction, pending] = useActionState(action, {});
 
   return (
-    <form action={formAction}>
-      {state.error && <p className="mb-1 text-xs text-red-600">{state.error}</p>}
+    <form action={formAction} className="flex flex-col items-end gap-1">
       <button
         type="submit"
         disabled={pending}
-        className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+        aria-label={label ? `Restore ${label}` : undefined}
+        className={PILL_NEUTRAL}
       >
         {pending ? "Restoring…" : "Restore"}
       </button>
+      {state.error && (
+        <p role="alert" className="max-w-48 text-right text-xs text-red-700">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }
