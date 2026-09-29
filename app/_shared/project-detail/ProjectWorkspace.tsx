@@ -1736,67 +1736,27 @@ export async function ProjectWorkspace({
     <p className="text-sm text-zinc-500">Project is in the recovery bin — controls are unavailable.</p>
   ) : (
     <>
+      {sharedSettings}
+      {/* Admin gets the same settings as a consultant plus its two actions, as
+          buttons only. Delete lives in the permanent rail card (#177). */}
       {isAdmin && (
-        <div className="border-b border-zinc-100 pb-4">
-          {project.status === "paused" ? (
-            <p className="rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-500">
-              Payment override disabled while project is paused.
+        <div className="space-y-3 border-t border-zinc-100 pt-3">
+          {project.payment_override && (
+            <p className="rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+              Override applied
+              {project.payment_override_at ? ` ${new Date(project.payment_override_at).toLocaleDateString("en-AU")}` : ""}
+              {project.payment_override_reason ? `: ${project.payment_override_reason}` : ""}
             </p>
+          )}
+          {project.status === "paused" ? (
+            <p className="text-xs text-zinc-500">Paused — resume from the panel on the left.</p>
           ) : (
-            <>
-              <h3 className="mb-1 text-sm font-semibold text-zinc-900">Payment gate</h3>
-              <div className="mb-2 flex gap-4 text-xs">
-                <span>
-                  <span className="text-zinc-500">Credit deducted: </span>
-                  <span className={project.credit_deducted ? "font-medium text-green-700" : "text-zinc-500"}>
-                    {project.credit_deducted ? "Yes" : "No"}
-                  </span>
-                </span>
-                {project.payment_override && (
-                  <span>
-                    <span className="text-zinc-500">Override applied: </span>
-                    <span className="font-medium text-amber-700">
-                      {project.payment_override_at
-                        ? new Date(project.payment_override_at).toLocaleDateString("en-AU")
-                        : "Yes"}
-                    </span>
-                  </span>
-                )}
-              </div>
-              {project.payment_override && project.payment_override_reason && (
-                <div className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  <span className="font-medium">Override reason: </span>
-                  {project.payment_override_reason}
-                </div>
-              )}
-              <OverrideForm projectId={id} alreadyOverridden={project.payment_override} paymentResolved={project.credit_deducted} />
-            </>
+            <div className="flex flex-wrap items-center gap-2">
+              <OverrideForm projectId={id} alreadyOverridden={project.payment_override} paymentResolved={project.credit_deducted} compact />
+              {!TERMINAL_STATUSES.has(project.status) && <PauseForm projectId={id} />}
+            </div>
           )}
         </div>
-      )}
-      {sharedSettings}
-      {/* Delete lives only in the permanent rail card now (leftRailExtras,
-          below) — issue #177's fix for delete being too hard to find applies
-          here too, so it shouldn't also live in a second place the admin has
-          to already know to open. Pause is reversible, not "dangerous", so
-          it no longer needs the red danger-zone framing either. */}
-      {isAdmin && project.status === "paused" ? (
-        <div className="border-t border-zinc-100 pt-4">
-          <h3 className="mb-1 text-sm font-semibold text-zinc-900">Project controls</h3>
-          <p className="text-xs text-zinc-500">Paused — resume from the panel on the left.</p>
-        </div>
-      ) : (
-        isAdmin && !TERMINAL_STATUSES.has(project.status) && (
-          <div className="border-t border-zinc-100 pt-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-zinc-900">Pause project</p>
-                <p className="text-xs text-zinc-500">Delivery date shifts by the days paused, on resume.</p>
-              </div>
-              <PauseForm projectId={id} />
-            </div>
-          </div>
-        )
       )}
     </>
   );

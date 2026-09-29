@@ -13,9 +13,11 @@ interface Props {
   alreadyOverridden: boolean;
   /** True once payment has been resolved by any means (normal deduction or a prior override) — nothing left to override. */
   paymentResolved?: boolean;
+  /** Buttons only — no explanatory paragraph (used in the Project Config popover). */
+  compact?: boolean;
 }
 
-function ReconcileButton({ projectId }: { projectId: string }) {
+function ReconcileButton({ projectId, compact }: { projectId: string; compact?: boolean }) {
   const boundAction = reconcileOverrideAction.bind(null, projectId);
   const [state, action, pending] = useActionState<ReconcileState, FormData>(boundAction, {});
   const [open, setOpen] = useState(false);
@@ -53,9 +55,11 @@ function ReconcileButton({ projectId }: { projectId: string }) {
       )}
 
       <div className="space-y-2">
-        <p className="text-sm text-zinc-500">
-          Override is active. Once payment is collected, mark this project as reconciled to clear the flag.
-        </p>
+        {!compact && (
+          <p className="text-sm text-zinc-500">
+            Override is active. Once payment is collected, mark this project as reconciled to clear the flag.
+          </p>
+        )}
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -68,14 +72,14 @@ function ReconcileButton({ projectId }: { projectId: string }) {
   );
 }
 
-export function OverrideForm({ projectId, alreadyOverridden, paymentResolved }: Props) {
+export function OverrideForm({ projectId, alreadyOverridden, paymentResolved, compact }: Props) {
   const boundAction = overridePaymentGateAction.bind(null, projectId);
   const [state, action, pending] = useActionState<OverrideState, FormData>(boundAction, {});
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
 
   if (alreadyOverridden) {
-    return <ReconcileButton projectId={projectId} />;
+    return <ReconcileButton projectId={projectId} compact={compact} />;
   }
 
   if (paymentResolved) {
