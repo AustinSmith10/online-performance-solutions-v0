@@ -250,7 +250,7 @@ function EditableRow({ user, field }: { user: UserTabsUser; field: FieldDef }) {
         <EditIconButton
           onClick={() => setEditing(true)}
           label={`Edit ${field.label}`}
-          className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
+          className="text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
         />
       </div>
     );

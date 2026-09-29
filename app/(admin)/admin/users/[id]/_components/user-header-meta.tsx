@@ -54,7 +54,7 @@ function EmailField({ user }: { user: UserHeaderMetaUser }) {
         <EditIconButton
           onClick={() => setEditing(true)}
           label="Edit email"
-          className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
+          className="text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
         />
       </span>
     );
@@ -123,7 +123,7 @@ function ClientField({ user, clients }: { user: UserHeaderMetaUser; clients: Pic
         <EditIconButton
           onClick={() => setEditing(true)}
           label="Edit client"
-          className="text-zinc-300 opacity-0 hover:text-zinc-600 group-hover:opacity-100"
+          className="text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
         />
       </span>
     );
