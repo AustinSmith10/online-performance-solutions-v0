@@ -962,7 +962,7 @@ function HeroCard({
                   <p className="truncate text-xs font-medium text-zinc-900">{item.label}</p>
                   <p className="truncate text-xs text-zinc-500">{item.meta}</p>
                 </div>
-                <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-600 transition-colors duration-150 hover:text-zinc-900 hover:underline">
+                <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900">
                   {item.actionLabel}
                 </button>
               </div>
@@ -1008,7 +1008,7 @@ function HeroCard({
                 <p className="truncate text-xs font-medium text-zinc-900">{item.label}</p>
                 <p className="truncate text-xs text-zinc-500">{item.meta}</p>
               </div>
-              <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-600 transition-colors duration-150 hover:text-zinc-900 hover:underline">
+              <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900">
                 {item.actionLabel}
               </button>
             </div>
