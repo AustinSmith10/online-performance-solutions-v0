@@ -28,7 +28,7 @@ export function UploadTemplateForm({ orgs, defaultOrgId }: Props) {
           className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
         >
           <option value="" disabled>
-            Select an organisation
+            Select a client
           </option>
           {orgs.map((o) => (
             <option key={o.id} value={o.id}>

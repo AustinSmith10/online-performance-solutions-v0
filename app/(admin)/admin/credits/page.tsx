@@ -92,7 +92,7 @@ export default async function CreditsPage({
             type="text"
             name="q"
             defaultValue={q ?? ""}
-            placeholder="Search organisation…"
+            placeholder="Search client…"
             className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <select

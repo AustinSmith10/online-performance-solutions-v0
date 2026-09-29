@@ -100,7 +100,7 @@ export default async function OrgCreditsPage({
         {orgData.payment_method === "upfront" && (
           <div className="col-span-2 rounded-xl border border-zinc-200 bg-zinc-50 p-5">
             <p className="text-sm text-zinc-500">
-              This organisation uses upfront payment — no credit balance managed in OPS.
+              This client uses upfront payment — no credit balance managed in OPS.
             </p>
           </div>
         )}

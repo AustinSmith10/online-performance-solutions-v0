@@ -19,6 +19,13 @@ interface Row {
   comparison_mode?: string | null;
 }
 
+// Portalled to <body>, outside the admin shell, so it repeats the shell's
+// phone-platform layer (see app/(admin)/admin/layout.tsx PLATFORM): no tap
+// flash, no button text selection, 16px form fields on touch.
+const PLATFORM =
+  "[-webkit-tap-highlight-color:transparent] [&_a]:touch-manipulation [&_button]:touch-manipulation [&_button]:select-none " +
+  "[@media(pointer:coarse)]:[&_input]:text-base [@media(pointer:coarse)]:[&_select]:text-base [@media(pointer:coarse)]:[&_textarea]:text-base";
+
 const COMPARISON_MODE_OPTIONS = [
   { value: "exact", label: "Exact match" },
   { value: "normalized", label: "Normalize whitespace & case" },
@@ -56,17 +63,21 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
 
       {/* Slide-in panel */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Extraction-only tokens"
+        inert={open ? undefined : true}
         style={{
           position: "fixed",
           top: 0,
           right: 0,
-          width: "24rem",
+          width: "min(24rem, 100vw)",
           height: "100dvh",
           zIndex: 50,
           transform: open ? "translateX(0)" : "translateX(100%)",
-          transition: "transform 300ms ease-in-out",
+          transition: "transform 300ms cubic-bezier(0.77, 0, 0.175, 1)",
         }}
-        className="flex flex-col border-l border-zinc-200 bg-white"
+        className={`flex flex-col border-l border-zinc-200 bg-white ${PLATFORM}`}
       >
         {/* Panel header */}
         <div className="flex shrink-0 items-start justify-between border-b border-zinc-200 px-5 py-4">
@@ -82,7 +93,7 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
             type="button"
             onClick={() => setOpen(false)}
             aria-label="Close panel"
-            className="ml-3 shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+            className="ml-3 shrink-0 rounded-md p-1 text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700"
           >
             ✕
           </button>

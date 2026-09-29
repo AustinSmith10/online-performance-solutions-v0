@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   getTemplateDownloadUrl,
@@ -26,6 +26,13 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
     | { status: "ready"; url: string; filename: string }
   >({ status: "idle" });
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   async function download() {
     setDownloading(true);
     setDownloadError(null);
@@ -50,7 +57,7 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
   }
 
   const btn =
-    "rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50";
+    "press-subtle rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50";
 
   return (
     <>
@@ -67,11 +74,14 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
       {open && typeof document !== "undefined" &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
+            className="modal-backdrop fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
             onClick={() => setOpen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Template preview"
           >
             <div
-              className="flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+              className="modal-panel flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
@@ -81,7 +91,7 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                  className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700"
                 >
                   Close
                 </button>
