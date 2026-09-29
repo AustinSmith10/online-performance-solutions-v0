@@ -87,8 +87,8 @@ export function Drawer({ isOpen, onClose, title, subtitle, footer, successMessag
         aria-hidden="true"
         onClick={successMessage ? undefined : onClose}
         className={[
-          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-200",
-          isOpen ? "opacity-100" : "pointer-events-none opacity-0",
+          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity ease-[cubic-bezier(0.23,1,0.32,1)]",
+          isOpen ? "opacity-100 duration-150" : "pointer-events-none opacity-0 duration-100",
         ].join(" ")}
       />
 
@@ -97,8 +97,8 @@ export function Drawer({ isOpen, onClose, title, subtitle, footer, successMessag
       <div
         inert={isOpen ? undefined : true}
         className={[
-          "fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200",
-          isOpen ? "opacity-100" : "pointer-events-none opacity-0",
+          "fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity ease-[cubic-bezier(0.23,1,0.32,1)]",
+          isOpen ? "opacity-100 duration-180" : "pointer-events-none opacity-0 duration-100",
         ].join(" ")}
       >
         <div
@@ -110,8 +110,8 @@ export function Drawer({ isOpen, onClose, title, subtitle, footer, successMessag
           className={[
             "relative flex w-full max-w-lg flex-col bg-white shadow-2xl outline-none rounded-xl overflow-hidden",
             "max-h-[90vh]",
-            "transform transition-transform duration-200 ease-out",
-            isOpen ? "scale-100" : "scale-95",
+            "transform transition-transform ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none motion-reduce:scale-100",
+            isOpen ? "scale-100 duration-180" : "scale-[0.97] duration-100",
           ].join(" ")}
         >
           {/* Success overlay */}
