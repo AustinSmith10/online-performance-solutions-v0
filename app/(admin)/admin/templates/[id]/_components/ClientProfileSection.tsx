@@ -158,7 +158,7 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
                   <span className="text-xs text-zinc-500">Saving…</span>
                 )}
                 {visibilitySaving[item.placeholder_token] === "error" && (
-                  <span className="text-xs text-red-600">Failed — try again</span>
+                  <span className="rise-in text-xs text-red-600">Failed — try again</span>
                 )}
                 <button
                   type="button"
@@ -189,8 +189,8 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
         <p className="text-xs text-zinc-500">
           Visibility saves instantly when toggled above — this button is only for the drag-to-reorder order.
         </p>
-        {state.success && <p className="text-sm text-green-600">Saved.</p>}
-        {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+        {state.success && <p className="rise-in text-sm text-green-600">Saved.</p>}
+        {state.error && <p className="rise-in text-sm text-red-600">{state.error}</p>}
       </div>
     </form>
   );

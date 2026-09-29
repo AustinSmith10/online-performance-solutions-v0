@@ -183,7 +183,7 @@ function ExtractionTokenCard({
 
   if (editing) {
     return (
-      <div ref={cardRef} className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-4">
+      <div ref={cardRef} className="pane-in rounded-lg border border-zinc-200 bg-zinc-50/60 p-4">
         <p className="mb-3 font-mono text-xs text-zinc-500">{"{" + token.placeholder_token + "}"}</p>
         <form action={handleSave} className="space-y-3">
           <div>
@@ -233,7 +233,7 @@ function ExtractionTokenCard({
             />
             Required
           </label>
-          {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+          {saveError && <p className="rise-in text-xs text-red-600">{saveError}</p>}
           <div className="flex items-center gap-3">
             <button
               type="submit"
@@ -351,7 +351,7 @@ function AddTokenForm({ templateId }: { templateId: string }) {
       </label>
 
       {state.error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>
+        <p className="rise-in rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>
       )}
 
       <button

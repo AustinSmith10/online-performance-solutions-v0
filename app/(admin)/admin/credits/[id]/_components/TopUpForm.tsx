@@ -20,10 +20,10 @@ export function TopUpForm({ orgId }: Props) {
   return (
     <div className="space-y-3">
       {state.error && (
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</p>
+        <p className="rise-in rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</p>
       )}
       {state.success && (
-        <p className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
+        <p className="rise-in rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
           Credits added successfully.
         </p>
       )}

@@ -68,7 +68,7 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
         {downloading ? "Preparing…" : "Download"}
       </button>
       {downloadError && (
-        <span className="text-xs text-red-600">{downloadError}</span>
+        <span className="rise-in text-xs text-red-600">{downloadError}</span>
       )}
 
       {open && typeof document !== "undefined" &&

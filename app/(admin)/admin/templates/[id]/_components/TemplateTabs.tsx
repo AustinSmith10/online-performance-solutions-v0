@@ -40,7 +40,7 @@ function TabsInner({ tabs }: { tabs: Tab[] }) {
         ))}
         </div>
       </div>
-      <div className="pt-6 space-y-6">
+      <div key={active} className="pane-in pt-6 space-y-6">
         {tabs[active].content}
       </div>
     </div>

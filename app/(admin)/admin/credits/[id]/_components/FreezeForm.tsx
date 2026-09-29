@@ -21,7 +21,7 @@ export function FreezeForm({ orgId, isFrozen }: Props) {
   return (
     <div className="space-y-2">
       {state.error && (
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</p>
+        <p className="rise-in rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</p>
       )}
       <form action={action}>
         <button

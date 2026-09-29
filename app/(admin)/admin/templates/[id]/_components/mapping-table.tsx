@@ -172,7 +172,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                   {SOURCE_LABELS[source]}
                 </span>
                 {row.is_mapped ? (
-                  <span className="text-xs text-green-700">✓ Valid</span>
+                  <span className="rise-in text-xs text-green-700">✓ Valid</span>
                 ) : (
                   <span className="text-xs font-medium text-red-600" title="Unrecognised prefix — blocks activation">
                     ✗ Invalid
@@ -281,8 +281,8 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
         >
           {pending ? "Saving…" : "Save labels & hints"}
         </button>
-        {state.success && <p className="text-sm text-green-600">Saved.</p>}
-        {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+        {state.success && <p className="rise-in text-sm text-green-600">Saved.</p>}
+        {state.error && <p className="rise-in text-sm text-red-600">{state.error}</p>}
       </div>
     </form>
   );
@@ -370,7 +370,7 @@ function ActivatedMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit
                 {SOURCE_LABELS[source]}
               </span>
               {row.is_mapped ? (
-                <span className="text-xs text-green-700">✓ Valid</span>
+                <span className="rise-in text-xs text-green-700">✓ Valid</span>
               ) : (
                 <span className="text-xs font-medium text-red-600">✗ Invalid</span>
               )}
@@ -412,7 +412,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
 
   if (editing) {
     return (
-      <div className="bg-blue-50/40 px-4 py-4">
+      <div className="pane-in bg-blue-50/40 px-4 py-4">
         <form action={handleSave} className="flex flex-col gap-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-600">
@@ -473,7 +473,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
             </label>
           )}
 
-          {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+          {saveError && <p className="rise-in text-xs text-red-600">{saveError}</p>}
 
           <div className="flex items-center gap-3">
             <button

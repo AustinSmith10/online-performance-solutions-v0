@@ -119,7 +119,7 @@ export function TemplateStatusActions({ templateId, status, canActivate }: Props
         </button>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="rise-in text-sm text-red-600">{error}</p>}
     </div>
   );
 }

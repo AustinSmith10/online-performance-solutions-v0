@@ -168,8 +168,8 @@ function DraftSectionLabels({ templateId, labels }: Omit<Props, "isActivated">) 
         </div>
       ))}
 
-      {state.error && <p className="text-xs text-red-600">{state.error}</p>}
-      {state.success && <p className="text-xs text-green-600">Section labels saved.</p>}
+      {state.error && <p className="rise-in text-xs text-red-600">{state.error}</p>}
+      {state.success && <p className="rise-in text-xs text-green-600">Section labels saved.</p>}
 
       <button
         type="submit"
@@ -250,7 +250,7 @@ function SectionCard({
 
       {/* Card body */}
       {editing ? (
-        <div className="bg-blue-50/40 p-4">
+        <div className="pane-in bg-blue-50/40 p-4">
           <form action={handleSave} className={`${section.fixedHeading ? "" : "grid grid-cols-2 gap-4"}`}>
             {!section.fixedHeading && section.labelField && (
               <div>
@@ -298,7 +298,7 @@ function SectionCard({
               >
                 Cancel
               </button>
-              {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+              {saveError && <p className="rise-in text-xs text-red-600">{saveError}</p>}
             </div>
           </form>
         </div>

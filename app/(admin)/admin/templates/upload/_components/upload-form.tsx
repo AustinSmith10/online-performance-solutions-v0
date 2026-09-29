@@ -87,7 +87,7 @@ export function UploadTemplateForm({ orgs, defaultOrgId }: Props) {
       </div>
 
       {state.error && (
-        <p className="rounded-md bg-red-50 px-4 py-2 text-sm text-red-700">{state.error}</p>
+        <p className="rise-in rounded-md bg-red-50 px-4 py-2 text-sm text-red-700">{state.error}</p>
       )}
 
       <button

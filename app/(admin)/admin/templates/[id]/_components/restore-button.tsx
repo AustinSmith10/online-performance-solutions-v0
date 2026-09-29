@@ -9,7 +9,7 @@ export function RestoreButton({ templateId }: { templateId: string }) {
 
   return (
     <form action={formAction} className="flex items-center gap-3">
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {state.error && <p className="rise-in text-sm text-red-600">{state.error}</p>}
       <button
         type="submit"
         disabled={pending}

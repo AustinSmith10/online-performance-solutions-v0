@@ -50,8 +50,8 @@ export function DisciplineSettingsForm({ templateId, suffix }: Props) {
         >
           {pending ? "Saving…" : "Save"}
         </button>
-        {state.success && !pending && <span className="text-xs text-green-700">Saved</span>}
-        {state.error && <span className="text-xs text-red-700">{state.error}</span>}
+        {state.success && !pending && <span className="rise-in text-xs text-green-700">Saved</span>}
+        {state.error && <span className="rise-in text-xs text-red-700">{state.error}</span>}
       </form>
     </div>
   );

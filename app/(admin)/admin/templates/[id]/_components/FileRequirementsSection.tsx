@@ -225,7 +225,7 @@ function RequirementCard({
             </div>
           </div>
 
-          {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+          {saveError && <p className="rise-in text-xs text-red-600">{saveError}</p>}
 
           <div className="flex items-center gap-3">
             <button

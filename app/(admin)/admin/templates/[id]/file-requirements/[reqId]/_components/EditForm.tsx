@@ -52,7 +52,7 @@ export function EditForm({
             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
           />
           {state.fieldErrors?.name?.map((e) => (
-            <p key={e} className="mt-1 text-xs text-red-600">
+            <p key={e} className="rise-in mt-1 text-xs text-red-600">
               {e}
             </p>
           ))}
@@ -81,7 +81,7 @@ export function EditForm({
             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
           />
           {state.fieldErrors?.max_count?.map((e) => (
-            <p key={e} className="mt-1 text-xs text-red-600">
+            <p key={e} className="rise-in mt-1 text-xs text-red-600">
               {e}
             </p>
           ))}
@@ -175,7 +175,7 @@ export function EditForm({
               />
             </div>
             {state.fieldErrors?.marker_page_count?.map((e) => (
-              <p key={e} className="text-xs text-red-600">
+              <p key={e} className="rise-in text-xs text-red-600">
                 {e}
               </p>
             ))}
@@ -192,15 +192,15 @@ export function EditForm({
               className="w-full rounded-md border border-zinc-300 px-3 py-2 font-mono text-sm focus:border-zinc-500 focus:outline-none"
             />
             {state.fieldErrors?.marker_regex?.map((e) => (
-              <p key={e} className="mt-1 text-xs text-red-600">
+              <p key={e} className="rise-in mt-1 text-xs text-red-600">
                 {e}
               </p>
             ))}
           </div>
         </div>
 
-        {state.error && <p className="text-sm text-red-600">{state.error}</p>}
-        {state.success && <p className="text-sm text-green-600">Saved.</p>}
+        {state.error && <p className="rise-in text-sm text-red-600">{state.error}</p>}
+        {state.success && <p className="rise-in text-sm text-green-600">Saved.</p>}
 
         <div className="flex gap-3 pt-1">
           <button

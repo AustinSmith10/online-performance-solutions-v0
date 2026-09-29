@@ -117,7 +117,7 @@ export function AddExtractionTokenForm({ templateId, existingTokens, highlightTo
         </div>
 
         {state.error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>
+          <p className="rise-in rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>
         )}
 
         <button
@@ -210,7 +210,7 @@ function ExtractionOnlyRow({ templateId, row, highlight }: { templateId: string;
               />
             </div>
             {saveError && (
-              <p className="text-xs text-red-600">{saveError}</p>
+              <p className="rise-in text-xs text-red-600">{saveError}</p>
             )}
             <div className="flex items-center gap-2">
               <button
