@@ -7,7 +7,7 @@ export function ReviewTallyChip({ summary, className = "" }: { summary: RoundSum
   const tone = summary.rejected > 0 ? "bg-red-50 text-red-700 ring-red-100" : "bg-zinc-50 text-zinc-600 ring-zinc-200";
   return (
     <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${tone} ${className}`}
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ring-1 ring-inset ${tone} ${className}`}
       title={`Current review round — ${summary.total} reviewer${summary.total === 1 ? "" : "s"}`}
     >
       {text}

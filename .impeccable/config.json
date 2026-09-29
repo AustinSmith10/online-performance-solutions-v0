@@ -16,6 +16,15 @@
         "rule": "side-tab",
         "value": "*",
         "files": [
+          "app/(admin)/admin/projects/page.tsx"
+        ],
+        "createdAt": "2026-09-28T23:11:38.878Z",
+        "reason": "Functional status-coded left accent (accentClass: overdue/payment_override), same pattern already confirmed and ignored for ActiveProjectsList.tsx and ActionPanel.tsx — not decorative"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
           "app/(admin)/admin/dashboard/_components/ActiveProjectsList.tsx"
         ],
         "createdAt": "2026-09-28T23:59:06.153Z",

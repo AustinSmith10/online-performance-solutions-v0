@@ -67,41 +67,41 @@ export function SubmitOnBehalfForm({
   const pickerFields = (
     <div className="grid grid-cols-1 gap-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-2">
       <div>
-        <label className="mb-1 block text-xs font-medium text-zinc-700">
+        <label className="block text-xs font-medium text-zinc-700">
           Client <span className="text-red-500">*</span>
+          <select
+            value={orgId}
+            onChange={(e) => {
+              setOrgId(e.target.value);
+              setStakeholderId("");
+            }}
+            className={`mt-1 ${selectClass}`}
+          >
+            <option value="" disabled>Select a client…</option>
+            {clients.map((org) => (
+              <option key={org.id} value={org.id}>{org.name}</option>
+            ))}
+          </select>
         </label>
-        <select
-          value={orgId}
-          onChange={(e) => {
-            setOrgId(e.target.value);
-            setStakeholderId("");
-          }}
-          className={selectClass}
-        >
-          <option value="" disabled>Select a client…</option>
-          {clients.map((org) => (
-            <option key={org.id} value={org.id}>{org.name}</option>
-          ))}
-        </select>
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-zinc-700">
+        <label className="block text-xs font-medium text-zinc-700">
           Stakeholder account <span className="text-red-500">*</span>
+          <select
+            value={stakeholderId}
+            onChange={(e) => setStakeholderId(e.target.value)}
+            disabled={!orgId || stakeholders.length === 0}
+            className={`mt-1 ${selectClass}`}
+          >
+            <option value="" disabled>
+              {!orgId ? "Select a client first" : stakeholders.length === 0 ? "No stakeholder accounts" : "Select a stakeholder…"}
+            </option>
+            {stakeholders.map((u) => (
+              <option key={u.id} value={u.id}>{u.name} — {u.email}</option>
+            ))}
+          </select>
         </label>
-        <select
-          value={stakeholderId}
-          onChange={(e) => setStakeholderId(e.target.value)}
-          disabled={!orgId || stakeholders.length === 0}
-          className={selectClass}
-        >
-          <option value="" disabled>
-            {!orgId ? "Select a client first" : stakeholders.length === 0 ? "No stakeholder accounts" : "Select a stakeholder…"}
-          </option>
-          {stakeholders.map((u) => (
-            <option key={u.id} value={u.id}>{u.name} — {u.email}</option>
-          ))}
-        </select>
       </div>
 
       {orgId && stakeholders.length === 0 && (
@@ -120,6 +120,11 @@ export function SubmitOnBehalfForm({
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-4 py-10">
       <BackLink href={backHref}>{backLabel}</BackLink>
+      {/* Rendered as its own block, not nested inside SubmissionForm's Right
+          Now card — choosing who this is for is the actual first step here,
+          not a preamble to file upload, and DESIGN.md's one-container rule
+          rules out a bordered box inside another bordered card anyway. */}
+      {pickerFields}
       {/* Keyed on orgId so switching clients cleanly resets any in-progress
           template/file selection instead of carrying over stale state. */}
       <SubmissionForm
@@ -131,7 +136,8 @@ export function SubmitOnBehalfForm({
         adminClientId={stakeholderId}
         projectBasePath={projectBasePath}
         startOverHref={submitPath}
-        beforeTemplateFields={pickerFields}
+        headerTitle={selectedOrg ? `New report request — on behalf of ${selectedOrg.name}` : "New report request — on behalf of a client"}
+        viewerRole="staff"
       />
     </div>
   );

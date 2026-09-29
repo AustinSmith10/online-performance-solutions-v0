@@ -13,9 +13,11 @@ interface Props {
   alreadyOverridden: boolean;
   /** True once payment has been resolved by any means (normal deduction or a prior override) — nothing left to override. */
   paymentResolved?: boolean;
+  /** Buttons only — no explanatory paragraph (used in the Project Config popover). */
+  compact?: boolean;
 }
 
-function ReconcileButton({ projectId }: { projectId: string }) {
+function ReconcileButton({ projectId, compact }: { projectId: string; compact?: boolean }) {
   const boundAction = reconcileOverrideAction.bind(null, projectId);
   const [state, action, pending] = useActionState<ReconcileState, FormData>(boundAction, {});
   const [open, setOpen] = useState(false);
@@ -23,8 +25,8 @@ function ReconcileButton({ projectId }: { projectId: string }) {
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl text-center">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+          <div className="modal-panel mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl text-center">
             <p className="text-base font-semibold text-zinc-900">Mark override as reconciled?</p>
             <p className="mt-2 text-sm text-zinc-500">
               This confirms payment has been collected and clears the override flag.
@@ -53,9 +55,11 @@ function ReconcileButton({ projectId }: { projectId: string }) {
       )}
 
       <div className="space-y-2">
-        <p className="text-sm text-zinc-500">
-          Override is active. Once payment is collected, mark this project as reconciled to clear the flag.
-        </p>
+        {!compact && (
+          <p className="text-sm text-zinc-500">
+            Override is active. Once payment is collected, mark this project as reconciled to clear the flag.
+          </p>
+        )}
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -68,14 +72,14 @@ function ReconcileButton({ projectId }: { projectId: string }) {
   );
 }
 
-export function OverrideForm({ projectId, alreadyOverridden, paymentResolved }: Props) {
+export function OverrideForm({ projectId, alreadyOverridden, paymentResolved, compact }: Props) {
   const boundAction = overridePaymentGateAction.bind(null, projectId);
   const [state, action, pending] = useActionState<OverrideState, FormData>(boundAction, {});
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
 
   if (alreadyOverridden) {
-    return <ReconcileButton projectId={projectId} />;
+    return <ReconcileButton projectId={projectId} compact={compact} />;
   }
 
   if (paymentResolved) {
@@ -94,8 +98,8 @@ export function OverrideForm({ projectId, alreadyOverridden, paymentResolved }: 
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+          <div className="modal-panel mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
             <p className="text-base font-semibold text-zinc-900">Apply payment override?</p>
             <p className="mt-1 text-sm text-zinc-500">
               This bypasses the credit gate and flags the project as Override — Payment Pending.

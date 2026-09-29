@@ -65,8 +65,13 @@ function StageIconGlyph({ icon, className }: { icon: StageIcon; className?: stri
 
 export function StageRail({ stages }: { stages: Stage[] }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white px-3 py-4 sm:px-6">
-      <ol aria-label="Project progress" className="flex items-start">
+    // overflow-x-auto (not overflow-hidden) below sm — five stages plus
+    // labels don't fit a 375px viewport, and clipping the last one (often
+    // "Delivered") hides the workflow's terminal state entirely. min-w-max
+    // on the list keeps every stage at its natural width so it scrolls
+    // instead of squeezing icons and labels.
+    <div className="relative overflow-x-auto rounded-xl border border-zinc-200 bg-white px-3 py-4 sm:overflow-hidden sm:px-6">
+      <ol aria-label="Project progress" className="flex min-w-max items-start sm:min-w-0">
         {stages.map((stage, i) => {
           const isLast = i === stages.length - 1;
           const urgency = stage.urgency ?? "neutral";

@@ -837,7 +837,7 @@ export async function ProjectWorkspace({
           <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 002.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0112.888 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
           </svg>
-          <span className="font-medium text-zinc-900">Rev {currentRevNumber}</span>
+          <span className="font-medium tabular-nums text-zinc-900">Rev {currentRevNumber}</span>
         </span>
         {isAdmin && (
           <HeaderStatInline
@@ -878,14 +878,14 @@ export async function ProjectWorkspace({
         <div className="flex justify-end gap-2">
           <a
             href={`/api/download/audit-export/project/${id}?format=csv`}
-            className="rounded border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+            className="rounded-md border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
           >
             Export CSV
           </a>
           <a
             href={`/api/download/audit-export/project/${id}?format=pdf`}
             title="A locked-down PDF rendering, for when the export must not be trivially editable"
-            className="rounded border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+            className="rounded-md border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
           >
             Export PDF
           </a>
@@ -1247,7 +1247,7 @@ export async function ProjectWorkspace({
               buttonClassName="shrink-0 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100"
             >
               <p className="text-sm font-medium text-zinc-900">PBDR</p>
-              <p className="mt-0.5 text-xs text-zinc-500">
+              <p className="mt-0.5 text-xs tabular-nums text-zinc-500">
                 Rev {pbdrGrouping.active.revNumber} · {new Date(pbdrGrouping.active.createdAt).toLocaleDateString("en-AU")}
               </p>
             </DownloadCard>
@@ -1554,7 +1554,7 @@ export async function ProjectWorkspace({
           return (
             <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
               <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
-                <span className="text-xs font-semibold text-zinc-700">Rev {cycle - 1}</span>
+                <span className="text-xs font-semibold tabular-nums text-zinc-700">Rev {cycle - 1}</span>
                 {pbdbForCycle ? (
                   <span className="text-xs text-zinc-500">
                     · PBDB sent {new Date(pbdbForCycle.created_at as string).toLocaleDateString("en-AU")}
@@ -1684,10 +1684,7 @@ export async function ProjectWorkspace({
     <>
       <div>
         <h3 className="text-sm font-semibold text-zinc-900">PBDB delivery timing</h3>
-        <p className="mt-1 mb-3 text-xs leading-relaxed text-zinc-500">
-          Sets how long to wait after QA is complete before the PBDB dispatches to stakeholders
-          for review — independent of the PBDR delivery timing below.
-        </p>
+        <p className="mt-1 mb-3 text-xs text-zinc-500">When the PBDB goes out for review, after QA.</p>
         <ProjectDeliveryDelayPresetSelect
           projectId={id}
           initialValue={project.pbdb_delivery_delay_preset}
@@ -1698,10 +1695,7 @@ export async function ProjectWorkspace({
       </div>
       <div className="border-t border-zinc-100 pt-3">
         <h3 className="text-sm font-semibold text-zinc-900">Delivery timing</h3>
-        <p className="mt-1 mb-3 text-xs leading-relaxed text-zinc-500">
-          Sets how long to wait after every stakeholder approves before the final report (PBDR)
-          goes out to the client.
-        </p>
+        <p className="mt-1 mb-3 text-xs text-zinc-500">When the PBDR goes to the client, after every approval.</p>
         <ProjectDeliveryDelayPresetSelect
           projectId={id}
           initialValue={project.delivery_delay_preset}
@@ -1711,19 +1705,16 @@ export async function ProjectWorkspace({
         />
         {project.expected_delivery_date && (
           <p className="mt-1 text-xs text-zinc-500">
-            Project due date (contractual): {fmtDMY(new Date(project.expected_delivery_date))} — the
-            send date above is separate.
+            Contractual due date: {fmtDMY(new Date(project.expected_delivery_date))} (separate from the send date above).
           </p>
         )}
         {deliveryLocked ? (
-          <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-xs leading-relaxed text-zinc-500">
-            All stakeholders already approved, so this delivery is using whatever was set
-            beforehand — changing it now won&apos;t affect this PBDR.
+          <p className="mt-2.5 rounded-md bg-zinc-50 px-2.5 py-2 text-xs text-zinc-500">
+            All stakeholders approved — this no longer affects the PBDR.
           </p>
         ) : (
-          <p className="mt-2.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs leading-relaxed text-amber-700">
-            Set this before the last stakeholder approves — it locks in at that point and can&apos;t
-            be changed retroactively.
+          <p className="mt-2.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-700">
+            Locks in once the last stakeholder approves — set it before then.
           </p>
         )}
       </div>
@@ -1735,9 +1726,7 @@ export async function ProjectWorkspace({
       {latestPbdb && (
         <div className="border-t border-zinc-100 pt-3">
           <p className="text-xs font-medium text-zinc-600">Client document colour</p>
-          <p className="mt-1 mb-2 text-xs text-zinc-500">
-            Black text, or the original red token colour, when the client downloads the PBDB.
-          </p>
+          <p className="mt-1 mb-2 text-xs text-zinc-500">Text colour on the client&apos;s downloaded PBDB.</p>
           <ProjectStripColorToggle projectId={id} initialValue={project.strip_token_color} />
         </div>
       )}
@@ -1748,74 +1737,28 @@ export async function ProjectWorkspace({
     <p className="text-sm text-zinc-500">Project is in the recovery bin — controls are unavailable.</p>
   ) : (
     <>
+      {sharedSettings}
+      {/* Admin gets the same settings as a consultant plus its two actions, as
+          buttons only. Delete lives in the permanent rail card (#177). */}
       {isAdmin && (
-        <div className="border-b border-zinc-100 pb-4">
-          {project.status === "paused" ? (
-            <p className="rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-500">
-              Payment override disabled while project is paused.
+        <div className="space-y-3 border-t border-zinc-100 pt-3">
+          {project.payment_override && (
+            <p className="rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+              Override applied
+              {project.payment_override_at ? ` ${new Date(project.payment_override_at).toLocaleDateString("en-AU")}` : ""}
+              {project.payment_override_reason ? `: ${project.payment_override_reason}` : ""}
             </p>
+          )}
+          {project.status === "paused" ? (
+            <p className="text-xs text-zinc-500">Paused — resume from the panel on the left.</p>
           ) : (
-            <>
-              <h3 className="mb-1 text-sm font-semibold text-zinc-900">Payment gate</h3>
-              <div className="mb-2 flex gap-4 text-xs">
-                <span>
-                  <span className="text-zinc-500">Credit deducted: </span>
-                  <span className={project.credit_deducted ? "font-medium text-green-700" : "text-zinc-500"}>
-                    {project.credit_deducted ? "Yes" : "No"}
-                  </span>
-                </span>
-                {project.payment_override && (
-                  <span>
-                    <span className="text-zinc-500">Override applied: </span>
-                    <span className="font-medium text-amber-700">
-                      {project.payment_override_at
-                        ? new Date(project.payment_override_at).toLocaleDateString("en-AU")
-                        : "Yes"}
-                    </span>
-                  </span>
-                )}
-              </div>
-              {project.payment_override && project.payment_override_reason && (
-                <div className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  <span className="font-medium">Override reason: </span>
-                  {project.payment_override_reason}
-                </div>
-              )}
-              <OverrideForm projectId={id} alreadyOverridden={project.payment_override} paymentResolved={project.credit_deducted} />
-            </>
+            <div className="flex flex-wrap items-center gap-2">
+              <OverrideForm projectId={id} alreadyOverridden={project.payment_override} paymentResolved={project.credit_deducted} compact />
+              {!TERMINAL_STATUSES.has(project.status) && <PauseForm projectId={id} />}
+            </div>
           )}
         </div>
       )}
-      {sharedSettings}
-      {isAdmin &&
-        (project.status === "paused" ? (
-          <div className="border-t border-zinc-100 pt-4">
-            <h3 className="mb-1 text-sm font-semibold text-zinc-900">Project controls</h3>
-            <p className="text-xs text-zinc-500">Paused — resume from the panel on the left.</p>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-red-100 bg-red-50/40 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700">Danger zone</p>
-            <div className="space-y-2">
-              {!TERMINAL_STATUSES.has(project.status) && (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-zinc-900">Pause project</p>
-                    <p className="truncate text-xs text-zinc-500">Delivery date shifts by the days paused, on resume.</p>
-                  </div>
-                  <PauseForm projectId={id} />
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-zinc-900">Delete project</p>
-                  <p className="truncate text-xs text-zinc-500">Recovery bin for 30 days, then purged.</p>
-                </div>
-                <AdminDeleteButton projectId={id} />
-              </div>
-            </div>
-          </div>
-        ))}
     </>
   );
 
@@ -1931,11 +1874,17 @@ export async function ProjectWorkspace({
           <span className="font-semibold">
             Overdue by {daysOverdue} day{daysOverdue !== 1 ? "s" : ""}.
           </span>{" "}
-          {project.status === "submitted"
+          {/* Branches on effectiveStatus (resolveStaffStatus), not raw
+              project.status — the stored status flips to revision_required
+              on the first rejection even while other reviewers are still
+              pending, which used to make this banner announce "action
+              needed" a round early, while the header pill still read
+              Awaiting Approval. */}
+          {effectiveStatus === "submitted"
             ? "No consultant has been assigned — assign one from the panel on the left."
-            : project.status === "dispatched" && pendingReviews.length > 0
+            : effectiveStatus === "dispatched" && pendingReviews.length > 0
             ? `${pendingReviews.length} stakeholder${pendingReviews.length !== 1 ? "s" : ""} yet to respond — see the panel on the left.`
-            : project.status === "revision_required"
+            : effectiveStatus === "revision_required"
             ? "A revision has been requested — the consultant must upload a corrected document."
             : `Expected delivery date has passed.`}
         </div>
@@ -1975,7 +1924,7 @@ function Row({
   return (
     <div className={`flex items-baseline gap-4 px-5 py-3 ${hint ? "cursor-help" : ""}`} title={hint}>
       <span className="w-36 shrink-0 text-sm text-zinc-500">{label}</span>
-      <span className={`min-w-0 flex-1 text-sm text-zinc-900 ${wrap ? "" : "truncate"}`}>{value}</span>
+      <span className={`min-w-0 flex-1 text-sm text-zinc-900 tabular-nums ${wrap ? "" : "truncate"}`}>{value}</span>
     </div>
   );
 }

@@ -54,7 +54,7 @@ function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" })
 
 function accentClass(p: { status: ProjectStatus; payment_override: boolean; overdue: boolean }): string {
   if (p.overdue) return "border-l-red-400";
-  if (p.payment_override) return "border-l-purple-400";
+  if (p.payment_override) return "border-l-amber-400";
   return "border-l-zinc-200";
 }
 
@@ -191,7 +191,7 @@ function ProjectsLayout({
         </div>
         <Link
           href="/admin/projects/submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          className="press rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
         >
           Submit request
         </Link>
@@ -204,7 +204,7 @@ function ProjectsLayout({
             name="q"
             defaultValue={params.q ?? ""}
             placeholder="Search project number, address, or PO number…"
-            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
           />
           <select
             name="status"
@@ -221,11 +221,11 @@ function ProjectsLayout({
             name="org"
             defaultValue={params.org ?? ""}
             placeholder="Client…"
-            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
           />
           <button
             type="submit"
-            className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+            className="press rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Search
           </button>
@@ -241,7 +241,7 @@ function ProjectsLayout({
       </form>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Sort by</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Sort by</span>
         {([
           ["created_at", "Created"],
           ["expected_delivery_date", "Due date"],
@@ -251,7 +251,7 @@ function ProjectsLayout({
           <a
             key={col}
             href={sortHref(params, col)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 ${
               sortCol === col ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
             }`}
           >
@@ -262,7 +262,7 @@ function ProjectsLayout({
       </div>
 
       {projects.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
           {hasFilter ? "No projects match your filters." : "No projects yet."}
         </div>
       ) : (
@@ -280,27 +280,33 @@ function ProjectsLayout({
               p.expected_delivery_date < todayIso &&
               !TERMINAL_STATUSES.has(p.status)
             );
+            const daysOverdue = overdue
+              ? Math.floor(
+                  (new Date(todayIso).getTime() - new Date(p.expected_delivery_date!).getTime()) /
+                    (1000 * 60 * 60 * 24)
+                )
+              : undefined;
 
             return (
               <Link
                 key={p.id}
                 href={`/admin/projects/${p.id}`}
-                className={`flex items-center gap-3 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 ${accentClass({ status: p.status, payment_override: p.payment_override, overdue })} hover:bg-zinc-50`}
+                className={`flex flex-col gap-2 border-l-4 border-y border-r border-zinc-200 bg-white px-3 py-2.5 transition-colors duration-150 sm:flex-row sm:items-center sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-inset ${accentClass({ status: p.status, payment_override: p.payment_override, overdue })} hover:bg-zinc-50`}
               >
                 <div className="min-w-0 flex-1">
-                  <span className="truncate text-sm font-medium text-zinc-900">{label}</span>
+                  <span className="block truncate text-sm font-medium text-zinc-900">{label}</span>
                   <p className="mt-0.5 truncate text-xs text-zinc-500">
                     {p.clients?.name ?? "—"} · {consultant ?? "Unassigned"} · Created{" "}
                     {new Date(p.created_at).toLocaleDateString("en-AU")}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {overdue && <OverduePill />}
+                <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:flex-nowrap">
+                  {overdue && <OverduePill days={daysOverdue} />}
                   {p.payment_override && (
-                    <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700">Override</span>
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Override</span>
                   )}
                   {p.tally && <ReviewTallyChip summary={p.tally} />}
-                  <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_CLASSES[p.displayStatus]}`}>
+                  <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLASSES[p.displayStatus]}`}>
                     {STATUS_LABELS[p.displayStatus]}
                   </span>
                 </div>

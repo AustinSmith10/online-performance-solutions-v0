@@ -40,7 +40,7 @@ export function ConsultantCard({
   const history = assignmentHistory ?? [];
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Consultant</p>
         {assignedName && (

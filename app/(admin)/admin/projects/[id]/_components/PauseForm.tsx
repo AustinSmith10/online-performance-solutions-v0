@@ -11,8 +11,8 @@ export function PauseForm({ projectId }: { projectId: string }) {
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+          <div className="modal-panel mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
             <p className="text-base font-semibold text-zinc-900">Pause project?</p>
             <p className="mt-1 text-sm text-zinc-500">
               The project will be frozen at its current stage. Provide a reason below.
@@ -56,7 +56,7 @@ export function PauseForm({ projectId }: { projectId: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="shrink-0 whitespace-nowrap rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+        className="shrink-0 whitespace-nowrap rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50"
       >
         Pause project
       </button>

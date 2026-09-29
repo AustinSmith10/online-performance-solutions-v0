@@ -22,8 +22,8 @@ export function RevertButton({ projectId }: { projectId: string }) {
   return (
     <>
       {confirming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+          <div className="modal-panel mx-4 w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-xl">
             <p className="text-base font-semibold text-zinc-900 text-center">Revert to PBDB?</p>
             <p className="mt-2 text-sm text-zinc-500 text-center">
               Sends this project back to the PBDB QA cycle so the consultant can correct and
