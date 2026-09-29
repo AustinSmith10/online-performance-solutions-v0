@@ -127,14 +127,14 @@ export default async function OrganisationsPage({
           </select>
           <button
             type="submit"
-            className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-zinc-700"
+            className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Search
           </button>
           {hasFilter && (
             <Link
               href="/admin/clients"
-              className="press-subtle rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 transition-colors duration-150 hover:bg-zinc-100"
+              className="press-subtle rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
             >
               Clear
             </Link>
@@ -166,7 +166,7 @@ export default async function OrganisationsPage({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-sm tabular-nums text-zinc-600" title="Credit balance" aria-label={`Credit balance ${org.credit_balance.toLocaleString()}`}>{org.credit_balance.toLocaleString()}</span>
+                  <span className="text-sm tabular-nums text-zinc-600" title="Credit balance">{org.credit_balance.toLocaleString()}</span>
                   {org.is_frozen ? (
                     <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Frozen</span>
                   ) : (

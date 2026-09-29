@@ -41,7 +41,7 @@ export function MetricsTableEditor({ clientId, table, rows, templateTokenGroups 
             <button
               type="button"
               onClick={open}
-              className="press-subtle transition-colors duration-150 shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+              className="press-subtle shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
             >
               Import spreadsheet
             </button>
@@ -353,7 +353,7 @@ function AutofillConfigPanel({
           <button
             type="submit"
             disabled={pending}
-            className="press-subtle transition-colors duration-150 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+            className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
             {pending ? "Saving…" : "Save changes"}
           </button>
@@ -407,7 +407,7 @@ function RowLine({ clientId, table, row }: { clientId: string; table: MetricsTab
             <button
               type="submit"
               disabled={pending}
-              className="press-subtle transition-colors duration-150 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="press-subtle rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {pending ? "Saving…" : "Save"}
             </button>
@@ -483,7 +483,7 @@ function NewRowLine({ clientId, table }: { clientId: string; table: MetricsTable
           <button
             type="submit"
             disabled={pending}
-            className="press-subtle transition-colors duration-150 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+            className="press-subtle rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
           >
             {pending ? "Adding…" : "+ Add row"}
           </button>

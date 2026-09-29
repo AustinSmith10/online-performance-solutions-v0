@@ -36,7 +36,7 @@ export function EmailWhitelistCard({ orgId, domains }: Props) {
           <button
             type="submit"
             disabled={pending}
-            className="press-subtle transition-colors duration-150 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+            className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
             {pending ? "Adding…" : "Add"}
           </button>
@@ -48,7 +48,7 @@ export function EmailWhitelistCard({ orgId, domains }: Props) {
 
       {/* Domain table */}
       {domains.length === 0 ? (
-        <p className="px-5 py-6 text-center text-sm text-zinc-400">
+        <p className="px-5 py-6 text-center text-sm text-zinc-500">
           No domains added — all senders allowed.
         </p>
       ) : (

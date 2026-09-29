@@ -243,8 +243,8 @@ export default async function OrganisationDetailPage({
                 type="submit"
                 className={
                   orgData.is_frozen
-                    ? "press-subtle rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors duration-150 hover:bg-zinc-50"
-                    : "press-subtle rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition-colors duration-150 hover:bg-red-50"
+                    ? "press-subtle rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                    : "press-subtle rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
                 }
               >
                 {orgData.is_frozen ? "Unfreeze" : "Freeze"}
@@ -281,7 +281,7 @@ export default async function OrganisationDetailPage({
       <div className="mb-4 flex items-center justify-end">
         <Link
           href={`/admin/templates/upload?client_id=${id}`}
-          className="press-subtle transition-colors duration-150 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          className="press-subtle rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
         >
           Upload template
         </Link>

@@ -37,7 +37,7 @@ export function MetricsTablesPanel({ clientId, tables, rowsByTable, templateToke
               <button
                 type="button"
                 onClick={open}
-                className="press-subtle transition-colors duration-150 shrink-0 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+                className="press-subtle shrink-0 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
               >
                 New table from spreadsheet
               </button>
@@ -109,7 +109,7 @@ function DeleteTableButton({
             const result = await deleteMetricsTable(clientId, tableId);
             if (result.error) setError(result.error);
           }}
-          className="press-subtle transition-colors duration-150 shrink-0 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+          className="press-subtle shrink-0 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
         >
           Delete
         </button>

@@ -37,14 +37,14 @@ export function AddStakeholderForm({ orgId }: { orgId: string }) {
       </div>
 
       {state.error && <p className="text-sm text-red-600">{state.error}</p>}
-      {state.saved && <p className="text-sm text-green-600">Stakeholder added.</p>}
+      {state.saved && <p className="text-sm text-green-600">Reviewer added.</p>}
 
       <button
         type="submit"
         disabled={pending}
-        className="press-subtle transition-colors duration-150 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+        className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
       >
-        {pending ? "Adding…" : "Add stakeholder"}
+        {pending ? "Adding…" : "Add reviewer"}
       </button>
     </form>
   );

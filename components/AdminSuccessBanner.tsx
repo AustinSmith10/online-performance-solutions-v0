@@ -37,7 +37,7 @@ export function AdminSuccessBanner({ cleanUrl, title, body }: Props) {
             setVisible(false);
             router.replace(cleanUrl, { scroll: false });
           }}
-          className="press-subtle mt-6 w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-zinc-700"
+          className="press-subtle mt-6 w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
         >
           Got it
         </button>
