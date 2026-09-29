@@ -58,7 +58,7 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
         onClick={() => setOpen(false)}
         aria-hidden="true"
         style={{ opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none" }}
-        className="fixed inset-0 z-40 bg-black/20 transition-opacity duration-300"
+        className="fixed inset-0 z-40 bg-black/20 transition-opacity duration-300 ease-[cubic-bezier(0.77,0,0.175,1)]"
       />
 
       {/* Slide-in panel */}
@@ -127,7 +127,7 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+        className="press-subtle rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
       >
         Extraction-only ({tokens.length}) →
       </button>
@@ -238,7 +238,7 @@ function ExtractionTokenCard({
             <button
               type="submit"
               disabled={isSavePending}
-              className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="press-subtle rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {isSavePending ? "Saving…" : "Save"}
             </button>
@@ -357,7 +357,7 @@ function AddTokenForm({ templateId }: { templateId: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+        className="press-subtle rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
       >
         {pending ? "Adding…" : "Add token"}
       </button>

@@ -114,7 +114,7 @@ export function AddFileRequirementForm({ templateId }: { templateId: string }) {
         <button
           type="submit"
           disabled={isPending}
-          className="shrink-0 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="press-subtle shrink-0 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {isPending ? "Adding…" : "Add requirement"}
         </button>

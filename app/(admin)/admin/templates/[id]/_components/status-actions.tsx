@@ -93,7 +93,7 @@ export function TemplateStatusActions({ templateId, status, canActivate }: Props
           onClick={() => ask("activate")}
           disabled={!canActivate}
           title={!canActivate ? "Resolve all red flags first" : undefined}
-          className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="press-subtle rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Activate template
         </button>
@@ -103,7 +103,7 @@ export function TemplateStatusActions({ templateId, status, canActivate }: Props
         <button
           type="button"
           onClick={() => ask("deactivate")}
-          className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          className="press-subtle rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
         >
           Deactivate
         </button>
@@ -113,7 +113,7 @@ export function TemplateStatusActions({ templateId, status, canActivate }: Props
         <button
           type="button"
           onClick={() => ask("reactivate")}
-          className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          className="press-subtle rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
         >
           Reactivate
         </button>
