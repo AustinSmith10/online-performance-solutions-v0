@@ -76,11 +76,11 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
           <div
             className="modal-backdrop fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
             onClick={() => setOpen(false)}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Template preview"
           >
             <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Template preview"
               className="modal-panel flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >

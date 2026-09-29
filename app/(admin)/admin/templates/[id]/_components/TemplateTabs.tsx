@@ -29,7 +29,7 @@ function TabsInner({ tabs }: { tabs: Tab[] }) {
             key={i}
             type="button"
             onClick={() => requestNavigate(() => setActive(i))}
-            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 transition-colors duration-150 ${
+            className={`shrink-0 whitespace-nowrap focus-visible:[outline-offset:-2px] px-4 py-2.5 text-sm font-medium border-b-2 transition-colors duration-150 ${
               active === i
                 ? "border-zinc-900 text-zinc-900"
                 : "border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300"

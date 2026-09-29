@@ -133,7 +133,7 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
               } ${!item.client_visible ? "opacity-50" : ""}`}
             >
               {/* Drag handle */}
-              <div className="flex items-center justify-center border-r border-zinc-100 bg-zinc-50 cursor-grab select-none text-zinc-500 hover:text-zinc-500 text-base">
+              <div className="flex items-center justify-center border-r border-zinc-100 bg-zinc-50 cursor-grab select-none text-zinc-500 hover:text-zinc-700 text-base">
                 ⠿
               </div>
 

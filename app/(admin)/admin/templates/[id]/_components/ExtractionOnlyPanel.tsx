@@ -58,7 +58,7 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
         onClick={() => setOpen(false)}
         aria-hidden="true"
         style={{ opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none" }}
-        className="fixed inset-0 z-40 bg-black/20 transition-opacity duration-300 ease-[cubic-bezier(0.77,0,0.175,1)]"
+        className="fixed inset-0 z-40 bg-black/20 transition-opacity duration-300 ease-[var(--ease-in-out)]"
       />
 
       {/* Slide-in panel */}
@@ -75,7 +75,7 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
           height: "100dvh",
           zIndex: 50,
           transform: open ? "translateX(0)" : "translateX(100%)",
-          transition: "transform 300ms cubic-bezier(0.77, 0, 0.175, 1)",
+          transition: "transform 300ms var(--ease-in-out)",
         }}
         className={`flex flex-col border-l border-zinc-200 bg-white ${PLATFORM}`}
       >

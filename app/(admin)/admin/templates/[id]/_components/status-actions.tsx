@@ -63,7 +63,7 @@ export function TemplateStatusActions({ templateId, status, canActivate }: Props
     <div className="flex items-center gap-3">
       <Drawer
         isOpen={open}
-        onClose={() => setOpen(false)}
+        onClose={() => (isPending ? undefined : setOpen(false))}
         title={confirmLabel}
       >
         <p className="text-sm text-zinc-600">{confirmBody}</p>

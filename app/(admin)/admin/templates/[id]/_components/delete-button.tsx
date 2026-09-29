@@ -18,7 +18,7 @@ export function DeleteButton({ templateId }: { templateId: string }) {
     <>
       <Drawer
         isOpen={open}
-        onClose={() => setOpen(false)}
+        onClose={() => (isPending ? undefined : setOpen(false))}
         title="Delete this template?"
       >
         <p className="text-sm text-zinc-600">

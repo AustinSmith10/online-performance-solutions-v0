@@ -57,7 +57,7 @@ const SECTIONS = [
     borderColor: "#7F77DD",
     labelField: "label_org" as const,
     descField: "label_org_desc" as const,
-    labelHint: "Shown above fields pre-filled from client config.",
+    labelHint: "Shown above fields pre-filled from the client's org config.",
     descHint: "Optional — appears below the heading in smaller text.",
     fixedHeading: false,
     fixedNote: null,

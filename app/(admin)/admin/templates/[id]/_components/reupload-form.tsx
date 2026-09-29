@@ -34,7 +34,7 @@ export function ReuploadForm({ templateId }: { templateId: string }) {
   const confirmDialog = (
     <Drawer
       isOpen={showConflicts}
-      onClose={() => setDismissed(true)}
+      onClose={() => (pending ? undefined : setDismissed(true))}
       title="This will break auto-fill mappings"
     >
       <p className="text-sm text-zinc-600">
