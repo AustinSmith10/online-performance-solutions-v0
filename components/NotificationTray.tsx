@@ -89,6 +89,7 @@ export function NotificationTray({
   // Lazy initialiser: filter dismissed IDs on first render so server-passed
   // entries that were already cleared don't flash back on mount.
   const [entries, setEntries] = useState<TrayEntry[]>(() => applyDismissed(initialEntries));
+  const [tab, setTab] = useState<"notifications" | "system">("notifications");
   const [openAtPathname, setOpenAtPathname] = useState<string | null>(null);
   const [refreshFailed, setRefreshFailed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -271,6 +272,79 @@ export function NotificationTray({
   const hasUnreadNotification = entries.some((e) => e.kind === "notification" && !e.isRead);
 
   const hasUnreadError = entries.some((e) => e.kind !== "notification");
+
+  // Admins get two tabs: regular notifications, and system health signals
+  // (failed jobs, bounces, stalled projects, expiring tokens). Other roles only
+  // ever have notifications, so they keep the single list.
+  const notifEntries = entries.filter((e) => e.kind === "notification");
+  const systemEntries = entries.filter((e) => e.kind !== "notification");
+  const notifUnread = notifEntries.filter((e) => !e.isRead).length;
+  const activeTab = includeNeedsAttention ? tab : "notifications";
+  const visibleEntries = !includeNeedsAttention
+    ? entries
+    : activeTab === "system"
+      ? systemEntries
+      : notifEntries;
+
+  function onTabKeyDown(ev: React.KeyboardEvent) {
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+    ev.preventDefault();
+    const next = activeTab === "notifications" ? "system" : "notifications";
+    setTab(next);
+    document.getElementById(`${panelId}-tab-${next}`)?.focus();
+  }
+
+  const tabButton = (id: "notifications" | "system", label: string, count: number, alert: boolean) => (
+    <button
+      type="button"
+      role="tab"
+      id={`${panelId}-tab-${id}`}
+      aria-selected={activeTab === id}
+      aria-controls={`${panelId}-list`}
+      tabIndex={activeTab === id ? 0 : -1}
+      onClick={() => setTab(id)}
+      onKeyDown={onTabKeyDown}
+      className={`press relative flex items-center gap-1.5 px-3 py-2.5 text-sm transition-colors duration-150 [@media(pointer:coarse)]:min-h-11 ${FOCUS_RING} ${
+        activeTab === id
+          ? "font-semibold text-zinc-900 after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-zinc-900"
+          : "text-zinc-500 hover:text-zinc-800"
+      }`}
+    >
+      {label}
+      {count > 0 && (
+        <span
+          className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums leading-5 ${
+            alert ? "bg-red-100 text-red-700" : "bg-zinc-200 text-zinc-700"
+          }`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+
+  const actions = activeTab === "notifications" && (hasUnreadNotification || hasReadNotification) && (
+    <div className="flex items-center gap-1">
+      {hasUnreadNotification && (
+        <button
+          type="button"
+          onClick={() => void markAllRead()}
+          className={`press rounded-md px-2 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 [@media(pointer:coarse)]:min-h-11 ${FOCUS_RING}`}
+        >
+          Mark all read
+        </button>
+      )}
+      {hasReadNotification && (
+        <button
+          type="button"
+          onClick={handleClear}
+          className={`press rounded-md px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-11 ${FOCUS_RING}`}
+        >
+          Clear
+        </button>
+      )}
+    </div>
+  );
   const unreadLabel = badgeCount > 0 ? `Notifications, ${badgeCount} unread` : "Notifications";
 
   return (
@@ -307,29 +381,26 @@ export function NotificationTray({
             align === "right" ? "sm:right-0" : "origin-top-left sm:left-0"
           }`}
         >
-          <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-4 py-2.5">
-            <h2 className="text-sm font-semibold tracking-tight text-zinc-900">Notifications</h2>
-            <div className="flex items-center gap-1">
-              {hasUnreadNotification && (
-                <button
-                  type="button"
-                  onClick={() => void markAllRead()}
-                  className={`press rounded-md px-2 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 [@media(pointer:coarse)]:min-h-11 ${FOCUS_RING}`}
-                >
-                  Mark all read
-                </button>
+          {includeNeedsAttention ? (
+            <>
+              <div
+                role="tablist"
+                aria-label="Notification type"
+                className="flex items-center border-b border-zinc-100 px-1"
+              >
+                {tabButton("notifications", "Notifications", notifUnread, false)}
+                {tabButton("system", "System", systemEntries.length, true)}
+              </div>
+              {actions && (
+                <div className="flex justify-end border-b border-zinc-100 px-3 py-1">{actions}</div>
               )}
-              {hasReadNotification && (
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className={`press rounded-md px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-11 ${FOCUS_RING}`}
-                >
-                  Clear
-                </button>
-              )}
+            </>
+          ) : (
+            <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-4 py-2.5">
+              <h2 className="text-sm font-semibold tracking-tight text-zinc-900">Notifications</h2>
+              {actions}
             </div>
-          </div>
+          )}
 
           {refreshFailed && (
             <div
@@ -347,19 +418,30 @@ export function NotificationTray({
             </div>
           )}
 
-          <ul className="max-h-[min(24rem,calc(100dvh-9rem))] overflow-y-auto overscroll-contain">
-            {entries.length === 0 ? (
+          <ul
+            id={`${panelId}-list`}
+            role={includeNeedsAttention ? "tabpanel" : undefined}
+            aria-labelledby={includeNeedsAttention ? `${panelId}-tab-${activeTab}` : undefined}
+            className="max-h-[min(24rem,calc(100dvh-9rem))] overflow-y-auto overscroll-contain"
+          >
+            {visibleEntries.length === 0 ? (
               <li className="flex flex-col items-center gap-2 px-4 py-8 text-center">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-500">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M20 6 9 17l-5-5" />
                   </svg>
                 </span>
-                <p className="text-sm font-medium text-zinc-700">You&apos;re all caught up</p>
-                <p className="text-xs text-zinc-500">New notifications will show up here.</p>
+                <p className="text-sm font-medium text-zinc-700">
+                  {activeTab === "system" ? "No system issues" : "You\u2019re all caught up"}
+                </p>
+                <p className="text-xs text-zinc-500">
+                  {activeTab === "system"
+                    ? "Failed jobs, bounces and stalled projects show up here."
+                    : "New notifications will show up here."}
+                </p>
               </li>
             ) : (
-              entries.map((e) => {
+              visibleEntries.map((e) => {
                 const unread = e.kind !== "notification" || !e.isRead;
                 const canMarkRead = e.kind === "notification" && !e.isRead;
                 return (
@@ -430,7 +512,7 @@ export function NotificationTray({
             )}
           </ul>
 
-          {includeNeedsAttention && (
+          {includeNeedsAttention && activeTab === "system" && (
             <div className="border-t border-zinc-100 px-4 py-2">
               <Link
                 href="/admin/system-health"
