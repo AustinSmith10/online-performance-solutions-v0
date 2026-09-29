@@ -58,27 +58,18 @@ export function MetricsSpreadsheetModal(props: Props) {
       <div
         onClick={() => setOpen(false)}
         aria-hidden="true"
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
-        style={{ opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none", transition: "opacity 200ms" }}
+        className="modal-backdrop fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
       />
       <div
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        style={{ pointerEvents: open ? "auto" : "none" }}
         aria-modal="true"
         role="dialog"
       >
         <div
-          className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-zinc-200 bg-white shadow-xl"
-          style={{
-            transform: open ? "scale(1)" : "scale(0.97)",
-            opacity: open ? 1 : 0,
-            transition: "transform 200ms, opacity 200ms",
-          }}
+          className="modal-panel flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-zinc-200 bg-white shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
-          {open && (
-            <ModalBody key={sessionKey} {...props} onClose={() => setOpen(false)} />
-          )}
+          <ModalBody key={sessionKey} {...props} onClose={() => setOpen(false)} />
         </div>
       </div>
     </>
@@ -87,7 +78,7 @@ export function MetricsSpreadsheetModal(props: Props) {
   return (
     <>
       {props.trigger(openModal)}
-      {mounted && createPortal(modal, document.body)}
+      {mounted && open && createPortal(modal, document.body)}
     </>
   );
 }
@@ -430,14 +421,14 @@ function CommitFooter({
           type="button"
           onClick={onSubmit}
           disabled={pending || disabled}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="press-subtle transition-colors duration-150 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {pending ? "Working…" : label}
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+          className="press-subtle transition-colors duration-150 rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
         >
           Cancel
         </button>

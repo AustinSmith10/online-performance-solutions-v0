@@ -37,7 +37,7 @@ export function MetricsTablesPanel({ clientId, tables, rowsByTable, templateToke
               <button
                 type="button"
                 onClick={open}
-                className="shrink-0 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+                className="press-subtle transition-colors duration-150 shrink-0 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
               >
                 New table from spreadsheet
               </button>
@@ -58,7 +58,7 @@ export function MetricsTablesPanel({ clientId, tables, rowsByTable, templateToke
             >
               <div>
                 <p className="text-sm font-medium text-zinc-900">{table.name}</p>
-                <p className="mt-0.5 text-xs text-zinc-500">
+                <p className="mt-0.5 text-xs tabular-nums text-zinc-500">
                   {table.columns.length} column{table.columns.length === 1 ? "" : "s"} ·{" "}
                   {(rowsByTable[table.id] ?? []).length} row
                   {(rowsByTable[table.id] ?? []).length === 1 ? "" : "s"}
@@ -109,14 +109,14 @@ function DeleteTableButton({
             const result = await deleteMetricsTable(clientId, tableId);
             if (result.error) setError(result.error);
           }}
-          className="shrink-0 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+          className="press-subtle transition-colors duration-150 shrink-0 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
         >
           Delete
         </button>
         <button
           type="button"
           onClick={() => setConfirming(false)}
-          className="shrink-0 text-xs text-zinc-500 hover:text-zinc-700"
+          className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-100"
         >
           Cancel
         </button>
@@ -129,7 +129,7 @@ function DeleteTableButton({
     <button
       type="button"
       onClick={() => setConfirming(true)}
-      className="mt-6 text-xs font-medium text-red-600 hover:text-red-800"
+      className="mt-6 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 transition-colors duration-150 hover:bg-red-100"
     >
       Delete table
     </button>

@@ -281,7 +281,7 @@ export default async function OrganisationDetailPage({
       <div className="mb-4 flex items-center justify-end">
         <Link
           href={`/admin/templates/upload?client_id=${id}`}
-          className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          className="press-subtle transition-colors duration-150 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
         >
           Upload template
         </Link>
