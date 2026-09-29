@@ -223,7 +223,7 @@ export default async function UsersPage({
               {hasFilter && (
                 <Link
                   href="/admin/users?tab=consultants"
-                  className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
+                  className="press-subtle w-full rounded-md border border-zinc-300 px-4 py-2 text-center text-sm text-zinc-600 hover:bg-zinc-100 sm:w-auto"
                 >
                   Clear
                 </Link>
@@ -352,7 +352,7 @@ export default async function UsersPage({
           {hasFilter && (
             <Link
               href="/admin/users"
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100"
+              className="press-subtle w-full rounded-md border border-zinc-300 px-4 py-2 text-center text-sm text-zinc-600 hover:bg-zinc-100 sm:w-auto"
             >
               Clear
             </Link>

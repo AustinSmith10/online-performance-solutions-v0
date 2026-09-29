@@ -310,7 +310,7 @@ function EditableRow({ user, field }: { user: UserTabsUser; field: FieldDef }) {
           type="submit"
           disabled={pending}
           aria-label="Save"
-          className="rounded-md p-1 text-green-600 hover:bg-green-50 hover:text-green-700 disabled:opacity-50 [@media(pointer:coarse)]:p-2"
+          className="rounded-md p-1 text-green-600 hover:bg-green-50 hover:text-green-700 disabled:opacity-50 [@media(pointer:coarse)]:p-2 transition-colors duration-150"
         >
           <CheckIcon />
         </button>
@@ -319,7 +319,7 @@ function EditableRow({ user, field }: { user: UserTabsUser; field: FieldDef }) {
           onClick={() => setEditing(false)}
           disabled={pending}
           aria-label="Cancel"
-          className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 [@media(pointer:coarse)]:p-2"
+          className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 [@media(pointer:coarse)]:p-2 transition-colors duration-150"
         >
           <XIcon />
         </button>
