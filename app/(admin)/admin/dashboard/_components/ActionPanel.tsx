@@ -816,7 +816,7 @@ function EmailFailureDrawerContent({
         <p className="mt-1 break-words text-sm text-zinc-700">{failure.subject}</p>
         <p className="mt-1 text-xs text-zinc-500">Source: {failure.source}</p>
         {failure.error && (
-          <p className="mt-2 break-words rounded bg-red-100 px-2 py-1.5 font-mono text-xs text-red-700">
+          <p className="mt-2 break-words rounded-md bg-red-100 px-2 py-1.5 font-mono text-xs text-red-700">
             {failure.error}
           </p>
         )}
@@ -945,25 +945,25 @@ function HeroCard({
         </div>
         <div className="shrink-0">
           {single ? (
-            <button type="button" onClick={() => onOpen(single.open())} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+            <button type="button" onClick={() => onOpen(single.open())} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50">
               {single.actionLabel}
             </button>
           ) : (
-            <button type="button" onClick={onToggleExpand} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+            <button type="button" onClick={onToggleExpand} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50">
               Review ({category.totalCount ?? category.items.length}) {expanded ? "▲" : "▼"}
             </button>
           )}
         </div>
         {!single && expanded && (
-          <div className="mt-2.5 w-full space-y-1 border-t border-zinc-100 pt-2.5">
+          <div className="rise-in mt-2.5 w-full space-y-1 border-t border-zinc-100 pt-2.5">
             {category.items.map((item) => (
               <div key={item.id} className="flex items-center justify-between gap-3 rounded-md bg-zinc-50 px-2.5 py-1.5">
                 <div className="min-w-0">
                   <p className="truncate text-xs font-medium text-zinc-900">{item.label}</p>
                   <p className="truncate text-xs text-zinc-500">{item.meta}</p>
                 </div>
-                <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-700 underline decoration-dotted underline-offset-2 hover:text-zinc-900">
-                  {item.actionLabel}
+                <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900">
+                  {item.actionLabel.replace(/\s*\u2192$/, "")}
                 </button>
               </div>
             ))}
@@ -990,26 +990,26 @@ function HeroCard({
         </div>
         <div className="shrink-0">
           {single ? (
-            <button type="button" onClick={() => onOpen(single.open())} className={`rounded-md border px-3 py-1.5 text-xs font-medium ${t.button}`}>
+            <button type="button" onClick={() => onOpen(single.open())} className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${t.button}`}>
               {single.actionLabel}
             </button>
           ) : (
-            <button type="button" onClick={onToggleExpand} className={`rounded-md border px-3 py-1.5 text-xs font-medium ${t.button}`}>
+            <button type="button" onClick={onToggleExpand} className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${t.button}`}>
               Review ({category.totalCount ?? category.items.length}) {expanded ? "▲" : "▼"}
             </button>
           )}
         </div>
       </div>
       {!single && expanded && (
-        <div className="mt-2.5 space-y-1 border-t border-zinc-900/10 pt-2.5">
+        <div className="rise-in mt-2.5 space-y-1 border-t border-zinc-900/10 pt-2.5">
           {category.items.map((item) => (
             <div key={item.id} className="flex items-center justify-between gap-3 rounded-md bg-white/70 px-2.5 py-1.5">
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium text-zinc-900">{item.label}</p>
                 <p className="truncate text-xs text-zinc-500">{item.meta}</p>
               </div>
-              <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 text-xs font-medium text-zinc-700 underline decoration-dotted underline-offset-2 hover:text-zinc-900">
-                {item.actionLabel}
+              <button type="button" onClick={() => onOpen(item.open())} className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900">
+                {item.actionLabel.replace(/\s*\u2192$/, "")}
               </button>
             </div>
           ))}
@@ -1284,7 +1284,7 @@ export function ActionPanel({
             <Link
               href={drawerAnchorId ? `/admin/projects/${drawerProjectId}#${drawerAnchorId}` : `/admin/projects/${drawerProjectId}`}
               onClick={closeDrawer}
-              className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
+              className="press inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-zinc-700"
             >
               Open full project profile →
             </Link>

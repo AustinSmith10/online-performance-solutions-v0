@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { CreateOrgForm } from "./_components/create-org-form";
+import { BackLink } from "@/components/BackLink";
 
 export default async function NewOrganisationPage() {
   const user = await requireRole("super_admin", "admin");
@@ -9,12 +9,7 @@ export default async function NewOrganisationPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-6">
-        <Link
-          href="/admin/clients"
-          className="text-sm text-zinc-500 hover:text-zinc-700"
-        >
-          ← Organisations
-        </Link>
+        <BackLink href="/admin/clients">Organisations</BackLink>
         <h1 className="mt-2 text-xl font-semibold text-zinc-900">
           New organisation
         </h1>

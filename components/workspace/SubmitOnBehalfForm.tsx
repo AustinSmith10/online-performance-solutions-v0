@@ -6,8 +6,8 @@
 // in place. No separate screens, no query-param navigation.
 
 import { useState } from "react";
-import Link from "next/link";
 import { SubmissionForm } from "@/app/(client)/portal/submit/_components/SubmissionForm";
+import { BackLink } from "@/components/BackLink";
 
 type Org = { id: string; name: string };
 type Stakeholder = { id: string; name: string; email: string };
@@ -119,9 +119,7 @@ export function SubmitOnBehalfForm({
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-4 py-10">
-      <Link href={backHref} className="text-sm text-zinc-500 hover:text-zinc-700">
-        {backLabel}
-      </Link>
+      <BackLink href={backHref}>{backLabel}</BackLink>
       {/* Rendered as its own block, not nested inside SubmissionForm's Right
           Now card — choosing who this is for is the actual first step here,
           not a preamble to file upload, and DESIGN.md's one-container rule

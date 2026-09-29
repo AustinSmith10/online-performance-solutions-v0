@@ -83,7 +83,7 @@ export default async function ConsultantSubmitPage() {
       requirementsByTemplate={requirementsByTemplate}
       projectBasePath="/ops/projects"
       backHref="/ops"
-      backLabel="← My projects"
+      backLabel="My projects"
       submitPath="/ops/projects/submit"
     />
   );

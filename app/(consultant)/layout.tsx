@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { Viewport } from "next";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { AccessNoticeBanner } from "@/components/AccessNoticeBanner";
@@ -13,6 +14,20 @@ import { AvailabilityPill } from "@/components/AvailabilityPill";
 import { Logo } from "@/components/Logo";
 import { ReplayTourButton } from "@/components/onboarding-tour/ReplayTourButton";
 import type { ConsultantAvailability } from "@/types";
+
+// Paint edge to edge on notched phones (safe-area padding is applied below) and
+// colour the browser chrome to match the white header.
+export const viewport: Viewport = {
+  viewportFit: "cover",
+  themeColor: "#ffffff",
+};
+
+// Phone-platform layer, matching app/(client)/layout.tsx: no grey tap flash, no
+// double-tap-zoom delay, no long-press selection on button labels, 16px form
+// fields on touch so iOS Safari never zooms on focus.
+const PLATFORM =
+  "[-webkit-tap-highlight-color:transparent] [&_a]:touch-manipulation [&_button]:touch-manipulation [&_button]:select-none " +
+  "[@media(pointer:coarse)]:[&_input]:text-base [@media(pointer:coarse)]:[&_select]:text-base [@media(pointer:coarse)]:[&_textarea]:text-base";
 
 // Compact single-row top nav — same idiom as the client portal
 // (app/(client)/layout.tsx). The old ConsultantSidebar (224px/56px-collapsed
@@ -35,12 +50,12 @@ export default async function ConsultantLayout({
 
   const NAV_ITEMS = [
     { href: "/ops", label: "Workspace" },
-    { href: "/ops/email-queue", label: `Email Queue (${pendingQueueCount})` },
+    { href: "/ops/email-queue", label: "Email Queue", count: pendingQueueCount },
   ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50">
-      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white">
+    <div className={`flex min-h-dvh flex-col bg-zinc-50 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] ${PLATFORM}`}>
+      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto max-w-5xl px-4">
           <div className="flex h-11 items-center justify-between">
             <div className="flex min-w-0 items-center gap-5">
@@ -52,28 +67,28 @@ export default async function ConsultantLayout({
             <div className="flex shrink-0 items-center gap-2">
               <ReplayTourButton
                 href="/ops"
-                className="flex h-6 w-6 items-center justify-center rounded-full border border-zinc-300 text-xs font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-300 text-xs font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
               >
                 ?
               </ReplayTourButton>
               <NotificationTrayServer projectBasePath="/ops/projects" align="right" />
               <Link
                 href="/ops/profile"
-                className="hidden max-w-[160px] truncate text-xs text-zinc-500 hover:text-zinc-700 sm:block"
+                className="hidden max-w-[160px] truncate rounded py-2 text-xs text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 sm:block"
               >
                 {userName}
               </Link>
               <form action={logout}>
                 <button
                   type="submit"
-                  className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                  className="rounded px-2 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
                 >
                   Sign out
                 </button>
               </form>
             </div>
           </div>
-          <nav className="flex gap-4 border-t border-zinc-100 py-1 tabular-nums sm:hidden">
+          <nav className="flex gap-4 border-t border-zinc-100 tabular-nums sm:hidden">
             <TopNavLinks items={NAV_ITEMS} />
           </nav>
         </div>

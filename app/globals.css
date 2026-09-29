@@ -156,6 +156,39 @@ body {
   }
 }
 
+/* Notification tray panel: grows from the bell on desktop (top-right origin;
+   .origin-top-left overrides for left-aligned trays), and on the mobile sheet
+   settles down 4px instead since it isn't anchored to the bell. Enter only. */
+.tray-pop {
+  transform-origin: top right;
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(-4px); }
+}
+.tray-pop.origin-top-left { transform-origin: top left; }
+@media (min-width: 640px) {
+  .tray-pop { @starting-style { opacity: 0; transform: scale(0.96); } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tray-pop { @starting-style { opacity: 0; transform: none; } }
+}
+
+/* Toast: slides in from its screen edge (--toast-x, set per item), leaves the
+   same way. CSS transitions so a burst of arrivals retargets instead of
+   restarting. Exit is driven by data-leaving before the item unmounts. */
+.toast-item {
+  transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
+  @starting-style { opacity: 0; transform: translateX(var(--toast-x, 16px)); }
+}
+.toast-item[data-leaving="true"] {
+  opacity: 0;
+  transform: translateX(var(--toast-x, 16px));
+  transition-duration: 150ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-item { @starting-style { opacity: 0; transform: none; } }
+  .toast-item[data-leaving="true"] { transform: none; }
+}
+
 /* Press feedback for pressable controls: 160ms ease-out, scale(0.97), or
    scale(0.98) for wide segmented tabs. Reduced motion keeps the colour change. */
 @utility press {

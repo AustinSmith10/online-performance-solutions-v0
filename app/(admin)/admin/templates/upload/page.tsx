@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { UploadTemplateForm } from "./_components/upload-form";
+import { BackLink } from "@/components/BackLink";
 
 export default async function UploadTemplatePage({
   searchParams,
@@ -23,9 +23,7 @@ export default async function UploadTemplatePage({
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div>
-        <Link href="/admin/templates" className="text-sm text-zinc-500 hover:text-zinc-700">
-          ← Templates
-        </Link>
+        <BackLink href="/admin/templates">Templates</BackLink>
         <h1 className="mt-2 text-xl font-semibold text-zinc-900">Upload template</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Upload a .docx file containing{" "}
