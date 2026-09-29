@@ -76,6 +76,7 @@ import { OverduePill } from "@/components/OverduePill";
 import { consultantHasDiscipline } from "@/lib/consultants/disciplines";
 import { formatProjectNumber, resolveNumberSuffix } from "@/lib/projects/project-number";
 import { daysOverdue as daysOverdueBetween } from "@/app/(consultant)/ops/_components/dashboardList";
+import { BackLink } from "@/components/BackLink";
 
 export type ProjectWorkspaceRole = "consultant" | "admin";
 
@@ -1904,12 +1905,9 @@ export async function ProjectWorkspace({
           body="The stakeholder's email has been updated and a fresh approval link has been resent."
         />
       )}
-      <Link
-        href={isAdmin ? (isDeleted ? "/admin/recovery" : "/admin/projects") : "/ops"}
-        className="text-sm text-zinc-500 hover:text-zinc-700"
-      >
-        {isAdmin ? (isDeleted ? "← Recovery bin" : "← Projects") : "← My projects"}
-      </Link>
+      <BackLink href={isAdmin ? (isDeleted ? "/admin/recovery" : "/admin/projects") : "/ops"}>
+        {isAdmin ? (isDeleted ? "Recovery bin" : "Projects") : "My projects"}
+      </BackLink>
 
       {isAdmin && isDeleted && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

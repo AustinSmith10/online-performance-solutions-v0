@@ -83,7 +83,7 @@ export default async function AdminSubmitPage() {
       requirementsByTemplate={requirementsByTemplate}
       projectBasePath="/admin/projects"
       backHref="/admin/projects"
-      backLabel="← Projects"
+      backLabel="Projects"
       submitPath="/admin/projects/submit"
     />
   );

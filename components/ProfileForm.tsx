@@ -108,7 +108,7 @@ export function ProfileForm({ profile }: { profile: ProfileData }) {
 
 function ReadOnlyProfile({ profile }: { profile: ProfileData }) {
   return (
-    <div className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white">
+    <div className="pane-in divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white">
       <InfoRow label="Email" value={profile.email} />
       <InfoRow label="First name" value={profile.first_name ?? "—"} />
       <InfoRow label="Last name" value={profile.last_name ?? "—"} />
@@ -144,7 +144,7 @@ function EditForm({
   onCancel: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5">
+    <div className="pane-in rounded-lg border border-zinc-200 bg-white p-5">
       {errors?.form?.map((e) => (
         <p key={e} className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
           {e}
@@ -227,7 +227,7 @@ function EditForm({
           <button
             type="submit"
             disabled={pending}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+            className="press rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
             {pending ? "Saving…" : "Save changes"}
           </button>
@@ -276,7 +276,7 @@ function PasswordSection({
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="self-start whitespace-nowrap rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            className="self-start whitespace-nowrap rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50"
           >
             Change password
           </button>
@@ -288,7 +288,7 @@ function PasswordSection({
       )}
 
       {expanded && (
-        <form key={formKey} action={action} className="mt-5 space-y-4">
+        <form key={formKey} action={action} className="rise-in mt-5 space-y-4">
           {state.errors?.form?.map((e) => (
             <p key={e} className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
               {e}
@@ -335,7 +335,7 @@ function PasswordSection({
             <button
               type="submit"
               disabled={pending}
-              className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="press rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {pending ? "Updating…" : "Update password"}
             </button>

@@ -16,6 +16,7 @@ import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_componen
 import type { Client, User } from "@/types";
 import type { MetricsTable, MetricsRow, TemplateTokenGroup } from "@/app/actions/client-metrics";
 import { getClientTemplateTokenGroups } from "@/app/actions/client-metrics";
+import { BackLink } from "@/components/BackLink";
 
 export default async function OrganisationDetailPage({
   params,
@@ -418,9 +419,7 @@ export default async function OrganisationDetailPage({
         />
       )}
       <div className="mx-auto max-w-3xl space-y-5">
-        <Link href="/admin/clients" className="text-sm text-zinc-500 hover:text-zinc-700">
-          ← Clients
-        </Link>
+        <BackLink href="/admin/clients">Clients</BackLink>
 
         <ProfileTabs
           header={header}

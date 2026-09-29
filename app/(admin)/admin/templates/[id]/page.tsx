@@ -19,6 +19,7 @@ import { AddFileRequirementForm } from "./_components/AddFileRequirementForm";
 import { ClientProfileSection, type ClientProfileRow } from "./_components/ClientProfileSection";
 import { TemplateReviewersSection } from "./_components/TemplateReviewersSection";
 import { TemplateFileActions } from "./_components/TemplateFileActions";
+import { BackLink } from "@/components/BackLink";
 
 const TEMPLATE_ACCENT: Record<string, string> = {
   active: "border-l-green-500",
@@ -163,9 +164,7 @@ export default async function TemplatePage({
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       {/* Breadcrumb */}
-      <Link href="/admin/templates" className="text-sm text-zinc-500 hover:text-zinc-700">
-        ← Templates
-      </Link>
+      <BackLink href="/admin/templates">Templates</BackLink>
 
       {/* Header card */}
       <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${TEMPLATE_ACCENT[template.status] ?? "border-l-zinc-300"} bg-white p-5`}>
