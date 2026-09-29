@@ -61,7 +61,7 @@ export function OrgConfigForm({ orgId, tokens, currentConfig, highlight }: Props
         disabled={pending}
         className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
       >
-        {pending ? "Saving…" : "Save org config"}
+        {pending ? "Saving…" : "Save client config"}
       </button>
     </form>
   );

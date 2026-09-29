@@ -261,7 +261,7 @@ export default async function TemplatePage({
 
       {yellowFlags.length > 0 && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-semibold">{yellowFlags.length} org config field(s) not present in template — </span>
+          <span className="font-semibold">{yellowFlags.length} client config field(s) not present in template — </span>
           these will not be populated in generated documents.
         </div>
       )}

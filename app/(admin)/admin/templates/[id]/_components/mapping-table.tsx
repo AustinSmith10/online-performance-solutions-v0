@@ -49,7 +49,7 @@ const SOURCE_STYLES: Record<TokenSource, string> = {
 const SOURCE_LABELS: Record<TokenSource, string> = {
   client:  "Client input",
   extract: "Extracted",
-  org:     "Org config",
+  org:     "Client config",
   sys:     "System",
   project: "Project",
   unknown: "Unknown",
@@ -566,7 +566,7 @@ function MissingOrgCard({ token }: { token: string }) {
           {"{" + token + "}"}
         </p>
         <span className="self-start rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700">
-          Org config
+          Client config
         </span>
         <span className="text-xs font-medium text-amber-600">! Missing</span>
       </div>
