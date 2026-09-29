@@ -244,13 +244,13 @@ function AutofillConfigPanel({
                     <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Match</p>
                   </div>
                   <div className="ml-[26px] flex flex-wrap items-start gap-3">
-                    <div>
+                    <div className="min-w-0 max-w-full">
                       <label className="mb-1 block text-xs text-zinc-600">Document token</label>
                       <select
                         name="match_token"
                         value={matchToken}
                         onChange={(e) => setMatchToken(e.target.value)}
-                        className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        className="max-w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                       >
                         <option value="">Select a token…</option>
                         {availableTokensFor(matchToken).map((t) => (
@@ -268,13 +268,13 @@ function AutofillConfigPanel({
                       <span aria-hidden="true">→</span>
                       <span className="text-[10px]">matches</span>
                     </div>
-                    <div>
+                    <div className="min-w-0 max-w-full">
                       <label className="mb-1 block text-xs text-zinc-600">Table column</label>
                       <select
                         name="match_column_id"
                         value={matchColumnId}
                         onChange={(e) => setMatchColumnId(e.target.value)}
-                        className="rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        className="max-w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                       >
                         <option value="">Select a column…</option>
                         {table.columns.map((c) => (
@@ -309,7 +309,7 @@ function AutofillConfigPanel({
                             name="output_token"
                             value={out.token}
                             onChange={(e) => updateOutput(index, "token", e.target.value)}
-                            className="flex-1 rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                            className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                           >
                             <option value="">Select a document token…</option>
                             {availableTokensFor(out.token).map((t) => (
@@ -326,7 +326,7 @@ function AutofillConfigPanel({
                             name="output_column_id"
                             value={out.columnId}
                             onChange={(e) => updateOutput(index, "columnId", e.target.value)}
-                            className="flex-1 rounded border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                            className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                           >
                             <option value="">Select a column…</option>
                             {table.columns.map((c) => (
