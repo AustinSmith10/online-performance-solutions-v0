@@ -183,7 +183,7 @@ export async function finalizeSubmission(
     extractDesc: rawLabels.extractDesc || "Review and correct any fields marked below before submitting.",
     trusteeDesc: rawLabels.trusteeDesc || "",
     org: rawLabels.org || "Client details",
-    orgDesc: rawLabels.orgDesc || "These details are pre-filled from your organisation's configuration.",
+    orgDesc: rawLabels.orgDesc || "These details are pre-filled from the client's profile.",
     client: rawLabels.client || "Additional information",
     clientDesc: rawLabels.clientDesc || "Please fill in the remaining details required for this report.",
   };
