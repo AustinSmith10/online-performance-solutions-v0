@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TopUpForm } from "./_components/TopUpForm";
 import { FreezeForm } from "./_components/FreezeForm";
 import type { Client, CreditLedgerEntry, CreditEventType } from "@/types";
+import { BackLink } from "@/components/BackLink";
 
 const EVENT_LABELS: Record<CreditEventType, string> = {
   top_up: "Top-up",
@@ -54,9 +54,7 @@ export default async function OrgCreditsPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <Link href="/admin/credits" className="text-sm text-zinc-500 hover:text-zinc-700">
-          ← Credits
-        </Link>
+        <BackLink href="/admin/credits">Credits</BackLink>
         <div className="mt-2 flex items-center gap-3">
           <h1 className="text-xl font-semibold text-zinc-900">{orgData.name}</h1>
           {orgData.is_frozen && (

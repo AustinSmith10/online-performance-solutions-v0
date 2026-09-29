@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { InviteUserForm } from "./_components/invite-user-form";
 import type { Client } from "@/types";
+import { BackLink } from "@/components/BackLink";
 
 export default async function InviteUserPage({
   searchParams,
@@ -23,12 +23,7 @@ export default async function InviteUserPage({
   return (
     <div className="mx-auto max-w-lg">
       <div className="mb-6">
-        <Link
-          href="/admin/users"
-          className="text-sm text-zinc-500 hover:text-zinc-700"
-        >
-          ← Users
-        </Link>
+        <BackLink href="/admin/users">Users</BackLink>
         <h1 className="mt-2 text-xl font-semibold text-zinc-900">
           Create account
         </h1>

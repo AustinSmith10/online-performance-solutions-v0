@@ -284,9 +284,9 @@ export default async function AdminDashboardPage({
             </h2>
             <Link
               href="/admin/projects"
-              className="text-xs text-zinc-400 hover:text-zinc-700 hover:underline"
+              className="press rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
             >
-              All projects →
+              All projects
             </Link>
           </div>
 

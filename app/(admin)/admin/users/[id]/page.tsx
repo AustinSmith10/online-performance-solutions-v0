@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -14,6 +13,7 @@ import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { ProfileTabs } from "@/components/workspace/ProfileTabs";
 import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_components/HeaderStatInline";
 import type { User, Client, ConsultantAvailability } from "@/types";
+import { BackLink } from "@/components/BackLink";
 
 // Minimal DTO passed to client components below — deliberately excludes
 // server-only-relevant fields like credit_balance/totp_enabled/etc. that
@@ -273,9 +273,7 @@ export default async function UserDetailPage({
       )}
 
       <div className="mx-auto max-w-3xl space-y-5">
-        <Link href="/admin/users" className="text-sm text-zinc-500 hover:text-zinc-700">
-          ← Users
-        </Link>
+        <BackLink href="/admin/users">Users</BackLink>
 
         <ProfileTabs
           header={header}
