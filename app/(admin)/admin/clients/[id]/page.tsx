@@ -207,12 +207,12 @@ export default async function OrganisationDetailPage({
 
   const header = (
     <div className={`rounded-xl border border-zinc-200 border-l-[3px] ${orgData.is_frozen ? "border-l-red-400" : "border-l-green-500"} bg-white p-5`}>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-600">
           {orgData.name.slice(0, 2).toUpperCase()}
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-40">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-base font-semibold text-zinc-900">{orgData.name}</h1>
             <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 capitalize">
@@ -230,7 +230,7 @@ export default async function OrganisationDetailPage({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
           <EmailWhitelistDrawer orgId={orgData.id} domains={orgData.email_whitelist ?? []} />
           <OrgCreateAccountModal
             orgId={orgData.id}
@@ -350,7 +350,7 @@ export default async function OrganisationDetailPage({
                       <span className="ml-2 text-xs text-zinc-400">{u.email}</span>
                     )}
                   </td>
-                  <td className="py-2 text-zinc-600">{u.role}</td>
+                  <td className="py-2 capitalize text-zinc-600">{u.role.replace("_", " ")}</td>
                   <td className="py-2">
                     {u.is_locked ? (
                       <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Locked</span>
@@ -398,10 +398,10 @@ export default async function OrganisationDetailPage({
     <div className="rounded-xl border border-red-200 bg-red-50 p-5 space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
-          <p className="text-sm font-medium text-zinc-900">Delete organisation</p>
+          <p className="text-sm font-medium text-zinc-900">Delete client</p>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Permanently removes this organisation. All projects must be purged first. Existing user
-            accounts are kept but lose org membership.
+            Moves this client to the recovery bin, where it can be restored. In-progress projects,
+            templates and reviewers go with it. User accounts are kept.
           </p>
         </div>
         <DeleteOrgButton orgId={orgData.id} orgName={orgData.name} userCount={orgUsers.length} />
@@ -415,7 +415,7 @@ export default async function OrganisationDetailPage({
         <AdminSuccessBanner
           cleanUrl={cleanUrl}
           title="Client created"
-          body="The organisation has been created successfully."
+          body="The client has been created successfully."
         />
       )}
       <div className="mx-auto max-w-3xl space-y-5">
@@ -426,7 +426,7 @@ export default async function OrganisationDetailPage({
           tabs={[
             { id: "overview", label: "Overview", content: overviewContent },
             { id: "templates", label: "Templates", content: templatesContent },
-            { id: "stakeholders", label: "Stakeholders", content: stakeholdersContent },
+            { id: "stakeholders", label: "Users", content: stakeholdersContent },
             { id: "roster", label: "Reviewer roster", content: rosterContent },
             { id: "metrics", label: "Data tables", content: metricsContent },
             { id: "danger", label: "Danger zone", content: dangerContent },
