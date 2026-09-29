@@ -72,25 +72,37 @@ export default async function AdminSettingsPage() {
       </SettingsSection>
 
       {user.role === "super_admin" && (
-        <SettingsSection title="Timezone" description="Super admin only.">
+        <SettingsSection
+          title="Timezone"
+          description="The clock that business hours and scheduled sends run on. Super admin only."
+        >
           <BusinessTimezoneForm timeZone={businessTimezone} />
         </SettingsSection>
       )}
 
       {user.role === "super_admin" && (
-        <SettingsSection title="Access control" description="Super admin only.">
+        <SettingsSection
+          title="Access control"
+          description="Choose which admin navigation items regular admins can see. Super admin only."
+        >
           <AdminNavRestrictionsForm restricted={navRestrictions} />
         </SettingsSection>
       )}
 
       {user.role === "super_admin" && (
-        <SettingsSection title="Email delivery" description="Super admin only.">
+        <SettingsSection
+          title="Email delivery"
+          description="A platform-wide switch for outbound email. Super admin only."
+        >
           <EmailsEnabledForm enabled={emailsEnabled} />
         </SettingsSection>
       )}
 
       {user.role === "super_admin" && (
-        <SettingsSection title="AI extraction" description="Super admin only.">
+        <SettingsSection
+          title="AI extraction"
+          description="A platform-wide switch for AI document extraction. Super admin only."
+        >
           <AiExtractionEnabledForm enabled={aiExtractionEnabled} />
         </SettingsSection>
       )}

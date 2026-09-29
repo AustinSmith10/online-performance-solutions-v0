@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormDirty } from "@/hooks/useFormDirty";
 import { useActionState } from "react";
 import {
   updateExtractionDocumentTextCapAction,
@@ -15,6 +16,8 @@ export function ExtractionDocumentTextCapForm({ cap }: { cap: number }) {
     updateExtractionDocumentTextCapAction,
     {}
   );
+
+  const { dirty, formProps } = useFormDirty(!!state.errors);
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
@@ -33,10 +36,10 @@ export function ExtractionDocumentTextCapForm({ cap }: { cap: number }) {
       ))}
 
       {state.saved && (
-        <p className="mt-4 text-sm font-medium text-green-700">Document cap updated.</p>
+        <p role="status" className="mt-4 text-sm font-medium text-green-700">Document cap updated.</p>
       )}
 
-      <form action={action} className="mt-5 flex items-end gap-4">
+      <form action={action} {...formProps} className="mt-5 flex items-end gap-4">
         <div>
           <label className="block text-sm font-medium text-zinc-700">Characters per document</label>
           <input
@@ -53,7 +56,7 @@ export function ExtractionDocumentTextCapForm({ cap }: { cap: number }) {
         </div>
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || !dirty}
           className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {pending ? "Saving…" : "Save changes"}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormDirty } from "@/hooks/useFormDirty";
 import { useActionState } from "react";
 import {
   updateBusinessHoursAction,
@@ -12,6 +13,8 @@ export function BusinessHoursForm({ hours }: { hours: BusinessHours }) {
     updateBusinessHoursAction,
     {}
   );
+
+  const { dirty, formProps } = useFormDirty(!!state.errors);
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
@@ -28,10 +31,10 @@ export function BusinessHoursForm({ hours }: { hours: BusinessHours }) {
       ))}
 
       {state.saved && (
-        <p className="mt-4 text-sm font-medium text-green-700">Business hours updated.</p>
+        <p role="status" className="mt-4 text-sm font-medium text-green-700">Business hours updated.</p>
       )}
 
-      <form action={action} className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <form action={action} {...formProps} className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Start time" error={state.errors?.start?.[0]}>
           <input name="start" type="time" defaultValue={hours.start} required className={input} />
         </Field>
@@ -43,7 +46,7 @@ export function BusinessHoursForm({ hours }: { hours: BusinessHours }) {
         <div className="sm:col-span-2">
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !dirty}
             className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
             {pending ? "Saving…" : "Save changes"}
@@ -73,4 +76,4 @@ function Field({
 }
 
 const input =
-  "block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500";
+  "block w-full sm:max-w-48 rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500";

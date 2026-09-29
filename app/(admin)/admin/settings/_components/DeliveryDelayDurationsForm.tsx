@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormDirty } from "@/hooks/useFormDirty";
 import { useActionState } from "react";
 import {
   updateDeliveryDelayDurationsAction,
@@ -12,6 +13,8 @@ export function DeliveryDelayDurationsForm({ durations }: { durations: DeliveryD
     updateDeliveryDelayDurationsAction,
     {}
   );
+
+  const { dirty, formProps } = useFormDirty(!!state.errors);
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
@@ -30,10 +33,10 @@ export function DeliveryDelayDurationsForm({ durations }: { durations: DeliveryD
       ))}
 
       {state.saved && (
-        <p className="mt-4 text-sm font-medium text-green-700">Delivery delay durations updated.</p>
+        <p role="status" className="mt-4 text-sm font-medium text-green-700">Delivery delay durations updated.</p>
       )}
 
-      <form action={action} className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <form action={action} {...formProps} className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <DurationField
           label="Normal delay"
           valueName="normalValue"
@@ -55,7 +58,7 @@ export function DeliveryDelayDurationsForm({ durations }: { durations: DeliveryD
         <div className="sm:col-span-2">
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !dirty}
             className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
             {pending ? "Saving…" : "Save changes"}
