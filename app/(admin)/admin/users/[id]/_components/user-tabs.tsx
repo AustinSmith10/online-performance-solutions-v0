@@ -203,7 +203,7 @@ function ProfileSection({
   user: UserTabsUser;
   clients: Pick<Client, "id" | "name">[];
 }) {
-  const showOrg = user.role === "stakeholder" || user.role === "consultant";
+  const showOrg = user.role === "stakeholder";
 
   const fields: FieldDef[] = [
     { key: "first_name", label: "First name", kind: "text", required: true },

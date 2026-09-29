@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { DisciplineChips } from "../users/_components/DisciplineChips";
 import type { User, ConsultantAvailability } from "@/types";
 
 const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
@@ -63,9 +64,7 @@ function SortPills({
   );
 }
 
-type ConsultantRow = Pick<User, "id" | "email" | "first_name" | "last_name" | "availability" | "is_locked"> & {
-  clients: { name: string } | null;
-};
+type ConsultantRow = Pick<User, "id" | "email" | "first_name" | "last_name" | "availability" | "is_locked" | "disciplines">;
 
 export default async function ConsultantsPage({
   searchParams,
@@ -81,7 +80,7 @@ export default async function ConsultantsPage({
   const supabase = createAdminClient();
   let query = supabase
     .from("users")
-    .select("id, email, first_name, last_name, availability, is_locked, clients(name)")
+    .select("id, email, first_name, last_name, availability, is_locked, disciplines")
     .eq("role", "consultant")
     .is("deleted_at", null)
     .order(sortCol, { ascending: sortOrder === "asc" });
@@ -177,10 +176,8 @@ export default async function ConsultantsPage({
                   <span className="truncate text-sm font-medium text-zinc-900">
                     {c.first_name && c.last_name ? `${c.first_name} ${c.last_name}` : c.email}
                   </span>
-                  <p className="mt-0.5 truncate text-xs text-zinc-500">
-                    {(c.first_name || c.last_name) && <>{c.email} · </>}
-                    {c.clients?.name ?? "—"}
-                  </p>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">{c.email}</p>
+                  <DisciplineChips disciplines={c.disciplines} className="mt-1" />
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {c.is_locked ? (

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/session";
 import { getFailedInviteEmails } from "@/lib/admin/invite-status";
+import { DisciplineChips } from "./_components/DisciplineChips";
 import { CreateAccountModal } from "./_components/CreateAccountModal";
 import type { User, Client, ConsultantAvailability } from "@/types";
 
@@ -82,7 +83,7 @@ function SortPills<Col extends string>({
   );
 }
 
-type UserRow = Pick<User, "id" | "email" | "first_name" | "last_name" | "role" | "availability" | "is_locked" | "created_at"> & {
+type UserRow = Pick<User, "id" | "email" | "first_name" | "last_name" | "role" | "availability" | "is_locked" | "created_at" | "disciplines"> & {
   clients: { name: string } | null;
 };
 
@@ -141,7 +142,7 @@ export default async function UsersPage({
 
   let query = supabase
     .from("users")
-    .select("id, email, first_name, last_name, role, availability, is_locked, created_at, clients(name)")
+    .select("id, email, first_name, last_name, role, availability, is_locked, created_at, disciplines, clients(name)")
     .is("deleted_at", null);
 
   if (isConsultantsTab) {
@@ -252,7 +253,8 @@ export default async function UsersPage({
                     <span className="truncate text-sm font-medium text-zinc-900">
                       {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
                     </span>
-                    <p className="mt-0.5 truncate text-xs text-zinc-500">{u.clients?.name ?? "—"}</p>
+                    <p className="mt-0.5 truncate text-xs text-zinc-500">{u.email}</p>
+                    <DisciplineChips disciplines={u.disciplines} className="mt-1" />
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {u.email && failedInviteEmails.has(u.email) && (
@@ -381,8 +383,9 @@ export default async function UsersPage({
                     {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
                   </span>
                   <p className="mt-0.5 truncate text-xs tabular-nums text-zinc-500">
-                    {ROLE_LABELS[u.role] ?? u.role} · {u.clients?.name ?? "—"} · Joined {new Date(u.created_at).toLocaleDateString("en-AU")}
+                    {ROLE_LABELS[u.role] ?? u.role}{u.role === "stakeholder" && <> · {u.clients?.name ?? "—"}</>} · Joined {new Date(u.created_at).toLocaleDateString("en-AU")}
                   </p>
+                  <DisciplineChips disciplines={u.disciplines} className="mt-1" />
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {u.email && failedInviteEmails.has(u.email) && (

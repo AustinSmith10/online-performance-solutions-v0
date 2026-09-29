@@ -14,6 +14,7 @@ import { ProfileTabs } from "@/components/workspace/ProfileTabs";
 import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_components/HeaderStatInline";
 import type { User, Client, ConsultantAvailability } from "@/types";
 import { BackLink } from "@/components/BackLink";
+import { DisciplineChips } from "../_components/DisciplineChips";
 
 // Minimal DTO passed to client components below — deliberately excludes
 // server-only-relevant fields like credit_balance/totp_enabled/etc. that
@@ -111,6 +112,7 @@ export default async function UserDetailPage({
             <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 capitalize">
               {u.role.replace("_", " ")}
             </span>
+            <DisciplineChips disciplines={u.disciplines} />
             {u.is_active ? (
               <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
                 Active
