@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   getTemplateDownloadUrl,
@@ -26,11 +26,42 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
     | { status: "ready"; url: string; filename: string }
   >({ status: "idle" });
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+
+  // Escape closes; Tab is trapped inside the dialog while it is open.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setOpen(false); return; }
+      if (e.key !== "Tab" || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) { e.preventDefault(); return; }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  // Focus moves into the dialog on open and back to the opener on close.
+  useEffect(() => {
+    if (open) {
+      openerRef.current = document.activeElement as HTMLElement | null;
+      panelRef.current?.focus();
+    } else {
+      openerRef.current?.focus();
+      openerRef.current = null;
+    }
   }, [open]);
 
   async function download() {
@@ -78,10 +109,12 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
             onClick={() => setOpen(false)}
           >
             <div
+              ref={panelRef}
+              tabIndex={-1}
               role="dialog"
               aria-modal="true"
               aria-label="Template preview"
-              className="modal-panel flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+              className="modal-panel flex min-h-0 w-full max-w-3xl outline-none flex-1 flex-col overflow-hidden rounded-lg bg-white shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">

@@ -38,11 +38,11 @@ interface Props {
 }
 
 const SOURCE_STYLES: Record<TokenSource, string> = {
-  client:  "bg-green-100 text-green-700",
-  extract: "bg-blue-100 text-blue-700",
-  org:     "bg-purple-100 text-purple-700",
-  sys:     "bg-zinc-100 text-zinc-600",
-  project: "bg-amber-100 text-amber-700",
+  client:  "bg-zinc-100 text-zinc-700",
+  extract: "bg-zinc-100 text-zinc-700",
+  org:     "bg-zinc-100 text-zinc-700",
+  sys:     "bg-zinc-100 text-zinc-700",
+  project: "bg-zinc-100 text-zinc-700",
   unknown: "bg-red-100 text-red-700",
 };
 
@@ -166,7 +166,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                 !row.is_mapped
                   ? "border-red-200 bg-red-50/30"
                   : isDragOver
-                  ? "border-blue-300"
+                  ? "border-zinc-400"
                   : "border-zinc-200 bg-white"
               }`}
             >
@@ -377,7 +377,7 @@ function ActivatedMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit
               !row.is_mapped
                 ? "border-red-200 bg-red-50/30"
                 : isDragOver
-                ? "border-blue-300"
+                ? "border-zinc-400"
                 : "border-zinc-200 bg-white"
             }`}
           >
@@ -438,7 +438,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
 
   if (editing) {
     return (
-      <div className="pane-in bg-blue-50/40 px-4 py-4">
+      <div className="pane-in bg-zinc-50 px-4 py-4">
         <form action={handleSave} className="flex flex-col gap-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-600">

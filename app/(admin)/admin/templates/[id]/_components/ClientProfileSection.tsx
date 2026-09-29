@@ -138,7 +138,7 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
               onDrop={(e) => onDrop(e, index)}
               onDragEnd={onDragEnd}
               className={`grid grid-cols-[1fr_auto] sm:grid-cols-[28px_1fr_auto] rounded-lg border overflow-hidden transition-colors ${
-                isDragOver ? "border-blue-300" : "border-zinc-200 bg-white"
+                isDragOver ? "border-zinc-400" : "border-zinc-200 bg-white"
               } ${!item.client_visible ? "opacity-50" : ""}`}
             >
               {/* Drag handle */}
@@ -155,7 +155,7 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
                   <p className="font-mono text-xs text-zinc-500">{item.placeholder_token}</p>
                   <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${
-                    item.in_template ? "bg-blue-100 text-blue-700" : "bg-zinc-100 text-zinc-500"
+                    item.in_template ? "bg-zinc-100 text-zinc-700" : "bg-zinc-100 text-zinc-500"
                   }`}>
                     {item.in_template ? "In template" : "Extraction only"}
                   </span>

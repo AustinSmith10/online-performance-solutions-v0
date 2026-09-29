@@ -27,8 +27,6 @@ const SECTIONS = [
     key: "extract",
     title: "Extracted fields section",
     badgeLabel: "Extracted",
-    badgeStyle: { background: "#E6F1FB", color: "#0C447C" },
-    borderColor: "#378ADD",
     labelField: "label_extract" as const,
     descField: "label_extract_desc" as const,
     labelHint: "Shown above fields auto-extracted from uploaded documents.",
@@ -40,8 +38,6 @@ const SECTIONS = [
     key: "trustee",
     title: "Trustee Entity section",
     badgeLabel: "System",
-    badgeStyle: { background: "#F1EFE8", color: "#444441" },
-    borderColor: "#888780",
     labelField: null,
     descField: "label_trustee_desc" as const,
     labelHint: null,
@@ -53,8 +49,6 @@ const SECTIONS = [
     key: "org",
     title: "Org config section",
     badgeLabel: "Org config",
-    badgeStyle: { background: "#EEEDFE", color: "#3C3489" },
-    borderColor: "#7F77DD",
     labelField: "label_org" as const,
     descField: "label_org_desc" as const,
     labelHint: "Shown above fields pre-filled from the client's org config.",
@@ -66,8 +60,6 @@ const SECTIONS = [
     key: "client",
     title: "Client fields section",
     badgeLabel: "Client input",
-    badgeStyle: { background: "#EAF3DE", color: "#27500A" },
-    borderColor: "#1D9E75",
     labelField: "label_client" as const,
     descField: "label_client_desc" as const,
     labelHint: "Shown above fields the client must fill in manually.",
@@ -124,12 +116,11 @@ function DraftSectionLabels({ templateId, labels }: Omit<Props, "isActivated">) 
       {SECTIONS.map((section) => (
         <div
           key={section.key}
-          className="overflow-hidden rounded-lg border border-zinc-200 bg-white"
-          style={{ borderLeft: `3px solid ${section.borderColor}` }}
+          className="overflow-hidden rounded-lg border border-zinc-200 border-l-[3px] border-l-zinc-300 bg-white"
         >
           <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50 px-4 py-3">
             <p className="text-xs font-medium text-zinc-800">{section.title}</p>
-            <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={section.badgeStyle}>
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
               {section.badgeLabel}
             </span>
           </div>
@@ -232,14 +223,13 @@ function SectionCard({
 
   return (
     <div
-      className="overflow-hidden rounded-lg border border-zinc-200 bg-white"
-      style={{ borderLeft: `3px solid ${section.borderColor}` }}
+      className="overflow-hidden rounded-lg border border-zinc-200 border-l-[3px] border-l-zinc-300 bg-white"
     >
       {/* Card header */}
       <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50 px-4 py-3">
         <p className="text-xs font-medium text-zinc-800">{section.title}</p>
         <div className="flex items-center gap-3">
-          <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={section.badgeStyle}>
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
             {section.badgeLabel}
           </span>
           {!editing && (
@@ -250,7 +240,7 @@ function SectionCard({
 
       {/* Card body */}
       {editing ? (
-        <div className="pane-in bg-blue-50/40 p-4">
+        <div className="pane-in bg-zinc-50 p-4">
           <form action={handleSave} className={`${section.fixedHeading ? "" : "grid grid-cols-2 gap-4"}`}>
             {!section.fixedHeading && section.labelField && (
               <div>

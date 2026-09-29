@@ -93,7 +93,7 @@ function RequirementCard({
 
   if (editing) {
     return (
-      <div className="rounded-lg border-2 border-blue-400 bg-blue-50/40 p-4">
+      <div className="rounded-lg border border-zinc-300 bg-zinc-50 p-4">
         <form action={handleSave} className="space-y-3">
           {/* Name + max on one row */}
           <div className="flex items-end gap-3">
@@ -328,17 +328,17 @@ function RequirementCard({
       {/* Attribute chips */}
       <div className="mt-3 flex flex-wrap gap-1.5">
         {requirement.required && (
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
             Required
           </span>
         )}
         {requirement.no_duplicates && (
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
             No duplicates
           </span>
         )}
         {requirement.extraction && (
-          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
             Extraction
           </span>
         )}
@@ -347,7 +347,7 @@ function RequirementCard({
           requirement.marker_page_count_min != null ||
           requirement.marker_page_count_max != null ||
           requirement.marker_regex) && (
-          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
             Verified on upload
           </span>
         )}
