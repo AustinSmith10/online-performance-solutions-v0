@@ -69,6 +69,7 @@ function SortPills<Col extends string>({
           <a
             key={o.col}
             href={sortHref(params, o.col)}
+            aria-current={active ? "true" : undefined}
             className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 ${
               active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
             }`}
@@ -93,20 +94,23 @@ type Tab = (typeof TABS)[number]["key"];
 
 function TabBar({ tab }: { tab: Tab }) {
   return (
-    <div className="flex gap-1 border-b border-zinc-200">
-      {TABS.map((t) => (
-        <Link
-          key={t.key}
-          href={`/admin/users?tab=${t.key}`}
-          className={`px-4 py-2 text-sm font-medium ${
-            tab === t.key
-              ? "border-b-2 border-zinc-900 text-zinc-900"
-              : "text-zinc-500 hover:text-zinc-700"
-          }`}
-        >
-          {t.label}
-        </Link>
-      ))}
+    <div className="border-b border-zinc-200">
+      <nav aria-label="User groups" className="-mx-1 flex gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {TABS.map((t) => (
+          <Link
+            key={t.key}
+            href={`/admin/users?tab=${t.key}`}
+            aria-current={tab === t.key ? "page" : undefined}
+            className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors duration-150 ${
+              tab === t.key
+                ? "border-zinc-900 text-zinc-900"
+                : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+            }`}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 }
@@ -166,8 +170,8 @@ export default async function UsersPage({
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-zinc-900">Internal Users</h1>
-            <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{users.length}</span>
+            <h1 className="text-xl font-semibold text-balance text-zinc-900">Internal Users</h1>
+            <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-zinc-700">{users.length}</span>
           </div>
           <CreateAccountModal orgs={orgs} callerRole={caller.role as string} />
         </div>
@@ -183,15 +187,17 @@ export default async function UsersPage({
             <div className="flex flex-wrap gap-3">
               <input
                 type="text"
+            aria-label="Search name or email"
                 name="q"
                 defaultValue={q ?? ""}
                 placeholder="Search name or email…"
-                className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                className="w-full sm:w-auto rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
               />
               <select
                 name="availability"
+              aria-label="Filter by availability"
                 defaultValue={availability ?? ""}
-                className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                className="min-w-0 flex-1 sm:flex-none rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
               >
                 <option value="">All availability</option>
                 <option value="available">Available</option>
@@ -200,8 +206,9 @@ export default async function UsersPage({
               </select>
               <select
                 name="status"
+              aria-label="Filter by status"
                 defaultValue={status ?? ""}
-                className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                className="min-w-0 flex-1 sm:flex-none rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
               >
                 <option value="">All statuses</option>
                 <option value="active">Active</option>
@@ -209,7 +216,7 @@ export default async function UsersPage({
               </select>
               <button
                 type="submit"
-                className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+                className="press-subtle w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 sm:w-auto"
               >
                 Search
               </button>
@@ -227,7 +234,7 @@ export default async function UsersPage({
 
         {users.length === 0 ? (
           <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
-            {hasFilter ? "No consultants match your filters." : "No consultants yet."}
+            {hasFilter ? "No consultants match your filters." : "No consultants yet. Create an account with the Consultant role to add one."}
           </div>
         ) : (
           <div className="space-y-2">
@@ -297,8 +304,8 @@ export default async function UsersPage({
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-zinc-900">Internal Users</h1>
-          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{users.length}</span>
+          <h1 className="text-xl font-semibold text-balance text-zinc-900">Internal Users</h1>
+          <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-zinc-700">{users.length}</span>
         </div>
         <CreateAccountModal orgs={orgs} callerRole={caller.role as string} />
       </div>
@@ -309,15 +316,17 @@ export default async function UsersPage({
         <div className="flex flex-wrap gap-3">
           <input
             type="text"
+            aria-label="Search name or email"
             name="q"
             defaultValue={q ?? ""}
             placeholder="Search name or email…"
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            className="w-full sm:w-auto rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <select
             name="role"
+              aria-label="Filter by role"
             defaultValue={role ?? ""}
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            className="min-w-0 flex-1 sm:flex-none rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           >
             <option value="">All roles</option>
             <option value="super_admin">Super Admin</option>
@@ -326,8 +335,9 @@ export default async function UsersPage({
           </select>
           <select
             name="status"
+              aria-label="Filter by status"
             defaultValue={status ?? ""}
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            className="min-w-0 flex-1 sm:flex-none rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           >
             <option value="">All statuses</option>
             <option value="active">Active</option>
@@ -335,7 +345,7 @@ export default async function UsersPage({
           </select>
           <button
             type="submit"
-            className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            className="press-subtle w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 sm:w-auto"
           >
             Search
           </button>

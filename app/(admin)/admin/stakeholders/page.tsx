@@ -31,6 +31,7 @@ function SortPills({ params, sortCol, sortOrder }: { params: Record<string, stri
           <a
             key={o.col}
             href={sortHref(params, o.col)}
+            aria-current={active ? "true" : undefined}
             className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 ${
               active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
             }`}
@@ -154,8 +155,8 @@ function ClientsLayout({
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-zinc-900">Stakeholders</h1>
-          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{clients.length}</span>
+          <h1 className="text-xl font-semibold text-balance text-zinc-900">Stakeholders</h1>
+          <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-zinc-700">{clients.length}</span>
         </div>
         <CreateAccountModal orgs={orgs} callerRole={callerRole} />
       </div>
@@ -164,22 +165,25 @@ function ClientsLayout({
         <div className="flex flex-wrap gap-3">
           <input
             type="text"
+            aria-label="Search name or email"
             name="q"
             defaultValue={params.q ?? ""}
             placeholder="Search name or email…"
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            className="w-full sm:w-auto rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <input
             type="text"
+            aria-label="Filter by client"
             name="org"
             defaultValue={params.org ?? ""}
             placeholder="Client…"
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            className="w-full sm:w-auto rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <select
             name="status"
+              aria-label="Filter by status"
             defaultValue={params.status ?? ""}
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            className="min-w-0 flex-1 sm:flex-none rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           >
             <option value="">All statuses</option>
             <option value="active">Active</option>
@@ -187,7 +191,7 @@ function ClientsLayout({
           </select>
           <button
             type="submit"
-            className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            className="press-subtle w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 sm:w-auto"
           >
             Search
           </button>
@@ -204,7 +208,7 @@ function ClientsLayout({
 
       {clients.length === 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
-          {hasFilter ? "No stakeholders match your filters." : "No stakeholders yet."}
+          {hasFilter ? "No stakeholders match your filters." : "No stakeholders yet. Create an account with the Stakeholder role to add one."}
         </div>
       ) : (
         <div className="space-y-2">
