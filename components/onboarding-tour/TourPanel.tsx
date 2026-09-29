@@ -50,7 +50,7 @@ export function TourPanel({
 
   return (
     <div
-      className={`fixed z-50 w-72 rounded-lg border border-zinc-200 bg-white p-4 shadow-xl transition-all duration-150 ${
+      className={`fixed z-50 w-72 rounded-lg border border-zinc-200 bg-white p-4 shadow-xl transition-[top,left] duration-150 ${
         pos ? "" : "bottom-4 right-4"
       }`}
       style={pos ? { top: pos.top, left: pos.left } : undefined}

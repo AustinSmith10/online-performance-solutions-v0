@@ -57,7 +57,7 @@ export function NumberSavedBanner({ cleanUrl }: { cleanUrl: string }) {
       {spotlightRect && (
         <>
           <div
-            className="pointer-events-none fixed z-40 animate-pulse rounded-lg ring-2 ring-green-400 ring-offset-2"
+            className="pointer-events-none fixed z-40 motion-safe:animate-pulse motion-safe:[animation-iteration-count:2] rounded-lg ring-2 ring-green-400 ring-offset-2"
             style={{
               top: spotlightRect.top - 4,
               left: spotlightRect.left - 4,
@@ -70,7 +70,7 @@ export function NumberSavedBanner({ cleanUrl }: { cleanUrl: string }) {
             style={{ top: spotlightRect.top - 26, left: spotlightRect.left, width: spotlightRect.width }}
           >
             <svg
-              className="h-5 w-5 animate-bounce text-green-500 drop-shadow-sm"
+              className="h-5 w-5 motion-safe:animate-bounce motion-safe:[animation-iteration-count:3] text-green-500 drop-shadow-sm"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"

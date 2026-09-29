@@ -7,7 +7,7 @@ export function TourHighlight({ id, children }: { id: string; children: React.Re
   return (
     <div
       data-tour-target={id}
-      className={active ? "rounded-lg ring-2 ring-blue-500 ring-offset-2 transition-all" : ""}
+      className={active ? "rounded-lg ring-2 ring-blue-500 ring-offset-2 transition-shadow duration-150" : ""}
     >
       {children}
     </div>

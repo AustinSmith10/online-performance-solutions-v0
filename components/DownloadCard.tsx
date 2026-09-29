@@ -165,7 +165,7 @@ export function DownloadCard({
     <div id={id} className={`relative flex-wrap overflow-hidden rounded-md ${wrapperClassName}`}>
       {href && phase !== "idle" && (
         <div
-          className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-1.5 transition-colors duration-500 ${
+          className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-1.5 transition-colors duration-300 ${
             phase === "wash" ? "bg-green-100/70" : "bg-green-100"
           }`}
         >

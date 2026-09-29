@@ -9,7 +9,7 @@ import {
 } from "@/lib/documents/pbdb-versions";
 
 const ROW_CLASS =
-  "flex items-center justify-between gap-2 border-t border-zinc-100 py-2 transition-shadow duration-700 first:border-t-0";
+  "flex items-center justify-between gap-2 border-t border-zinc-100 py-2 transition-shadow duration-300 first:border-t-0";
 const BUTTON_CLASS =
   "shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100";
 

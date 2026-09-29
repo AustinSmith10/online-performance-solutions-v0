@@ -432,7 +432,7 @@ export function ActiveProjectsList({ projects, storageKey }: { projects: ActiveP
                 activePresetId === preset.id ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
               }`}
             >
-              <span className={`mr-1.5 opacity-0 group-hover:opacity-100 ${activePresetId === preset.id ? "text-zinc-400" : "text-zinc-300"}`}>⠿</span>
+              <span className={`mr-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 ${activePresetId === preset.id ? "text-zinc-400" : "text-zinc-300"}`}>⠿</span>
               {preset.label}
               <span className={`ml-1.5 ${activePresetId === preset.id ? "opacity-70" : "text-zinc-500"}`}>
                 ({projects.filter((p) => matchesFilters(p, preset.filters)).length})
