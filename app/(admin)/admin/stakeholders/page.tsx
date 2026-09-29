@@ -10,6 +10,7 @@ type SortCol = (typeof SORT_COLS)[number];
 const NATURAL_ORDER: Record<SortCol, "asc" | "desc"> = { first_name: "asc", email: "asc", invited_at: "desc" };
 const SORT_OPTIONS: { col: SortCol; label: string }[] = [
   { col: "first_name", label: "Name" },
+  { col: "email", label: "Email" },
   { col: "invited_at", label: "Invited" },
 ];
 

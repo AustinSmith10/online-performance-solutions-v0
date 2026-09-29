@@ -23,7 +23,8 @@ function sortHref(params: Record<string, string | undefined>, col: SortCol): str
   for (const [k, v] of Object.entries(params)) if (v) p.set(k, v);
   const isActive = (params.sort ?? "first_name") === col;
   p.set("sort", col);
-  p.set("order", isActive && params.order !== "asc" ? "asc" : "desc");
+  // Active pill flips direction (default is ascending); a newly chosen one starts A→Z.
+  p.set("order", isActive && params.order !== "desc" ? "desc" : "asc");
   return `/admin/consultants?${p.toString()}`;
 }
 

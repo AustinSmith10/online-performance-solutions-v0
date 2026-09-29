@@ -40,12 +40,22 @@ const CONSULTANT_SORT_OPTIONS: { col: ConsultantSortCol; label: string }[] = [
   { col: "availability", label: "Availability" },
 ];
 
-function sortHref(params: Record<string, string | undefined>, col: string): string {
+// Dates read newest first; everything else A→Z.
+function naturalOrder(col: string): "asc" | "desc" {
+  return col === "created_at" ? "desc" : "asc";
+}
+
+function sortHref(
+  params: Record<string, string | undefined>,
+  col: string,
+  activeCol: string,
+  activeOrder: "asc" | "desc"
+): string {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) p.set(k, v);
-  const isActive = params.sort === col;
   p.set("sort", col);
-  p.set("order", isActive && params.order !== "asc" ? "asc" : "desc");
+  // The active pill flips direction; a newly chosen one starts in its natural direction.
+  p.set("order", col === activeCol ? (activeOrder === "asc" ? "desc" : "asc") : naturalOrder(col));
   return `/admin/users?${p.toString()}`;
 }
 
@@ -68,7 +78,7 @@ function SortPills<Col extends string>({
         return (
           <a
             key={o.col}
-            href={sortHref(params, o.col)}
+            href={sortHref(params, o.col, sortCol, sortOrder)}
             aria-current={active ? "true" : undefined}
             className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 ${
               active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
@@ -125,7 +135,7 @@ export default async function UsersPage({
   const tab: Tab = tabParam === "consultants" ? "consultants" : "all";
   const isConsultantsTab = tab === "consultants";
 
-  const sortOrder: "asc" | "desc" = order === "asc" ? "asc" : "desc";
+  const orderParam: "asc" | "desc" | undefined = order === "asc" || order === "desc" ? order : undefined;
 
   const [caller, supabaseClient] = await Promise.all([
     requireRole("super_admin", "admin"),
@@ -148,6 +158,7 @@ export default async function UsersPage({
     const sortCol: ConsultantSortCol = CONSULTANT_SORT_COLS.includes(sort as ConsultantSortCol)
       ? (sort as ConsultantSortCol)
       : "first_name";
+    const sortOrder = orderParam ?? naturalOrder(sortCol);
     query = query.eq("role", "consultant").order(sortCol, { ascending: sortOrder === "asc" });
 
     if (q?.trim()) {
@@ -280,6 +291,7 @@ export default async function UsersPage({
   const sortCol: AllSortCol = ALL_SORT_COLS.includes(sort as AllSortCol) ? (sort as AllSortCol) : "created_at";
   const params = { q, role, status, sort, order, tab };
 
+  const sortOrder = orderParam ?? naturalOrder(sortCol);
   query = query.order(sortCol, { ascending: sortOrder === "asc" });
 
   query = query.neq("role", "stakeholder");
