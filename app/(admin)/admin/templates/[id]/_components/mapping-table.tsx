@@ -8,6 +8,7 @@ import {
   type UpdateTokenLabelsState,
 } from "@/app/actions/templates";
 import type { TokenSource } from "@/lib/documents/field-keys";
+import { ReorderControls } from "./ReorderControls";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 import { EditIconButton } from "@/components/EditIconButton";
 
@@ -96,6 +97,15 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
+  function moveRow(from: number, to: number) {
+    if (to < 0 || to >= orderedRows.length) return;
+    const next = [...orderedRows];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setOrderedRows(next);
+    setIsDirty(true);
+  }
+
   function onDragStart(index: number) { dragIndexRef.current = index; }
 
   function onDragOver(e: React.DragEvent, index: number) {
@@ -152,7 +162,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
               onDragOver={(e) => onDragOver(e, index)}
               onDrop={(e) => onDrop(e, index)}
               onDragEnd={onDragEnd}
-              className={`grid grid-cols-1 sm:grid-cols-[28px_172px_1fr] rounded-lg border overflow-hidden transition-colors ${
+              className={`grid grid-cols-1 sm:grid-cols-[28px_200px_1fr] rounded-lg border overflow-hidden transition-colors ${
                 !row.is_mapped
                   ? "border-red-200 bg-red-50/30"
                   : isDragOver
@@ -160,8 +170,9 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                   : "border-zinc-200 bg-white"
               }`}
             >
-              <div className="hidden items-center justify-center border-r border-zinc-100 bg-zinc-50 sm:flex cursor-grab select-none text-zinc-500 hover:text-zinc-700 text-base">
-                ⠿
+              <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50 px-2 py-1 sm:flex-col sm:justify-center sm:gap-1 sm:border-b-0 sm:border-r sm:px-0 sm:py-2">
+                <span aria-hidden="true" className="hidden cursor-grab select-none text-base text-zinc-500 hover:text-zinc-700 sm:block">⠿</span>
+                <ReorderControls index={index} count={orderedRows.length} label={row.display_label || row.placeholder_token} onMove={moveRow} />
               </div>
 
               <div className="flex flex-col gap-2 justify-center border-b border-zinc-100 px-4 py-4 sm:border-b-0 sm:border-r">
@@ -298,6 +309,20 @@ function ActivatedMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [, startOrderTransition] = useTransition();
 
+  function moveRow(from: number, to: number) {
+    if (to < 0 || to >= orderedRows.length) return;
+    const next = [...orderedRows];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setOrderedRows(next);
+    startOrderTransition(async () => {
+      await updateTokenOrder(
+        templateId,
+        next.map((r, i) => ({ placeholder_token: r.placeholder_token, sort_order: (i + 1) * 10 }))
+      );
+    });
+  }
+
   function onDragStart(index: number) { dragIndexRef.current = index; }
 
   function onDragOver(e: React.DragEvent, index: number) {
@@ -348,7 +373,7 @@ function ActivatedMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit
             onDragOver={(e) => onDragOver(e, index)}
             onDrop={(e) => onDrop(e, index)}
             onDragEnd={onDragEnd}
-            className={`grid grid-cols-1 sm:grid-cols-[28px_172px_1fr] rounded-lg border overflow-hidden transition-colors ${
+            className={`grid grid-cols-1 sm:grid-cols-[28px_200px_1fr] rounded-lg border overflow-hidden transition-colors ${
               !row.is_mapped
                 ? "border-red-200 bg-red-50/30"
                 : isDragOver
@@ -357,8 +382,9 @@ function ActivatedMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit
             }`}
           >
             {/* Drag handle */}
-            <div className="hidden items-center justify-center border-r border-zinc-100 bg-zinc-50 sm:flex cursor-grab select-none text-zinc-500 hover:text-zinc-700 text-base">
-              ⠿
+            <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50 px-2 py-1 sm:flex-col sm:justify-center sm:gap-1 sm:border-b-0 sm:border-r sm:px-0 sm:py-2">
+              <span aria-hidden="true" className="hidden cursor-grab select-none text-base text-zinc-500 hover:text-zinc-700 sm:block">⠿</span>
+              <ReorderControls index={index} count={orderedRows.length} label={row.display_label || row.placeholder_token} onMove={moveRow} />
             </div>
 
             {/* Identity */}
@@ -530,7 +556,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
 function MissingOrgCard({ token }: { token: string }) {
   return (
     <div
-      className="grid grid-cols-1 sm:grid-cols-[28px_172px_1fr] rounded-lg border border-amber-200 bg-amber-50/40 overflow-hidden"
+      className="grid grid-cols-1 sm:grid-cols-[28px_200px_1fr] rounded-lg border border-amber-200 bg-amber-50/40 overflow-hidden"
     >
       <div className="hidden items-center justify-center border-r border-amber-100 bg-amber-50 sm:flex select-none text-amber-300 text-base">
         —

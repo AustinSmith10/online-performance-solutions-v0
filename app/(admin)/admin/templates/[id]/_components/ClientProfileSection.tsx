@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useRef, useEffect } from "react";
 import { updateClientProfile, toggleFieldVisibility } from "@/app/actions/templates";
+import { ReorderControls } from "./ReorderControls";
 import { useUnsavedChanges } from "@/components/UnsavedChangesProvider";
 
 export interface ClientProfileRow {
@@ -66,6 +67,15 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
     });
   }
 
+  function moveItem(from: number, to: number) {
+    if (to < 0 || to >= items.length) return;
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setItems(next);
+    setIsDirty(true);
+  }
+
   function onDragStart(index: number) {
     dragIndexRef.current = index;
   }
@@ -127,14 +137,14 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
               onDragOver={(e) => onDragOver(e, index)}
               onDrop={(e) => onDrop(e, index)}
               onDragEnd={onDragEnd}
-              style={{ display: "grid", gridTemplateColumns: "28px 1fr auto" }}
-              className={`rounded-lg border overflow-hidden transition-colors ${
+              className={`grid grid-cols-[1fr_auto] sm:grid-cols-[28px_1fr_auto] rounded-lg border overflow-hidden transition-colors ${
                 isDragOver ? "border-blue-300" : "border-zinc-200 bg-white"
               } ${!item.client_visible ? "opacity-50" : ""}`}
             >
               {/* Drag handle */}
-              <div className="flex items-center justify-center border-r border-zinc-100 bg-zinc-50 cursor-grab select-none text-zinc-500 hover:text-zinc-700 text-base">
-                ⠿
+              <div className="col-span-2 flex items-center justify-between border-b border-zinc-100 bg-zinc-50 px-2 py-1 sm:col-span-1 sm:flex-col sm:justify-center sm:gap-1 sm:border-b-0 sm:border-r sm:px-0 sm:py-2">
+                <span aria-hidden="true" className="hidden cursor-grab select-none text-base text-zinc-500 hover:text-zinc-700 sm:block">⠿</span>
+                <ReorderControls index={index} count={items.length} label={item.display_label || item.placeholder_token} onMove={moveItem} />
               </div>
 
               {/* Token info */}
