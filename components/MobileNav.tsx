@@ -73,7 +73,7 @@ export function MobileNav({
   return (
     <>
       {/* Mobile top bar — hidden on desktop */}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-4 pt-[env(safe-area-inset-top)] lg:hidden">
+      <div className="flex h-14 shrink-0 items-center justify-between box-content border-b border-zinc-200 bg-white px-4 pt-[env(safe-area-inset-top)] lg:hidden">
         {logo ?? <span className="text-sm font-semibold text-zinc-900">{title}</span>}
         <div className="flex items-center gap-1">
           {notifications}
