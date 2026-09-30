@@ -94,9 +94,15 @@ export function PbdbSendPreview({ projectId, fileId, findings, acknowledged }: P
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3">
-                <p className="truncate text-sm font-medium text-zinc-900">
-                  {previewState.status === "ready" ? previewState.filename : "PBDB preview"}
-                </p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-sm font-medium text-zinc-900">
+                    {previewState.status === "ready" ? previewState.filename : "PBDB preview"}
+                  </p>
+                  {/* #208: this is the pending PDF, not the one sent to stakeholders. */}
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    Not yet sent
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setPreviewOpen(false)}

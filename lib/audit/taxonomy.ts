@@ -30,6 +30,11 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "user.soft_deleted",
       "user.recovered",
       "user.disciplines_changed",
+      "tag.created",
+      "tag.updated",
+      "tag.deleted",
+      "tag.assigned",
+      "tag.unassigned",
     ],
   },
   project: {
@@ -66,6 +71,7 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "project.complete",
       "project.pbdr_downloaded",
       "project.pbdb_downloaded",
+      "project.sent_pdf_downloaded",
       "evidence.attached",
     ],
   },
@@ -179,6 +185,11 @@ export const EVENT_LABELS: Record<string, string> = {
   "user.soft_deleted": "Account deleted",
   "user.recovered": "Account restored from recovery bin",
   "user.disciplines_changed": "Consultant disciplines changed",
+  "tag.created": "Tag created",
+  "tag.updated": "Tag updated",
+  "tag.deleted": "Tag deleted",
+  "tag.assigned": "Tag assigned",
+  "tag.unassigned": "Tag removed",
   "project.draft_created": "New report request started",
   "project.submitted": "Project submitted",
   "project.review_confirmed": "Client confirmed report details reviewed",
@@ -211,6 +222,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "project.complete": "Project marked complete",
   "project.pbdr_downloaded": "PBDR downloaded",
   "project.pbdb_downloaded": "PBDB downloaded",
+  "project.sent_pdf_downloaded": "Sent PDF downloaded",
   "evidence.attached": "Evidence attached",
   "stakeholder.responded": "Stakeholder responded",
   "stakeholder.responded_via_portal": "Stakeholder responded via portal",
@@ -472,6 +484,7 @@ export function formatDetails(
       if (s(oldResp.status) || s(newResp.status)) {
         parts.push(`${s(oldResp.status).replace(/_/g, " ")} → ${s(newResp.status).replace(/_/g, " ")}`);
       }
+      if (metadata.post_close === true && s(metadata.reason)) parts.push(`After close: ${s(metadata.reason)}`);
       break;
     }
 
@@ -509,6 +522,12 @@ export function formatDetails(
       break;
 
     case "project.pbdr_downloaded":
+      if (s(metadata.role)) parts.push(s(metadata.role).replace(/_/g, " "));
+      if (s(metadata.filename)) parts.push(s(metadata.filename));
+      break;
+
+    case "project.sent_pdf_downloaded":
+      if (s(metadata.doc_type)) parts.push(s(metadata.doc_type).toUpperCase());
       if (s(metadata.role)) parts.push(s(metadata.role).replace(/_/g, " "));
       if (s(metadata.filename)) parts.push(s(metadata.filename));
       break;

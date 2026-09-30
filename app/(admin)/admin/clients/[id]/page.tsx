@@ -17,6 +17,8 @@ import type { Client, User } from "@/types";
 import type { MetricsTable, MetricsRow, TemplateTokenGroup } from "@/app/actions/client-metrics";
 import { getClientTemplateTokenGroups } from "@/app/actions/client-metrics";
 import { BackLink } from "@/components/BackLink";
+import { getTagsByUserId } from "@/lib/tags/queries";
+import { TagChips } from "@/components/TagChip";
 
 export default async function OrganisationDetailPage({
   params,
@@ -141,6 +143,7 @@ export default async function OrganisationDetailPage({
     User,
     "id" | "email" | "first_name" | "last_name" | "role" | "is_locked" | "created_at"
   >[];
+  const tagsByUser = await getTagsByUserId(supabase, orgUsers.map((u) => u.id));
   const orgTemplates = (templates ?? []) as {
     id: string; name: string; status: string; created_at: string;
   }[];
@@ -346,6 +349,7 @@ export default async function OrganisationDetailPage({
                     <Link href={`/admin/users/${u.id}`} className="font-medium text-zinc-900 transition-colors duration-150 hover:text-zinc-600">
                       {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
                     </Link>
+                    <TagChips tags={tagsByUser.get(u.id)} className="ml-2" />
                     {(u.first_name || u.last_name) && (
                       <span className="ml-2 text-xs text-zinc-500">{u.email}</span>
                     )}

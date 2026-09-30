@@ -20,6 +20,7 @@ import { renderEmailShell, e, paragraph, strong, noticeBox } from "@/lib/email/t
 import { computeSignedUrlExpirySeconds } from "@/lib/stakeholders/tokens";
 import { writeProgress, PROGRESS_MILESTONES } from "@/lib/documents/progress";
 import { getBusinessTimezone } from "@/lib/settings/timezone";
+import { sendSentCopies } from "@/lib/email/sent-copy";
 import { formatLongDateAU } from "@/lib/time";
 
 export interface DeliverPbdrResult {
@@ -300,6 +301,18 @@ export async function deliverPbdr(
         logPrefix: "[deliver-pbdr]",
       });
     }
+
+    // Consultant/admin copy of the delivered PBDR with the stored PDF attached
+    // (#212). Never blocks or fails the delivery (errors swallowed inside).
+    await sendSentCopies({
+      supabase,
+      projectId,
+      kind: "pbdr",
+      storagePath: pdfStoragePath,
+      filename: pbdrFilename,
+      projectRef,
+      actorId,
+    });
 
     const conversionEnd = new Date();
 

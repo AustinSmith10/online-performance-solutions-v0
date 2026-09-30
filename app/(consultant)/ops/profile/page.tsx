@@ -1,10 +1,16 @@
 import { requireRole } from "@/lib/auth/session";
 import { ProfileForm } from "@/components/ProfileForm";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getTagsByUserId, listTags } from "@/lib/tags/queries";
+import { TagAssigner } from "@/components/TagAssigner";
 import { DISCIPLINES } from "@/lib/projects/project-number";
 
 export default async function ConsultantProfilePage() {
   const user = await requireRole("consultant");
   const disciplines = new Set((user as { disciplines?: string[] | null }).disciplines ?? []);
+
+  const supabase = createAdminClient();
+  const [tagsMap, allTags] = await Promise.all([getTagsByUserId(supabase, [user.id as string]), listTags(supabase)]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -18,6 +24,14 @@ export default async function ConsultantProfilePage() {
           state_territory: user.state_territory as string | null,
         }}
       />
+
+      <div className="rounded-xl border border-zinc-200 bg-white p-5">
+        <h2 className="text-sm font-semibold text-zinc-900">Tags</h2>
+        <p className="mt-1 text-sm text-zinc-500">Labels shown beside your name to other staff.</p>
+        <div className="mt-3">
+          <TagAssigner targetUserId={user.id as string} assigned={tagsMap.get(user.id as string) ?? []} allTags={allTags} />
+        </div>
+      </div>
 
       {/* Read-only — disciplines are what "Available jobs" and admin
           assignment filter on, set by an admin (Users → this account →

@@ -8,6 +8,7 @@ import { sendEmail } from "@/lib/email/sender";
 import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { renderApprovalRequestEmail } from "@/lib/email/templates/ApprovalRequestEmail";
 import { getOrCreateDispatchPdf } from "@/lib/documents/pbdb-pdf";
+import { sendSentCopies } from "@/lib/email/sent-copy";
 import { formatLongDateAU } from "@/lib/time";
 import { getBusinessTimezone } from "@/lib/settings/timezone";
 
@@ -265,6 +266,22 @@ export async function dispatchPbdb(
         console.error(`[dispatch-pbdb] email to ${stakeholder.email} failed:`, err);
       });
     }
+  }
+
+  // One consultant/admin copy per dispatch (not per stakeholder) with the
+  // stored sent PDF attached (#212). Fire after the stakeholder emails; a
+  // failure here is swallowed inside and never affects the dispatch.
+  if (pbdbPdf) {
+    await sendSentCopies({
+      supabase,
+      projectId,
+      kind: "pbdb",
+      storagePath: pbdbPdf.storagePath,
+      filename: pbdbPdf.originalFilename,
+      projectRef,
+      actorId,
+      stakeholderCount: stakeholders.length,
+    });
   }
 
   console.log(

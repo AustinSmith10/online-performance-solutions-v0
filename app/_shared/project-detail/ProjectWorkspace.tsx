@@ -8,6 +8,9 @@ import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import { getCurrentRevNumber, getLatestRevisionHistoryRow } from "@/lib/documents/revision-history";
 import { groupPbdbVersions } from "@/lib/documents/pbdb-versions";
 import { groupPbdrVersions } from "@/lib/documents/pbdr-versions";
+import { getTagsByUserId, listTags } from "@/lib/tags/queries";
+import { TagAssigner } from "@/components/TagAssigner";
+import { findSentPbdbFileIds } from "@/lib/documents/sent-pdf";
 import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
 import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
 import { resolveStaffStatus } from "@/lib/delivery/effective-status";
@@ -670,6 +673,16 @@ export async function ProjectWorkspace({
     revisionHistory: revisionRows.filter((r) => r.doc_type === "pbdb"),
     revisionNotesByCycle,
   });
+  // #208: which PBDB rows have a stored PDF that actually went to stakeholders.
+  const sentPbdbFileIds = await findSentPbdbFileIds(
+    supabase,
+    id,
+    (pbdbFiles as { id: string; version: number; review_cycle: number }[]).map((f) => ({
+      id: f.id,
+      version: f.version,
+      review_cycle: f.review_cycle,
+    }))
+  );
   const pbdrGrouping = groupPbdrVersions({
     files: pbdrFiles as { id: string; original_filename: string; version: number; created_at: string }[],
     revisionHistory: revisionRows,
@@ -709,6 +722,11 @@ export async function ProjectWorkspace({
   const assignedName = project.assigned
     ? [project.assigned.first_name, project.assigned.last_name].filter(Boolean).join(" ") || project.assigned.email
     : null;
+  // #213: internal-only tag chips beside the submitter (this workspace is staff-only).
+  const wsTags = project.submitter
+    ? (await getTagsByUserId(supabase, [project.submitter.id as string])).get(project.submitter.id as string) ?? []
+    : [];
+  const wsAllTags = await listTags(supabase);
   const submitterName = project.submitter
     ? [project.submitter.first_name, project.submitter.last_name].filter(Boolean).join(" ") || project.submitter.email
     : null;
@@ -1335,6 +1353,7 @@ export async function ProjectWorkspace({
           projectId={id}
           grouping={pbdbGrouping}
           canRegenerate={canRegeneratePbdb}
+          sentFileIds={sentPbdbFileIds}
         />
       )}
       {isAdmin && !isDeleted && project.status !== "paused" && (
@@ -1370,6 +1389,15 @@ export async function ProjectWorkspace({
                   )}
                   {project.submitter?.email && (
                     <span className="ml-2 text-xs text-zinc-500"> · {project.submitter.email}</span>
+                  )}
+                  {project.submitter && (
+                    <div className="mt-1">
+                      <TagAssigner
+                        targetUserId={project.submitter.id as string}
+                        assigned={wsTags}
+                        allTags={wsAllTags}
+                      />
+                    </div>
                   )}
                 </>
               ) : (
@@ -1531,6 +1559,8 @@ export async function ProjectWorkspace({
               // The PBDR download route only serves the latest file, so older
               // revisions are listed (and previewable) but not downloadable.
               hrefFor={(_fileId, tier) => (tier === "active" ? `/api/download/pbdr/${id}` : null)}
+              // #208: every delivered PBDR revision keeps its stored PDF downloadable.
+              sentHrefFor={(fileId) => `/api/download/sent/${fileId}`}
             />
           </div>
         </CollapsibleSection>
@@ -1551,6 +1581,8 @@ export async function ProjectWorkspace({
           const cycleReviews = reviewsByCycle.get(cycle)!;
           const pbdbForCycle = pbdbFiles.find((f) => (f.review_cycle as number) === cycle);
           const isCurrent = cycle === project.review_cycle;
+          // #209: earlier rounds are closed but their logged responses can still be corrected.
+          const cycleRoundStatus = deriveRoundStatus(cycleReviews);
           return (
             <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
               <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
@@ -1606,12 +1638,12 @@ export async function ProjectWorkspace({
                               </p>
                             )}
                           </div>
-                          {isCurrent && (
+                          {(isCurrent || cycleRoundStatus === "closed_approved" || cycleRoundStatus === "closed_rejected") && (
                             <ReviewResponseControl
                               review={r}
                               projectId={id}
-                              roundStatus={currentRoundStatus}
-                              revisionNumber={currentRevNumber}
+                              roundStatus={isCurrent ? currentRoundStatus : cycleRoundStatus}
+                              revisionNumber={isCurrent ? currentRevNumber : cycle - 1}
                               pendingCount={pendingCount}
                               roster={stakeholderRoster}
                               evidence={

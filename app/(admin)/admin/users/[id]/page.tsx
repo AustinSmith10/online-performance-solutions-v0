@@ -14,6 +14,11 @@ import { ProfileTabs } from "@/components/workspace/ProfileTabs";
 import { HeaderStatInline } from "@/app/(consultant)/ops/projects/[id]/_components/HeaderStatInline";
 import type { User, Client, ConsultantAvailability } from "@/types";
 import { BackLink } from "@/components/BackLink";
+import { requireRole } from "@/lib/auth/session";
+import { getTagsByUserId, listTags } from "@/lib/tags/queries";
+import { canAssignTag } from "@/lib/tags/permissions";
+import { TagAssigner } from "@/components/TagAssigner";
+import { TagChips } from "@/components/TagChip";
 import { DisciplineChips } from "../_components/DisciplineChips";
 
 // Minimal DTO passed to client components below — deliberately excludes
@@ -91,6 +96,10 @@ export default async function UserDetailPage({
       ? `${u.first_name[0]}${u.last_name[0]}`.toUpperCase()
       : (u.email ?? "?").slice(0, 2).toUpperCase();
 
+  const caller = await requireRole("super_admin", "admin");
+  const [tagsMap, allTags] = await Promise.all([getTagsByUserId(supabase, [u.id]), listTags(supabase)]);
+  const userTags = tagsMap.get(u.id) ?? [];
+  const mayTag = canAssignTag({ id: caller.id as string, role: caller.role as string }, { id: u.id, role: u.role });
   const displayName =
     u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email;
 
@@ -113,6 +122,11 @@ export default async function UserDetailPage({
               {u.role.replace("_", " ")}
             </span>
             <DisciplineChips disciplines={u.disciplines} />
+            {mayTag ? (
+              <TagAssigner targetUserId={u.id} assigned={userTags} allTags={allTags} />
+            ) : (
+              <TagChips tags={userTags} />
+            )}
             {u.is_active ? (
               <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
                 Active

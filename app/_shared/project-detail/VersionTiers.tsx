@@ -31,6 +31,7 @@ function Row({
   badge,
   detail,
   cta,
+  sentHref,
 }: {
   entry: VersionEntry;
   projectId: string;
@@ -39,6 +40,8 @@ function Row({
   badge?: React.ReactNode;
   detail?: string;
   cta?: string | null;
+  /** #208: the stored PDF that went to stakeholders; null/undefined when nothing was sent. */
+  sentHref?: string | null;
 }) {
   return (
     <div className="space-y-1">
@@ -64,6 +67,16 @@ function Row({
         </div>
         {detail && <p className="mt-0.5 text-xs tabular-nums text-zinc-500">{detail}</p>}
       </DownloadCard>
+      {sentHref && (
+        <p className="px-3">
+          <a
+            href={sentHref}
+            className="text-xs font-medium text-zinc-600 underline underline-offset-2 hover:text-zinc-900"
+          >
+            Download PDF (as sent)
+          </a>
+        </p>
+      )}
       {cta && <p className="px-3 text-xs leading-relaxed text-amber-700">{cta}</p>}
       {entry.revisionNote && (
         <p className="px-3 text-xs leading-relaxed text-zinc-500">{entry.revisionNote}</p>
@@ -95,6 +108,7 @@ export function VersionTiers({
   historical,
   drafts = [],
   hrefFor,
+  sentHrefFor,
   activeRowId,
 }: {
   projectId: string;
@@ -104,6 +118,8 @@ export function VersionTiers({
   drafts?: VersionEntry[];
   /** null renders the row without a download button (preview only). */
   hrefFor: (fileId: string, tier: "active" | "historical" | "draft") => string | null;
+  /** #208: "Download PDF (as sent)" link per row; null = nothing sent for that row. */
+  sentHrefFor?: (fileId: string) => string | null;
   activeRowId?: string;
 }) {
   return (
@@ -114,6 +130,7 @@ export function VersionTiers({
           projectId={projectId}
           href={hrefFor(active.fileId, "active")}
           rowId={activeRowId}
+          sentHref={sentHrefFor?.(active.fileId) ?? null}
           cta={active.ctaCopy}
           badge={
             active.badge === "dispatched" ? (
@@ -137,6 +154,7 @@ export function VersionTiers({
               projectId={projectId}
               href={hrefFor(h.fileId, "historical")}
               detail={historicalNote(h)}
+              sentHref={sentHrefFor?.(h.fileId) ?? null}
             />
           ))}
         </CollapsedGroup>

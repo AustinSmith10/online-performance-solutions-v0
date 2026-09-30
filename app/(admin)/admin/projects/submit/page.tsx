@@ -1,6 +1,8 @@
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SubmitOnBehalfForm } from "@/components/workspace/SubmitOnBehalfForm";
+import { getTagsByUserId } from "@/lib/tags/queries";
+import type { TagChipData } from "@/components/TagChip";
 
 type FileRequirement = {
   id: string;
@@ -49,9 +51,20 @@ export default async function AdminSubmitPage() {
       ])
     : [{ data: [] }, { data: [] }];
 
-  const stakeholdersByClient: Record<string, { id: string; name: string; email: string }[]> = {};
+  // Internal roles only (this page is staff-gated): tags render as chips
+  // beside the name in the stakeholder dropdown (#213).
+  const tagsByUser = await getTagsByUserId(
+    supabase,
+    ((stakeholderRows ?? []) as { id: string }[]).map((r) => r.id)
+  );
+  const stakeholdersByClient: Record<string, { id: string; name: string; email: string; tags: TagChipData[] }[]> = {};
   for (const row of (stakeholderRows ?? []) as { id: string; first_name: string | null; last_name: string | null; email: string; client_id: string }[]) {
-    (stakeholdersByClient[row.client_id] ??= []).push({ id: row.id, name: stakeholderName(row), email: row.email });
+    (stakeholdersByClient[row.client_id] ??= []).push({
+      id: row.id,
+      name: stakeholderName(row),
+      email: row.email,
+      tags: tagsByUser.get(row.id) ?? [],
+    });
   }
 
   const templatesByClient: Record<string, { id: string; name: string }[]> = {};

@@ -20,7 +20,8 @@ export interface ReviewResponseRow {
  * pending one, "Replace response" (with the existing response shown and an
  * explicit replace confirmation) for one who already responded, whether
  * logged on their behalf or submitted by them via the portal/link. Once the
- * round closes it becomes read-only: "Round closed — Revision N".
+ * round closes the same control becomes "Correct response" and requires a
+ * reason (#209).
  */
 export function ReviewResponseControl({
   review,
@@ -42,10 +43,11 @@ export function ReviewResponseControl({
   evidence?: { storagePath: string; filename: string } | null;
   loggedByEmail?: string | null;
 }) {
-  if (roundStatus === "closed_approved" || roundStatus === "closed_rejected") {
-    return <p className="shrink-0 text-xs text-zinc-500">Round closed — Revision {revisionNumber}</p>;
-  }
-  if (roundStatus !== "open" || review.status === "superseded") return null;
+  const postClose = roundStatus === "closed_approved" || roundStatus === "closed_rejected";
+  if ((!postClose && roundStatus !== "open") || review.status === "superseded") return null;
+  // #209: a closed round can still be corrected (reason required) — but there
+  // is nothing to correct on a response that was never logged.
+  if (postClose && review.status === "pending") return null;
 
   const isPending = review.status === "pending";
   const existing: ExistingResponse | undefined = isPending
@@ -70,7 +72,9 @@ export function ReviewResponseControl({
       prefilledEvidence={isPending ? (evidence ?? undefined) : undefined}
       prefilledComments={isPending ? (review.email_reply_text ?? undefined) : undefined}
       existing={existing}
-      closesRound={isPending && pendingCount === 1}
+      closesRound={!postClose && isPending && pendingCount === 1}
+      postClose={postClose}
+      roundRevision={revisionNumber}
     />
   );
 }

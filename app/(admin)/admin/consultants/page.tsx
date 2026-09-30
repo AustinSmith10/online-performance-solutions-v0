@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DisciplineChips } from "../users/_components/DisciplineChips";
 import type { User, ConsultantAvailability } from "@/types";
+import { getTagsByUserId } from "@/lib/tags/queries";
+import { TagChips } from "@/components/TagChip";
 
 const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
   available: "Available",
@@ -95,6 +97,7 @@ export default async function ConsultantsPage({
 
   const { data } = await query;
   const consultants = (data ?? []) as unknown as ConsultantRow[];
+  const tagsByUser = await getTagsByUserId(supabase, consultants.map((c) => c.id));
   const hasFilter = !!(q || availability || status || sort || order);
 
   return (
@@ -179,6 +182,7 @@ export default async function ConsultantsPage({
                   </span>
                   <p className="mt-0.5 truncate text-xs text-zinc-500">{c.email}</p>
                   <DisciplineChips disciplines={c.disciplines} className="mt-1" />
+                  <TagChips tags={tagsByUser.get(c.id)} className="mt-1" />
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {c.is_locked ? (

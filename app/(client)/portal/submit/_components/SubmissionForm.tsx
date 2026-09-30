@@ -17,6 +17,7 @@ import {
 import { streamUploadedFile, reducePipelineFile } from "./streamUpload";
 import { createClient } from "@/lib/supabase/client";
 import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
+import { SubmitDocumentViewer } from "./SubmitDocumentViewer";
 import { matchDevelopmentName, type MetricsPickRow } from "@/lib/documents/metrics-autofill";
 import { ClientWorkspace } from "../../_components/ClientWorkspace";
 import { ClientHeaderCard } from "../../_components/ClientHeaderCard";
@@ -384,6 +385,8 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
               </div>
             </FocusCard>
           }
+          // #210: the viewer lives in the left column under the Right Now card.
+          leftRailExtras={<SubmitDocumentViewer documents={documents} />}
           overviewTab={
             <div className="space-y-3">
               {notFoundCount > 0 && (
