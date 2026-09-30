@@ -16,7 +16,7 @@ const BTN_SECONDARY =
   "press rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-600 transition-colors duration-150 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:leading-6";
 const PAGER_LINK =
   "press rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors duration-150 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:items-center";
-const PAGER_DISABLED = "rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-400 [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:items-center";
+const PAGER_DISABLED = "cursor-not-allowed rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-500 [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:items-center";
 const CELL_LINK =
   "rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium tabular-nums text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900";
 
@@ -63,12 +63,12 @@ function buildExportHref(
 function SortIcon({ active, order }: { active: boolean; order: "asc" | "desc" }) {
   if (!active)
     return (
-      <span className="ml-1 text-zinc-400 group-hover:text-zinc-600">
+      <span aria-hidden="true" className="ml-1 text-zinc-500 group-hover:text-zinc-700">
         ↕
       </span>
     );
   return (
-    <span className="ml-1 text-zinc-600">{order === "asc" ? "↑" : "↓"}</span>
+    <span aria-hidden="true" className="ml-1 text-zinc-800">{order === "asc" ? "↑" : "↓"}</span>
   );
 }
 
@@ -253,7 +253,7 @@ export default async function AuditPage({
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
               <span>Active:</span>
               {activeCat && (
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORIES[activeCat].color}`}>
+                <span className={`rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700`}>
                   {CATEGORIES[activeCat].label}
                 </span>
               )}
@@ -275,7 +275,7 @@ export default async function AuditPage({
 
       {/* Results */}
       {entries.length === 0 ? (
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+        <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
           <p>{hasFilter ? "No audit entries match these filters." : "No audit entries yet."}</p>
           {hasFilter && (
             <Link href="/admin/audit" className={`${BTN_SECONDARY} mt-3 inline-block`}>
@@ -298,7 +298,7 @@ export default async function AuditPage({
                   <th
                     key={col}
                     aria-sort={sortCol === col ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}
-                    className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    className="px-5 py-3 text-left text-xs font-semibold text-zinc-600">
                     <a
                       href={buildSortHref(currentParams, col)}
                       className="group inline-flex items-center transition-colors duration-150 hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
@@ -308,9 +308,9 @@ export default async function AuditPage({
                     </a>
                   </th>
                 ))}
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">Client</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">Project</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">Details</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-600">Client</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-600">Project</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-600">Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-50">
@@ -337,7 +337,7 @@ export default async function AuditPage({
                         <span className="text-xs font-medium text-zinc-800">{label}</span>
                         {catInfo && (
                           <span
-                            className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs font-medium ${catInfo.color}`}
+                            className={`inline-block w-fit rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700`}
                           >
                             {catInfo.label}
                           </span>

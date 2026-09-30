@@ -705,7 +705,11 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
               showDetail ? "hidden" : "block max-h-[70dvh] md:max-h-none"
             }`}
           >
-            {visible.length === 0 && <p className="p-4 text-sm text-zinc-500">{EMPTY_TEXT[tab]}</p>}
+            {visible.length === 0 && (
+              <p className="m-3 rounded-lg border border-dashed border-zinc-200 p-4 text-center text-sm text-zinc-500">
+                {EMPTY_TEXT[tab]}
+              </p>
+            )}
             {visible.map((row) => (
               <ListRow
                 key={row.id}
