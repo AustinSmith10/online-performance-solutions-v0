@@ -13,7 +13,7 @@ import { resolveNumberSuffix } from "@/lib/projects/project-number";
 import { consultantHasDiscipline } from "@/lib/consultants/disciplines";
 import { summarizeRound } from "@/lib/stakeholders/round-summary";
 import type { ProjectStatus } from "@/types";
-import { getTagsByUserId } from "@/lib/tags/queries";
+import { tagsByUserIdFromEmbedded } from "@/lib/tags/queries";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -88,13 +88,18 @@ export default async function ConsultantOpsPage({
   // Independent reads run together: this page is dynamic and every tab, page and
   // search navigation re-renders it, so sequential round trips add up quickly
   // (the server and database are in different regions).
-  const [{ data, error }, { data: rawAvailable }] = await Promise.all([
+  //
+  // The review rows, revision PBDB files and verification mismatches are keyed
+  // on this consultant's projects, so they are joined to `projects` and filtered
+  // there (rather than looked up by id after the project list has loaded) — one
+  // round trip for the whole page.
+  const [{ data, error }, { data: rawAvailable }, { data: rawReviewRows }, { data: rawPbdbFiles }, { data: mismatchRows }] = await Promise.all([
     supabase
     .from("projects")
     .select(`
       id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle, accepted_at, paused_previous_status,
       clients(name, revision_notes_required),
-      submitter:users!projects_submitted_by_fkey(id, first_name, last_name, email)
+      submitter:users!projects_submitted_by_fkey(id, first_name, last_name, email, account_tags!account_tags_user_id_fkey(tags(id, name, color)))
     `)
     .eq("assigned_consultant_id", user.id)
     .not("status", "eq", "draft")
@@ -107,6 +112,35 @@ export default async function ConsultantOpsPage({
     .is("assigned_consultant_id", null)
     .is("deleted_at", null)
     .order("created_at", { ascending: true }),
+    supabase
+      .from("stakeholder_reviews")
+      .select("id, project_id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle, projects!inner(assigned_consultant_id, deleted_at, accepted_at, status)")
+      .eq("projects.assigned_consultant_id", user.id)
+      .is("projects.deleted_at", null)
+      .not("projects.accepted_at", "is", null)
+      .in("projects.status", ["dispatched", "revision_required"])
+      .order("review_cycle", { ascending: false })
+      .order("responded_at", { ascending: true }),
+    supabase
+      .from("project_files")
+      .select("id, project_id, original_filename, version, review_cycle, created_at, projects!inner(assigned_consultant_id, deleted_at, accepted_at, status)")
+      .eq("file_type", "pbdb")
+      .eq("projects.assigned_consultant_id", user.id)
+      .is("projects.deleted_at", null)
+      .not("projects.accepted_at", "is", null)
+      .eq("projects.status", "revision_required")
+      .order("version", { ascending: false }),
+    // #115: a single aggregated query for "which of this consultant's projects
+    // has at least one stakeholder-confirmed verification mismatch" — not N+1
+    // lookups per row.
+    supabase
+      .from("project_files")
+      .select("project_id, projects!inner(assigned_consultant_id, deleted_at, status)")
+      .eq("projects.assigned_consultant_id", user.id)
+      .is("projects.deleted_at", null)
+      .not("projects.status", "eq", "draft")
+      .not("verification_mismatch_reasons", "is", null)
+      .not("verification_confirmed_at", "is", null),
   ]);
 
   if (error) console.error("[ops] project list query failed:", error);
@@ -129,26 +163,13 @@ export default async function ConsultantOpsPage({
     string,
     { id: string; original_filename: string | null; version: number; created_at: string }
   > = {};
-  const revisionTask = (async () => {
-  if (revisionRequired.length > 0) {
-    const revisionIds = revisionRequired.map((p) => p.id);
+  {
+    const revisionIds = new Set(revisionRequired.map((p) => p.id));
 
-    const [{ data: rawRevisionReviews }, { data: rawPbdbFiles }] = await Promise.all([
-      supabase
-        .from("stakeholder_reviews")
-        .select("id, project_id, stakeholder_name, stakeholder_email, status, comments, responded_at, review_cycle")
-        .in("project_id", revisionIds)
-        .order("review_cycle", { ascending: false })
-        .order("responded_at", { ascending: true }),
-      supabase
-        .from("project_files")
-        .select("id, project_id, original_filename, version, review_cycle, created_at")
-        .in("project_id", revisionIds)
-        .eq("file_type", "pbdb")
-        .order("version", { ascending: false }),
-    ]);
-
-    for (const r of (rawRevisionReviews ?? []) as ReviewRow[]) {
+    for (const raw of (rawReviewRows ?? []) as unknown as (ReviewRow & { projects?: unknown })[]) {
+      if (!revisionIds.has(raw.project_id)) continue;
+      // Drop the join columns used only for filtering above.
+      const { projects: _joined, ...r } = raw;
       if (!reviewsByProject[r.project_id]) reviewsByProject[r.project_id] = [];
       reviewsByProject[r.project_id].push(r);
     }
@@ -156,13 +177,12 @@ export default async function ConsultantOpsPage({
     // Serve the docx matching each project's current review cycle — the one that
     // was just rejected — not just whichever version happens to sort highest.
     const cycleByProject = new Map(revisionRequired.map((p) => [p.id, p.review_cycle]));
-    for (const f of (rawPbdbFiles ?? []) as { id: string; project_id: string; original_filename: string | null; version: number; review_cycle: number; created_at: string }[]) {
+    for (const f of (rawPbdbFiles ?? []) as unknown as { id: string; project_id: string; original_filename: string | null; version: number; review_cycle: number; created_at: string }[]) {
       if (pbdbFileByProject[f.project_id]) continue;
       if (f.review_cycle !== cycleByProject.get(f.project_id)) continue;
       pbdbFileByProject[f.project_id] = { id: f.id, original_filename: f.original_filename, version: f.version, created_at: f.created_at };
     }
   }
-  })();
   // Single source of truth for "what stage is this project really at" — every
   // list, tab bucket, and label below derives from this instead of separately
   // recomputing "are all reviews resolved," which is what let this landing
@@ -176,36 +196,18 @@ export default async function ConsultantOpsPage({
     .filter((p) => p.status === "dispatched" || p.status === "revision_required")
     .map((p) => p.id);
   const reviewsByProjectId = new Map<string, { status: string }[]>();
-  const dispatchedTask = (async () => {
-  if (dispatchedIds.length > 0) {
-    const { data: reviewRows } = await supabase
-      .from("stakeholder_reviews")
-      .select("project_id, review_cycle, status")
-      .in("project_id", dispatchedIds);
+  {
     const reviewCycleById = new Map(projects.map((p) => [p.id, p.review_cycle]));
     for (const pid of dispatchedIds) {
       const cycle = reviewCycleById.get(pid);
       reviewsByProjectId.set(
         pid,
-        (reviewRows ?? []).filter((r) => r.project_id === pid && r.review_cycle === cycle)
+        ((rawReviewRows ?? []) as unknown as { project_id: string; review_cycle: number; status: string }[]).filter(
+          (r) => r.project_id === pid && r.review_cycle === cycle
+        )
       );
     }
   }
-  })();
-  // #115: a single aggregated query for "which of this consultant's projects
-  // has at least one stakeholder-confirmed verification mismatch" — not N+1
-  // lookups per row.
-  const mismatchTask = allAssigned.length
-    ? supabase
-        .from("project_files")
-        .select("project_id")
-        .in("project_id", allAssigned.map((p) => p.id))
-        .not("verification_mismatch_reasons", "is", null)
-        .not("verification_confirmed_at", "is", null)
-    : Promise.resolve({ data: [] as { project_id: string }[] });
-
-  // The three lookups only depend on the project list, so run them together.
-  const [, , { data: mismatchRows }] = await Promise.all([revisionTask, dispatchedTask, mismatchTask]);
   const effectiveStatusMap = new Map<string, ProjectStatus>(
     projects.map((p) => [p.id, resolveStaffStatus(p.status, reviewsByProjectId.get(p.id) ?? [])])
   );
@@ -253,10 +255,10 @@ export default async function ConsultantOpsPage({
 
   const mismatchProjectIds = new Set((mismatchRows ?? []).map((r) => r.project_id as string));
 
-  // #213: internal-only tag chips beside the submitter's name.
-  const submitterTags = await getTagsByUserId(
-    supabase,
-    allAssigned.map((p) => p.submitter?.id).filter((x): x is string => !!x)
+  // #213: internal-only tag chips beside the submitter's name (embedded on the
+  // submitter above, so no follow-up lookup).
+  const submitterTags = tagsByUserIdFromEmbedded(
+    allAssigned.flatMap((p) => (p.submitter ? [p.submitter as unknown as Parameters<typeof tagsByUserIdFromEmbedded>[0][number]] : []))
   );
   function toDashboardProject(p: ProjectRow): DashboardProject {
     const overdueDays = TERMINAL_STATUSES.has(p.status) ? 0 : daysOverdue(p.expected_delivery_date, todayIso);

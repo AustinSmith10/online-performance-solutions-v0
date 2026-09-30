@@ -3,7 +3,7 @@ import { isMetricsLookupFlag } from "@/lib/documents/metrics-autofill";
 import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getStakeholderReviewedProjectIds, stakeholderAccessFilter } from "@/lib/portal/access";
+import { getStakeholderReviewedProjectIds } from "@/lib/portal/access";
 import { DeleteProjectButton } from "./_components/DeleteProjectButton";
 import { FileUploadForm } from "./_components/FileUploadForm";
 import { PortalApprovalForm } from "./_components/PortalApprovalForm";
@@ -75,20 +75,142 @@ export default async function ClientProjectDetailPage({
   const justSubmitted = sp.submitted === "1";
   const user = await requireRole("stakeholder");
   const supabase = createAdminClient();
+  const clientId = user.client_id as string;
+  const viewerEmail = user.email as string;
 
-  const reviewedProjectIds = await getStakeholderReviewedProjectIds(supabase, user.email as string);
-
-  const { data } = await supabase
-    .from("projects")
-    .select(
-      "id, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at, source, assigned_consultant_id, review_cycle, paused_previous_status, pbdb_downloaded_at"
+  // Everything below that only needs the project id or the viewer starts now and
+  // runs alongside the access check, instead of one round trip after another
+  // (this page used to be ten in a row). Nothing is rendered unless the access
+  // check passes. The no-op catch only stops an unhandled-rejection warning if
+  // an earlier await throws first; the real await still sees the rejection.
+  const early = <T,>(p: PromiseLike<T>): Promise<T> => {
+    const q = Promise.resolve(p);
+    q.catch(() => {});
+    return q;
+  };
+  const reviewedIdsP = early(getStakeholderReviewedProjectIds(supabase, viewerEmail));
+  const projectP = early(
+    supabase
+      .from("projects")
+      .select(
+        "id, submitted_by, extracted_fields, status, po_number, template_id, created_at, expected_delivery_date, deleted_at, source, assigned_consultant_id, review_cycle, paused_previous_status, pbdb_downloaded_at"
+      )
+      .eq("id", id)
+      .eq("client_id", clientId)
+      .maybeSingle()
+  );
+  const orgP = early(supabase.from("clients").select("show_consultant_name").eq("id", clientId).maybeSingle());
+  const clientReviewP = early(
+    supabase
+      .from("stakeholder_reviews")
+      .select("id, token, expires_at, review_cycle, status, comments, responded_at")
+      .eq("project_id", id)
+      .eq("stakeholder_email", viewerEmail)
+      // A superseded review (#191) is internal/audit-only — never shown here.
+      .neq("status", "superseded")
+      .order("review_cycle", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  );
+  const clientReviewHistoryP = early(
+    supabase
+      .from("stakeholder_reviews")
+      .select("review_cycle, status, comments, responded_at")
+      .eq("project_id", id)
+      .eq("stakeholder_email", viewerEmail)
+      .not("responded_at", "is", null)
+      .order("review_cycle", { ascending: false })
+  );
+  const rawFilesP = early(
+    supabase
+      .from("project_files")
+      .select("id, file_type, original_filename, storage_path, created_at")
+      .eq("project_id", id)
+      .not("file_type", "in", '("pbdb","pbdr","pbdb_pdf")')
+      .order("created_at")
+  );
+  const rawPbdbsP = early(
+    supabase
+      .from("project_files")
+      .select("original_filename, created_at")
+      .eq("project_id", id)
+      .eq("file_type", "pbdb")
+      .order("version", { ascending: false })
+      .limit(1)
+  );
+  // Filtered to the project's current review cycle below (needs the project row).
+  const rawPbdbPdfsP = early(
+    supabase
+      .from("project_files")
+      .select("original_filename, review_cycle")
+      .eq("project_id", id)
+      .eq("file_type", "pbdb_pdf")
+      .order("version", { ascending: false })
+  );
+  const rawPbdrsP = early(
+    supabase
+      .from("project_files")
+      .select("id, original_filename, storage_path, version, created_at")
+      .eq("project_id", id)
+      .eq("file_type", "pbdr")
+      .order("version", { ascending: false })
+      .limit(1)
+  );
+  const openFieldFlagsP = early(
+    supabase
+      .from("field_flags")
+      .select("id, field_key, candidate_values, type, status, current_value, resolved_by, resolved_at")
+      .eq("project_id", id)
+  );
+  // Follow-ups that depend on one of the above start as soon as it lands, not
+  // after everything else has been awaited.
+  const flagResolversP = early(
+    openFieldFlagsP.then(async ({ data: flags }) => {
+      const ids = [
+        ...new Set(
+          (flags ?? [])
+            .filter((f) => !isMetricsLookupFlag(f.candidate_values))
+            .map((f) => f.resolved_by as string | null)
+            .filter((v): v is string => !!v)
+        ),
+      ];
+      return ids.length ? await supabase.from("users").select("id, email").in("id", ids) : { data: [] };
+    })
+  );
+  const filesP = early(
+    rawFilesP.then(({ data: rows }) =>
+      Promise.all(
+        (rows ?? []).map(async (f) => {
+          const bucket = f.file_type === "evidence" ? "evidence" : "submissions";
+          const { data: signed } = await supabase.storage
+            .from(bucket)
+            .createSignedUrl(f.storage_path as string, 3600);
+          return { ...f, signedUrl: signed?.signedUrl ?? null };
+        })
+      )
     )
-    .eq("id", id)
-    .eq("client_id", user.client_id as string)
-    .or(stakeholderAccessFilter(user.id as string, reviewedProjectIds))
-    .maybeSingle();
+  );
+  const pbdrSignedUrlP = early(
+    rawPbdrsP.then(async ({ data: rows }) => {
+      const latest = rows?.[0];
+      if (!latest) return null;
+      const { data: signed } = await supabase.storage
+        .from("documents")
+        .createSignedUrl(latest.storage_path as string, 3600, {
+          download: (latest.original_filename as string) || true,
+        });
+      return signed?.signedUrl ?? null;
+    })
+  );
 
-  if (!data) notFound();
+  const [reviewedProjectIds, { data }] = await Promise.all([reviewedIdsP, projectP]);
+
+  // Same rule as stakeholderAccessFilter: a project the viewer submitted, or one
+  // they've been asked to review (and always within their own client).
+  const projectRow = data as unknown as { id: string; submitted_by: string } | null;
+  if (!projectRow || !(projectRow.submitted_by === (user.id as string) || reviewedProjectIds.includes(projectRow.id))) {
+    notFound();
+  }
 
   type ProjectDetail = {
     id: string;
@@ -121,8 +243,23 @@ export default async function ClientProjectDetailPage({
   const pbdbVisible = PBDB_VISIBLE_STATUSES.has(project.status);
 
   // Stepper — resolve stage/caption from real status only, no simulated progress
+  // Template-dependent lookups start together with the ones below.
+  const mappingsP = project.template_id
+    ? early(
+        supabase
+          .from("template_field_mappings")
+          .select("placeholder_token, field_key, display_label, client_visible, client_sort_order")
+          .eq("template_id", project.template_id)
+          .order("client_sort_order", { ascending: true })
+          .order("placeholder_token", { ascending: true })
+      )
+    : Promise.resolve({ data: [] });
+  const rawFileRequirementsP = project.template_id
+    ? early(supabase.from("file_requirements").select("slug, name").eq("template_id", project.template_id))
+    : Promise.resolve({ data: [] });
+
   const [{ data: orgRow }, { data: consultant }, { data: templateRow }, { data: revisionNoteRow }, { data: reviewRows }] = await Promise.all([
-    supabase.from("clients").select("show_consultant_name").eq("id", user.client_id as string).maybeSingle(),
+    orgP,
     project.assigned_consultant_id
       ? supabase.from("users").select("first_name").eq("id", project.assigned_consultant_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -183,94 +320,39 @@ export default async function ClientProjectDetailPage({
   const stages = mapStepperStages(stepperResult.stages);
   const currentStageLabel = stages.find((s) => s.state === "current")?.label ?? null;
 
-  // Fetch this client's most recent review for this project (any status), and
-  // the full history for the Review tab
-  const [{ data: clientReview }, { data: clientReviewHistory }] = await Promise.all([
-    supabase
-      .from("stakeholder_reviews")
-      .select("id, token, expires_at, review_cycle, status, comments, responded_at")
-      .eq("project_id", id)
-      .eq("stakeholder_email", user.email as string)
-      // A superseded review (#191) is internal/audit-only — never shown here.
-      .neq("status", "superseded")
-      .order("review_cycle", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("stakeholder_reviews")
-      .select("review_cycle, status, comments, responded_at")
-      .eq("project_id", id)
-      .eq("stakeholder_email", user.email as string)
-      .not("responded_at", "is", null)
-      .order("review_cycle", { ascending: false }),
+  // This client's most recent review for this project (any status), and the
+  // full history for the Review tab — started with the batch above.
+  // Template mappings, submission files, latest PBDB/PBDR and open field flags
+  // likewise.
+  const [
+    { data: clientReview },
+    { data: clientReviewHistory },
+    { data: mappings },
+    { data: rawFileRequirements },
+    { data: rawPbdbsAll },
+    { data: rawPbdbPdfsAll },
+    { data: rawPbdrs },
+    { data: openFieldFlags },
+  ] = await Promise.all([
+    clientReviewP,
+    clientReviewHistoryP,
+    mappingsP,
+    rawFileRequirementsP,
+    rawPbdbsP,
+    rawPbdbPdfsP,
+    rawPbdrsP,
+    openFieldFlagsP,
   ]);
-
-  // Load template mappings, submission files, latest PBDB, latest PBDR, and
-  // open field flags in parallel
-  const [{ data: mappings }, { data: rawFileRequirements }, { data: rawFiles }, { data: rawPbdbs }, { data: rawPbdbPdfs }, { data: rawPbdrs }, { data: openFieldFlags }] =
-    await Promise.all([
-      project.template_id
-        ? supabase
-            .from("template_field_mappings")
-            .select("placeholder_token, field_key, display_label, client_visible, client_sort_order")
-            .eq("template_id", project.template_id)
-            .order("client_sort_order", { ascending: true })
-            .order("placeholder_token", { ascending: true })
-        : Promise.resolve({ data: [] }),
-      project.template_id
-        ? supabase
-            .from("file_requirements")
-            .select("slug, name")
-            .eq("template_id", project.template_id)
-        : Promise.resolve({ data: [] }),
-      supabase
-        .from("project_files")
-        .select("id, file_type, original_filename, storage_path, created_at")
-        .eq("project_id", id)
-        .not("file_type", "in", '("pbdb","pbdr","pbdb_pdf")')
-        .order("created_at"),
-      pbdbVisible
-        ? supabase
-            .from("project_files")
-            .select("original_filename, created_at")
-            .eq("project_id", id)
-            .eq("file_type", "pbdb")
-            .order("version", { ascending: false })
-            .limit(1)
-        : Promise.resolve({ data: [] }),
-      pbdbVisible
-        ? supabase
-            .from("project_files")
-            .select("original_filename")
-            .eq("project_id", id)
-            .eq("file_type", "pbdb_pdf")
-            .eq("review_cycle", project.review_cycle)
-            .order("version", { ascending: false })
-            .limit(1)
-        : Promise.resolve({ data: [] }),
-      supabase
-        .from("project_files")
-        .select("id, original_filename, storage_path, version, created_at")
-        .eq("project_id", id)
-        .eq("file_type", "pbdr")
-        .order("version", { ascending: false })
-        .limit(1),
-      supabase
-        .from("field_flags")
-        .select("id, field_key, candidate_values, type, status, current_value, resolved_by, resolved_at")
-        .eq("project_id", id),
-    ]);
+  const rawPbdbs = pbdbVisible ? rawPbdbsAll : [];
+  const rawPbdbPdfs = pbdbVisible
+    ? (rawPbdbPdfsAll ?? []).filter((r) => r.review_cycle === project.review_cycle).slice(0, 1)
+    : [];
 
   // A metrics-lookup flag (#190 — e.g. rainfall intensity that couldn't be
   // resolved from the development name) is consultant-facing only.
   const allFieldFlags = (openFieldFlags ?? []).filter((f) => !isMetricsLookupFlag(f.candidate_values));
 
-  const flagResolverIds = [
-    ...new Set(allFieldFlags.map((f) => f.resolved_by as string | null).filter((v): v is string => !!v)),
-  ];
-  const { data: flagResolvers } = flagResolverIds.length
-    ? await supabase.from("users").select("id, email").in("id", flagResolverIds)
-    : { data: [] };
+  const { data: flagResolvers } = await flagResolversP;
   const flagResolverEmailById = new Map(
     (flagResolvers ?? []).map((u) => [u.id as string, u.email as string])
   );
@@ -295,15 +377,7 @@ export default async function ClientProjectDetailPage({
   // evidence files which live in their own `evidence` bucket (see
   // app/actions/evidence.ts). Signing evidence against `submissions` fails
   // silently and drops both Download and Preview for those rows.
-  const files = await Promise.all(
-    (rawFiles ?? []).map(async (f) => {
-      const bucket = f.file_type === "evidence" ? "evidence" : "submissions";
-      const { data: signed } = await supabase.storage
-        .from(bucket)
-        .createSignedUrl(f.storage_path as string, 3600);
-      return { ...f, signedUrl: signed?.signedUrl ?? null };
-    })
-  );
+  const files = await filesP;
 
   const fileReqLabelMap = new Map<string, string>(
     (rawFileRequirements ?? []).map((r) => [r.slug as string, r.name as string])
@@ -336,15 +410,7 @@ export default async function ClientProjectDetailPage({
 
   // PBDR — latest version only, signed URL from `documents` bucket
   const latestPbdr = rawPbdrs?.[0] ?? null;
-  let pbdrSignedUrl: string | null = null;
-  if (latestPbdr) {
-    const { data: signed } = await supabase.storage
-      .from("documents")
-      .createSignedUrl(latestPbdr.storage_path as string, 3600, {
-        download: (latestPbdr.original_filename as string) || true,
-      });
-    pbdrSignedUrl = signed?.signedUrl ?? null;
-  }
+  const pbdrSignedUrl: string | null = await pbdrSignedUrlP;
 
   // Build label map from template mappings
   type MappingEntry = {

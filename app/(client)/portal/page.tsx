@@ -109,30 +109,32 @@ export default async function ClientPortalPage({
 
   // A stakeholder may see a project it submitted, or one it's been asked to
   // review — never every project the org has ever submitted.
-  const reviewedProjectIds = await getStakeholderReviewedProjectIds(supabase, user.email as string);
+  // Round trip 1: the review ids that widen this viewer's access, the client
+  // row, and their pending reviews are independent of each other. Round trip 2
+  // is the project list, which needs the ids.
+  const [reviewedProjectIds, { data: orgData }, { data: pendingReviewsData }] = await Promise.all([
+    getStakeholderReviewedProjectIds(supabase, user.email as string),
+    supabase
+      .from("clients")
+      .select("payment_method, credit_balance, show_consultant_name")
+      .eq("id", orgId)
+      .single(),
+    supabase
+      .from("stakeholder_reviews")
+      .select("id, project_id, token, expires_at, review_cycle")
+      .eq("stakeholder_email", user.email as string)
+      .eq("status", "pending"),
+  ]);
 
-  const [{ data: projectsData }, { data: orgData }, { data: pendingReviewsData }] =
-    await Promise.all([
-      supabase
-        .from("projects")
-        .select(
-          "id, po_number, extracted_fields, status, created_at, delivered_at, expected_delivery_date, review_cycle, paused_previous_status, pbdb_downloaded_at, assigned_consultant_id"
-        )
-        .eq("client_id", orgId)
-        .is("deleted_at", null)
-        .or(stakeholderAccessFilter(user.id as string, reviewedProjectIds))
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("clients")
-        .select("payment_method, credit_balance, show_consultant_name")
-        .eq("id", orgId)
-        .single(),
-      supabase
-        .from("stakeholder_reviews")
-        .select("id, project_id, token, expires_at, review_cycle")
-        .eq("stakeholder_email", user.email as string)
-        .eq("status", "pending"),
-    ]);
+  const { data: projectsData } = await supabase
+    .from("projects")
+    .select(
+      "id, po_number, extracted_fields, status, created_at, delivered_at, expected_delivery_date, review_cycle, paused_previous_status, pbdb_downloaded_at, assigned_consultant_id"
+    )
+    .eq("client_id", orgId)
+    .is("deleted_at", null)
+    .or(stakeholderAccessFilter(user.id as string, reviewedProjectIds))
+    .order("created_at", { ascending: false });
 
   const projects = (projectsData ?? []) as unknown as ProjectRow[];
   const org = orgData as OrgRow | null;
@@ -143,57 +145,12 @@ export default async function ClientPortalPage({
   );
   const pendingApprovals = projects.filter((p) => pendingReviewMap.has(p.id));
 
-  // Latest PBDB filename per project with a pending approval. The stakeholder
-  // is served the converted `pbdb_pdf` (not the .docx source), so use that
-  // row's name — it's what the download saves as and what the previewer needs
-  // to recognise a PDF. Match the pending review's cycle, highest version.
-  const pbdbFilenameMap = new Map<string, string>();
-  if (pendingApprovals.length > 0) {
-    const { data: pbdbFilesData } = await supabase
-      .from("project_files")
-      .select("project_id, file_type, original_filename, version, review_cycle")
-      .in("project_id", pendingApprovals.map((p) => p.id))
-      .in("file_type", ["pbdb_pdf", "pbdb"])
-      .order("version", { ascending: false });
-    // Prefer the cached PDF's name; with no cached PDF yet (the routes
-    // regenerate it on demand, #186) fall back to the name it will carry.
-    const rows = [...(pbdbFilesData ?? [])].sort(
-      (a, b) => Number(a.file_type !== "pbdb_pdf") - Number(b.file_type !== "pbdb_pdf")
-    );
-    for (const row of rows) {
-      const pid = row.project_id as string;
-      if (pbdbFilenameMap.has(pid)) continue;
-      const cycle = pendingReviewMap.get(pid)?.review_cycle;
-      if (cycle != null && row.review_cycle !== cycle) continue;
-      const name = row.original_filename as string;
-      pbdbFilenameMap.set(pid, row.file_type === "pbdb_pdf" ? name : dispatchPdfFilenameFor(name));
-    }
-  }
-
   // Complete projects within the 8-working-day window
   const recentlyComplete = projects.filter((p) => {
     if (p.status !== "complete") return false;
     const from = p.delivered_at ?? p.created_at;
     return workingDaysElapsed(from, todayIso) < READY_WINDOW_DAYS;
   });
-
-  // Check which of those this user has already downloaded
-  const downloadedIds = new Set<string>();
-  if (recentlyComplete.length > 0) {
-    const { data: dlRows } = await supabase
-      .from("audit_log")
-      .select("project_id")
-      .eq("event_type", "project.pbdr_downloaded")
-      .eq("actor_id", user.id as string)
-      .in(
-        "project_id",
-        recentlyComplete.map((p) => p.id)
-      );
-    for (const row of dlRows ?? []) downloadedIds.add(row.project_id as string);
-  }
-
-  // Ready banner: recently complete + not yet downloaded by this user
-  const reportsReady = recentlyComplete.filter((p) => !downloadedIds.has(p.id));
 
   // Projects currently in delivered status
   const allDelivered = projects.filter((p) => p.status === "delivered");
@@ -208,40 +165,98 @@ export default async function ClientPortalPage({
     .filter((p) => p.status !== "complete")
     .sort((a, b) => activeProjectPriority(b) - activeProjectPriority(a));
 
-  // Consultant first names — for the "assessing"/"working on"/"applying changes" captions
   const consultantIds = [
     ...new Set(activeProjects.map((p) => p.assigned_consultant_id).filter((id): id is string => !!id)),
   ];
+  const dispatchedIds = activeProjects.filter((p) => p.status === "dispatched").map((p) => p.id);
+  // The PBDR filename lookup covers delivered and recently-complete projects —
+  // a superset of the "ready" banner's projects (recently complete and not yet
+  // downloaded) — so it doesn't have to wait for the download check.
+  const pbdrRelevantIds = [...new Set([...allDelivered, ...recentlyComplete].map((p) => p.id))];
+
+  // Round trip 3: every remaining lookup depends only on the project list.
+  const [pbdbFilesResult, dlRowsResult, consultantRowsResult, reviewRowsResult, pbdrFilesResult] = await Promise.all([
+    // Latest PBDB filename per project with a pending approval. The stakeholder
+    // is served the converted `pbdb_pdf` (not the .docx source), so use that
+    // row's name — it's what the download saves as and what the previewer needs
+    // to recognise a PDF. Match the pending review's cycle, highest version.
+    pendingApprovals.length > 0
+      ? supabase
+          .from("project_files")
+          .select("project_id, file_type, original_filename, version, review_cycle")
+          .in("project_id", pendingApprovals.map((p) => p.id))
+          .in("file_type", ["pbdb_pdf", "pbdb"])
+          .order("version", { ascending: false })
+      : Promise.resolve({ data: [] as { project_id: string; file_type: string; original_filename: string; version: number; review_cycle: number }[] }),
+    // Which of the recently-complete projects this user has already downloaded
+    recentlyComplete.length > 0
+      ? supabase
+          .from("audit_log")
+          .select("project_id")
+          .eq("event_type", "project.pbdr_downloaded")
+          .eq("actor_id", user.id as string)
+          .in("project_id", recentlyComplete.map((p) => p.id))
+      : Promise.resolve({ data: [] as { project_id: string }[] }),
+    // Consultant first names — for the "assessing"/"working on"/"applying changes" captions
+    consultantIds.length > 0
+      ? supabase.from("users").select("id, first_name").in("id", consultantIds)
+      : Promise.resolve({ data: [] as { id: string; first_name: string | null }[] }),
+    dispatchedIds.length > 0
+      ? supabase
+          .from("stakeholder_reviews")
+          .select("project_id, review_cycle, status, stakeholder_email")
+          .in("project_id", dispatchedIds)
+      : Promise.resolve({ data: [] as { project_id: string; review_cycle: number; status: string; stakeholder_email: string }[] }),
+    // Latest PBDR original_filename per project — shown under the download button
+    pbdrRelevantIds.length > 0
+      ? supabase
+          .from("project_files")
+          .select("project_id, original_filename, version")
+          .in("project_id", pbdrRelevantIds)
+          .eq("file_type", "pbdr")
+          .order("version", { ascending: false })
+      : Promise.resolve({ data: [] as { project_id: string; original_filename: string; version: number }[] }),
+  ]);
+
+  const pbdbFilenameMap = new Map<string, string>();
+  // Prefer the cached PDF's name; with no cached PDF yet (the routes
+  // regenerate it on demand, #186) fall back to the name it will carry.
+  const pbdbRows = [...(pbdbFilesResult.data ?? [])].sort(
+    (a, b) => Number(a.file_type !== "pbdb_pdf") - Number(b.file_type !== "pbdb_pdf")
+  );
+  for (const row of pbdbRows) {
+    const pid = row.project_id as string;
+    if (pbdbFilenameMap.has(pid)) continue;
+    const cycle = pendingReviewMap.get(pid)?.review_cycle;
+    if (cycle != null && row.review_cycle !== cycle) continue;
+    const name = row.original_filename as string;
+    pbdbFilenameMap.set(pid, row.file_type === "pbdb_pdf" ? name : dispatchPdfFilenameFor(name));
+  }
+
+  const downloadedIds = new Set<string>();
+  for (const row of dlRowsResult.data ?? []) downloadedIds.add(row.project_id as string);
+
+  // Ready banner: recently complete + not yet downloaded by this user
+  const reportsReady = recentlyComplete.filter((p) => !downloadedIds.has(p.id));
+
   const consultantNameMap = new Map<string, string | null>();
-  if (consultantIds.length > 0) {
-    const { data: consultantRows } = await supabase
-      .from("users")
-      .select("id, first_name")
-      .in("id", consultantIds);
-    for (const row of consultantRows ?? []) {
-      consultantNameMap.set(row.id as string, row.first_name as string | null);
-    }
+  for (const row of consultantRowsResult.data ?? []) {
+    consultantNameMap.set(row.id as string, row.first_name as string | null);
   }
 
   // Every surface derives its display status from resolveEffectiveStatus
   // rather than separately recomputing "are all reviews resolved" — that
   // duplication is what let the dashboard, project detail, and stepper
   // disagree about whether a project was still "awaiting approval".
-  const dispatchedIds = activeProjects.filter((p) => p.status === "dispatched").map((p) => p.id);
   const reviewsByProjectId = new Map<string, { status: string; stakeholder_email: string }[]>();
-  if (dispatchedIds.length > 0) {
-    const { data: reviewRows } = await supabase
-      .from("stakeholder_reviews")
-      .select("project_id, review_cycle, status, stakeholder_email")
-      .in("project_id", dispatchedIds);
-    const reviewCycleById = new Map(activeProjects.map((p) => [p.id, p.review_cycle]));
-    for (const pid of dispatchedIds) {
-      const cycle = reviewCycleById.get(pid);
-      reviewsByProjectId.set(
-        pid,
-        (reviewRows ?? []).filter((r) => r.project_id === pid && r.review_cycle === cycle)
-      );
-    }
+  const reviewRows = reviewRowsResult.data ?? [];
+  const reviewCycleById = new Map(activeProjects.map((p) => [p.id, p.review_cycle]));
+  for (const pid of dispatchedIds) {
+    const cycle = reviewCycleById.get(pid);
+    reviewsByProjectId.set(
+      pid,
+      reviewRows.filter((r) => r.project_id === pid && r.review_cycle === cycle)
+    );
   }
   const effectiveStatusMap = new Map<string, ProjectStatus>(
     activeProjects.map((p) => [
@@ -285,20 +300,10 @@ export default async function ClientPortalPage({
     );
   }
 
-  // Latest PBDR original_filename per project — shown under the download button
-  const pbdrRelevantIds = [...new Set([...allDelivered, ...reportsReady].map((p) => p.id))];
   const pbdrFilenameMap = new Map<string, string>();
-  if (pbdrRelevantIds.length > 0) {
-    const { data: pbdrFilesData } = await supabase
-      .from("project_files")
-      .select("project_id, original_filename, version")
-      .in("project_id", pbdrRelevantIds)
-      .eq("file_type", "pbdr")
-      .order("version", { ascending: false });
-    for (const row of pbdrFilesData ?? []) {
-      const pid = row.project_id as string;
-      if (!pbdrFilenameMap.has(pid)) pbdrFilenameMap.set(pid, row.original_filename as string);
-    }
+  for (const row of pbdrFilesResult.data ?? []) {
+    const pid = row.project_id as string;
+    if (!pbdrFilenameMap.has(pid)) pbdrFilenameMap.set(pid, row.original_filename as string);
   }
 
   const dashboardData: DashboardData = {
