@@ -21,6 +21,7 @@ import {
   rejectQueueEntry,
   requestClarification,
   getSuggestedReviewsForSender,
+  getTaggedReviewForEntry,
   searchProjectsForReassign,
   getReviewCyclesForProject,
 } from "./email-queue";
@@ -475,6 +476,68 @@ describe("email-queue actions", () => {
 
       const results = await getSuggestedReviewsForSender("missing");
       expect(results).toEqual([]);
+    });
+  });
+
+  describe("getTaggedReviewForEntry", () => {
+    const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
+    const PAST = new Date(Date.now() - 86_400_000).toISOString();
+    const reviewRow = (over: Record<string, unknown> = {}) => ({
+      id: "review-7",
+      review_cycle: 3,
+      stakeholder_name: "Rattan",
+      project_id: "proj-9",
+      status: "pending",
+      expires_at: FUTURE,
+      projects: { id: "proj-9", project_number: "221083", site_address: "42 Example St" },
+      ...over,
+    });
+
+    function clientFor(entry: unknown, review: unknown) {
+      const from = vi.fn((table: string) =>
+        makeQueryBuilder({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: table === "inbound_email_queue" ? entry : review,
+            error: null,
+          }),
+        })
+      );
+      vi.mocked(createAdminClient).mockReturnValue({ from } as unknown as ReturnType<typeof createAdminClient>);
+      return from;
+    }
+
+    it("returns null, without looking up reviews, when the email has no mailbox hash", async () => {
+      const from = clientFor({ mailbox_hash: null }, reviewRow());
+      expect(await getTaggedReviewForEntry("queue-1")).toBeNull();
+      expect(from).not.toHaveBeenCalledWith("stakeholder_reviews");
+    });
+
+    it("returns null when the entry doesn't exist or the hash matches no review", async () => {
+      clientFor(null, null);
+      expect(await getTaggedReviewForEntry("missing")).toBeNull();
+      clientFor({ mailbox_hash: "unknown-token" }, null);
+      expect(await getTaggedReviewForEntry("queue-1")).toBeNull();
+    });
+
+    it("names the review even when its link has expired", async () => {
+      clientFor({ mailbox_hash: "tok" }, reviewRow({ expires_at: PAST }));
+      expect(await getTaggedReviewForEntry("queue-1")).toEqual({
+        reviewId: "review-7",
+        projectId: "proj-9",
+        projectLabel: "221083",
+        reviewLabel: "Cycle 3 — Rattan",
+        note: "link expired",
+      });
+    });
+
+    it("flags a review that was already responded to, ahead of expiry", async () => {
+      clientFor({ mailbox_hash: "tok" }, reviewRow({ status: "approved_with_comments", expires_at: PAST }));
+      expect((await getTaggedReviewForEntry("queue-1"))?.note).toBe("already responded");
+    });
+
+    it("has no note for a live pending review", async () => {
+      clientFor({ mailbox_hash: "tok" }, reviewRow());
+      expect((await getTaggedReviewForEntry("queue-1"))?.note).toBeNull();
     });
   });
 

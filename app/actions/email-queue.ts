@@ -7,7 +7,12 @@ import { auditLog } from "@/lib/audit/log";
 import { sendEmail } from "@/lib/email/sender";
 import { buildStakeholderReplyTo } from "@/lib/email/parser";
 import { generateTokenString, hashToken } from "@/lib/stakeholders/tokens";
-import { getCandidateReviewsForSender, type CandidateReview } from "@/lib/email-queue/candidate-reviews";
+import {
+  getCandidateReviewsForSender,
+  getReviewForMailboxHash,
+  type CandidateReview,
+  type TaggedReview,
+} from "@/lib/email-queue/candidate-reviews";
 import { buildProjectSearchFilter } from "@/lib/projects/search";
 import { renderClarificationRequestEmail } from "@/lib/email/templates/ClarificationRequestEmail";
 import {
@@ -330,6 +335,25 @@ export async function getSuggestedReviewsForSender(queueId: string): Promise<Can
 
   if (!entry) return [];
   return getCandidateReviewsForSender(supabase, entry.from_email as string);
+}
+
+// The review the email's reply-to tag (MailboxHash) named, if any — shown as
+// the first suggestion in the Reassign panel. Kept apart from
+// getSuggestedReviewsForSender, which also feeds the clarification-email draft
+// and must only list the sender's genuinely open reviews.
+export async function getTaggedReviewForEntry(queueId: string): Promise<TaggedReview | null> {
+  await requireRole("super_admin", "admin", "consultant");
+  const supabase = createAdminClient();
+
+  const { data: entry } = await supabase
+    .from("inbound_email_queue")
+    .select("mailbox_hash")
+    .eq("id", queueId)
+    .maybeSingle();
+
+  const hash = (entry?.mailbox_hash as string | null | undefined)?.trim();
+  if (!hash) return null;
+  return getReviewForMailboxHash(supabase, hash);
 }
 
 export async function requestClarification(queueId: string, message: string): Promise<QueueActionState> {

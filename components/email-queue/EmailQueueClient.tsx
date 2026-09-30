@@ -10,11 +10,12 @@ import {
   searchProjectsForReassign,
   getReviewCyclesForProject,
   getSuggestedReviewsForSender,
+  getTaggedReviewForEntry,
   type ProjectSearchResult,
   type QueueActionState,
   type ReviewCycleOption,
 } from "@/app/actions/email-queue";
-import type { CandidateReview } from "@/lib/email-queue/candidate-reviews";
+import type { CandidateReview, TaggedReview } from "@/lib/email-queue/candidate-reviews";
 import { buildDefaultClarificationDraft } from "@/lib/email-queue/clarification-draft";
 import {
   CATEGORY_LABEL,
@@ -56,6 +57,10 @@ const BTN_SECONDARY = `press rounded-md border border-zinc-300 bg-white px-3 py-
 const BTN_GHOST = `press rounded-md px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors duration-150 hover:bg-zinc-200 ${BTN_FOCUS} disabled:opacity-50 [@media(pointer:coarse)]:min-h-10`;
 const BTN_DANGER = `press rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition-colors duration-150 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-50 [@media(pointer:coarse)]:min-h-10`;
 const BTN_DANGER_SOLID = `press rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-50 [@media(pointer:coarse)]:min-h-10`;
+const suggestionChip = (selected: boolean) =>
+  `press rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-150 ${BTN_FOCUS} [@media(pointer:coarse)]:min-h-10 ${
+    selected ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100"
+  }`;
 const FIELD =
   "rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500";
 
@@ -131,6 +136,7 @@ function ReassignPanel({
   );
   const [reviewId, setReviewId] = useState(row.proposedTarget?.reviewId ?? "");
   const [suggestions, setSuggestions] = useState<CandidateReview[]>([]);
+  const [tagged, setTagged] = useState<TaggedReview | null>(null);
   // Combobox state: focus stays in the input, `activeIndex` is the highlighted
   // option (announced through aria-activedescendant), Esc closes the list.
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -142,8 +148,12 @@ function ReassignPanel({
   useEffect(() => {
     if (row.proposedTarget) return;
     startTransition(async () => {
-      const results = await getSuggestedReviewsForSender(row.id);
+      const [results, fromTag] = await Promise.all([
+        getSuggestedReviewsForSender(row.id),
+        getTaggedReviewForEntry(row.id),
+      ]);
       setSuggestions(results);
+      setTagged(fromTag);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.id]);
@@ -178,6 +188,9 @@ function ReassignPanel({
       setReviewOptions(results);
     });
   }, [projectId, category]);
+
+  // The tagged review is shown on its own; don't list it twice.
+  const otherSuggestions = suggestions.filter((c) => c.reviewId !== tagged?.reviewId);
 
   const listOpen = !!projectQuery && !projectId && !dismissed;
   const listboxId = `reassign-project-list-${row.id}`;
@@ -239,22 +252,34 @@ function ReassignPanel({
 
   return (
     <div className="rise-in flex flex-wrap items-end gap-3 rounded-lg bg-zinc-50 p-4">
-      {suggestions.length > 0 && (
+      {tagged && (
+        <div className="w-full">
+          <p className="text-xs font-medium text-zinc-700">The reply-to tag on this email points at:</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => applySuggestion(tagged)}
+              className={suggestionChip(reviewId === tagged.reviewId)}
+            >
+              {tagged.projectLabel} — {tagged.reviewLabel}
+            </button>
+            {tagged.note && <span className="text-xs text-zinc-500">({tagged.note})</span>}
+          </div>
+        </div>
+      )}
+
+      {otherSuggestions.length > 0 && (
         <div className="w-full">
           <p className="text-xs font-medium text-zinc-700">
-            {row.fromName ?? row.fromEmail} has open review{suggestions.length === 1 ? "" : "s"} on:
+            {row.fromName ?? row.fromEmail} has open review{otherSuggestions.length === 1 ? "" : "s"} on:
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {suggestions.map((c) => (
+            {otherSuggestions.map((c) => (
               <button
                 key={c.reviewId}
                 type="button"
                 onClick={() => applySuggestion(c)}
-                className={`press rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-150 ${BTN_FOCUS} [@media(pointer:coarse)]:min-h-10 ${
-                  reviewId === c.reviewId
-                    ? "border-zinc-900 bg-zinc-900 text-white"
-                    : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100"
-                }`}
+                className={suggestionChip(reviewId === c.reviewId)}
               >
                 {c.projectLabel} — {c.reviewLabel}
               </button>
