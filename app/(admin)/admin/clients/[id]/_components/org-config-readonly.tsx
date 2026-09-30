@@ -44,7 +44,7 @@ export function OrgConfigReadonly({ orgId, tokens, currentConfig, roster, tokenL
   if (tokens.length === 0) {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white p-5">
-        <h2 className="mb-1 text-sm font-semibold text-zinc-900">Org config</h2>
+        <h2 className="mb-1 text-sm font-semibold text-zinc-900">Client config</h2>
         <p className="text-sm text-zinc-500">
           No <code className="rounded-sm bg-zinc-100 px-1 text-xs">ORG_</code> tokens found in this
           org&apos;s templates yet. Upload a template first.
@@ -56,7 +56,7 @@ export function OrgConfigReadonly({ orgId, tokens, currentConfig, roster, tokenL
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
       <div className="mb-4">
-        <h2 className="text-sm font-semibold text-zinc-900">Org config</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">Client config</h2>
         <p className="mt-0.5 text-xs text-zinc-500">
           Values for <code className="rounded-sm bg-zinc-100 px-1">ORG_</code> tokens used in this org&apos;s templates.
         </p>

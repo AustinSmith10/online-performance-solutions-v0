@@ -10,7 +10,7 @@ export interface TokenPrefix {
 export const TOKEN_PREFIXES: TokenPrefix[] = [
   { prefix: "CLIENT_",  source: "client",  label: "Client input", description: "Client enters directly on the submission form" },
   { prefix: "EXTRACT_", source: "extract", label: "Extracted",    description: "Claude extracts from uploaded docs; client inputs if extraction fails" },
-  { prefix: "ORG_",     source: "org",     label: "Org config",   description: "Configured at org or stakeholder level" },
+  { prefix: "ORG_",     source: "org",     label: "Client config", description: "Configured at client or stakeholder level" },
   { prefix: "SYS_",     source: "sys",     label: "System",       description: "Auto-populated by OPS (dates, revision numbers)" },
   { prefix: "PROJECT_", source: "project", label: "Project",      description: "Entered by consultant (project number etc.)" },
 ];
