@@ -26,19 +26,31 @@ export default async function AdminSettingsPage() {
   const user = await requireRole("super_admin", "admin");
 
   const supabase = createAdminClient();
-  const schedule = await getDigestSchedule(supabase);
-  const businessHours = await getBusinessHours(supabase);
-  const deliveryDelayDurations = await getDeliveryDelayDurations(supabase);
-  const judgeDocumentTextCap = await getJudgeDocumentTextCharCap(supabase);
-  const extractionDocumentTextCap = await getExtractionDocumentTextCharCap(supabase);
-  const extractionDailyLimit = await getExtractionDailyLimit(supabase);
-  const navRestrictions =
-    user.role === "super_admin" ? await getAdminNavRestrictions(supabase) : [];
-  const emailsEnabled =
-    user.role === "super_admin" ? await getEmailsEnabled(supabase) : true;
-  const businessTimezone = await getBusinessTimezone(supabase);
-  const aiExtractionEnabled =
-    user.role === "super_admin" ? await getAiExtractionEnabled(supabase) : true;
+  const isSuperAdmin = user.role === "super_admin";
+  // Ten independent settings reads: run together instead of one round trip each.
+  const [
+    schedule,
+    businessHours,
+    deliveryDelayDurations,
+    judgeDocumentTextCap,
+    extractionDocumentTextCap,
+    extractionDailyLimit,
+    navRestrictions,
+    emailsEnabled,
+    businessTimezone,
+    aiExtractionEnabled,
+  ] = await Promise.all([
+    getDigestSchedule(supabase),
+    getBusinessHours(supabase),
+    getDeliveryDelayDurations(supabase),
+    getJudgeDocumentTextCharCap(supabase),
+    getExtractionDocumentTextCharCap(supabase),
+    getExtractionDailyLimit(supabase),
+    isSuperAdmin ? getAdminNavRestrictions(supabase) : Promise.resolve([]),
+    isSuperAdmin ? getEmailsEnabled(supabase) : Promise.resolve(true),
+    getBusinessTimezone(supabase),
+    isSuperAdmin ? getAiExtractionEnabled(supabase) : Promise.resolve(true),
+  ]);
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">

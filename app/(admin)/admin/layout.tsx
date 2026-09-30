@@ -44,18 +44,17 @@ export default async function AdminShellLayout({
   const user = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
-  let NAV_ITEMS = ALL_NAV_ITEMS;
-  if (user.role !== "super_admin") {
-    const restricted = await getAdminNavRestrictions(supabase);
-    NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => !item.key || !restricted.includes(item.key));
-  }
+  // Independent lookups: awaiting them one after another put three database
+  // round trips in a row on the critical path of every admin page.
+  const [restricted, pendingQueueCount, emailsEnabled] = await Promise.all([
+    user.role !== "super_admin" ? getAdminNavRestrictions(supabase) : Promise.resolve<AdminNavKey[]>([]),
+    getPendingEmailQueueCount(supabase),
+    getEmailsEnabled(supabase),
+  ]);
 
-  const pendingQueueCount = await getPendingEmailQueueCount(supabase);
-  NAV_ITEMS = NAV_ITEMS.map((item) =>
+  const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => !item.key || !restricted.includes(item.key)).map((item) =>
     item.href === "/admin/email-queue" ? { ...item, count: pendingQueueCount } : item
   );
-
-  const emailsEnabled = await getEmailsEnabled(supabase);
 
   return (
     <div className={`flex min-h-dvh flex-col bg-zinc-50 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] lg:h-dvh lg:flex-row lg:overflow-hidden ${PLATFORM}`}>
