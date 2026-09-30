@@ -1,4 +1,5 @@
-import type { createAdminClient } from "@/lib/supabase/admin";
+import { cache } from "react";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { FailedJob, BounceEvent, CreditRaceEvent, EmailSendFailure, AiProviderFailure } from "@/types";
 import { trayId } from "@/lib/notifications/tray-id";
 
@@ -195,3 +196,10 @@ export async function getNeedsAttentionSignals(
     error,
   };
 }
+
+// Per-request memo for server-rendered pages: the admin layout's notification
+// tray and the System Health page both need the same signals, and without
+// this a System Health load ran the whole ten-query batch twice.
+export const getNeedsAttentionSignalsForRequest = cache(() =>
+  getNeedsAttentionSignals(createAdminClient())
+);

@@ -66,25 +66,21 @@ export default async function ClientsPage({
   const sortOrder: "asc" | "desc" = order === "asc" ? "asc" : "desc";
   const params = { q, org, status, sort, order };
 
-  const [caller, supabase] = await Promise.all([
+  const supabase = createAdminClient();
+
+  // The caller check, the client list and the org-name filter don't depend on
+  // each other: run them together instead of as three round trips in a row.
+  const [caller, { data: orgsData }, matchedResult] = await Promise.all([
     requireRole("super_admin", "admin"),
-    Promise.resolve(createAdminClient()),
+    supabase.from("clients").select("id, name").order("name", { ascending: true }),
+    org?.trim()
+      ? supabase.from("clients").select("id").ilike("name", `%${org.trim()}%`)
+      : Promise.resolve(null),
   ]);
-
-  const { data: orgsData } = await supabase
-    .from("clients")
-    .select("id, name")
-    .order("name", { ascending: true });
   const orgs = (orgsData ?? []) as Pick<Client, "id" | "name">[];
-
-  let orgIds: string[] | null = null;
-  if (org?.trim()) {
-    const { data: matched } = await supabase
-      .from("clients")
-      .select("id")
-      .ilike("name", `%${org.trim()}%`);
-    orgIds = matched?.map((o) => o.id as string) ?? [];
-  }
+  const orgIds: string[] | null = matchedResult
+    ? (matchedResult.data?.map((o) => o.id as string) ?? [])
+    : null;
 
   let query = supabase
     .from("users")
@@ -120,11 +116,13 @@ export default async function ClientsPage({
   const clients = (data ?? []) as unknown as ClientRow[];
   const hasFilter = !!(q || org || status || sort || order);
 
-  const failedInviteEmails = await getFailedInviteEmails(
-    supabase,
-    clients.map((c) => c.email).filter((e): e is string => !!e)
-  );
-  const tagsByUser = await getTagsByUserId(supabase, clients.map((c) => c.id));
+  const [failedInviteEmails, tagsByUser] = await Promise.all([
+    getFailedInviteEmails(
+      supabase,
+      clients.map((c) => c.email).filter((e): e is string => !!e)
+    ),
+    getTagsByUserId(supabase, clients.map((c) => c.id)),
+  ]);
 
   return (
     <ClientsLayout

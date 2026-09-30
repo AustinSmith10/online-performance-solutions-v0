@@ -19,17 +19,18 @@ export const SESSION_EXPIRY_COOKIE = "ops-session-expires";
 // request they share this lookup instead of repeating the auth + profile round trips.
 export const getSessionUser = cache(async () => {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-  if (error || !user) return null;
+  // Local JWT verification (proxy.ts has already refreshed the token if it was
+  // expired); avoids an Auth-server round trip. The users-table lookup below
+  // still enforces deleted/inactive/locked accounts on every request.
+  const { data, error } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
+  if (error || !userId) return null;
 
   const adminClient = createAdminClient();
   const { data: profile } = await adminClient
     .from("users")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", userId)
     .is("deleted_at", null)
     .eq("is_active", true)
     .eq("is_locked", false)

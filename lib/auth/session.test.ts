@@ -21,8 +21,8 @@ const AUTH_USER = { id: "user-1" };
 function mockAuthUser(user: { id: string } | null = AUTH_USER) {
   vi.mocked(createServerClient).mockResolvedValue({
     auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user },
+      getClaims: vi.fn().mockResolvedValue({
+        data: user ? { claims: { sub: user.id } } : null,
         error: user ? null : new Error("no session"),
       }),
     },

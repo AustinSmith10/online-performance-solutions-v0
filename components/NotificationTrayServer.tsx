@@ -1,8 +1,7 @@
 import { cache } from "react";
 import { getSessionUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getNeedsAttentionSignals } from "@/lib/admin/needs-attention";
+import { getNeedsAttentionSignalsForRequest } from "@/lib/admin/needs-attention";
 import {
   sortEntries,
   notificationToEntry,
@@ -36,7 +35,7 @@ const loadTrayData = cache(async (projectBasePath: string, includeNeedsAttention
       .eq("recipient_id", userId)
       .order("created_at", { ascending: false })
       .limit(30),
-    includeNeedsAttention ? getNeedsAttentionSignals(createAdminClient()) : Promise.resolve(null),
+    includeNeedsAttention ? getNeedsAttentionSignalsForRequest() : Promise.resolve(null),
   ]);
 
   const entries: TrayEntry[] = ((data ?? []) as Notification[]).map((n) =>

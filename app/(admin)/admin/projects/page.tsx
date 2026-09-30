@@ -6,7 +6,7 @@ import { OverduePill } from "@/components/OverduePill";
 import { ReviewTallyChip } from "@/components/ReviewTallyChip";
 import { resolveStaffStatus } from "@/lib/delivery/effective-status";
 import { summarizeRound, type RoundSummary } from "@/lib/stakeholders/round-summary";
-import { getTagsByUserId, type Tag } from "@/lib/tags/queries";
+import { tagsByUserIdFromEmbedded, type Tag } from "@/lib/tags/queries";
 import { TagChips } from "@/components/TagChip";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -37,6 +37,8 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
 
 const TERMINAL_STATUSES = new Set<ProjectStatus>(["delivered", "complete"]);
 
+const PAGE_SIZE = 50;
+
 const SORT_COLS = ["created_at", "expected_delivery_date", "status", "org"] as const;
 type SortCol = (typeof SORT_COLS)[number];
 
@@ -46,6 +48,13 @@ function sortHref(params: Record<string, string | undefined>, col: SortCol): str
   const isActive = (params.sort ?? "created_at") === col;
   p.set("sort", col);
   p.set("order", isActive && params.order !== "asc" ? "asc" : "desc");
+  return `/admin/projects?${p.toString()}`;
+}
+
+function pageHref(params: Record<string, string | undefined>, page: number): string {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v) p.set(k, v);
+  p.set("page", String(page));
   return `/admin/projects?${p.toString()}`;
 }
 
@@ -81,9 +90,10 @@ type ProjectRow = {
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; org?: string; sort?: string; order?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; org?: string; sort?: string; order?: string; page?: string }>;
 }) {
-  const { q, status, org, sort, order } = await searchParams;
+  const { q, status, org, sort, order, page: pageParam } = await searchParams;
+  const page = Math.max(1, Number.parseInt(pageParam ?? "1", 10) || 1);
 
   const sortCol: SortCol = SORT_COLS.includes(sort as SortCol) ? (sort as SortCol) : "created_at";
   const sortOrder: "asc" | "desc" = order === "asc" ? "asc" : "desc";
@@ -91,15 +101,9 @@ export default async function ProjectsPage({
 
   const supabase = createAdminClient();
 
-  // Resolve org name filter to IDs
-  let orgIds: string[] | null = null;
-  if (org?.trim()) {
-    const { data: matched } = await supabase
-      .from("clients")
-      .select("id")
-      .ilike("name", `%${org.trim()}%`);
-    orgIds = matched?.map((o) => o.id as string) ?? [];
-  }
+  // The client-name filter is applied in the same query via an inner join on
+  // clients (no separate lookup for matching ids first).
+  const orgFilter = org?.trim() ?? "";
 
   let query = supabase
     .from("projects")
@@ -114,14 +118,19 @@ export default async function ProjectsPage({
       payment_override,
       expected_delivery_date,
       created_at,
-      clients(name),
-      consultant:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email)
-    `)
+      clients${orgFilter ? "!inner" : ""}(name),
+      consultant:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email, account_tags!account_tags_user_id_fkey(tags(id, name, color))),
+      stakeholder_reviews(review_cycle, status)
+    `, { count: "exact" })
     .is("deleted_at", null);
+  if (orgFilter) query = query.ilike("clients.name", `%${orgFilter}%`);
 
   query = sortCol === "org"
     ? query.order("name", { referencedTable: "clients", ascending: sortOrder === "asc" })
     : query.order(sortCol, { ascending: sortOrder === "asc" });
+  // Tiebreaker so rows with equal sort values (e.g. the same status) don't
+  // shuffle between pages.
+  query = query.order("id", { ascending: true });
 
   const searchFilter = buildProjectSearchFilter(q);
   if (searchFilter) {
@@ -133,44 +142,46 @@ export default async function ProjectsPage({
   const roundAwareFilter = statusFilter === "dispatched" || statusFilter === "revision_required";
   if (roundAwareFilter) query = query.in("status", ["dispatched", "revision_required"]);
   else if (statusFilter) query = query.eq("status", statusFilter);
-  if (orgIds !== null) {
-    if (orgIds.length === 0) {
-      const projects: ProjectRow[] = [];
-      const todayIso = new Date().toISOString().slice(0, 10);
-      return <ProjectsLayout projects={projects} todayIso={todayIso} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={!!(q || status || org || sort || order)} />;
-    }
-    query = query.in("client_id", orgIds);
-  }
+  // Paginate in the database, except for the round-aware filters: those match
+  // on the resolved status, which is only known after the rounds are read, so
+  // that (small) set is fetched whole, filtered, then sliced below.
+  if (!roundAwareFilter) query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+  const { data, count } = await query;
+  type RawProject = Omit<ProjectRow, "displayStatus" | "tally" | "consultant"> & {
+    consultant: (NonNullable<ProjectRow["consultant"]> & { account_tags?: { tags: Tag | null }[] | null }) | null;
+    stakeholder_reviews: { review_cycle: number; status: string }[] | null;
+  };
+  const rawProjects = (data ?? []) as unknown as RawProject[];
 
-  const { data } = await query;
-  const rawProjects = (data ?? []) as unknown as Omit<ProjectRow, "displayStatus" | "tally">[];
-
-  const roundIds = rawProjects
-    .filter((p) => p.status === "dispatched" || p.status === "revision_required")
-    .map((p) => p.id);
-  const { data: reviewRows } = roundIds.length
-    ? await supabase.from("stakeholder_reviews").select("project_id, review_cycle, status").in("project_id", roundIds)
-    : { data: [] };
-  const cycleById = new Map(rawProjects.map((p) => [p.id, p.review_cycle]));
-  const currentRoundOf = (id: string) =>
-    (reviewRows ?? []).filter((r) => r.project_id === id && r.review_cycle === cycleById.get(id)) as { status: string }[];
+  const currentRoundOf = (p: RawProject) =>
+    (p.stakeholder_reviews ?? []).filter((r) => r.review_cycle === p.review_cycle);
 
   const projects: ProjectRow[] = rawProjects
-    .map((p) => {
-      const round = currentRoundOf(p.id);
+    .map(({ stakeholder_reviews: _reviews, consultant, ...p }) => {
+      const inFlightRound = p.status === "dispatched" || p.status === "revision_required";
+      const round = inFlightRound ? currentRoundOf({ ...p, consultant, stakeholder_reviews: _reviews }) : [];
       const displayStatus = p.status === "revision_required" ? resolveStaffStatus(p.status, round) : p.status;
       const inRound = displayStatus === "dispatched" || displayStatus === "revision_required";
-      return { ...p, displayStatus, tally: inRound && round.length > 0 ? summarizeRound(round) : undefined };
+      return {
+        ...p,
+        consultant: consultant ? { id: consultant.id, first_name: consultant.first_name, last_name: consultant.last_name, email: consultant.email } : null,
+        displayStatus,
+        tally: inRound && round.length > 0 ? summarizeRound(round) : undefined,
+      };
     })
     .filter((p) => !roundAwareFilter || p.displayStatus === statusFilter);
-  const tagsByUser = await getTagsByUserId(
-    supabase,
-    projects.map((p) => p.consultant?.id).filter((x): x is string => !!x)
+  const total = roundAwareFilter ? projects.length : count ?? projects.length;
+  const pageProjects = roundAwareFilter
+    ? projects.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : projects;
+  // Tags come back embedded on the consultant (one query, no follow-up lookup).
+  const tagsByUser = tagsByUserIdFromEmbedded(
+    rawProjects.flatMap((p) => (p.consultant ? [p.consultant] : []))
   );
   const todayIso = new Date().toISOString().slice(0, 10);
   const hasFilter = !!(q || status || org || sort || order);
 
-  return <ProjectsLayout projects={projects} todayIso={todayIso} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} tagsByUser={tagsByUser} />;
+  return <ProjectsLayout projects={pageProjects} todayIso={todayIso} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} tagsByUser={tagsByUser} page={page} total={total} />;
 }
 
 function ProjectsLayout({
@@ -181,6 +192,8 @@ function ProjectsLayout({
   sortOrder,
   hasFilter,
   tagsByUser,
+  page,
+  total,
 }: {
   projects: ProjectRow[];
   todayIso: string;
@@ -189,13 +202,16 @@ function ProjectsLayout({
   sortOrder: "asc" | "desc";
   hasFilter: boolean;
   tagsByUser?: Map<string, Tag[]>;
+  page: number;
+  total: number;
 }) {
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold text-zinc-900">Projects</h1>
-          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{projects.length}</span>
+          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-blue-700">{total}</span>
         </div>
         <Link
           href="/admin/projects/submit"
@@ -323,6 +339,26 @@ function ProjectsLayout({
             );
           })}
         </div>
+      )}
+
+      {pageCount > 1 && (
+        <nav aria-label="Pagination" className="flex items-center justify-between text-sm text-zinc-600">
+          <span className="tabular-nums">
+            Page {page} of {pageCount}
+          </span>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Link href={pageHref(params, page - 1)} className="press-subtle rounded-md border border-zinc-300 px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100">
+                Previous
+              </Link>
+            )}
+            {page < pageCount && (
+              <Link href={pageHref(params, page + 1)} className="press-subtle rounded-md border border-zinc-300 px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100">
+                Next
+              </Link>
+            )}
+          </div>
+        </nav>
       )}
     </div>
   );

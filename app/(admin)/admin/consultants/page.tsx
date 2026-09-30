@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DisciplineChips } from "../users/_components/DisciplineChips";
 import type { User, ConsultantAvailability } from "@/types";
-import { getTagsByUserId } from "@/lib/tags/queries";
+import { tagsByUserIdFromEmbedded } from "@/lib/tags/queries";
 import { TagChips } from "@/components/TagChip";
 
 const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
@@ -83,7 +83,7 @@ export default async function ConsultantsPage({
   const supabase = createAdminClient();
   let query = supabase
     .from("users")
-    .select("id, email, first_name, last_name, availability, is_locked, disciplines")
+    .select("id, email, first_name, last_name, availability, is_locked, disciplines, account_tags!account_tags_user_id_fkey(tags(id, name, color))")
     .eq("role", "consultant")
     .is("deleted_at", null)
     .order(sortCol, { ascending: sortOrder === "asc" });
@@ -97,7 +97,9 @@ export default async function ConsultantsPage({
 
   const { data } = await query;
   const consultants = (data ?? []) as unknown as ConsultantRow[];
-  const tagsByUser = await getTagsByUserId(supabase, consultants.map((c) => c.id));
+  const tagsByUser = tagsByUserIdFromEmbedded(
+    (data ?? []) as unknown as Parameters<typeof tagsByUserIdFromEmbedded>[0]
+  );
   const hasFilter = !!(q || availability || status || sort || order);
 
   return (

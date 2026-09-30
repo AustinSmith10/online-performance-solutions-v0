@@ -139,17 +139,13 @@ export default async function UsersPage({
 
   const orderParam: "asc" | "desc" | undefined = order === "asc" || order === "desc" ? order : undefined;
 
-  const [caller, supabaseClient] = await Promise.all([
-    requireRole("super_admin", "admin"),
-    Promise.resolve(createAdminClient()),
-  ]);
-  const supabase = supabaseClient;
+  const supabase = createAdminClient();
 
-  const { data: orgsData } = await supabase
-    .from("clients")
-    .select("id, name")
-    .order("name", { ascending: true });
-  const orgs = (orgsData ?? []) as Pick<Client, "id" | "name">[];
+  // Started here, awaited together with the user list in each branch below:
+  // the caller check, the client list and the user list are independent, so
+  // they run as one round trip instead of three in a row.
+  const callerPromise = requireRole("super_admin", "admin");
+  const orgsQuery = supabase.from("clients").select("id, name").order("name", { ascending: true });
 
   let query = supabase
     .from("users")
@@ -170,15 +166,18 @@ export default async function UsersPage({
     if (status === "locked") query = query.eq("is_locked", true);
     if (status === "active") query = query.eq("is_locked", false);
 
-    const { data } = await query;
+    const [caller, { data: orgsData }, { data }] = await Promise.all([callerPromise, orgsQuery, query]);
+    const orgs = (orgsData ?? []) as Pick<Client, "id" | "name">[];
     const users = (data ?? []) as unknown as UserRow[];
     const hasFilter = !!(q || availability || status || sort || order);
     const params = { q, availability, status, sort, order, tab };
-    const failedInviteEmails = await getFailedInviteEmails(
-      supabase,
-      users.map((u) => u.email).filter((e): e is string => !!e)
-    );
-    const tagsByUser = await getTagsByUserId(supabase, users.map((u) => u.id));
+    const [failedInviteEmails, tagsByUser] = await Promise.all([
+      getFailedInviteEmails(
+        supabase,
+        users.map((u) => u.email).filter((e): e is string => !!e)
+      ),
+      getTagsByUserId(supabase, users.map((u) => u.id)),
+    ]);
 
     return (
       <div className="mx-auto max-w-4xl space-y-6">
@@ -319,14 +318,17 @@ export default async function UsersPage({
   if (status === "locked") query = query.eq("is_locked", true);
   if (status === "active") query = query.eq("is_locked", false);
 
-  const { data } = await query;
+  const [caller, { data: orgsData }, { data }] = await Promise.all([callerPromise, orgsQuery, query]);
+  const orgs = (orgsData ?? []) as Pick<Client, "id" | "name">[];
   const users = (data ?? []) as unknown as UserRow[];
   const hasFilter = !!(q || role || status || sort || order);
-  const failedInviteEmails = await getFailedInviteEmails(
-    supabase,
-    users.map((u) => u.email).filter((e): e is string => !!e)
-  );
-  const tagsByUser = await getTagsByUserId(supabase, users.map((u) => u.id));
+  const [failedInviteEmails, tagsByUser] = await Promise.all([
+    getFailedInviteEmails(
+      supabase,
+      users.map((u) => u.email).filter((e): e is string => !!e)
+    ),
+    getTagsByUserId(supabase, users.map((u) => u.id)),
+  ]);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

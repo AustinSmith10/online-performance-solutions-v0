@@ -5,6 +5,13 @@ import { AdminSuccessBanner } from "@/components/AdminSuccessBanner";
 import { CreateOrgModal } from "./_components/CreateOrgModal";
 import type { Client } from "@/types";
 
+// Only the columns the list renders; `select *` also dragged client_config and
+// the email whitelist over the wire for every row.
+type ClientListRow = Pick<
+  Client,
+  "id" | "name" | "slug" | "payment_method" | "state_territory" | "credit_balance" | "is_frozen"
+>;
+
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   upfront: "Upfront",
   credit_deduction: "Credit Deduction",
@@ -62,11 +69,10 @@ export default async function OrganisationsPage({
   const sortOrder: "asc" | "desc" = order === "desc" ? "desc" : "asc";
   const params = { name, payment, status, sort, order };
 
-  const actor = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
   let query = supabase
     .from("clients")
-    .select("*")
+    .select("id, name, slug, payment_method, state_territory, credit_balance, is_frozen")
     .is("deleted_at", null)
     .order(sortCol, { ascending: sortOrder === "asc" });
 
@@ -75,8 +81,9 @@ export default async function OrganisationsPage({
   if (status === "frozen") query = query.eq("is_frozen", true);
   if (status === "active") query = query.eq("is_frozen", false);
 
-  const { data: orgs } = await query;
-  const rows = (orgs ?? []) as Client[];
+  // The caller check and the list don't depend on each other: one round trip.
+  const [actor, { data: orgs }] = await Promise.all([requireRole("super_admin", "admin"), query]);
+  const rows = (orgs ?? []) as unknown as ClientListRow[];
   const hasFilter = name || payment || status || sort || order;
 
   return (

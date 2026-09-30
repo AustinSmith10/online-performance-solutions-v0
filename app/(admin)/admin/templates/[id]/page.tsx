@@ -60,12 +60,13 @@ export default async function TemplatePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string>>;
 }) {
-  await requireRole("super_admin", "admin");
   const { id } = await params;
   const sp = await searchParams;
   const supabase = createAdminClient();
 
-  const [{ data: tmpl }, { data: mappings, error: mappingsError }, { data: fileReqs }] = await Promise.all([
+  // Round trip 1: the caller check and everything keyed on the template id.
+  const [, { data: tmpl }, { data: mappings, error: mappingsError }, { data: fileReqs }, { data: requiredRows }] = await Promise.all([
+    requireRole("super_admin", "admin"),
     supabase
       .from("templates")
       .select("id, name, status, storage_path, created_at, deleted_at, section_labels, number_suffix, org:client_id(id, name, client_config)")
@@ -84,24 +85,12 @@ export default async function TemplatePage({
       )
       .eq("template_id", id)
       .order("sort_order", { ascending: true }),
+    supabase.from("template_stakeholders").select("stakeholder_id").eq("template_id", id),
   ]);
-
   const orgId = (tmpl?.org as unknown as { id: string } | null)?.id ?? null;
-  const [{ data: roster }, { data: requiredRows }] = orgId
-    ? await Promise.all([
-        supabase
-          .from("stakeholders")
-          .select("id, name, email, company")
-          .eq("scope", "org")
-          .eq("scope_id", orgId)
-          .is("deleted_at", null)
-          .order("sort_order", { ascending: true }),
-        supabase.from("template_stakeholders").select("stakeholder_id").eq("template_id", id),
-      ])
-    : [{ data: [] }, { data: [] }];
-
-  const reviewerRoster = (roster ?? []) as { id: string; name: string; email: string; company: string | null }[];
-  const requiredReviewerIds = new Set((requiredRows ?? []).map((r) => r.stakeholder_id as string));
+  const requiredReviewerIds = new Set(
+    orgId ? (requiredRows ?? []).map((r) => r.stakeholder_id as string) : []
+  );
 
   // A query error here (e.g. a schema column the DB hasn't migrated yet)
   // otherwise renders as an empty, silently misleading "no tokens" state —
@@ -125,19 +114,33 @@ export default async function TemplatePage({
     reference_sample_storage_path: string | null;
   }[];
 
+  // Round trip 2: the org roster (needs the template's client) and the signed
+  // reference-sample URLs (need the file requirements) don't depend on each other.
   // Reference sample previews (#115) need a fresh signed URL per render —
   // the storage path alone isn't fetchable from the browser (private bucket).
-  const requirements = await Promise.all(
-    rawRequirements.map(async (r) => {
-      if (!r.reference_sample_storage_path) {
-        return { ...r, reference_sample_signed_url: null as string | null };
-      }
-      const { data } = await supabase.storage
-        .from("templates")
-        .createSignedUrl(r.reference_sample_storage_path, 3600);
-      return { ...r, reference_sample_signed_url: data?.signedUrl ?? null };
-    })
-  );
+  const [{ data: roster }, requirements] = await Promise.all([
+    orgId
+      ? supabase
+          .from("stakeholders")
+          .select("id, name, email, company")
+          .eq("scope", "org")
+          .eq("scope_id", orgId)
+          .is("deleted_at", null)
+          .order("sort_order", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    Promise.all(
+      rawRequirements.map(async (r) => {
+        if (!r.reference_sample_storage_path) {
+          return { ...r, reference_sample_signed_url: null as string | null };
+        }
+        const { data } = await supabase.storage
+          .from("templates")
+          .createSignedUrl(r.reference_sample_storage_path, 3600);
+        return { ...r, reference_sample_signed_url: data?.signedUrl ?? null };
+      })
+    ),
+  ]);
+  const reviewerRoster = (roster ?? []) as { id: string; name: string; email: string; company: string | null }[];
   const templateRows = rows.filter((r) => r.in_template);
   const extractionOnlyRows = rows.filter((r) => !r.in_template);
 

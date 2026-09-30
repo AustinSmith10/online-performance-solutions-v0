@@ -37,9 +37,15 @@ export default async function UserDetailPage({
   const sp = await searchParams;
   const supabase = createAdminClient();
 
-  const [userResult, orgsResult] = await Promise.all([
+  // Round trip 1: everything keyed on the id in the URL (the caller check and
+  // tags don't need the user row first). Round trip 2 is the invite lookup,
+  // which needs the user's email.
+  const [userResult, orgsResult, caller, tagsMap, allTags] = await Promise.all([
     supabase.from("users").select("*, clients(id, name)").eq("id", id).maybeSingle(),
     supabase.from("clients").select("id, name").order("name"),
+    requireRole("super_admin", "admin"),
+    getTagsByUserId(supabase, [id]),
+    listTags(supabase),
   ]);
 
   if (!userResult.data) notFound();
@@ -96,8 +102,6 @@ export default async function UserDetailPage({
       ? `${u.first_name[0]}${u.last_name[0]}`.toUpperCase()
       : (u.email ?? "?").slice(0, 2).toUpperCase();
 
-  const caller = await requireRole("super_admin", "admin");
-  const [tagsMap, allTags] = await Promise.all([getTagsByUserId(supabase, [u.id]), listTags(supabase)]);
   const userTags = tagsMap.get(u.id) ?? [];
   const mayTag = canAssignTag({ id: caller.id as string, role: caller.role as string }, { id: u.id, role: u.role });
   const displayName =

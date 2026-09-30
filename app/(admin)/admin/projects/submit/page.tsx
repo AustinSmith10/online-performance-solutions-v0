@@ -20,45 +20,58 @@ function stakeholderName(row: { first_name: string | null; last_name: string | n
 }
 
 export default async function AdminSubmitPage() {
-  await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
-  const { data: orgs } = await supabase
-    .from("clients")
-    .select("id, name")
-    .is("deleted_at", null)
-    .order("name");
+  // The caller check, the client list, and the stakeholder/template lists are
+  // independent: one round trip. The stakeholder/template queries are not
+  // filtered by client id up front (that filter is only "clients that aren't
+  // deleted"), so rows belonging to deleted clients are dropped below instead.
+  const [, { data: orgs }, { data: allStakeholderRows }, { data: allTemplateRows }] = await Promise.all([
+    requireRole("super_admin", "admin"),
+    supabase.from("clients").select("id, name").is("deleted_at", null).order("name"),
+    supabase
+      .from("users")
+      .select("id, first_name, last_name, email, client_id")
+      .not("client_id", "is", null)
+      .eq("role", "stakeholder")
+      .order("first_name")
+      .order("last_name"),
+    supabase
+      .from("templates")
+      .select("id, name, client_id")
+      .eq("status", "active")
+      .is("deleted_at", null)
+      .order("name"),
+  ]);
 
   const clients = (orgs ?? []) as { id: string; name: string }[];
-  const clientIds = clients.map((c) => c.id);
-
-  const [{ data: stakeholderRows }, { data: templateRows }] = clientIds.length
-    ? await Promise.all([
-        supabase
-          .from("users")
-          .select("id, first_name, last_name, email, client_id")
-          .in("client_id", clientIds)
-          .eq("role", "stakeholder")
-          .order("first_name")
-          .order("last_name"),
-        supabase
-          .from("templates")
-          .select("id, name, client_id")
-          .in("client_id", clientIds)
-          .eq("status", "active")
-          .is("deleted_at", null)
-          .order("name"),
-      ])
-    : [{ data: [] }, { data: [] }];
+  const liveClientIds = new Set(clients.map((c) => c.id));
+  const stakeholderRows = ((allStakeholderRows ?? []) as { id: string; first_name: string | null; last_name: string | null; email: string; client_id: string }[]).filter(
+    (r) => liveClientIds.has(r.client_id)
+  );
+  const templateRows = ((allTemplateRows ?? []) as { id: string; name: string; client_id: string }[]).filter(
+    (r) => liveClientIds.has(r.client_id)
+  );
+  const allTemplateIds = templateRows.map((r) => r.id);
 
   // Internal roles only (this page is staff-gated): tags render as chips
-  // beside the name in the stakeholder dropdown (#213).
-  const tagsByUser = await getTagsByUserId(
-    supabase,
-    ((stakeholderRows ?? []) as { id: string }[]).map((r) => r.id)
-  );
+  // beside the name in the stakeholder dropdown (#213). Independent of the
+  // requirements lookup, so both run together.
+  const [tagsByUser, { data: reqRows }] = await Promise.all([
+    getTagsByUserId(
+      supabase,
+      stakeholderRows.map((r) => r.id)
+    ),
+    allTemplateIds.length
+      ? supabase
+          .from("file_requirements")
+          .select("id, name, slug, max_count, required, no_duplicates, extraction, template_id")
+          .in("template_id", allTemplateIds)
+          .order("sort_order", { ascending: true })
+      : Promise.resolve({ data: [] }),
+  ]);
   const stakeholdersByClient: Record<string, { id: string; name: string; email: string; tags: TagChipData[] }[]> = {};
-  for (const row of (stakeholderRows ?? []) as { id: string; first_name: string | null; last_name: string | null; email: string; client_id: string }[]) {
+  for (const row of stakeholderRows) {
     (stakeholdersByClient[row.client_id] ??= []).push({
       id: row.id,
       name: stakeholderName(row),
@@ -68,19 +81,9 @@ export default async function AdminSubmitPage() {
   }
 
   const templatesByClient: Record<string, { id: string; name: string }[]> = {};
-  const allTemplateIds: string[] = [];
-  for (const row of (templateRows ?? []) as { id: string; name: string; client_id: string }[]) {
+  for (const row of templateRows) {
     (templatesByClient[row.client_id] ??= []).push({ id: row.id, name: row.name });
-    allTemplateIds.push(row.id);
   }
-
-  const { data: reqRows } = allTemplateIds.length
-    ? await supabase
-        .from("file_requirements")
-        .select("id, name, slug, max_count, required, no_duplicates, extraction, template_id")
-        .in("template_id", allTemplateIds)
-        .order("sort_order", { ascending: true })
-    : { data: [] };
 
   const requirementsByTemplate: Record<string, FileRequirement[]> = {};
   for (const req of (reqRows ?? []) as FileRequirement[]) {

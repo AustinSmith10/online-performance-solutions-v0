@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getNeedsAttentionSignals } from "@/lib/admin/needs-attention";
+import { getNeedsAttentionSignalsForRequest } from "@/lib/admin/needs-attention";
 import { trayId } from "@/lib/notifications/tray-id";
 import type { TrayEntryKind } from "@/lib/notifications/tray";
 import {
@@ -120,7 +119,7 @@ function Row({
 }
 
 export default async function SystemHealthPage() {
-  const { data, error } = await getNeedsAttentionSignals(createAdminClient());
+  const { data, error } = await getNeedsAttentionSignalsForRequest();
 
   const sections = [
     { key: "failedJobs", count: data.failedJobs.length, hard: true, node: (

@@ -346,6 +346,9 @@ export async function completeProfile(
     data: { profile_complete: true },
   });
   if (metaError) return { errors: { form: [metaError.message] } };
+  // proxy.ts reads profile_complete from the JWT; updateUser() leaves the old
+  // token in place, so re-issue it or the next request loops back here.
+  await supabase.auth.refreshSession();
 
   // Update users table
   const adminClient = createAdminClient();
@@ -402,6 +405,9 @@ export async function completeOnboarding(
     data: { profile_complete: true },
   });
   if (metaError) return { errors: { form: [metaError.message] } };
+  // proxy.ts reads profile_complete from the JWT; updateUser() leaves the old
+  // token in place, so re-issue it or the next request loops back here.
+  await supabase.auth.refreshSession();
 
   const adminClient = createAdminClient();
   const { error: dbError } = await adminClient

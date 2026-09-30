@@ -139,10 +139,18 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // Validate and refresh the session on every request
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Validate and refresh the session on every request. getClaims() verifies
+  // the JWT signature locally against the project's cached signing key (no
+  // Auth-server round trip, ~200ms saved per request) and still refreshes an
+  // expired token. Trade-off vs getUser(): a server-side revocation or a
+  // metadata change is only seen once the token is next refreshed (<= 1h).
+  // Locked/inactive accounts are still enforced per request by the users-table
+  // lookup in lib/auth/session.ts.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims;
+  const user = claims
+    ? { app_metadata: claims.app_metadata, user_metadata: claims.user_metadata }
+    : null;
 
   const pathname = request.nextUrl.pathname;
 

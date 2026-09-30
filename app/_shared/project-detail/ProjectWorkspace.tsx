@@ -283,6 +283,35 @@ export async function ProjectWorkspace({
 
   const isDeleted = isAdmin && !!project.deleted_at;
 
+  // These depend only on the project id / the two user ids, not on the big
+  // batch below, so they start now and run alongside it (each is a database
+  // round trip; awaited where their results are first needed). The no-op
+  // catch only stops an unhandled-rejection warning if an earlier await
+  // throws first; the real await still sees the rejection.
+  const revisionPromise = Promise.all([
+    getCurrentRevNumber(supabase, id, "pbdb"),
+    // #195: whether the consultant has downloaded the revision-populated
+    // working copy for the *current* revision yet.
+    getLatestRevisionHistoryRow(supabase, id, "pbdb"),
+    // Projected "send date" beside the delivery-timing controls (#176) — the
+    // contractual due date (project.expected_delivery_date) is a different
+    // thing and testers were reading the two as one.
+    previewNextSendTime(id, "pbdb").catch(() => null),
+    previewNextSendTime(id, "pbdr").catch(() => null),
+    supabase
+      .from("revision_history")
+      .select("doc_type, event, rev_number, review_cycle, created_at")
+      .eq("project_id", id),
+  ]);
+  revisionPromise.catch(() => {});
+  // #213: internal-only tag chips beside the submitter (this workspace is staff-only).
+  const tagsPromise = Promise.all([
+    project.submitter ? getTagsByUserId(supabase, [project.submitter.id as string]) : null,
+    listTags(supabase),
+    project.assigned ? getTagsByUserId(supabase, [project.assigned.id as string]) : null,
+  ]);
+  tagsPromise.catch(() => {});
+
   const [
     { data: mappings },
     { data: rawSubmissionFiles },
@@ -462,6 +491,20 @@ export async function ProjectWorkspace({
 
   // Signing file URLs only needs the file rows, so start it now and let it run
   // while the flag-actor lookup below waits on its own round trip.
+  // #208: which PBDB rows have a stored PDF that actually went to stakeholders.
+  // Needs only the pbdb file rows, so it runs alongside the file signing and
+  // flag-actor lookup below.
+  const sentPbdbPromise = findSentPbdbFileIds(
+    supabase,
+    id,
+    ((rawPbdbFiles ?? []) as { id: string; version: number; review_cycle: number }[]).map((f) => ({
+      id: f.id,
+      version: f.version,
+      review_cycle: f.review_cycle,
+    }))
+  );
+  sentPbdbPromise.catch(() => {});
+
   const signedFilesPromise = Promise.all([
     Promise.all(
       (rawSubmissionFiles ?? []).map(async (f) => {
@@ -640,21 +683,8 @@ export async function ProjectWorkspace({
   // (the old `latestPbdb.version - 1` formula drifted every regenerate).
   // That regeneration counter is deliberately not surfaced anywhere in the
   // UI — Rev is the only version number a user should ever see.
-  const [currentRevNumber, latestPbdbRevisionRow, pbdbSendPreview, pbdrSendPreview, { data: rawRevisionRows }] = await Promise.all([
-    getCurrentRevNumber(supabase, id, "pbdb"),
-    // #195: whether the consultant has downloaded the revision-populated
-    // working copy for the *current* revision yet.
-    getLatestRevisionHistoryRow(supabase, id, "pbdb"),
-    // Projected "send date" beside the delivery-timing controls (#176) — the
-    // contractual due date (project.expected_delivery_date) is a different
-    // thing and testers were reading the two as one.
-    previewNextSendTime(id, "pbdb").catch(() => null),
-    previewNextSendTime(id, "pbdr").catch(() => null),
-    supabase
-      .from("revision_history")
-      .select("doc_type, event, rev_number, review_cycle, created_at")
-      .eq("project_id", id),
-  ]);
+  const [currentRevNumber, latestPbdbRevisionRow, pbdbSendPreview, pbdrSendPreview, { data: rawRevisionRows }] =
+    await revisionPromise;
   const revisionRows = (rawRevisionRows ?? []) as {
     doc_type: string;
     event: string;
@@ -675,15 +705,7 @@ export async function ProjectWorkspace({
     revisionNotesByCycle,
   });
   // #208: which PBDB rows have a stored PDF that actually went to stakeholders.
-  const sentPbdbFileIds = await findSentPbdbFileIds(
-    supabase,
-    id,
-    (pbdbFiles as { id: string; version: number; review_cycle: number }[]).map((f) => ({
-      id: f.id,
-      version: f.version,
-      review_cycle: f.review_cycle,
-    }))
-  );
+  const sentPbdbFileIds = await sentPbdbPromise;
   const pbdrGrouping = groupPbdrVersions({
     files: pbdrFiles as { id: string; original_filename: string; version: number; created_at: string }[],
     revisionHistory: revisionRows,
@@ -723,14 +745,9 @@ export async function ProjectWorkspace({
   const assignedName = project.assigned
     ? [project.assigned.first_name, project.assigned.last_name].filter(Boolean).join(" ") || project.assigned.email
     : null;
-  // #213: internal-only tag chips beside the submitter (this workspace is staff-only).
-  const wsTags = project.submitter
-    ? (await getTagsByUserId(supabase, [project.submitter.id as string])).get(project.submitter.id as string) ?? []
-    : [];
-  const wsAllTags = await listTags(supabase);
-  const wsAssignedTags = project.assigned
-    ? (await getTagsByUserId(supabase, [project.assigned.id as string])).get(project.assigned.id as string) ?? []
-    : [];
+  const [wsTagsMap, wsAllTags, wsAssignedTagsMap] = await tagsPromise;
+  const wsTags = project.submitter ? wsTagsMap?.get(project.submitter.id as string) ?? [] : [];
+  const wsAssignedTags = project.assigned ? wsAssignedTagsMap?.get(project.assigned.id as string) ?? [] : [];
   const submitterName = project.submitter
     ? [project.submitter.first_name, project.submitter.last_name].filter(Boolean).join(" ") || project.submitter.email
     : null;

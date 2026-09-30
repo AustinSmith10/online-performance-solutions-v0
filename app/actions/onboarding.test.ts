@@ -48,6 +48,7 @@ describe("completeProfile (fallback path)", () => {
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
         updateUser,
+        refreshSession: vi.fn().mockResolvedValue({ error: null }),
       },
     } as never);
     vi.mocked(createAdminClient).mockReturnValue({
@@ -92,6 +93,7 @@ describe("completeOnboarding (merged password + profile)", () => {
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: userOverrides } }),
         updateUser,
+        refreshSession: vi.fn().mockResolvedValue({ error: null }),
       },
       updateUser,
     };

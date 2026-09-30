@@ -73,11 +73,14 @@ export default async function AdminDashboardPage({
   searchParams: Promise<{ tour?: string }>;
 }) {
   const { tour } = await searchParams;
-  const user = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
   const todayIso = new Date().toISOString().slice(0, 10);
 
+  // One round trip for everything: the caller check, the queue lists, and the
+  // per-project review rounds and verification mismatches (embedded / joined
+  // onto the same set of projects instead of looked up by id afterwards).
   const [
+    user,
     activeResult,
     overrideResult,
     pendingReviewsResult,
@@ -85,7 +88,9 @@ export default async function AdminDashboardPage({
     emailFailuresResult,
     emailFailuresCountResult,
     consultantsResult,
+    mismatchResult,
   ] = await Promise.all([
+    requireRole("super_admin", "admin"),
     supabase
       .from("projects")
       .select(`
@@ -93,7 +98,8 @@ export default async function AdminDashboardPage({
         payment_override, payment_override_at, payment_override_reason, assigned_consultant_id,
         review_buffer_fired_at, qa_completed_by, created_at, review_cycle,
         clients(name), templates(number_suffix),
-        consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email, phone)
+        consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email, phone),
+        stakeholder_reviews(review_cycle, status)
       `)
       .is("deleted_at", null)
       .in("status", IN_FLIGHT_STATUSES)
@@ -150,6 +156,17 @@ export default async function AdminDashboardPage({
       .select("id, first_name, last_name, email, availability, disciplines")
       .eq("role", "consultant")
       .order("first_name"),
+
+    // #115: a single aggregated query for "which in-flight projects have at
+    // least one stakeholder-confirmed verification mismatch" — not N+1 lookups
+    // per row. Joined to projects so it needs no list of ids.
+    supabase
+      .from("project_files")
+      .select("project_id, projects!inner(status, deleted_at)")
+      .is("projects.deleted_at", null)
+      .in("projects.status", IN_FLIGHT_STATUSES)
+      .not("verification_mismatch_reasons", "is", null)
+      .not("verification_confirmed_at", "is", null),
   ]);
 
   const allActive = (activeResult.data ?? []) as unknown as ProjectRow[];
@@ -192,36 +209,15 @@ export default async function AdminDashboardPage({
     .map((p) => p.id);
   const reviewsByProjectId = new Map<string, { status: string }[]>();
 
-  // Both lookups depend only on the projects above, not on each other, so run
-  // them together instead of one round trip after the other.
-  //
-  // #115: the second is a single aggregated query for "which of these projects
-  // has at least one stakeholder-confirmed verification mismatch" — not N+1
-  // lookups per row.
-  const [reviewRowsResult, mismatchResult] = await Promise.all([
-    dispatchedIds.length > 0
-      ? supabase
-          .from("stakeholder_reviews")
-          .select("project_id, review_cycle, status")
-          .in("project_id", dispatchedIds)
-      : Promise.resolve({ data: [] as { project_id: string; review_cycle: number; status: string }[] }),
-    allActive.length
-      ? supabase
-          .from("project_files")
-          .select("project_id")
-          .in("project_id", allActive.map((p) => p.id))
-          .not("verification_mismatch_reasons", "is", null)
-          .not("verification_confirmed_at", "is", null)
-      : Promise.resolve({ data: [] as { project_id: string }[] }),
-  ]);
-
-  const reviewRows = reviewRowsResult.data ?? [];
   const reviewCycleById = new Map(allActive.map((p) => [p.id, p.review_cycle]));
+  const embeddedReviewsById = new Map(
+    allActive.map((p) => [p.id, (p as unknown as { stakeholder_reviews: { review_cycle: number; status: string }[] | null }).stakeholder_reviews ?? []])
+  );
   for (const pid of dispatchedIds) {
     const cycle = reviewCycleById.get(pid);
     reviewsByProjectId.set(
       pid,
-      reviewRows.filter((r) => r.project_id === pid && r.review_cycle === cycle)
+      (embeddedReviewsById.get(pid) ?? []).filter((r) => r.review_cycle === cycle)
     );
   }
   const mismatchProjectIds = new Set((mismatchResult.data ?? []).map((r) => r.project_id as string));

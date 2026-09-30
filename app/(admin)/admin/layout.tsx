@@ -1,10 +1,11 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { logout } from "@/app/actions/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminNavRestrictions, type AdminNavKey } from "@/lib/settings/admin-nav-restrictions";
 import { getPendingEmailQueueCount } from "@/lib/email/queue-pending-count";
-import { getEmailsEnabled } from "@/lib/settings/emails-enabled";
+import { EmailsDisabledBanner } from "@/components/EmailsDisabledBanner";
 import { NotificationTrayServer } from "@/components/NotificationTrayServer";
 import { NotificationToasts } from "@/components/NotificationToasts";
 import { MobileNav } from "@/components/MobileNav";
@@ -36,21 +37,28 @@ const PLATFORM =
   "[-webkit-tap-highlight-color:transparent] [&_a]:touch-manipulation [&_button]:touch-manipulation [&_button]:select-none " +
   "[@media(pointer:coarse)]:[&_input]:text-base [@media(pointer:coarse)]:[&_select]:text-base [@media(pointer:coarse)]:[&_textarea]:text-base";
 
+// The tray (a dozen queries) streams in after the rest of the shell instead of
+// blocking it; this holds the bell's place so nothing shifts when it arrives.
+function TrayPlaceholder() {
+  return <div aria-hidden className="h-9 w-9 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11" />;
+}
+
 export default async function AdminShellLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireRole("super_admin", "admin");
   const supabase = createAdminClient();
 
-  // Independent lookups: awaiting them one after another put three database
-  // round trips in a row on the critical path of every admin page.
-  const [restricted, pendingQueueCount, emailsEnabled] = await Promise.all([
-    user.role !== "super_admin" ? getAdminNavRestrictions(supabase) : Promise.resolve<AdminNavKey[]>([]),
+  // Independent lookups, one round trip: the profile/role check and the two nav
+  // inputs. The restrictions are fetched even for super admins (they're
+  // ignored below) so the query doesn't have to wait for the role first.
+  const [user, restrictedForAdmins, pendingQueueCount] = await Promise.all([
+    requireRole("super_admin", "admin"),
+    getAdminNavRestrictions(supabase),
     getPendingEmailQueueCount(supabase),
-    getEmailsEnabled(supabase),
   ]);
+  const restricted: AdminNavKey[] = user.role !== "super_admin" ? restrictedForAdmins : [];
 
   const NAV_ITEMS = ALL_NAV_ITEMS.filter(
     (item) => (!item.superOnly || user.role === "super_admin") && (!item.key || !restricted.includes(item.key))
@@ -69,11 +77,13 @@ export default async function AdminShellLayout({
         profileHref="/admin/profile"
         logoutAction={logout}
         notifications={
-          <NotificationTrayServer
-            projectBasePath="/admin/projects"
-            includeNeedsAttention
-            align="right"
-          />
+          <Suspense fallback={<TrayPlaceholder />}>
+            <NotificationTrayServer
+              projectBasePath="/admin/projects"
+              includeNeedsAttention
+              align="right"
+            />
+          </Suspense>
         }
       />
 
@@ -82,7 +92,9 @@ export default async function AdminShellLayout({
         <div className="flex h-11 items-center justify-between border-b border-zinc-200 px-4">
           <Logo className="h-6 w-auto" />
           <div className="flex items-center gap-1">
-            <NotificationTrayServer projectBasePath="/admin/projects" includeNeedsAttention />
+            <Suspense fallback={<TrayPlaceholder />}>
+              <NotificationTrayServer projectBasePath="/admin/projects" includeNeedsAttention />
+            </Suspense>
           </div>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
@@ -115,19 +127,9 @@ export default async function AdminShellLayout({
 
       {/* Main — min-w-0 prevents flex children from overflowing */}
       <main className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-8">
-        {!emailsEnabled && (
-          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <span className="font-semibold">Outbound emails are disabled.</span> No emails are being
-            sent to anyone right now.{" "}
-            {user.role === "super_admin" ? (
-              <Link href="/admin/settings" className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 transition-colors duration-150 hover:bg-amber-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700">
-                Turn back on in Settings
-              </Link>
-            ) : (
-              "Ask a super admin to turn it back on in Settings when you're done testing."
-            )}
-          </div>
-        )}
+        <Suspense>
+          <EmailsDisabledBanner role={user.role as string} />
+        </Suspense>
         {children}
       </main>
       <RealtimeRefresh userId={user.id as string} />

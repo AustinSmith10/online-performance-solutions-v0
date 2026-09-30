@@ -41,3 +41,25 @@ export async function getTagsByUserId(
   for (const list of map.values()) list.sort((a, b) => a.name.localeCompare(b.name));
   return map;
 }
+
+/**
+ * Same result as getTagsByUserId, built from rows that already embed their
+ * tags — `users` selected with
+ * `account_tags!account_tags_user_id_fkey(tags(id, name, color))` — so a page
+ * that lists users needs no second round trip for tags. The explicit FK hint
+ * is required: account_tags has two foreign keys to users (user_id and
+ * assigned_by).
+ */
+export function tagsByUserIdFromEmbedded(
+  rows: { id: string; account_tags?: { tags: Tag | null }[] | null }[]
+): Map<string, Tag[]> {
+  const map = new Map<string, Tag[]>();
+  for (const row of rows) {
+    const list = (row.account_tags ?? [])
+      .map((at) => at.tags)
+      .filter((t): t is Tag => !!t)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (list.length) map.set(row.id, list);
+  }
+  return map;
+}

@@ -32,68 +32,109 @@ export default async function OrganisationDetailPage({
   const created = sp.created === "1";
   const cleanUrl = `/admin/clients/${id}`;
   const supabase = createAdminClient();
-  const caller = await requireRole("super_admin", "admin");
-
-  const [{ data: org }, { data: users }, { data: templates }, { data: orgStakeholders }] =
-    await Promise.all([
-      supabase.from("clients").select("*").eq("id", id).maybeSingle(),
-      supabase
-        .from("users")
-        .select("id, email, first_name, last_name, role, is_locked, created_at")
-        .eq("client_id", id)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("templates")
-        .select("id, name, status, created_at")
-        .eq("client_id", id)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("stakeholders")
-        .select("id, name, email, company")
-        .eq("scope", "org")
-        .eq("scope_id", id)
-        .is("deleted_at", null)
-        .order("sort_order", { ascending: true }),
-    ]);
+  // Everything that only needs the client id runs in one round trip together
+  // with the caller check (previously six sequential stages).
+  const [
+    caller,
+    { data: org },
+    { data: users },
+    { data: templates },
+    { data: orgStakeholders },
+    { data: metricsTables },
+    { data: tokenLinkRows },
+  ] = await Promise.all([
+    requireRole("super_admin", "admin"),
+    supabase.from("clients").select("*").eq("id", id).maybeSingle(),
+    supabase
+      .from("users")
+      .select("id, email, first_name, last_name, role, is_locked, created_at")
+      .eq("client_id", id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("templates")
+      .select("id, name, status, created_at")
+      .eq("client_id", id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("stakeholders")
+      .select("id, name, email, company")
+      .eq("scope", "org")
+      .eq("scope_id", id)
+      .is("deleted_at", null)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("client_metrics_tables")
+      .select("id, client_id, name, created_at, autofill_enabled, template_id, match_token, match_column_id")
+      .eq("client_id", id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("client_config_token_links")
+      .select("token, stakeholder_id, field")
+      .eq("client_id", id),
+  ]);
 
   if (!org) notFound();
 
-  const { data: metricsTables } = await supabase
-    .from("client_metrics_tables")
-    .select("id, client_id, name, created_at, autofill_enabled, template_id, match_token, match_column_id")
-    .eq("client_id", id)
-    .order("created_at", { ascending: true });
-
   const metricsTableIds = (metricsTables ?? []).map((t) => t.id as string);
 
-  let metricsColumns: { id: string; table_id: string; name: string; data_type: string; position: number }[] = [];
-  let metricsRows: { id: string; table_id: string; data: Record<string, string | number | null> }[] = [];
-  let metricsOutputs: { id: string; table_id: string; output_token: string; output_column_id: string }[] = [];
-  let templateTokenGroups: TemplateTokenGroup[] = [];
-  if (metricsTableIds.length > 0) {
-    const [{ data: cols }, { data: rowsData }, { data: outputsData }, groups] = await Promise.all([
-      supabase
-        .from("client_metrics_columns")
-        .select("id, table_id, name, data_type, position")
-        .in("table_id", metricsTableIds)
-        .order("position", { ascending: true }),
-      supabase
-        .from("client_metrics_rows")
-        .select("id, table_id, data")
-        .in("table_id", metricsTableIds)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("client_metrics_output_mappings")
-        .select("id, table_id, output_token, output_column_id")
-        .in("table_id", metricsTableIds),
-      getClientTemplateTokenGroups(id),
-    ]);
-    metricsColumns = cols ?? [];
-    metricsRows = rowsData ?? [];
-    metricsOutputs = outputsData ?? [];
-    templateTokenGroups = groups;
-  }
+  const orgUsers = (users ?? []) as Pick<
+    User,
+    "id" | "email" | "first_name" | "last_name" | "role" | "is_locked" | "created_at"
+  >[];
+  const orgTemplates = (templates ?? []) as {
+    id: string; name: string; status: string; created_at: string;
+  }[];
+  const templateIds = orgTemplates.map((t) => t.id);
+
+  // Second (and last) round trip: the metrics detail, tags, template tokens and
+  // template stakeholder requirements all depend only on the first round's
+  // results, not on each other.
+  const [metricsDetail, tagsByUser, tokenRowsResult, templateRequiredResult] = await Promise.all([
+    metricsTableIds.length > 0
+      ? Promise.all([
+          supabase
+            .from("client_metrics_columns")
+            .select("id, table_id, name, data_type, position")
+            .in("table_id", metricsTableIds)
+            .order("position", { ascending: true }),
+          supabase
+            .from("client_metrics_rows")
+            .select("id, table_id, data")
+            .in("table_id", metricsTableIds)
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("client_metrics_output_mappings")
+            .select("id, table_id, output_token, output_column_id")
+            .in("table_id", metricsTableIds),
+          getClientTemplateTokenGroups(id),
+        ])
+      : null,
+    getTagsByUserId(supabase, orgUsers.map((u) => u.id)),
+    // Only tokens genuinely present in the template file (in_template = true).
+    templateIds.length > 0
+      ? supabase
+          .from("template_field_mappings")
+          .select("placeholder_token")
+          .in("template_id", templateIds)
+          .eq("field_key", "org")
+          .eq("in_template", true)
+      : Promise.resolve({ data: [] }),
+    templateIds.length > 0
+      ? supabase
+          .from("template_stakeholders")
+          .select("stakeholder_id, templates(name)")
+          .in("template_id", templateIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const metricsColumns: { id: string; table_id: string; name: string; data_type: string; position: number }[] =
+    metricsDetail?.[0].data ?? [];
+  const metricsRows: { id: string; table_id: string; data: Record<string, string | number | null> }[] =
+    metricsDetail?.[1].data ?? [];
+  const metricsOutputs: { id: string; table_id: string; output_token: string; output_column_id: string }[] =
+    metricsDetail?.[2].data ?? [];
+  const templateTokenGroups: TemplateTokenGroup[] = metricsDetail?.[3] ?? [];
 
   const metricsTablesWithColumns: MetricsTable[] = (metricsTables ?? []).map((t) => ({
     id: t.id as string,
@@ -139,46 +180,15 @@ export default async function OrganisationDetailPage({
     accept_window_working_days: orgData.accept_window_working_days,
     credit_limit: orgData.credit_limit,
   };
-  const orgUsers = (users ?? []) as Pick<
-    User,
-    "id" | "email" | "first_name" | "last_name" | "role" | "is_locked" | "created_at"
-  >[];
-  const tagsByUser = await getTagsByUserId(supabase, orgUsers.map((u) => u.id));
-  const orgTemplates = (templates ?? []) as {
-    id: string; name: string; status: string; created_at: string;
-  }[];
-
-  // Only tokens genuinely present in the template file (in_template = true).
-  const templateIds = orgTemplates.map((t) => t.id);
-  let orgConfigTokens: string[] = [];
-  if (templateIds.length > 0) {
-    const { data: tokenRows } = await supabase
-      .from("template_field_mappings")
-      .select("placeholder_token")
-      .in("template_id", templateIds)
-      .eq("field_key", "org")
-      .eq("in_template", true);
-    const seen = new Set<string>();
-    for (const row of tokenRows ?? []) {
-      seen.add((row as { placeholder_token: string }).placeholder_token);
-    }
-    orgConfigTokens = [...seen].sort();
+  const seenTokens = new Set<string>();
+  for (const row of tokenRowsResult.data ?? []) {
+    seenTokens.add((row as { placeholder_token: string }).placeholder_token);
   }
+  const orgConfigTokens = [...seenTokens].sort();
 
   const roster = (orgStakeholders ?? []) as { id: string; name: string; email: string; company: string | null }[];
 
-  const [{ data: tokenLinkRows }, { data: templateRequiredRows }] = await Promise.all([
-    supabase
-      .from("client_config_token_links")
-      .select("token, stakeholder_id, field")
-      .eq("client_id", id),
-    templateIds.length > 0
-      ? supabase
-          .from("template_stakeholders")
-          .select("stakeholder_id, templates(name)")
-          .in("template_id", templateIds)
-      : Promise.resolve({ data: [] }),
-  ]);
+  const templateRequiredRows = templateRequiredResult.data;
 
   const tokenLinks: Record<string, { stakeholderId: string; field: "name" | "email" | "company" }> = {};
   for (const row of tokenLinkRows ?? []) {
