@@ -11,7 +11,7 @@ export interface SubmitDocument {
 }
 
 /**
- * Sticky document card shown beside the extracted fields (#210), so a reviewer
+ * Document card shown in the left column under the Right Now card (#210), so a reviewer
  * can check a value against the source without leaving the Overview tab. Shared
  * by the portal, consultant and admin submit pages through SubmissionForm.
  * Wraps the existing DocumentViewer, so PDF rendering and the unsupported-type
@@ -50,32 +50,9 @@ export function SubmitDocumentViewer({ documents }: { documents: SubmitDocument[
         )}
       </div>
       {/* Bounded height so the card itself stays sticky-able; the viewer scrolls inside it. */}
-      <div className="flex h-[55vh] min-h-0 flex-col xl:h-[calc(100vh-7rem)]">
+      <div className="flex h-[60vh] min-h-0 flex-col md:h-[55vh]">
         <DocumentViewer key={current.slug} src={current.previewUrl as string} filename={current.name} fill />
       </div>
     </section>
-  );
-}
-
-/**
- * Details left, sticky viewer right on wide screens; below the breakpoint the
- * viewer collapses to a card above the fields.
- */
-export function SplitWithViewer({
-  documents,
-  children,
-}: {
-  documents: SubmitDocument[];
-  children: React.ReactNode;
-}) {
-  const hasViewer = documents.some((d) => d.previewUrl);
-  if (!hasViewer) return <>{children}</>;
-  return (
-    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
-      <div className="min-w-0 xl:sticky xl:top-4 xl:order-2">
-        <SubmitDocumentViewer documents={documents} />
-      </div>
-      <div className="min-w-0 xl:order-1">{children}</div>
-    </div>
   );
 }
