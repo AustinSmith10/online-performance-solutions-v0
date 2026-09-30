@@ -1,10 +1,18 @@
 const FROM = process.env.EMAIL_FROM ?? "OPS <noreply@ddeg.com.au>";
 
+export interface EmailAttachment {
+  name: string;
+  content: Buffer;
+  contentType: string;
+}
+
 export interface SendEmailOptions {
   to: string;
   subject: string;
   html: string;
   replyTo?: string;
+  /** Files sent with the email (#212). Not logged beyond the send row. */
+  attachments?: EmailAttachment[];
   /**
    * Rethrow delivery failures instead of swallowing them. Off by default so
    * application callers are never blocked by email problems; opt in from
@@ -56,7 +64,7 @@ async function logSend(fields: { to: string; subject: string; source: string; pr
  * check it; callers that want to react to a silent failure (e.g. notify an
  * admin) can await and inspect it instead of reaching for throwOnError.
  */
-export async function sendEmail({ to, subject, html, replyTo, throwOnError, source, projectId }: SendEmailOptions): Promise<boolean> {
+export async function sendEmail({ to, subject, html, replyTo, attachments, throwOnError, source, projectId }: SendEmailOptions): Promise<boolean> {
   let emailsEnabled = true;
   try {
     const { createAdminClient } = await import("@/lib/supabase/admin");
@@ -90,6 +98,16 @@ export async function sendEmail({ to, subject, html, replyTo, throwOnError, sour
       Subject: subject,
       HtmlBody: html,
       ...(replyTo ? { ReplyTo: replyTo } : {}),
+      ...(attachments?.length
+        ? {
+            Attachments: attachments.map((a) => ({
+              Name: a.name,
+              Content: a.content.toString("base64"),
+              ContentType: a.contentType,
+              ContentID: null,
+            })),
+          }
+        : {}),
     });
     await logSend({ to, subject, source, projectId, status: "sent", messageId: result.MessageID });
     return true;
