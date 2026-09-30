@@ -758,7 +758,9 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   // Below md the list and the detail are separate screens.
   const [showDetail, setShowDetail] = useState(false);
-  const liveRows = rows.filter((r) => !hidden.has(r.id));
+  // A row stays hidden only while it is still open on the server. Once the
+  // refresh brings it back as approved/rejected it belongs in its history tab.
+  const liveRows = rows.filter((r) => !(hidden.has(r.id) && RESOLVABLE_STATUSES.includes(r.status)));
   const visible = liveRows
     .filter((r) => r.status === tab)
     .sort((a, b) =>
@@ -795,8 +797,12 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
     });
   }, []);
 
+  // `navigate: false` is for flushes the admin didn't wait for (they started
+  // another action, switched tab, or left): a redirect then would hijack
+  // whatever they're doing, so it becomes a link in the note instead.
   const execute = useCallback(
-    async (commit: Commit) => {
+    async (commit: Commit, opts: { navigate?: boolean } = {}) => {
+      const navigate = opts.navigate ?? true;
       // The undo window is over for this action; a still-visible Undo button
       // would do nothing. (A newer pending commit keeps its own toast.)
       if (!pendingRef.current) setToast((t) => (t?.kind === "undo" ? null : t));
@@ -814,7 +820,12 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
         return;
       }
       if (res.redirectTo) {
-        router.push(res.redirectTo);
+        if (navigate) {
+          router.push(res.redirectTo);
+        } else {
+          router.refresh();
+          setNote({ kind: "info", message: commit.message, persistent: true, href: res.redirectTo, hrefLabel: "Open the project" });
+        }
         return;
       }
       router.refresh();
@@ -833,7 +844,7 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
     if (!p) return;
     clearTimeout(p.timer);
     pendingRef.current = null;
-    void execute(p.commit);
+    void execute(p.commit, { navigate: false });
   }, [execute]);
 
   useEffect(() => {

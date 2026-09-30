@@ -66,9 +66,18 @@ export function WaiveForm({ reviewId, projectId, stakeholderName, requireEvidenc
     return () => document.removeEventListener("keydown", handler, true);
   }, [open]);
 
+  // Return focus to the trigger only after the dialog has actually been open;
+  // on mount `open` is false, and refocusing then would steal focus (and
+  // scroll) on every page that renders a WaiveForm.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) panelRef.current?.focus();
-    else triggerRef.current?.focus();
+    if (open) {
+      wasOpen.current = true;
+      panelRef.current?.focus();
+    } else if (wasOpen.current) {
+      wasOpen.current = false;
+      triggerRef.current?.focus();
+    }
   }, [open]);
 
   return (
