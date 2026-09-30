@@ -13,6 +13,7 @@ import { resolveNumberSuffix } from "@/lib/projects/project-number";
 import { consultantHasDiscipline } from "@/lib/consultants/disciplines";
 import { summarizeRound } from "@/lib/stakeholders/round-summary";
 import type { ProjectStatus } from "@/types";
+import { getTagsByUserId } from "@/lib/tags/queries";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -54,7 +55,7 @@ type ProjectRow = {
   accepted_at: string | null;
   paused_previous_status: ProjectStatus | null;
   clients: { name: string; revision_notes_required: boolean } | null;
-  submitter: { first_name: string | null; last_name: string | null; email: string } | null;
+  submitter: { id: string; first_name: string | null; last_name: string | null; email: string } | null;
 };
 
 function clientName(s: ProjectRow["submitter"]) {
@@ -93,7 +94,7 @@ export default async function ConsultantOpsPage({
     .select(`
       id, project_number, extracted_fields, status, po_number, expected_delivery_date, created_at, review_cycle, accepted_at, paused_previous_status,
       clients(name, revision_notes_required),
-      submitter:users!projects_submitted_by_fkey(first_name, last_name, email)
+      submitter:users!projects_submitted_by_fkey(id, first_name, last_name, email)
     `)
     .eq("assigned_consultant_id", user.id)
     .not("status", "eq", "draft")
@@ -252,6 +253,11 @@ export default async function ConsultantOpsPage({
 
   const mismatchProjectIds = new Set((mismatchRows ?? []).map((r) => r.project_id as string));
 
+  // #213: internal-only tag chips beside the submitter's name.
+  const submitterTags = await getTagsByUserId(
+    supabase,
+    allAssigned.map((p) => p.submitter?.id).filter((x): x is string => !!x)
+  );
   function toDashboardProject(p: ProjectRow): DashboardProject {
     const overdueDays = TERMINAL_STATUSES.has(p.status) ? 0 : daysOverdue(p.expected_delivery_date, todayIso);
     const isOverdue = overdueDays > 0;
@@ -268,6 +274,7 @@ export default async function ConsultantOpsPage({
       label: projectLabel(p),
       clientName: p.clients?.name ?? null,
       submitterName: clientName(p.submitter),
+      submitterTags: p.submitter ? submitterTags.get(p.submitter.id) ?? [] : [],
       statusLabel: STATUS_LABELS[effectiveStatus],
       statusClassName: STATUS_CLASSES[effectiveStatus],
       expectedDeliveryLabel: p.expected_delivery_date ? formatAuDate(p.expected_delivery_date) : null,

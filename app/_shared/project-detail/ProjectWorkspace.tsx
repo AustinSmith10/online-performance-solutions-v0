@@ -10,6 +10,7 @@ import { groupPbdbVersions } from "@/lib/documents/pbdb-versions";
 import { groupPbdrVersions } from "@/lib/documents/pbdr-versions";
 import { getTagsByUserId, listTags } from "@/lib/tags/queries";
 import { TagAssigner } from "@/components/TagAssigner";
+import { TagChips } from "@/components/TagChip";
 import { findSentPbdbFileIds } from "@/lib/documents/sent-pdf";
 import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
 import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
@@ -727,6 +728,9 @@ export async function ProjectWorkspace({
     ? (await getTagsByUserId(supabase, [project.submitter.id as string])).get(project.submitter.id as string) ?? []
     : [];
   const wsAllTags = await listTags(supabase);
+  const wsAssignedTags = project.assigned
+    ? (await getTagsByUserId(supabase, [project.assigned.id as string])).get(project.assigned.id as string) ?? []
+    : [];
   const submitterName = project.submitter
     ? [project.submitter.first_name, project.submitter.last_name].filter(Boolean).join(" ") || project.submitter.email
     : null;
@@ -860,7 +864,7 @@ export async function ProjectWorkspace({
         {isAdmin && (
           <HeaderStatInline
             label="Assigned"
-            value={assignedName ?? "Unassigned"}
+            value={assignedName ? <>{assignedName}<TagChips tags={wsAssignedTags} className="ml-1.5 align-middle" /></> : "Unassigned"}
             valueClassName={assignedName ? undefined : "text-amber-700"}
             noLeftBorder
           />
@@ -1343,6 +1347,7 @@ export async function ProjectWorkspace({
           consultants={disciplineConsultants}
           currentConsultantId={project.assigned.id}
           assignedName={assignedName}
+          assignedTags={wsAssignedTags}
           availability={project.assigned.availability}
           assignmentHistory={assignmentHistory}
         />

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AssignForm, type ConsultantOption } from "./AssignForm";
 import type { ConsultantAvailability } from "@/types";
+import { TagChips, type TagChipData } from "@/components/TagChip";
 
 const AVAILABILITY_LABELS: Record<ConsultantAvailability, string> = {
   available: "Available",
@@ -26,6 +27,7 @@ export function ConsultantCard({
   consultants,
   currentConsultantId,
   assignedName,
+  assignedTags,
   availability,
   assignmentHistory,
 }: {
@@ -33,6 +35,7 @@ export function ConsultantCard({
   consultants: ConsultantOption[];
   currentConsultantId: string;
   assignedName: string | null;
+  assignedTags?: TagChipData[];
   availability: ConsultantAvailability | null;
   assignmentHistory?: AssignmentHistoryEntry[];
 }) {
@@ -56,7 +59,10 @@ export function ConsultantCard({
 
       {assignedName ? (
         <div className="mb-1">
-          <p className="font-medium text-zinc-900">{assignedName}</p>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-zinc-900">
+            {assignedName}
+            <TagChips tags={assignedTags} />
+          </p>
           {availability && <p className="text-xs text-zinc-500">{AVAILABILITY_LABELS[availability]}</p>}
         </div>
       ) : (

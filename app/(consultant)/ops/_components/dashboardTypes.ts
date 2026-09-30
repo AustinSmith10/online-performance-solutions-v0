@@ -1,6 +1,7 @@
 import type { ReviewRow, PbdbFile, RevisionProject } from "./RevisionReviewDrawer";
 import type { SectionKey } from "./dashboardList";
 import type { RoundSummary } from "@/lib/stakeholders/round-summary";
+import type { TagChipData } from "@/components/TagChip";
 
 export interface DashboardProject {
   id: string;
@@ -8,6 +9,7 @@ export interface DashboardProject {
   label: string;
   clientName: string | null;
   submitterName: string | null;
+  submitterTags?: TagChipData[];
   statusLabel: string;
   statusClassName: string;
   expectedDeliveryLabel: string | null;

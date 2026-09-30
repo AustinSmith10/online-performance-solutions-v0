@@ -6,6 +6,8 @@ import { OverduePill } from "@/components/OverduePill";
 import { ReviewTallyChip } from "@/components/ReviewTallyChip";
 import { resolveStaffStatus } from "@/lib/delivery/effective-status";
 import { summarizeRound, type RoundSummary } from "@/lib/stakeholders/round-summary";
+import { getTagsByUserId, type Tag } from "@/lib/tags/queries";
+import { TagChips } from "@/components/TagChip";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "Draft",
@@ -73,7 +75,7 @@ type ProjectRow = {
   expected_delivery_date: string | null;
   created_at: string;
   clients: { name: string } | null;
-  consultant: { first_name: string | null; last_name: string | null; email: string } | null;
+  consultant: { id: string; first_name: string | null; last_name: string | null; email: string } | null;
 };
 
 export default async function ProjectsPage({
@@ -113,7 +115,7 @@ export default async function ProjectsPage({
       expected_delivery_date,
       created_at,
       clients(name),
-      consultant:users!projects_assigned_consultant_id_fkey(first_name, last_name, email)
+      consultant:users!projects_assigned_consultant_id_fkey(id, first_name, last_name, email)
     `)
     .is("deleted_at", null);
 
@@ -161,10 +163,14 @@ export default async function ProjectsPage({
       return { ...p, displayStatus, tally: inRound && round.length > 0 ? summarizeRound(round) : undefined };
     })
     .filter((p) => !roundAwareFilter || p.displayStatus === statusFilter);
+  const tagsByUser = await getTagsByUserId(
+    supabase,
+    projects.map((p) => p.consultant?.id).filter((x): x is string => !!x)
+  );
   const todayIso = new Date().toISOString().slice(0, 10);
   const hasFilter = !!(q || status || org || sort || order);
 
-  return <ProjectsLayout projects={projects} todayIso={todayIso} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} />;
+  return <ProjectsLayout projects={projects} todayIso={todayIso} params={params} sortCol={sortCol} sortOrder={sortOrder} hasFilter={hasFilter} tagsByUser={tagsByUser} />;
 }
 
 function ProjectsLayout({
@@ -174,6 +180,7 @@ function ProjectsLayout({
   sortCol,
   sortOrder,
   hasFilter,
+  tagsByUser,
 }: {
   projects: ProjectRow[];
   todayIso: string;
@@ -181,6 +188,7 @@ function ProjectsLayout({
   sortCol: SortCol;
   sortOrder: "asc" | "desc";
   hasFilter: boolean;
+  tagsByUser?: Map<string, Tag[]>;
 }) {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -296,7 +304,8 @@ function ProjectsLayout({
                 <div className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-zinc-900">{label}</span>
                   <p className="mt-0.5 truncate text-xs text-zinc-500">
-                    {p.clients?.name ?? "—"} · {consultant ?? "Unassigned"} · Created{" "}
+                    {p.clients?.name ?? "—"} · {consultant ?? "Unassigned"}
+                    {p.consultant && <TagChips tags={tagsByUser?.get(p.consultant.id)} className="ml-1.5 align-middle" />} · Created{" "}
                     {new Date(p.created_at).toLocaleDateString("en-AU")}
                   </p>
                 </div>

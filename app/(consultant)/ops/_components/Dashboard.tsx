@@ -17,6 +17,7 @@ import type { DashboardData, DashboardProject } from "./dashboardTypes";
 import type { SectionKey } from "./dashboardList";
 import { OverduePill } from "@/components/OverduePill";
 import { ReviewTallyChip } from "@/components/ReviewTallyChip";
+import { TagChips } from "@/components/TagChip";
 
 export function Tile({
   tone,
@@ -105,6 +106,9 @@ export function ProjectRow({ p }: { p: DashboardProject }) {
           )}
           <p className="mt-0.5 truncate text-xs text-zinc-600">
             {[p.clientName, p.isPending ? "assigned to you" : p.submitterName].filter(Boolean).join(" · ")}
+            {!p.isPending && p.submitterTags && p.submitterTags.length > 0 && (
+              <TagChips tags={p.submitterTags} className="ml-1.5 align-middle" />
+            )}
           </p>
           <p className="mt-0.5 text-xs tabular-nums text-zinc-600">
             {p.expectedDeliveryLabel ? `Expected ${p.expectedDeliveryLabel}` : "No delivery date set"}
