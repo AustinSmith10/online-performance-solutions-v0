@@ -9,9 +9,12 @@ export interface NotifyOptions {
   title?: string;
   message: string;
   projectId?: string;
-  emailSubject: string;
-  emailHtml: string;
+  // Required unless inAppOnly.
+  emailSubject?: string;
+  emailHtml?: string;
   replyTo?: string;
+  // Write the notification row only; send no email.
+  inAppOnly?: boolean;
 }
 
 export async function notify({
@@ -23,8 +26,26 @@ export async function notify({
   emailSubject,
   emailHtml,
   replyTo,
+  inAppOnly,
 }: NotifyOptions): Promise<void> {
   const admin = createAdminClient();
+
+  if (inAppOnly) {
+    const { error } = await admin.from("notifications").insert({
+      recipient_id: recipientId,
+      project_id: projectId ?? null,
+      type,
+      title: title ?? deriveTitleFromMessage(message),
+      message,
+    });
+    if (error) {
+      console.error("[notify] failed to write notification row:", error);
+      throw new Error("Failed to write notification");
+    }
+    return;
+  }
+
+  if (!emailSubject || !emailHtml) throw new Error("notify: emailSubject and emailHtml are required unless inAppOnly");
 
   const [notifResult, userResult] = await Promise.all([
     admin.from("notifications").insert({

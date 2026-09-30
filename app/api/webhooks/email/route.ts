@@ -14,6 +14,7 @@ import { validateToken, hashToken } from "@/lib/stakeholders/tokens";
 import { e } from "@/lib/email/templates/shell";
 import { isPostmarkWebhookAuthorized } from "@/lib/email/webhook-auth";
 import { sanitizeFilename } from "@/lib/storage/sanitize-filename";
+import { notifyProjectStaff } from "@/lib/email-queue/notify-staff";
 
 // Postmark retries on non-2xx — always return 200 so it doesn't retry on expected failures.
 // This does not apply to auth failures below: Postmark won't retry with different
@@ -116,6 +117,7 @@ export async function POST(req: NextRequest) {
         proposedProjectId: review.project_id,
         proposedStakeholderReviewId: review.id,
         matchReason: "token_match",
+        reviewerName: review.stakeholder_name,
       });
       return NextResponse.json({ ok: true });
     }
@@ -289,6 +291,8 @@ async function queueInboundEmail(
     proposedProjectId: string | null;
     proposedStakeholderReviewId: string | null;
     matchReason: MatchReason;
+    // Set for token-matched replies, so staff can be told who wrote in.
+    reviewerName?: string;
   }
 ) {
   // #150: Postmark retries on non-2xx or a slow response, and this function
@@ -369,6 +373,17 @@ async function queueInboundEmail(
       match_reason: classification.matchReason,
     },
   });
+
+  // A reviewer's reply is time-sensitive: without this it would sit in the
+  // queue until someone happened to open it. Only after a successful insert,
+  // so a Postmark retry (caught by the message_id checks above) never repeats it.
+  if (classification.matchReason === "token_match" && classification.proposedProjectId) {
+    await notifyProjectStaff(supabase, classification.proposedProjectId, {
+      type: "email_queue_reply_received",
+      message: (ref) =>
+        `${classification.reviewerName ?? "A reviewer"} replied by email on ${ref}. It's waiting in the Email Queue for approval.`,
+    }).catch((err) => console.error("[email-webhook] Failed to notify staff of queued reply:", err));
+  }
 
   await sendEmail({
     to: fromEmail,

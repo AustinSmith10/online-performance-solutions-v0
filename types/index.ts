@@ -42,6 +42,8 @@ export type NotificationType =
   | "system_error"
   | "stakeholder_replied_by_email"
   | "email_reply_without_thread_token"
+  | "email_queue_reply_received"
+  | "email_queue_unrecognised_reply"
   | "email_draft_notification_failed"
   | "pbdb_generation_failed";
 

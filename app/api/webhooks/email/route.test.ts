@@ -5,7 +5,8 @@ import { createHash } from "crypto";
 // vi.mock() is hoisted to the top of the file — use vi.hoisted() so the mock
 // function references are available before initialization.
 
-const { mockSendEmail, mockAuditLog, mockValidateToken } = vi.hoisted(() => ({
+const { mockSendEmail, mockAuditLog, mockValidateToken, mockNotifyStaff } = vi.hoisted(() => ({
+  mockNotifyStaff: vi.fn().mockResolvedValue(undefined),
   mockSendEmail: vi.fn().mockResolvedValue(true),
   mockAuditLog: vi.fn().mockResolvedValue(undefined),
   mockValidateToken: vi.fn().mockResolvedValue(null),
@@ -14,6 +15,7 @@ const { mockSendEmail, mockAuditLog, mockValidateToken } = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/email/sender", () => ({ sendEmail: mockSendEmail }));
 vi.mock("@/lib/audit/log", () => ({ auditLog: mockAuditLog }));
+vi.mock("@/lib/email-queue/notify-staff", () => ({ notifyProjectStaff: mockNotifyStaff }));
 vi.mock("@/lib/stakeholders/tokens", () => ({
   validateToken: mockValidateToken,
   hashToken: (token: string) => createHash("sha256").update(token).digest("hex"),
@@ -519,6 +521,41 @@ describe("POST /api/webhooks/email", () => {
         (c[0] as { subject: string }).subject?.includes("Unrecognised")
       );
       expect(bounced).toBe(false);
+
+      // Staff are told a reply is waiting, once, in-app.
+      expect(mockNotifyStaff).toHaveBeenCalledOnce();
+      const [, projectId, opts] = mockNotifyStaff.mock.calls[0];
+      expect(projectId).toBe("proj-1");
+      expect(opts.type).toBe("email_queue_reply_received");
+    });
+
+    it("does not notify staff again when Postmark retries a message that is already queued", async () => {
+      mockValidateToken.mockResolvedValue({ review: REVIEW, isExpired: false });
+      const insert = vi.fn();
+      // One shared lookup, since each from() call builds a new query builder:
+      // 1st = clarification token (no match), 2nd = message_id dedupe (already queued).
+      const queueLookup = vi
+        .fn()
+        .mockResolvedValueOnce({ data: null, error: null })
+        .mockResolvedValueOnce({ data: { id: "existing" }, error: null });
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn((table: string) =>
+          table === "inbound_email_queue" ? makeQueryBuilder({ insert, maybeSingle: queueLookup }) : makeQueryBuilder()
+        ),
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      await POST(
+        makeRequest({
+          ...BASE_PAYLOAD,
+          From: "stakeholder@external.com",
+          FromFull: { Email: "stakeholder@external.com", Name: "Sam", MailboxHash: TOKEN },
+          MailboxHash: TOKEN,
+        })
+      );
+
+      expect(insert).not.toHaveBeenCalled();
+      expect(mockNotifyStaff).not.toHaveBeenCalled();
     });
 
     it("#99: treats an expired token as no match — falls through instead of queuing a stakeholder_response", async () => {
