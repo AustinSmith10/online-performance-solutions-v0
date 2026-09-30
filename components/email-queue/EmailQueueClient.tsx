@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   approveQueueEntry,
@@ -92,7 +93,7 @@ type OnCommit = (commit: Omit<Commit, "rowId">) => void;
 
 type Toast =
   | { kind: "undo"; message: string }
-  | { kind: "info"; message: string; persistent?: boolean }
+  | { kind: "info"; message: string; persistent?: boolean; href?: string; hrefLabel?: string }
   | { kind: "error"; message: string };
 
 // Category is not workflow state, so the badge stays neutral.
@@ -705,6 +706,14 @@ function ToastBar({
         </svg>
       )}
       <span className="min-w-0 flex-1 break-words">{toast.message}</span>
+      {toast.kind === "info" && toast.href && (
+        <Link
+          href={toast.href}
+          className="press shrink-0 rounded-md bg-zinc-700 px-2 py-1 text-sm font-medium text-white transition-colors duration-150 hover:bg-zinc-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:items-center"
+        >
+          {toast.hrefLabel ?? "Open"}
+        </Link>
+      )}
       {toast.kind === "undo" && onUndo && (
         <button
           type="button"
@@ -809,7 +818,9 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
         return;
       }
       router.refresh();
-      if (commit.persistent) setNote({ kind: "info", message: commit.message, persistent: true });
+      if (commit.persistent || res.followUpHref) {
+        setNote({ kind: "info", message: commit.message, persistent: true, href: res.followUpHref, hrefLabel: "Open the project" });
+      }
       else if (!pendingRef.current) setToast({ kind: "info", message: commit.message });
     },
     [router, unhide]

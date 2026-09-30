@@ -44,6 +44,10 @@ export interface QueueActionState {
   // admin/consultant straight there to confirm it, rather than leaving that
   // as an easy-to-miss badge back on the project page (#101 follow-up).
   redirectTo?: string;
+  // Set after filing a stakeholder reply: the project page where the reply
+  // still has to be read and the review response logged. Shown as a link, not
+  // a redirect, so triaging a batch of mail isn't interrupted.
+  followUpHref?: string;
 }
 
 export type QueueCategory = "new_submission" | "thread_reply" | "stakeholder_response";
@@ -120,6 +124,11 @@ async function documentReviewRedirect(
   return `${base}?queue_approved=1`;
 }
 
+function followUpFor(target: ResolvedTarget, projectId: string | undefined, actorRole: string): string | undefined {
+  if (target.category !== "stakeholder_response" || !projectId) return undefined;
+  return `${actorRole === "consultant" ? "/ops/projects" : "/admin/projects"}/${projectId}`;
+}
+
 async function markResolved(
   supabase: ReturnType<typeof createAdminClient>,
   queueId: string,
@@ -173,7 +182,7 @@ export async function approveQueueEntry(queueId: string): Promise<QueueActionSta
   const redirectTo = await documentReviewRedirect(supabase, target, result.projectId, actor.role as string);
 
   revalidateQueueRoutes();
-  return { redirectTo };
+  return { redirectTo, followUpHref: followUpFor(target, result.projectId, actor.role as string) };
 }
 
 // ── Reassign & approve ──────────────────────────────────────────────────────
@@ -225,7 +234,7 @@ export async function reassignQueueEntry(
   const redirectTo = await documentReviewRedirect(supabase, target, result.projectId, actor.role as string);
 
   revalidateQueueRoutes();
-  return { redirectTo };
+  return { redirectTo, followUpHref: followUpFor(target, result.projectId, actor.role as string) };
 }
 
 // ── Reject ───────────────────────────────────────────────────────────────────

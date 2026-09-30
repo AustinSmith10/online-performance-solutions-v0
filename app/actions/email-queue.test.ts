@@ -159,6 +159,38 @@ describe("email-queue actions", () => {
       expect(vi.mocked(auditLog)).toHaveBeenCalledWith("email_queue.approved", "actor-1", "admin@example.com", expect.anything());
     });
 
+    describe("follow-up link after filing a stakeholder reply", () => {
+      const REPLY_ENTRY = { ...PENDING_ENTRY, proposed_category: "stakeholder_response", proposed_project_id: "proj-1", proposed_stakeholder_review_id: "review-1" };
+
+      function useEntry(entry: unknown) {
+        mockExecute.mockResolvedValue({ ok: true, projectId: "proj-1" });
+        vi.mocked(createAdminClient).mockReturnValue({
+          from: vi.fn().mockReturnValue(
+            makeQueryBuilder({
+              maybeSingle: vi.fn().mockResolvedValue({ data: entry, error: null }),
+              update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }),
+            })
+          ),
+        } as unknown as ReturnType<typeof createAdminClient>);
+      }
+
+      it("points admins at the admin project page", async () => {
+        useEntry(REPLY_ENTRY);
+        expect((await approveQueueEntry("queue-1")).followUpHref).toBe("/admin/projects/proj-1");
+      });
+
+      it("points consultants at the consultant project page", async () => {
+        vi.mocked(requireRole).mockResolvedValue({ id: "actor-1", email: "c@example.com", role: "consultant" } as never);
+        useEntry(REPLY_ENTRY);
+        expect((await approveQueueEntry("queue-1")).followUpHref).toBe("/ops/projects/proj-1");
+      });
+
+      it("offers no link for other categories", async () => {
+        useEntry(PENDING_ENTRY);
+        expect((await approveQueueEntry("queue-1")).followUpHref).toBeUndefined();
+      });
+    });
+
     it("leaves the row unresolved and surfaces the error when execution fails", async () => {
       mockExecute.mockResolvedValue({ ok: false, error: "boom" });
       const updateFn = vi.fn();

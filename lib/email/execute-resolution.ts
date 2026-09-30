@@ -754,6 +754,38 @@ async function executeStakeholderResponse(
     supabase
   );
 
+  // Attachments on the reply (marked-up drawings, a signed sheet) belong with
+  // the project's evidence, not left behind in the intake bucket. A pending
+  // copy is only removed once its evidence copy is safely recorded.
+  const filedPendingPaths: string[] = [];
+  const attachments = await downloadPendingAttachments(row, supabase);
+  for (const att of attachments) {
+    const safeName = att.Name.replace(/[^\w.\- ]+/g, "_");
+    const evidencePath = `${project.client_id}/${project.id}/evidence/${Date.now()}-${safeName}`;
+    const { error: uploadError } = await supabase.storage
+      .from("evidence")
+      .upload(evidencePath, att.buffer, { contentType: att.ContentType, upsert: false });
+    if (uploadError) {
+      console.error(`[email-queue] Failed to file reply attachment ${att.Name}:`, uploadError);
+      continue;
+    }
+    const { error: insertError } = await supabase.from("project_files").insert({
+      project_id: project.id,
+      file_type: "evidence",
+      storage_path: evidencePath,
+      original_filename: att.Name,
+      uploaded_by: uploadedBy,
+      reference: `stakeholder_review:${review.id}`,
+    });
+    if (insertError) {
+      console.error(`[email-queue] Failed to record reply attachment ${att.Name}:`, insertError);
+      await supabase.storage.from("evidence").remove([evidencePath]);
+      continue;
+    }
+    filedPendingPaths.push(att.path);
+  }
+  await removePendingAttachments(filedPendingPaths, supabase);
+
   await auditLog("stakeholder.email_reply_received", null, row.from_email, {
     projectId: project.id as string,
     orgId: project.client_id as string,
@@ -763,6 +795,7 @@ async function executeStakeholderResponse(
       queue_id: row.id,
       sender_verified: verified,
       evidence_file_id: evidenceFileId,
+      attachments_filed: filedPendingPaths.length,
     },
   });
 

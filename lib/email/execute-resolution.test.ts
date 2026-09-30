@@ -366,6 +366,80 @@ describe("executeQueueRowResolution", () => {
       expect(supabase.reviewUpdate).toHaveBeenCalledWith(expect.objectContaining({ email_reply_sender_verified: false }));
     });
 
+    // project_files takes two insert shapes: the .eml archive (.select().single())
+    // and the per-attachment rows (awaited directly).
+    function filesInsert(failFor?: string) {
+      return vi.fn((row: { original_filename?: string }) => {
+        const result = row.original_filename && row.original_filename === failFor ? { error: { message: "boom" } } : { error: null };
+        return Object.assign(Promise.resolve(result), {
+          select: () => ({ single: () => Promise.resolve({ data: { id: "evidence-file-1" }, error: null }) }),
+        });
+      });
+    }
+
+    it("files reply attachments to the project's evidence and clears them from intake", async () => {
+      const supabase = makeSupabase({ senderKnown: true });
+      const projectFilesInsert = filesInsert();
+      const baseFrom = supabase.from;
+      supabase.from = vi.fn((table: string) =>
+        table === "project_files" ? makeQueryBuilder({ insert: projectFilesInsert }) : baseFrom(table)
+      );
+      const evidenceUpload = vi.fn().mockResolvedValue({ error: null });
+      const pendingRemove = vi.fn().mockResolvedValue({ error: null });
+      const pendingDownload = vi.fn().mockResolvedValue({
+        data: { arrayBuffer: async () => new TextEncoder().encode("pdf-bytes").buffer },
+        error: null,
+      });
+      supabase.storage = {
+        from: vi.fn((bucket: string) =>
+          bucket === "pending-inbound"
+            ? { download: pendingDownload, remove: pendingRemove }
+            : { upload: evidenceUpload, remove: vi.fn() }
+        ),
+      };
+      const row = makeRow({
+        from_email: "stakeholder@external.com",
+        attachment_paths: [{ path: "queue-1/markup.pdf", filename: "markup.pdf", content_type: "application/pdf" }],
+      });
+
+      const result = await executeQueueRowResolution(row, { category: "stakeholder_response", stakeholderReviewId: "review-1" }, supabase as never);
+
+      expect(result.ok).toBe(true);
+      expect(evidenceUpload).toHaveBeenCalledWith(expect.stringMatching(/^org-1\/proj-1\/evidence\/\d+-markup\.pdf$/), expect.anything(), expect.objectContaining({ contentType: "application/pdf" }));
+      expect(projectFilesInsert).toHaveBeenCalledWith(
+        expect.objectContaining({ file_type: "evidence", original_filename: "markup.pdf", reference: "stakeholder_review:review-1" })
+      );
+      expect(pendingRemove).toHaveBeenCalledWith(["queue-1/markup.pdf"]);
+    });
+
+    it("keeps the intake copy when recording the evidence row fails", async () => {
+      const supabase = makeSupabase({ senderKnown: true });
+      const baseFrom = supabase.from;
+      supabase.from = vi.fn((table: string) =>
+        table === "project_files" ? makeQueryBuilder({ insert: filesInsert("markup.pdf") }) : baseFrom(table)
+      );
+      const pendingRemove = vi.fn().mockResolvedValue({ error: null });
+      supabase.storage = {
+        from: vi.fn((bucket: string) =>
+          bucket === "pending-inbound"
+            ? {
+                download: vi.fn().mockResolvedValue({ data: { arrayBuffer: async () => new ArrayBuffer(4) }, error: null }),
+                remove: pendingRemove,
+              }
+            : { upload: vi.fn().mockResolvedValue({ error: null }), remove: vi.fn() }
+        ),
+      };
+      const row = makeRow({
+        from_email: "stakeholder@external.com",
+        attachment_paths: [{ path: "queue-1/markup.pdf", filename: "markup.pdf", content_type: "application/pdf" }],
+      });
+
+      const result = await executeQueueRowResolution(row, { category: "stakeholder_response", stakeholderReviewId: "review-1" }, supabase as never);
+
+      expect(result.ok).toBe(true);
+      expect(pendingRemove).not.toHaveBeenCalled();
+    });
+
     it("returns an error when the target review cycle doesn't exist", async () => {
       const supabase = makeSupabase({ review: null });
       const row = makeRow();
