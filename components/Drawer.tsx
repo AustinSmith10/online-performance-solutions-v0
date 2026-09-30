@@ -42,7 +42,12 @@ export function Drawer({ isOpen, onClose, title, subtitle, footer, successMessag
   useEffect(() => {
     if (isOpen) {
       previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
-      panelRef.current?.focus();
+      // Land on the first form field when there is one (what autoFocus gave
+      // the dialogs this replaced); otherwise on the panel itself.
+      const field = panelRef.current?.querySelector<HTMLElement>(
+        "input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled])"
+      );
+      (field ?? panelRef.current)?.focus();
     } else {
       previouslyFocusedRef.current?.focus();
       previouslyFocusedRef.current = null;
@@ -144,7 +149,7 @@ export function Drawer({ isOpen, onClose, title, subtitle, footer, successMessag
             <button
               onClick={onClose}
               aria-label="Close panel"
-              className="mt-0.5 shrink-0 rounded-md p-1 text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700"
+              className="mt-0.5 shrink-0 rounded-md p-1 text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:p-3"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

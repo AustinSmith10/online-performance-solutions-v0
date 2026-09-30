@@ -44,7 +44,7 @@ function ReconcileButton({ projectId, compact }: { projectId: string; compact?: 
                 <button
                   type="submit"
                   disabled={pending}
-                  className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+                  className="press-subtle w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                 >
                   {pending ? "Clearing…" : "Confirm"}
                 </button>
@@ -88,7 +88,7 @@ export function OverrideForm({ projectId, alreadyOverridden, paymentResolved, co
         type="button"
         disabled
         title="Payment has already been resolved — there is no payment gate to override."
-        className="cursor-not-allowed rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs font-medium text-zinc-400"
+        className="press-subtle cursor-not-allowed rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs font-medium text-zinc-400"
       >
         Apply payment override
       </button>
@@ -119,7 +119,7 @@ export function OverrideForm({ projectId, alreadyOverridden, paymentResolved, co
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Explain why the payment gate is being bypassed…"
-                  className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none"
                 />
               </div>
               {state.error && <p className="text-sm text-red-600">{state.error}</p>}
@@ -134,7 +134,7 @@ export function OverrideForm({ projectId, alreadyOverridden, paymentResolved, co
                 <button
                   type="submit"
                   disabled={pending || reason.length < 10}
-                  className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                  className="press-subtle flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
                 >
                   {pending ? "Applying…" : "Apply override"}
                 </button>

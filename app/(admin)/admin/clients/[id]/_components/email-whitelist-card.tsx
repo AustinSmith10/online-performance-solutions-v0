@@ -1,5 +1,6 @@
 "use client";
 
+import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { useActionState, useEffect, useRef } from "react";
 import { addEmailDomain, removeEmailDomain, type WhitelistState } from "@/app/actions/clients";
 
@@ -68,12 +69,7 @@ export function EmailWhitelistCard({ orgId, domains }: Props) {
                   <td className="px-5 py-3 font-mono text-xs text-zinc-800">{domain}</td>
                   <td className="px-5 py-3 text-right">
                     <form action={removeAction}>
-                      <button
-                        type="submit"
-                        className="rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 hover:text-red-700"
-                      >
-                        Delete
-                      </button>
+                      <FormSubmitButton pendingLabel="Deleting…" className="rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 hover:text-red-700">Delete</FormSubmitButton>
                     </form>
                   </td>
                 </tr>

@@ -86,7 +86,7 @@ export function UserHeaderActions({
         <button
           type="submit"
           disabled={restoreDeletedPending}
-          className="press-subtle rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="press-subtle rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50"
         >
           {restoreDeletedPending ? "Restoring…" : "Restore from recovery bin"}
         </button>
@@ -94,7 +94,7 @@ export function UserHeaderActions({
     );
   }
 
-  const BTN = "press-subtle rounded-md border bg-white px-3 py-1.5 text-xs font-medium disabled:opacity-50";
+  const BTN = "press-subtle rounded-md border bg-white px-3 py-1.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50";
 
   return (
     <>

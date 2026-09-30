@@ -66,13 +66,13 @@ export function TourPanel({
       <p className="mt-3 text-sm font-medium text-zinc-900">{step.title}</p>
       <p className="mt-1 text-sm text-zinc-600">{step.text}</p>
       <div className="mt-3 flex items-center justify-between">
-        <button type="button" onClick={onSkip} className="text-xs text-zinc-500 hover:underline">
+        <button type="button" onClick={onSkip} className="text-xs text-zinc-500 transition-colors duration-150 hover:text-zinc-700">
           Skip
         </button>
         <button
           type="button"
           onClick={onNext}
-          className="rounded-md bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700"
+          className="press-subtle rounded-md bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700"
         >
           {index === total - 1 ? "Done" : "Next"}
         </button>

@@ -37,7 +37,7 @@ export function ResumeButton({
                 <button
                   type="submit"
                   disabled={pending}
-                  className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                  className="press-subtle w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                 >
                   {pending ? "Resuming…" : "Confirm"}
                 </button>

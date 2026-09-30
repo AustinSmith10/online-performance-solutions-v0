@@ -150,7 +150,7 @@ function OverrideReconcileForm({ projectId }: { projectId: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+        className="press-subtle w-full rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
       >
         {pending ? "Reconciling…" : "Mark payment received externally"}
       </button>
@@ -178,7 +178,7 @@ function RetryConversionForm({ projectId }: { projectId: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs font-medium text-red-800 hover:bg-red-100 disabled:opacity-50"
+        className="press-subtle w-full rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs font-medium text-red-800 hover:bg-red-100 disabled:opacity-50"
       >
         {pending ? "Retrying…" : "Retry PBDR conversion"}
       </button>
@@ -278,7 +278,7 @@ function SetNumberAndAssignDrawerContent({
             <button
               type="submit"
               disabled={pending || !field.value.trim()}
-              className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {pending ? "Saving…" : "Save"}
             </button>
@@ -834,7 +834,7 @@ function EmailFailureDrawerContent({
             <button
               type="submit"
               disabled={resendPending || resendState.success}
-              className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="press-subtle rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
             >
               {resendPending ? "Resending…" : resendState.success ? "Resent ✓" : "Resend invite"}
             </button>
@@ -945,11 +945,11 @@ function HeroCard({
         </div>
         <div className="shrink-0">
           {single ? (
-            <button type="button" onClick={() => onOpen(single.open())} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50">
+            <button type="button" onClick={() => onOpen(single.open())} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 [@media(pointer:coarse)]:min-h-10 transition-colors duration-150 hover:bg-zinc-50">
               {single.actionLabel}
             </button>
           ) : (
-            <button type="button" onClick={onToggleExpand} className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50">
+            <button type="button" onClick={onToggleExpand} className="press-subtle rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 [@media(pointer:coarse)]:min-h-10 transition-colors duration-150 hover:bg-zinc-50">
               Review ({category.totalCount ?? category.items.length}) {expanded ? "▲" : "▼"}
             </button>
           )}
@@ -994,7 +994,7 @@ function HeroCard({
               {single.actionLabel}
             </button>
           ) : (
-            <button type="button" onClick={onToggleExpand} className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${t.button}`}>
+            <button type="button" onClick={onToggleExpand} className={`press-subtle rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${t.button}`}>
               Review ({category.totalCount ?? category.items.length}) {expanded ? "▲" : "▼"}
             </button>
           )}

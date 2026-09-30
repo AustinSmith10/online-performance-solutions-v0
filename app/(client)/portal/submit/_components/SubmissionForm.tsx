@@ -157,7 +157,7 @@ function TokenInput({
           {field.candidates!.map((c, i) => (
             <label
               key={`${c.value}-${i}`}
-              className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
+              className="flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
             >
               <input
                 type="radio"
@@ -172,7 +172,7 @@ function TokenInput({
               />
               <span>
                 <span className="font-medium text-zinc-900">{c.value}</span>{" "}
-                <span className="text-zinc-400">
+                <span className="text-zinc-500">
                   ({c.source_document})
                 </span>
               </span>
@@ -347,7 +347,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                     checked={reviewedConfirmed}
                     onChange={(e) => setReviewedConfirmed(e.target.checked)}
                     disabled={submitPending}
-                    className="mt-0.5 h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                    className="mt-0.5 h-4 w-4 rounded-sm border-blue-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="text-sm text-blue-900">
                     <span className="font-medium">I confirm I have reviewed the details</span> and that
@@ -360,9 +360,9 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                     {submitState.error}{" "}
                     <a
                       href={`${projectBasePath}/${submitState.duplicateProjectId}`}
-                      className="font-medium underline hover:text-red-900"
+                      className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 transition-colors duration-150 hover:bg-red-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
                     >
-                      View existing project →
+                      View existing project
                     </a>
                   </div>
                 ) : submitState.error ? (
@@ -471,7 +471,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                   </div>
                 </div>
               )}
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-500">
                 Fields marked <span className="text-red-500">*</span> are required before submitting.
               </p>
             </div>
@@ -903,7 +903,7 @@ function RequestForm({
       {selectedTemplateId && (
         <div className="space-y-5">
           {currentRequirements.length === 0 ? (
-            <p className="text-center text-sm text-zinc-400">
+            <p className="text-center text-sm text-zinc-500">
               No file uploads required for this report type.
             </p>
           ) : (
@@ -931,9 +931,9 @@ function RequestForm({
               {" "}
               <a
                 href={`${projectBasePath}/${continueDuplicateId}`}
-                className="font-medium underline hover:text-red-900"
+                className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 transition-colors duration-150 hover:bg-red-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
               >
-                View existing project →
+                View existing project
               </a>
             </>
           )}
@@ -951,7 +951,7 @@ function RequestForm({
       </button>
 
       {!continuePending && !ready && (
-        <p className="text-center text-xs text-zinc-400">
+        <p className="text-center text-xs text-zinc-500">
           {hasAnyFiles ? "Waiting for every file to finish processing…" : "Upload all required files to continue."}
         </p>
       )}

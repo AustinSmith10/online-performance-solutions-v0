@@ -32,6 +32,21 @@
   }
 }
 
+/* Baseline keyboard focus ring. Any link, button or summary that doesn't set
+   its own focus style (a `focus-visible:` utility, ring or outline) still gets
+   a visible one; utilities are in a later layer, so they always win. Text
+   fields keep their own ring. Keyboard only: :focus-visible never fires on a
+   mouse click. */
+@layer base {
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid var(--color-zinc-900);
+    outline-offset: 2px;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

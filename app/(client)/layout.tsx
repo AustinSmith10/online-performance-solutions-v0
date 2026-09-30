@@ -63,7 +63,7 @@ export default async function ClientLayout({ children }: { children: React.React
               <form action={logout}>
                 <button
                   type="submit"
-                  className="rounded px-2 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                  className="rounded-md px-2 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
                 >
                   Sign out
                 </button>

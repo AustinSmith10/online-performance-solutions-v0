@@ -66,9 +66,18 @@ export function WaiveForm({ reviewId, projectId, stakeholderName, requireEvidenc
     return () => document.removeEventListener("keydown", handler, true);
   }, [open]);
 
+  // Return focus to the trigger only after the dialog has actually been open;
+  // on mount `open` is false, and refocusing then would steal focus (and
+  // scroll) on every page that renders a WaiveForm.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) panelRef.current?.focus();
-    else triggerRef.current?.focus();
+    if (open) {
+      wasOpen.current = true;
+      panelRef.current?.focus();
+    } else if (wasOpen.current) {
+      wasOpen.current = false;
+      triggerRef.current?.focus();
+    }
   }, [open]);
 
   return (
@@ -103,13 +112,13 @@ export function WaiveForm({ reviewId, projectId, stakeholderName, requireEvidenc
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="e.g. Stakeholder unreachable after 3 attempts"
-                  className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none"
                 />
               </div>
               {requireEvidence && (
                 <div>
                   <span className="mb-1.5 block text-xs font-medium text-zinc-700">
-                    Evidence <span className="font-normal text-zinc-400">(required)</span>
+                    Evidence <span className="font-normal text-zinc-500">(required)</span>
                   </span>
                   <UploadDropzone
                     accept="application/pdf,image/png,image/jpeg,image/tiff,message/rfc822,.eml,application/vnd.ms-outlook,.msg"
@@ -137,7 +146,7 @@ export function WaiveForm({ reviewId, projectId, stakeholderName, requireEvidenc
                 <button
                   type="submit"
                   disabled={pending || reason.length < 10 || (requireEvidence && !file)}
-                  className="flex-1 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+                  className="press-subtle flex-1 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
                 >
                   {pending ? "Waiving…" : "Waive response"}
                 </button>

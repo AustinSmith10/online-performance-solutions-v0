@@ -74,7 +74,7 @@ export function DispatchButton({
                 <button
                   type="submit"
                   disabled={pending}
-                  className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+                  className="press-subtle w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                 >
                   {pending ? "Dispatching…" : "Confirm"}
                 </button>

@@ -82,8 +82,8 @@ function SortPills<Col extends string>({
             key={o.col}
             href={sortHref(params, o.col, sortCol, sortOrder)}
             aria-current={active ? "true" : undefined}
-            className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 ${
-              active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+            className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:items-center [@media(pointer:coarse)]:px-3 ${
+              active ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-900"
             }`}
           >
             {o.label} {active ? (sortOrder === "asc" ? "↑" : "↓") : ""}
@@ -205,7 +205,7 @@ export default async function UsersPage({
                 name="q"
                 defaultValue={q ?? ""}
                 placeholder="Search name or email…"
-                className="w-full sm:w-auto rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                className="w-full sm:w-auto rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
               />
               <select
                 name="availability"
@@ -336,7 +336,7 @@ export default async function UsersPage({
             name="q"
             defaultValue={q ?? ""}
             placeholder="Search name or email…"
-            className="w-full sm:w-auto rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            className="w-full sm:w-auto rounded-md border border-zinc-300 px-3 py-2 text-sm placeholder-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           <select
             name="role"

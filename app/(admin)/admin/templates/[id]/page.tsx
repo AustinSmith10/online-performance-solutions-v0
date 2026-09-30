@@ -162,7 +162,7 @@ export default async function TemplatePage({
   });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-4xl space-y-5 [@media(pointer:coarse)]:[&_button]:min-h-10">
       {/* Breadcrumb */}
       <BackLink href="/admin/templates">Templates</BackLink>
 
@@ -207,7 +207,7 @@ export default async function TemplatePage({
           {template.org && (
             <>
               Client{" "}
-              <Link href={`/admin/clients/${template.org.id}`} className="font-medium text-zinc-900 hover:underline">
+              <Link href={`/admin/clients/${template.org.id}`} className="font-medium text-zinc-900 transition-colors duration-150 hover:text-zinc-600">
                 {template.org.name}
               </Link>
               {" · "}

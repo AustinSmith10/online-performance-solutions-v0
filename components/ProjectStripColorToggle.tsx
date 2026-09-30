@@ -36,7 +36,7 @@ export function ProjectStripColorToggle({
           disabled={pending}
           role="switch"
           aria-checked={strip}
-          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 disabled:opacity-50 ${
+          className={`press-subtle relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 disabled:opacity-50 ${
             strip ? "bg-zinc-900" : "bg-zinc-200"
           }`}
         >

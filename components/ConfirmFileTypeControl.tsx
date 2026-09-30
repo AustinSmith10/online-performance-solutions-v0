@@ -62,7 +62,7 @@ export function ConfirmFileTypeControl({
         type="button"
         onClick={handleConfirm}
         disabled={isPending}
-        className="rounded-md border border-zinc-300 px-2 py-0.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-30"
+        className="press-subtle rounded-md border border-zinc-300 px-2 py-0.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-30"
       >
         {isPending ? "Saving…" : "Confirm"}
       </button>

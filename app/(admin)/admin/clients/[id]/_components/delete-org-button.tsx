@@ -20,7 +20,7 @@ export function DeleteOrgButton({ orgId, orgName, userCount }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="press-subtle self-start shrink-0 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+        className="press-subtle self-start shrink-0 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition-colors duration-150 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
       >
         Delete client
       </button>
@@ -57,7 +57,7 @@ export function DeleteOrgButton({ orgId, orgName, userCount }: Props) {
             type="button"
             onClick={() => setOpen(false)}
             disabled={pending}
-            className="press-subtle flex-1 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+            className="press-subtle flex-1 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -65,7 +65,7 @@ export function DeleteOrgButton({ orgId, orgName, userCount }: Props) {
             <button
               type="submit"
               disabled={pending}
-              className="press-subtle w-full rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="press-subtle w-full rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-50"
             >
               {pending ? "Deleting…" : "Yes, delete"}
             </button>

@@ -235,7 +235,7 @@ function EditForm({
             type="button"
             onClick={onCancel}
             disabled={pending}
-            className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+            className="press-subtle rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -313,7 +313,7 @@ function PasswordSection({
               required
               className={input}
             />
-            <ul className="mt-2 space-y-1 text-xs text-zinc-400">
+            <ul className="mt-2 space-y-1 text-xs text-zinc-500">
               <li>• At least 12 characters</li>
               <li>• One uppercase letter (A–Z)</li>
               <li>• One number (0–9)</li>
@@ -370,7 +370,7 @@ function Field({
           no id plumbing needed here. */}
       <label className="block text-sm font-medium text-zinc-700">
         {label}
-        <div className="mt-1">{children}</div>
+        <span className="mt-1 block">{children}</span>
       </label>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>

@@ -58,21 +58,21 @@ export function AttachEvidenceForm({ projectId }: { projectId: string }) {
       />
       <div>
         <label htmlFor={`evidence-reference-${projectId}`} className="block text-xs font-medium text-zinc-500">
-          Reference <span className="font-normal text-zinc-400">(optional — e.g. a field or decision this evidences)</span>
+          Reference <span className="font-normal text-zinc-500">(optional — e.g. a field or decision this evidences)</span>
         </label>
         <input
           id={`evidence-reference-${projectId}`}
           type="text"
           name="reference"
           placeholder="e.g. EXTRACT_ADDRESS"
-          className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-1.5 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+          className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-1.5 text-sm placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none"
         />
       </div>
       <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={pending || !hasFile}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {pending ? "Attaching…" : "Attach evidence"}
         </button>

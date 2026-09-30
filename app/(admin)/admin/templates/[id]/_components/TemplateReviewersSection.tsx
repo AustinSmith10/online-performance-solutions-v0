@@ -20,7 +20,7 @@ export function TemplateReviewersSection({ templateId, orgId, roster, requiredId
     return (
       <p className="px-5 py-8 text-center text-sm text-zinc-500">
         This client has no reviewer roster yet.{" "}
-        <Link href={`/admin/clients/${orgId}`} className="font-medium text-zinc-900 hover:underline">
+        <Link href={`/admin/clients/${orgId}`} className="font-medium text-zinc-900 transition-colors duration-150 hover:text-zinc-600">
           Add third-party stakeholders on their profile
         </Link>{" "}
         to require them here.

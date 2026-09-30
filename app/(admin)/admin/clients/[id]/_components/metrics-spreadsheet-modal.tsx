@@ -123,7 +123,7 @@ function ModalBody(props: Props & { onClose: () => void }) {
           type="button"
           onClick={props.onClose}
           aria-label="Close"
-          className="ml-3 shrink-0 rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600"
+          className="ml-3 shrink-0 rounded-md p-1 text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:p-3"
         >
           ✕
         </button>
@@ -143,7 +143,7 @@ function ModalBody(props: Props & { onClose: () => void }) {
                 setIsDragOver(false);
                 applyFile(e.dataTransfer.files?.[0]);
               }}
-              className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed px-4 py-10 text-xs transition-colors ${
+              className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed px-4 py-10 text-xs transition-colors duration-150 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-zinc-900 ${
                 isDragOver
                   ? "border-zinc-400 bg-zinc-100 text-zinc-700"
                   : "border-zinc-300 bg-white text-zinc-500 hover:border-zinc-400 hover:text-zinc-600"
@@ -159,7 +159,7 @@ function ModalBody(props: Props & { onClose: () => void }) {
               <input
                 type="file"
                 accept=".xlsx,.xls"
-                className="hidden"
+                className="sr-only"
                 onChange={(e) => applyFile(e.target.files?.[0])}
               />
             </label>

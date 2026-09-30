@@ -28,7 +28,7 @@ export function PauseForm({ projectId }: { projectId: string }) {
                   rows={2}
                   required
                   placeholder="e.g. Client requested hold pending DA outcome"
-                  className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none"
                 />
               </div>
               {state.error && <p className="text-sm text-red-600">{state.error}</p>}
@@ -43,7 +43,7 @@ export function PauseForm({ projectId }: { projectId: string }) {
                 <button
                   type="submit"
                   disabled={pending}
-                  className="flex-1 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+                  className="press-subtle flex-1 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
                 >
                   {pending ? "Pausing…" : "Pause project"}
                 </button>

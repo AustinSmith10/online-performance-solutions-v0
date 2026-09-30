@@ -61,11 +61,11 @@ export function ReferenceSampleControl({
       </label>
 
       {currentSignedUrl && currentFilename && (
-        <div className="flex items-center justify-between rounded border border-zinc-200 bg-white px-2 py-1.5">
+        <div className="flex items-center justify-between rounded-md border border-zinc-200 bg-white px-2 py-1.5">
           <button
             type="button"
             onClick={() => setShowPreview((v) => !v)}
-            className="truncate text-left text-xs font-medium text-zinc-700 hover:underline"
+            className="truncate text-left text-xs font-medium text-zinc-700 transition-colors duration-150 hover:text-zinc-900"
           >
             {currentFilename}
           </button>
@@ -101,7 +101,7 @@ export function ReferenceSampleControl({
           <button
             type="submit"
             disabled={pending}
-            className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+            className="press-subtle rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
             {pending ? "Uploading…" : currentSignedUrl ? "Replace sample" : "Upload sample"}
           </button>

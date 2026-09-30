@@ -34,6 +34,7 @@ export function MobileNav({
   const [open, setOpen] = useState(false);
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
   const wasOpen = useRef(false);
 
   // Widening past the lg breakpoint hides the drawer's trigger; close it so
@@ -55,6 +56,22 @@ export function MobileNav({
       closeButtonRef.current?.focus();
       const onKey = (e: KeyboardEvent) => {
         if (e.key === "Escape") setOpen(false);
+        // aria-modal says the page behind is unreachable, so keep Tab inside.
+        if (e.key === "Tab" && drawerRef.current) {
+          const focusable = drawerRef.current.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       };
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
@@ -104,6 +121,7 @@ export function MobileNav({
       {/* Drawer */}
       <div
         id="mobile-nav-drawer"
+        ref={drawerRef}
         role="dialog"
         aria-modal="true"
         aria-label="Navigation"

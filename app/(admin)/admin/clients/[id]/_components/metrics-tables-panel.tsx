@@ -116,7 +116,7 @@ function DeleteTableButton({
         <button
           type="button"
           onClick={() => setConfirming(false)}
-          className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-100"
+          className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
         >
           Cancel
         </button>
@@ -129,7 +129,7 @@ function DeleteTableButton({
     <button
       type="button"
       onClick={() => setConfirming(true)}
-      className="mt-6 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 transition-colors duration-150 hover:bg-red-100"
+      className="mt-6 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 transition-colors duration-150 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
     >
       Delete table
     </button>

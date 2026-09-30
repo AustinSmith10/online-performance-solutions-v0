@@ -42,12 +42,12 @@ export function ConsultantCard({
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Consultant</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Consultant</p>
         {assignedName && (
           <button
             type="button"
             onClick={() => setReassigning((v) => !v)}
-            className="text-xs font-medium text-zinc-600 hover:underline"
+            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
           >
             {reassigning ? "Cancel" : "Reassign"}
           </button>
@@ -60,7 +60,7 @@ export function ConsultantCard({
           {availability && <p className="text-xs text-zinc-500">{AVAILABILITY_LABELS[availability]}</p>}
         </div>
       ) : (
-        <p className="mb-2 text-zinc-400">Unassigned</p>
+        <p className="mb-2 text-zinc-500">Unassigned</p>
       )}
 
       {(reassigning || !assignedName) && (
@@ -72,14 +72,14 @@ export function ConsultantCard({
             isReassign={!!assignedName}
           />
           {consultants.length === 0 && (
-            <p className="mt-2 text-xs text-zinc-400">No consultants available.</p>
+            <p className="mt-2 text-xs text-zinc-500">No consultants available.</p>
           )}
         </div>
       )}
 
       {history.length > 1 && (
         <div className="mt-3 border-t border-zinc-100 pt-2">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">History</p>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">History</p>
           <div className="space-y-0.5">
             {history.map((a, i) => (
               <p key={`${a.consultantId}-${i}`} className="text-xs text-zinc-500">

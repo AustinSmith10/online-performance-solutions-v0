@@ -106,7 +106,7 @@ function RequirementCard({
                 type="text"
                 required
                 defaultValue={requirement.name}
-                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
             <div className="shrink-0">
@@ -119,7 +119,7 @@ function RequirementCard({
                 min={1}
                 max={20}
                 defaultValue={requirement.max_count}
-                className="w-16 rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-16 rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
           </div>
@@ -170,7 +170,7 @@ function RequirementCard({
                 type="text"
                 defaultValue={requirement.ai_judge_hint ?? ""}
                 placeholder="e.g. A Stockland Purchase Order — letterhead, PO number, cost table"
-                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
             <div>
@@ -184,7 +184,7 @@ function RequirementCard({
                   "\n",
                 )}
                 placeholder={"Purchase Order\nPO Number"}
-                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
             <div className="flex items-end gap-3">
@@ -197,7 +197,7 @@ function RequirementCard({
                   type="number"
                   min={1}
                   defaultValue={requirement.marker_page_count_min ?? ""}
-                  className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
               <div className="w-20">
@@ -209,7 +209,7 @@ function RequirementCard({
                   type="number"
                   min={1}
                   defaultValue={requirement.marker_page_count_max ?? ""}
-                  className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
               <div className="flex-1">
@@ -221,7 +221,7 @@ function RequirementCard({
                   type="text"
                   defaultValue={requirement.marker_regex ?? ""}
                   placeholder="PO-\d+"
-                  className="w-full rounded-md border border-zinc-200 px-2 py-1.5 font-mono text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full rounded-md border border-zinc-200 px-2 py-1.5 font-mono text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
               </div>
             </div>

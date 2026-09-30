@@ -219,6 +219,27 @@ A 2px-bordered, urgency-tinted (blue neutral / amber / red / green) card with a 
 ### List switcher (dashboard)
 Bordered white track with 4 equal ARIA tabs (2x2 on phones); selected = zinc-900 fill with white text, others zinc-600 text; counts in parentheses. Sticky under the header from `sm` up. The URL is the state (`?tab=&page=&q=`); each tab is paged server-side at 20, with a debounced search box once a list has more than 6 items and Previous/Next controls. Rows sort revisions first, then most overdue, then the rest; the Overdue pill shows days ("Overdue · 6d").
 
+### Tab bar (shared `TabBar`)
+Underline tabs with real tab semantics: `role="tablist"`/`tab`, `aria-selected`, roving `tabIndex`, and a `tabpanel` keyed to the active tab. Arrow keys, Home and End move focus only; Enter or Space activates, so tab changes behind an unsaved-changes guard prompt once per choice. The grey baseline is an inset shadow on the scroll row (not a border with `-mb-px`), so the active tab's 2px line paints over it and nothing clips. Used by `ProfileTabs` and the user-detail tabs; the email queue has its own status tabs with the same semantics.
+
+### Sort pills
+Filled `rounded-full px-2 py-0.5 text-xs font-medium`: active `bg-zinc-900 text-white`, inactive `bg-zinc-100 text-zinc-700 hover:bg-zinc-200`. No border, so active and inactive share one height. Each has a `focus-visible` outline and grows to a 40px target on coarse pointers. A text column starts A-Z on first click, a number or date starts high-to-low.
+
+### Inline confirm and edit panels
+Reject, turn-off, purge and resolve confirmations open in place with `rise-in` rather than in a modal. Cancel sits where the trigger button was, so a double-click on the trigger lands on the safe choice; the destructive button is the one that moved. High-impact purges (a client cascades to its templates and stakeholders; a user account) also require typing the name before the destructive button unlocks. Panels use the tinted-callout radius (`rounded-lg`) and no border inside a bordered card.
+
+### Undo toast and persistent notes (email queue)
+Approve, reassign and reject are held for six seconds behind an Undo toast and only then sent, because approving has real side effects and can't be reverted after the fact. The row leaves the list at once and the next email is selected. Errors and messages that imply follow-up work ("Filed, needs manual review", or an Open-the-project link) live in a separate note that stays until dismissed, so a newer Undo toast never replaces them. Toasts use `toast-item` and exit the way they entered. A pending action is flushed, never lost, when the admin starts another one, switches tab or leaves; a flushed action never redirects.
+
+### Review context block (email queue)
+Before an admin decides on a stakeholder reply, a tinted callout states which review it answers (cycle, reviewer, sent date, link expiry) with an amber note if the link expired or was already answered, and whether the sender is on the project's reviewer list (green if so, amber "will be filed as unverified" if not). The reply is shown without the quoted thread, with a toggle for the full email. Open items are worked oldest-first and show "Waiting 2d 4h", amber after 24 hours.
+
+### Kill-switch card (settings)
+A platform-wide switch shows its saved state as an On (green) or Off (amber) chip. Turning it off is a second, explicit step in an amber callout that says what stops; turning it on saves directly. Other settings forms keep Save disabled until edited (`useFormDirty`).
+
+### Bulk selection (recovery bin)
+Rows carry a checkbox with a 44px tap area; a bar with the count and "Restore N selected" appears once anything is selected. Only the reversible action is bulk: Delete forever stays per row.
+
 ## Do's and Don'ts
 
 ### Do:

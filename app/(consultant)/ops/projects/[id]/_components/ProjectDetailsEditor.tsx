@@ -121,7 +121,7 @@ function EditableRow({
           <EditIconButton
             onClick={() => setEditing(true)}
             label={`Edit ${label}`}
-            className="text-zinc-400 opacity-0 hover:text-zinc-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+            className="text-zinc-500 opacity-0 hover:text-zinc-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
           />
         </div>
         {/* Rendered on its own line, not trailing inline with the value —

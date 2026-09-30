@@ -63,7 +63,7 @@ export function PendingDeliveryPanel({
             type="button"
             onClick={handleExpedite}
             disabled={pending}
-            className="rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-50"
+            className="press-subtle rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-50"
           >
             {pending ? "Expediting…" : "Expedite delivery"}
           </button>

@@ -23,7 +23,7 @@ type Props = {
 };
 
 export function UserHeaderMeta({ user, clients }: Props) {
-  const showClient = user.role === "stakeholder";
+  const showClient = user.role === "stakeholder" || !!user.client_id;
 
   return (
     <div className="mt-3.5 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-zinc-100 pt-3 text-sm text-zinc-500">

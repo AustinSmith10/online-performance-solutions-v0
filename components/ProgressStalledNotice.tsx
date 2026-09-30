@@ -10,7 +10,7 @@ export function ProgressStalledNotice({ onRefresh }: { onRefresh: () => void }) 
       <button
         type="button"
         onClick={onRefresh}
-        className="mt-1 font-medium underline underline-offset-2 hover:text-amber-900"
+        className="mt-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 transition-colors duration-150 hover:bg-amber-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
       >
         Refresh
       </button>

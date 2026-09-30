@@ -633,6 +633,32 @@ describe("POST /api/webhooks/email", () => {
       expect(mockNotifyStaff.mock.calls[0][2].message("221083")).toContain("already answered");
     });
 
+    it("answers and notifies once when Postmark retries a stale-token email from an unknown sender", async () => {
+      mockValidateToken.mockResolvedValue({ review: { ...REVIEW, expires_at: "2000-01-01T00:00:00Z" }, isExpired: true });
+      // audit_log already has an entry for this message_id: it was handled.
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn((table: string) =>
+          table === "audit_log"
+            ? makeQueryBuilder({ maybeSingle: vi.fn().mockResolvedValue({ data: { id: "audit-1" }, error: null }) })
+            : makeQueryBuilder()
+        ),
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      const res = await POST(
+        makeRequest({
+          ...BASE_PAYLOAD,
+          From: "stakeholder@external.com",
+          FromFull: { Email: "stakeholder@external.com", Name: "Sam", MailboxHash: TOKEN },
+          MailboxHash: TOKEN,
+        })
+      );
+
+      expect(res.status).toBe(200);
+      expect(mockSendEmail).not.toHaveBeenCalled();
+      expect(mockNotifyStaff).not.toHaveBeenCalled();
+    });
+
     it("does not tell staff about an unrecognised sender when there is no review token at all", async () => {
       mockValidateToken.mockResolvedValue(null);
       vi.mocked(createAdminClient).mockReturnValue({

@@ -114,7 +114,7 @@ function CandidatePreviewButton({
       href={href}
       filename={filename}
       buttonLabel="Preview"
-      buttonClassName="ml-1 rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+      buttonClassName="ml-1 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
     />
   );
 }
@@ -282,7 +282,7 @@ export function FieldFlagReview({
           ))}
         </div>
         {resolvedByEmail && (
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-zinc-500">
             Resolved by {resolvedByEmail}
             {resolvedAt && ` on ${formatAuDate(resolvedAt)}`}
           </p>
@@ -315,7 +315,7 @@ export function FieldFlagReview({
               <span className={c.value === currentValue ? "font-semibold text-zinc-900" : "text-zinc-700"}>
                 {c.value || "(empty)"}
               </span>{" "}
-              <span className="text-zinc-400">
+              <span className="text-zinc-500">
                 ({c.source_document})
               </span>
               {c.value === currentValue && (
@@ -331,7 +331,7 @@ export function FieldFlagReview({
           ))}
         </div>
         {resolvedByEmail && (
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-zinc-500">
             Resolved by {resolvedByEmail}
             {resolvedAt && ` on ${formatAuDate(resolvedAt)}`}
           </p>
@@ -358,7 +358,7 @@ export function FieldFlagReview({
               setValue(conflict.resolvedValue);
               setConflict(null);
             }}
-            className="ml-2 underline hover:text-amber-900"
+            className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 transition-colors duration-150 hover:bg-amber-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
           >
             Use their value
           </button>
@@ -407,7 +407,7 @@ export function FieldFlagReview({
             {candidates.map((c, i) => (
               <label
                 key={`${c.value}-${i}`}
-                className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
+                className="flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
               >
                 <input
                   type="radio"
@@ -417,7 +417,7 @@ export function FieldFlagReview({
                 />
                 <span>
                   <span className="font-medium text-zinc-900">{c.value || "(empty)"}</span>{" "}
-                  <span className="text-zinc-400">
+                  <span className="text-zinc-500">
                     ({c.source_document})
                   </span>
                   {/* The value that came in on the submission for this field —
@@ -527,7 +527,7 @@ export function FieldFlagReview({
           type="button"
           onClick={handleResolve}
           disabled={pending || (requiresAcknowledgment && !confirmed)}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="press-subtle rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {pending ? "Resolving…" : requiresAcknowledgment ? "Resolve & acknowledge" : "Resolve"}
         </button>

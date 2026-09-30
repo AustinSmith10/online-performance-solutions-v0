@@ -74,14 +74,14 @@ export default async function ConsultantLayout({
               <NotificationTrayServer projectBasePath="/ops/projects" align="right" />
               <Link
                 href="/ops/profile"
-                className="hidden max-w-[160px] truncate rounded py-2 text-xs text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 sm:block"
+                className="hidden max-w-[160px] truncate rounded-md py-2 text-xs text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 sm:block"
               >
                 {userName}
               </Link>
               <form action={logout}>
                 <button
                   type="submit"
-                  className="rounded px-2 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                  className="rounded-md px-2 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
                 >
                   Sign out
                 </button>

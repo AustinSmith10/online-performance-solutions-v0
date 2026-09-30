@@ -55,6 +55,7 @@ export function NotificationToasts({
   const router = useRouter();
   const seenIds = useRef<Set<string> | null>(null);
   const exitTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const stackRef = useRef<HTMLDivElement>(null);
 
   const pushToast = useCallback((entry: TrayEntry) => {
     setToasts((prev) => [...prev, { entry, createdAt: Date.now() }]);
@@ -134,11 +135,14 @@ export function NotificationToasts({
     };
   }, [includeNeedsAttention, projectBasePath, pushToast]);
 
-  // The stack unmounts when empty, so a pointer that was over it never fires
-  // mouseleave — clear the hold or the next toast would never auto-dismiss.
+  // A pointer or focus hold must not outlive its target. When the toast that
+  // had it is removed (dismissed with the keyboard, or the stack empties) there
+  // is no mouseleave or blur, so clear the hold here or the remaining toasts
+  // would never auto-dismiss.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets a pointer-hold whose mouseleave can never fire once the stack unmounts
-    if (toasts.length === 0) setPaused(false);
+    const el = stackRef.current;
+    const stillHeld = !!el && (el.matches(":hover") || el.contains(document.activeElement));
+    if (toasts.length === 0 || !stillHeld) setPaused(false);
   }, [toasts.length]);
 
   // Marks matching toasts as leaving (fade + slide out), then unmounts them.
@@ -191,6 +195,7 @@ export function NotificationToasts({
 
   return (
     <div
+      ref={stackRef}
       role="status"
       aria-live="polite"
       onMouseEnter={() => setPaused(true)}

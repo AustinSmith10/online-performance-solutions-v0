@@ -311,7 +311,7 @@ export default async function OrganisationDetailPage({
                 return (
                   <tr key={t.id}>
                     <td className="py-2">
-                      <Link href={`/admin/templates/${t.id}`} className="font-medium text-zinc-900 hover:underline">
+                      <Link href={`/admin/templates/${t.id}`} className="font-medium text-zinc-900 transition-colors duration-150 hover:text-zinc-600">
                         {t.name}
                       </Link>
                     </td>
@@ -346,7 +346,7 @@ export default async function OrganisationDetailPage({
               {orgUsers.map((u) => (
                 <tr key={u.id}>
                   <td className="py-2">
-                    <Link href={`/admin/users/${u.id}`} className="font-medium text-zinc-900 hover:underline">
+                    <Link href={`/admin/users/${u.id}`} className="font-medium text-zinc-900 transition-colors duration-150 hover:text-zinc-600">
                       {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
                     </Link>
                     <TagChips tags={tagsByUser.get(u.id)} className="ml-2" />

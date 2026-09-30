@@ -173,6 +173,9 @@ export function ClientProfileSection({ templateId, tokens }: Props) {
                 <button
                   type="button"
                   aria-pressed={item.client_visible}
+                  // A fixed name: the visible label flips with the state, and
+                  // aria-pressed already announces it ("Hidden, pressed" otherwise).
+                  aria-label="Visible to client"
                   onClick={() => toggleVisible(index)}
                   disabled={visibilitySaving[item.placeholder_token] === "saving"}
                   className={`text-xs font-medium transition-colors disabled:opacity-60 [@media(pointer:coarse)]:-my-2 [@media(pointer:coarse)]:py-3 ${

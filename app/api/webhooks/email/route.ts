@@ -177,6 +177,19 @@ export async function POST(req: NextRequest) {
 
     if (staleReview) {
       const stale = staleReview;
+      // Nothing is queued for this branch, so the message_id dedupe used
+      // elsewhere can't catch a Postmark retry. Our own audit entry is the
+      // record that this message was already answered and staff notified.
+      if (payload.MessageID) {
+        const { data: seen } = await supabase
+          .from("audit_log")
+          .select("id")
+          .eq("event_type", "email.stale_token_unrecognised_sender")
+          .eq("metadata->>message_id", payload.MessageID)
+          .limit(1)
+          .maybeSingle();
+        if (seen) return NextResponse.json({ ok: true });
+      }
       await sendEmail({
         to: fromEmail,
         subject: "OPS: We couldn't process your reply",
