@@ -345,11 +345,11 @@ export function FieldFlagReview({
       className={
         isConflict
           ? "mt-2 space-y-3 rounded-md border border-red-200 bg-red-50/60 p-3"
-          : "mt-2 space-y-3 rounded-md border border-orange-200 bg-orange-50/60 p-3"
+          : "mt-2 space-y-3 rounded-md border border-amber-200 bg-amber-50/60 p-3"
       }
     >
       {conflict && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <div className="rounded-md border border-amber-300 bg-white px-3 py-2 text-xs text-amber-900">
           Already resolved by <strong>{conflict.resolvedByEmail}</strong> as{" "}
           <strong>&quot;{conflict.resolvedValue}&quot;</strong>. You can still override it below.
           <button
@@ -382,7 +382,7 @@ export function FieldFlagReview({
               setValue(picked?.value ?? "");
             }}
             disabled={pending}
-            className="w-full rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:opacity-60"
+            className="w-full rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-60"
           >
             <option value="">— select development —</option>
             {candidates.map((c, i) => (
@@ -393,7 +393,7 @@ export function FieldFlagReview({
             ))}
           </select>
           {suggestedCandidate?.reason && (
-            <p className="text-xs italic text-orange-700">{suggestedCandidate.reason}</p>
+            <p className="text-xs italic text-amber-800">{suggestedCandidate.reason}</p>
           )}
         </div>
       ) : (
@@ -407,7 +407,7 @@ export function FieldFlagReview({
             {candidates.map((c, i) => (
               <label
                 key={`${c.value}-${i}`}
-                className="flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
+                className="flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 text-xs text-zinc-700 hover:bg-amber-100"
               >
                 <input
                   type="radio"
@@ -435,7 +435,7 @@ export function FieldFlagReview({
                     filename={c.source_document}
                     sourceUrlsByFilename={sourceUrlsByFilename}
                   />
-                  {c.reason && <span className="block text-xs italic text-orange-700">{c.reason}</span>}
+                  {c.reason && <span className="block text-xs italic text-amber-800">{c.reason}</span>}
                 </span>
               </label>
             ))}
@@ -456,7 +456,7 @@ export function FieldFlagReview({
             }
           }}
           disabled={pending}
-          className="w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:opacity-60"
+          className="w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-60"
         />
       </div>
 
@@ -483,7 +483,7 @@ export function FieldFlagReview({
               value={reason}
               onChange={(e) => setReason(e.target.value as ResolutionReason)}
               disabled={pending}
-              className="w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:opacity-60"
+              className="w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-60"
             >
               {REASON_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -502,7 +502,7 @@ export function FieldFlagReview({
           onChange={(e) => setNote(e.target.value)}
           disabled={pending}
           rows={2}
-          className="w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:opacity-60"
+          className="w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-60"
         />
       </div>
 
