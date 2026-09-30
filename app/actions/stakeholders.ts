@@ -28,7 +28,8 @@ import { sendStakeholderBufferUpdate } from "@/lib/stakeholders/buffer-update";
 import { logger } from "@/lib/observability/logger";
 import { attachEvidence } from "@/app/actions/evidence";
 import { parseEmlBody } from "@/lib/email/parseEml";
-import { closeRoundIfComplete, getRoundStatus } from "@/lib/stakeholders/review-round";
+import { closeRoundIfComplete, getRoundStatus, recalculateClosedRound } from "@/lib/stakeholders/review-round";
+import { renderEmailShell, e as esc, paragraph, strong } from "@/lib/email/templates/shell";
 import { runTextCompletion } from "@/lib/documents/extractor";
 import { formatLongDateAU } from "@/lib/time";
 import { getBusinessTimezone } from "@/lib/settings/timezone";
@@ -975,10 +976,22 @@ export interface LogResponseState {
 export type ResponseMode = "email" | "teams" | "call" | "sms";
 
 // Replacing an already-recorded response (#192) — including a stakeholder's
-// own portal/link response — is allowed only while the review round is still
-// open, and only with an explicit confirmation naming the response being
-// replaced: `replace.previousStatus` must match what's recorded now, so a
-// response that changed after the dialog opened is never overwritten blind.
+// own portal/link response — needs an explicit confirmation naming the
+// response being replaced: `replace.previousStatus` must match what's
+// recorded now, so a response that changed after the dialog opened is never
+// overwritten blind.
+//
+// After the round has closed (#209) the same correction is still allowed for
+// the assigned consultant / admins, with a mandatory `reason`. Comments,
+// evidence and respondent can always be fixed; flipping the decision is
+// allowed only while nothing irreversible has happened (no PBDR delivered,
+// no newer revision uploaded), and recalculates the round via
+// recalculateClosedRound.
+const POST_CLOSE_STATUSES = ["closed_approved", "closed_rejected"];
+const DECISION_LABEL = (status: string) =>
+  status === "rejected_with_comments" || status === "rejected_without_comments" ? "Rejected" : "Approved";
+const FLIP_BLOCKED_MESSAGE =
+  "This would change the round's outcome, but a newer revision has been uploaded or the PBDR has been delivered. Raise a new revision, or ask an admin.";
 export async function logStakeholderResponseOnBehalf(
   reviewId: string,
   projectId: string,
@@ -988,7 +1001,8 @@ export async function logStakeholderResponseOnBehalf(
   mode: ResponseMode,
   respondentName: string,
   respondedAt: string,
-  replace: { previousStatus: string } | null = null
+  replace: { previousStatus: string } | null = null,
+  reason: string | null = null
 ): Promise<LogResponseState> {
   const actor = await requireRole("consultant", "admin", "super_admin");
   const supabase = createAdminClient();
@@ -1035,11 +1049,16 @@ export async function logStakeholderResponseOnBehalf(
     .maybeSingle();
 
   if (!review) return { error: "Review not found." };
-  if ((review.review_cycle as number) !== (project.review_cycle as number)) {
-    return { error: "This review is no longer valid — the project has moved to a new review cycle." };
-  }
   const previousStatus = review.status as string;
   const isReplace = previousStatus !== "pending";
+  // A pending review only makes sense in the project's live cycle; a logged
+  // response can be corrected in any cycle once its own round has closed.
+  if (!isReplace && (review.review_cycle as number) !== (project.review_cycle as number)) {
+    return { error: "This review is no longer valid — the project has moved to a new review cycle." };
+  }
+  let postClose = false;
+  const trimmedReason = reason?.trim() || null;
+  let isFlip = false;
   if (isReplace) {
     if (!replace) return { error: "This review has already been responded to." };
     if (previousStatus === "superseded") {
@@ -1048,9 +1067,20 @@ export async function logStakeholderResponseOnBehalf(
     if (replace.previousStatus !== previousStatus) {
       return { error: "This response changed since you opened it — reload to see the latest before replacing it." };
     }
-    const roundStatus = await getRoundStatus(supabase, projectId, project.review_cycle as number);
-    if (roundStatus !== "open") {
-      return { error: "This review round has closed — its responses can no longer be changed." };
+    const roundStatus = await getRoundStatus(supabase, projectId, review.review_cycle as number);
+    if (roundStatus === "closed_approved" || roundStatus === "closed_rejected") {
+      postClose = true;
+      if (!trimmedReason) {
+        return { error: "A reason is required to correct a response after the round has closed." };
+      }
+      const wasRejected = DECISION_LABEL(previousStatus) === "Rejected";
+      isFlip = wasRejected !== (response === "rejected");
+      const irreversible =
+        (review.review_cycle as number) !== (project.review_cycle as number) ||
+        !["dispatched", "revision_required"].includes(project.status as string);
+      if (isFlip && irreversible) return { error: FLIP_BLOCKED_MESSAGE };
+    } else if (roundStatus !== "open") {
+      return { error: "This review can no longer be changed." };
     }
   }
   // "revision_required" is allowed alongside "dispatched" — see the matching
@@ -1058,7 +1088,7 @@ export async function logStakeholderResponseOnBehalf(
   // this cycle already rejected, not that this stakeholder's own pending
   // review is closed.
   const openProjectStatuses = new Set(["dispatched", "revision_required"]);
-  if (!openProjectStatuses.has(project.status as string)) {
+  if (!postClose && !openProjectStatuses.has(project.status as string)) {
     return { error: "This project is no longer awaiting review." };
   }
 
@@ -1108,7 +1138,11 @@ export async function logStakeholderResponseOnBehalf(
     )
     .eq("id", reviewId)
     .eq("status", previousStatus);
-  if (isReplace) reviewUpdate = reviewUpdate.eq("round_status", "open");
+  if (isReplace) {
+    reviewUpdate = postClose
+      ? reviewUpdate.in("round_status", POST_CLOSE_STATUSES)
+      : reviewUpdate.eq("round_status", "open");
+  }
   const { error: updateErr, count } = await reviewUpdate;
 
   if (updateErr) return { error: "Failed to record the response. Please try again." };
@@ -1144,8 +1178,32 @@ export async function logStakeholderResponseOnBehalf(
         },
         evidence_file_id: evidenceFileId,
         reference: `stakeholder_review:${reviewId}`,
+        ...(postClose ? { post_close: true, reason: trimmedReason, outcome_flipped: isFlip } : {}),
       },
     });
+  }
+
+  if (postClose) {
+    await finishPostCloseCorrection({
+      supabase,
+      actor: { id: actor.id as string, email: actor.email as string },
+      projectId,
+      reviewId,
+      review: {
+        cycle: review.review_cycle as number,
+        stakeholderName: review.stakeholder_name as string,
+        stakeholderEmail: review.stakeholder_email as string,
+      },
+      previousStatus,
+      newStatus,
+      isFlip,
+      comments: trimmedComments,
+      reason: trimmedReason as string,
+      now,
+    });
+    revalidatePath(`/ops/projects/${projectId}`);
+    revalidatePath(`/admin/projects/${projectId}`);
+    return { success: true };
   }
 
   if (!isReplace) {
@@ -1226,6 +1284,127 @@ export async function logStakeholderResponseOnBehalf(
   revalidatePath(`/ops/projects/${projectId}`);
   revalidatePath(`/admin/projects/${projectId}`);
   return { success: true };
+}
+
+// Everything that follows a saved post-close correction (#209): recalculate
+// the round on a decision flip, re-derive project status, tell the
+// stakeholder (flip only) and the assigned consultant + admins (always).
+async function finishPostCloseCorrection({
+  supabase,
+  actor,
+  projectId,
+  reviewId,
+  review,
+  previousStatus,
+  newStatus,
+  isFlip,
+  comments,
+  reason,
+  now,
+}: {
+  supabase: ReturnType<typeof createAdminClient>;
+  actor: { id: string; email: string };
+  projectId: string;
+  reviewId: string;
+  review: { cycle: number; stakeholderName: string; stakeholderEmail: string };
+  previousStatus: string;
+  newStatus: string;
+  isFlip: boolean;
+  comments: string | null;
+  reason: string;
+  now: string;
+}): Promise<void> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("extracted_fields, project_number, assigned_consultant_id, qa_completed_by, status")
+    .eq("id", projectId)
+    .single();
+  const projectRef = project ? resolveProjectRef(project, projectId) : projectId.slice(0, 8);
+  const from = DECISION_LABEL(previousStatus);
+  const to = DECISION_LABEL(newStatus);
+
+  if (isFlip && project) {
+    await recalculateClosedRound(supabase, projectId, review.cycle);
+
+    const { data: cycleReviews } = await supabase
+      .from("stakeholder_reviews")
+      .select("status")
+      .eq("project_id", projectId)
+      .eq("review_cycle", review.cycle);
+    const hasRejection = (cycleReviews ?? []).some((r) =>
+      ["rejected_with_comments", "rejected_without_comments"].includes(r.status as string)
+    );
+    const derivedStatus = hasRejection ? "revision_required" : "dispatched";
+    if (derivedStatus !== (project.status as string)) {
+      await supabase
+        .from("projects")
+        .update({ status: derivedStatus, updated_at: now })
+        .eq("id", projectId)
+        .in("status", ["dispatched", "revision_required"]);
+    }
+
+    if (to === "Rejected") {
+      await notifyModificationsRequested({
+        supabase,
+        projectId,
+        reviewCycle: review.cycle,
+        projectRef,
+        stakeholderName: review.stakeholderName,
+        comments,
+        qaCompletedBy: project.qa_completed_by as string | null,
+        assignedConsultantId: project.assigned_consultant_id as string | null,
+        messageVerb: "requested changes to",
+        subjectLabel: "Changes requested",
+      });
+    } else {
+      await notifyIfFullyApproved(supabase, projectId, review.cycle, "[logStakeholderResponseOnBehalf]");
+    }
+
+    // Plain notice to the stakeholder — no internal detail, no reason.
+    await sendEmail({
+      to: review.stakeholderEmail,
+      subject: `Your logged response was corrected — ${projectRef}`,
+      html: renderEmailShell({
+        status: "info",
+        statusLabel: "Corrected",
+        heading: "Your response was corrected",
+        bodyHtml: paragraph(
+          `Your logged response for project ${strong(esc(projectRef))} was corrected from ${strong(from)} to ${strong(to)}.`,
+          20
+        ),
+      }),
+      source: "response_correction_notice",
+      projectId,
+    }).catch((err) => logger.error({ event: "response-correction.stakeholder_email_failed", err }, "Correction notice failed"));
+  }
+
+  // Internal notice on every post-close correction.
+  const { data: admins } = await supabase.from("users").select("id").in("role", ["super_admin", "admin"]);
+  const recipients = new Set<string>((admins ?? []).map((a) => a.id as string));
+  if (project?.assigned_consultant_id) recipients.add(project.assigned_consultant_id as string);
+  const summary = isFlip ? `${from} → ${to}` : "details corrected";
+  const message = `${actor.email} corrected ${review.stakeholderName}'s response on ${projectRef} after the round closed (${summary}). Reason: ${reason}`;
+  const html = renderEmailShell({
+    status: "info",
+    statusLabel: "Correction",
+    heading: "Response corrected after round close",
+    bodyHtml:
+      paragraph(
+        `${strong(esc(actor.email))} corrected ${strong(esc(review.stakeholderName))}'s response on ${strong(esc(projectRef))} (${esc(summary)}).`
+      ) + paragraph(`Reason: ${esc(reason)}`, 20),
+  });
+  await Promise.all(
+    [...recipients].map((id) =>
+      notify({
+        recipientId: id,
+        type: "review_response_recorded",
+        message,
+        projectId,
+        emailSubject: `Response corrected after close — ${projectRef}`,
+        emailHtml: html,
+      }).catch((err) => logger.error({ event: "response-correction.notify_failed", reviewId, err }, "Correction notify failed"))
+    )
+  );
 }
 
 // ─── Extract comments from an uploaded email (#65, optional AI convenience) ──

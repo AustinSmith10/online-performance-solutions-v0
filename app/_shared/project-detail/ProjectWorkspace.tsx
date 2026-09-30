@@ -1565,6 +1565,8 @@ export async function ProjectWorkspace({
           const cycleReviews = reviewsByCycle.get(cycle)!;
           const pbdbForCycle = pbdbFiles.find((f) => (f.review_cycle as number) === cycle);
           const isCurrent = cycle === project.review_cycle;
+          // #209: earlier rounds are closed but their logged responses can still be corrected.
+          const cycleRoundStatus = deriveRoundStatus(cycleReviews);
           return (
             <div key={cycle} className="border-b border-zinc-100 last:border-b-0">
               <div className="flex flex-wrap items-center gap-2 bg-zinc-50 px-5 py-2.5">
@@ -1620,12 +1622,12 @@ export async function ProjectWorkspace({
                               </p>
                             )}
                           </div>
-                          {isCurrent && (
+                          {(isCurrent || cycleRoundStatus === "closed_approved" || cycleRoundStatus === "closed_rejected") && (
                             <ReviewResponseControl
                               review={r}
                               projectId={id}
-                              roundStatus={currentRoundStatus}
-                              revisionNumber={currentRevNumber}
+                              roundStatus={isCurrent ? currentRoundStatus : cycleRoundStatus}
+                              revisionNumber={isCurrent ? currentRevNumber : cycle - 1}
                               pendingCount={pendingCount}
                               roster={stakeholderRoster}
                               evidence={

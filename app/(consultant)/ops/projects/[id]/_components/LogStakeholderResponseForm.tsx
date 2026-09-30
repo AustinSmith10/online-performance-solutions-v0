@@ -73,6 +73,10 @@ interface Props {
   // True when this is the last response the round is waiting on — saving it
   // closes the round, after which nothing in it can be corrected.
   closesRound?: boolean;
+  // The round has already closed (#209): saving is a correction, needs a
+  // reason, and a decision flip may be refused by the server.
+  postClose?: boolean;
+  roundRevision?: number;
 }
 
 export function LogStakeholderResponseForm({
@@ -85,6 +89,8 @@ export function LogStakeholderResponseForm({
   prefilledComments,
   existing,
   closesRound,
+  postClose,
+  roundRevision,
 }: Props) {
   const [open, setOpen] = useState(false);
   const existingDecision: "approved" | "rejected" | "" = existing?.status.startsWith("approved")
@@ -96,6 +102,7 @@ export function LogStakeholderResponseForm({
   const [comments, setComments] = useState(existing?.comments ?? prefilledComments ?? "");
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [confirmFinal, setConfirmFinal] = useState(false);
+  const [reason, setReason] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [useEmailEvidence, setUseEmailEvidence] = useState(!!prefilledEvidence);
   const [extracting, setExtracting] = useState(false);
@@ -136,6 +143,9 @@ export function LogStakeholderResponseForm({
     if (existing && !confirmReplace) {
       return { error: `Confirm you want to replace the existing "${statusLabel(existing.status)}" response.` };
     }
+    if (postClose && !reason.trim()) {
+      return { error: "A reason is required to correct a response after the round has closed." };
+    }
     if (closesRound && !confirmFinal) {
       return { error: "Confirm this final response — it closes the round and can't be changed afterward." };
     }
@@ -152,7 +162,8 @@ export function LogStakeholderResponseForm({
         mode,
         respondentFinal,
         respondedAtIso,
-        replace
+        replace,
+        reason
       );
     }
 
@@ -167,7 +178,8 @@ export function LogStakeholderResponseForm({
         mode,
         respondentFinal,
         respondedAtIso,
-        replace
+        replace,
+        reason
       );
     }
 
@@ -193,7 +205,8 @@ export function LogStakeholderResponseForm({
       mode,
       respondentFinal,
       respondedAtIso,
-      replace
+      replace,
+      reason
     );
   }
 
@@ -234,6 +247,7 @@ export function LogStakeholderResponseForm({
     !!respondentFinal &&
     !!respondedAt &&
     (!existing || confirmReplace) &&
+    (!postClose || reason.trim().length > 0) &&
     (!closesRound || confirmFinal);
 
   return (
@@ -247,7 +261,11 @@ export function LogStakeholderResponseForm({
         <div className="modal-backdrop fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-sm bg-black/30 p-4">
           <div className="modal-panel w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-[0_8px_30px_rgb(0_0_0/0.10)]">
             <p className="text-base font-semibold text-zinc-900">
-              {existing ? `Replace response for ${stakeholderName}?` : `Log response for ${stakeholderName}?`}
+              {postClose
+                ? `Correct response for ${stakeholderName}?`
+                : existing
+                  ? `Replace response for ${stakeholderName}?`
+                  : `Log response for ${stakeholderName}?`}
             </p>
             <p className="mt-0.5 text-xs text-zinc-500">{stakeholderEmail}</p>
             {existing ? (
@@ -452,6 +470,30 @@ export function LogStakeholderResponseForm({
                 )}
               </div>
 
+              {postClose && (
+                <div>
+                  <label
+                    htmlFor={`log-response-reason-${reviewId}`}
+                    className="mb-1.5 block text-xs font-medium text-zinc-700"
+                  >
+                    Reason for correction <span className="font-normal text-zinc-500">(required, saved to the audit log)</span>
+                  </label>
+                  <textarea
+                    id={`log-response-reason-${reviewId}`}
+                    rows={2}
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Why is this response being corrected?"
+                    className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">
+                    This round is closed (Revision {roundRevision}). Changing approve/reject recalculates the
+                    round and revision, and emails the stakeholder — it&apos;s refused once a newer revision
+                    is uploaded or the PBDR is delivered.
+                  </p>
+                </div>
+              )}
+
               {existing && (
                 <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   <input
@@ -495,7 +537,7 @@ export function LogStakeholderResponseForm({
                   disabled={pending || !canSubmit}
                   className="flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                 >
-                  {pending ? "Submitting…" : existing ? "Replace response" : "Log response"}
+                  {pending ? "Submitting…" : postClose ? "Correct response" : existing ? "Replace response" : "Log response"}
                 </button>
               </div>
             </form>
@@ -509,7 +551,7 @@ export function LogStakeholderResponseForm({
         onClick={() => setOpen(true)}
         className="shrink-0 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
       >
-        {existing ? "Replace response" : "Log response"}
+        {postClose ? "Correct response" : existing ? "Replace response" : "Log response"}
       </button>
     </>
   );

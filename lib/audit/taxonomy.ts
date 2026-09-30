@@ -458,6 +458,7 @@ export function formatDetails(
       if (s(oldResp.status) || s(newResp.status)) {
         parts.push(`${s(oldResp.status).replace(/_/g, " ")} → ${s(newResp.status).replace(/_/g, " ")}`);
       }
+      if (metadata.post_close === true && s(metadata.reason)) parts.push(`After close: ${s(metadata.reason)}`);
       break;
     }
 

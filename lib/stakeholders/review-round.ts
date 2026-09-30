@@ -42,7 +42,7 @@ export async function getRoundStatus(
 }
 
 /** Bumps the PBDB revision number for this round, unless it already was. */
-async function bumpRevisionForRound(
+export async function bumpRevisionForRound(
   supabase: SupabaseClient,
   projectId: string,
   reviewCycle: number
@@ -196,4 +196,87 @@ export async function forceCloseRound(
   });
 
   return { closed: true, revisionBumped, supersededStakeholders: stillPending };
+}
+
+export interface RoundRecalcResult {
+  /** The round's new outcome, or null when nothing changed. */
+  changed: "closed_approved" | "closed_rejected" | null;
+  revisionBumped: boolean;
+  revisionReversed: boolean;
+}
+
+/**
+ * Undoes this round's revision bump (#209): rejected → approved after the
+ * round closed. Only removes the row if it is still the newest PBDB
+ * revision — if anything was recorded on top of it, the bump is no longer
+ * ours to take back.
+ */
+async function reverseRevisionForRound(
+  supabase: SupabaseClient,
+  projectId: string,
+  reviewCycle: number
+): Promise<boolean> {
+  const { data: bump } = await supabase
+    .from("revision_history")
+    .select("id, rev_number")
+    .eq("project_id", projectId)
+    .eq("doc_type", "pbdb")
+    .eq("event", "rejected")
+    .eq("review_cycle", reviewCycle)
+    .maybeSingle();
+  if (!bump) return false;
+
+  const { data: newer } = await supabase
+    .from("revision_history")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("doc_type", "pbdb")
+    .gt("rev_number", bump.rev_number as number)
+    .limit(1);
+  if (newer && newer.length > 0) return false;
+
+  const { error } = await supabase.from("revision_history").delete().eq("id", bump.id as string);
+  return !error;
+}
+
+/**
+ * Re-derives a *closed* round's outcome after a logged response was
+ * corrected (#209), reusing the same bump the natural close applies rather
+ * than duplicating it. The `closed_x → closed_y` write is conditional on the
+ * old value, so of two concurrent corrections exactly one sees a count and
+ * applies the bump or reversal; the other finds the round already flipped
+ * and does nothing.
+ */
+export async function recalculateClosedRound(
+  supabase: SupabaseClient,
+  projectId: string,
+  reviewCycle: number
+): Promise<RoundRecalcResult> {
+  const none: RoundRecalcResult = { changed: null, revisionBumped: false, revisionReversed: false };
+  const { data } = await supabase
+    .from("stakeholder_reviews")
+    .select("status, round_status")
+    .eq("project_id", projectId)
+    .eq("review_cycle", reviewCycle);
+  const rows = (data ?? []) as RoundRow[];
+
+  const current = deriveRoundStatus(rows);
+  if (current !== "closed_approved" && current !== "closed_rejected") return none;
+
+  const live = rows.filter((r) => r.status !== "superseded");
+  const outcome = live.some((r) => REJECTED_STATUSES.has(r.status)) ? "closed_rejected" : "closed_approved";
+  if (outcome === current) return none;
+
+  const { count } = await supabase
+    .from("stakeholder_reviews")
+    .update({ round_status: outcome }, { count: "exact" })
+    .eq("project_id", projectId)
+    .eq("review_cycle", reviewCycle)
+    .eq("round_status", current);
+  if (!count) return none;
+
+  if (outcome === "closed_rejected") {
+    return { changed: outcome, revisionBumped: await bumpRevisionForRound(supabase, projectId, reviewCycle), revisionReversed: false };
+  }
+  return { changed: outcome, revisionBumped: false, revisionReversed: await reverseRevisionForRound(supabase, projectId, reviewCycle) };
 }

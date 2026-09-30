@@ -9,13 +9,17 @@ vi.mock("@/lib/audit/log");
 vi.mock("@/lib/documents/pending-delivery");
 vi.mock("@/lib/stakeholders/review-outcome");
 vi.mock("@/lib/stakeholders/review-round");
+vi.mock("@/lib/notifications/notify");
+vi.mock("@/lib/email/sender");
 
 import { logStakeholderResponseOnBehalf } from "./stakeholders";
 import { requireRole } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { notifyModificationsRequested, resolveProjectRef } from "@/lib/stakeholders/review-outcome";
-import { closeRoundIfComplete, getRoundStatus } from "@/lib/stakeholders/review-round";
+import { closeRoundIfComplete, getRoundStatus, recalculateClosedRound } from "@/lib/stakeholders/review-round";
+import { notify } from "@/lib/notifications/notify";
+import { sendEmail } from "@/lib/email/sender";
 
 type Row = Record<string, unknown>;
 
@@ -75,7 +79,12 @@ function setup(reviews: Row[], projectStatus: string) {
   return tables;
 }
 
-function log(reviewId: string, response: "approved" | "rejected", replace: { previousStatus: string } | null) {
+function log(
+  reviewId: string,
+  response: "approved" | "rejected",
+  replace: { previousStatus: string } | null,
+  reason: string | null = null
+) {
   return logStakeholderResponseOnBehalf(
     reviewId,
     "p1",
@@ -85,7 +94,8 @@ function log(reviewId: string, response: "approved" | "rejected", replace: { pre
     "call",
     "Jane",
     "2026-09-20T10:00:00Z",
-    replace
+    replace,
+    reason
   );
 }
 
@@ -94,6 +104,8 @@ beforeEach(() => {
   vi.mocked(requireRole).mockResolvedValue(CONSULTANT as never);
   vi.mocked(resolveProjectRef).mockReturnValue("OPS-1");
   vi.mocked(getRoundStatus).mockResolvedValue("open");
+  vi.mocked(notify).mockResolvedValue(undefined);
+  vi.mocked(sendEmail).mockResolvedValue(true);
   vi.mocked(closeRoundIfComplete).mockResolvedValue({ closed: null, revisionBumped: false });
 });
 
@@ -110,12 +122,6 @@ describe("logStakeholderResponseOnBehalf — replacing a logged response (#192)"
     expect(result.error).toMatch(/changed since you opened it/);
   });
 
-  it("refuses once the round has closed", async () => {
-    setup([{ id: "r1", status: "approved_without_comments", stakeholder_name: "Jane", stakeholder_email: "j@x.com" }], "dispatched");
-    vi.mocked(getRoundStatus).mockResolvedValue("closed_approved");
-    const result = await log("r1", "rejected", { previousStatus: "approved_without_comments" });
-    expect(result.error).toMatch(/round has closed/);
-  });
 
   it("replacing the round's only rejection with an approval returns the project to dispatched", async () => {
     const tables = setup(
@@ -177,5 +183,106 @@ describe("logStakeholderResponseOnBehalf — replacing a logged response (#192)"
     expect(result).toEqual({ success: true });
     expect(tables.stakeholder_reviews[0].status).toBe("approved_without_comments");
     expect(auditLog).toHaveBeenCalledWith("stakeholder.responded_on_behalf", "c1", "c@ddeg.com.au", expect.anything());
+  });
+});
+
+describe("logStakeholderResponseOnBehalf — correcting after the round closes (#209)", () => {
+  const JANE = { id: "r1", stakeholder_name: "Jane", stakeholder_email: "j@x.com", comments: "ok" };
+
+  function setupClosed(status: string, projectStatus: string, round: "closed_approved" | "closed_rejected", extra: Row = {}) {
+    const tables = setup([{ ...JANE, status, round_status: round, ...extra }], projectStatus);
+    tables.users = [
+      { id: "adm1", role: "admin" },
+      { id: "c1", role: "consultant" },
+    ];
+    tables.projects[0].assigned_consultant_id = "c1";
+    vi.mocked(getRoundStatus).mockResolvedValue(round);
+    vi.mocked(recalculateClosedRound).mockResolvedValue({ changed: null, revisionBumped: false, revisionReversed: false });
+    return tables;
+  }
+
+  it("requires a reason once the round is closed", async () => {
+    setupClosed("approved_without_comments", "dispatched", "closed_approved");
+    const result = await log("r1", "approved", { previousStatus: "approved_without_comments" });
+    expect(result.error).toMatch(/reason is required/i);
+  });
+
+  it("a non-flip correction never touches round status, revision or project status, and emails no stakeholder", async () => {
+    const tables = setupClosed("approved_with_comments", "dispatched", "closed_approved");
+    const result = await log("r1", "approved", { previousStatus: "approved_with_comments" }, "Typo in comment");
+    expect(result).toEqual({ success: true });
+    expect(tables.stakeholder_reviews[0].round_status).toBe("closed_approved");
+    expect(tables.projects[0].status).toBe("dispatched");
+    expect(recalculateClosedRound).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(auditLog).toHaveBeenCalledWith(
+      "stakeholder.response_replaced",
+      "c1",
+      "c@ddeg.com.au",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          post_close: true,
+          reason: "Typo in comment",
+          outcome_flipped: false,
+          old: expect.objectContaining({ status: "approved_with_comments" }),
+          new: expect.objectContaining({ status: "approved_without_comments" }),
+        }),
+      })
+    );
+    // internal notice goes to the assigned consultant and the admin
+    expect(vi.mocked(notify).mock.calls.map((c) => c[0].recipientId).sort()).toEqual(["adm1", "c1"]);
+  });
+
+  it("flip rejected → approved recalculates, returns the project to dispatched, and emails the stakeholder", async () => {
+    const tables = setupClosed("rejected_with_comments", "revision_required", "closed_rejected");
+    const result = await log("r1", "approved", { previousStatus: "rejected_with_comments" }, "Logged against the wrong person");
+    expect(result).toEqual({ success: true });
+    expect(recalculateClosedRound).toHaveBeenCalledWith(expect.anything(), "p1", 1);
+    expect(tables.projects[0].status).toBe("dispatched");
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const mail = vi.mocked(sendEmail).mock.calls[0][0];
+    expect(mail.to).toBe("j@x.com");
+    expect(mail.html).toContain("Rejected");
+    expect(mail.html).toContain("Approved");
+    // no internal detail leaks to the stakeholder
+    expect(mail.html).not.toContain("Logged against the wrong person");
+  });
+
+  it("flip approved → rejected recalculates and sends the project to revision_required", async () => {
+    const tables = setupClosed("approved_without_comments", "dispatched", "closed_approved");
+    const result = await log("r1", "rejected", { previousStatus: "approved_without_comments" }, "Actually rejected by phone");
+    expect(result).toEqual({ success: true });
+    expect(recalculateClosedRound).toHaveBeenCalledTimes(1);
+    expect(tables.projects[0].status).toBe("revision_required");
+    expect(notifyModificationsRequested).toHaveBeenCalled();
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["PBDR delivered", "delivered", 1],
+    ["PBDR converting", "converting", 1],
+    ["newer revision uploaded", "dispatched", 2],
+  ])("blocks a flip once irreversible: %s", async (_label, projectStatus, projectCycle) => {
+    const tables = setupClosed("rejected_with_comments", projectStatus, "closed_rejected");
+    tables.projects[0].review_cycle = projectCycle;
+    const result = await log("r1", "approved", { previousStatus: "rejected_with_comments" }, "Wrong");
+    expect(result.error).toMatch(/Raise a new revision, or ask an admin/);
+    expect(tables.stakeholder_reviews[0].status).toBe("rejected_with_comments");
+    expect(recalculateClosedRound).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("still allows a non-flip correction after the PBDR is delivered", async () => {
+    const tables = setupClosed("approved_with_comments", "delivered", "closed_approved");
+    const result = await log("r1", "approved", { previousStatus: "approved_with_comments" }, "Fix respondent");
+    expect(result).toEqual({ success: true });
+    expect(tables.projects[0].status).toBe("delivered");
+  });
+
+  it("refuses a consultant who is not assigned", async () => {
+    setupClosed("approved_without_comments", "dispatched", "closed_approved");
+    vi.mocked(requireRole).mockResolvedValue({ id: "other", role: "consultant", email: "o@x" } as never);
+    const result = await log("r1", "approved", { previousStatus: "approved_without_comments" }, "why");
+    expect(result.error).toBe("Access denied.");
   });
 });
