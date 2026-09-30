@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit/log";
 import { sendEmail } from "@/lib/email/sender";
 import { buildInboundReplyTo } from "@/lib/email/parser";
-import { resolveStakeholders } from "@/lib/stakeholders/resolver";
+import { isReplySenderVerified } from "@/lib/email-queue/sender-verification";
 import { notify } from "@/lib/notifications/notify";
 import { extractDocumentFields } from "@/lib/documents/extractor";
 import { claimExtractionSlots } from "@/lib/documents/extraction-budget";
@@ -723,18 +723,13 @@ async function executeStakeholderResponse(
     return { ok: false, error: "The review's project could not be found." };
   }
 
-  const knownEmails = new Set<string>([(review.stakeholder_email as string).toLowerCase()]);
-  const roster = await resolveStakeholders(project.id as string, project.template_id as string | null);
-  for (const s of roster) knownEmails.add(s.email.toLowerCase());
-  if (project.submitted_by) {
-    const { data: submitter } = await supabase
-      .from("users")
-      .select("email")
-      .eq("id", project.submitted_by as string)
-      .maybeSingle();
-    if (submitter?.email) knownEmails.add((submitter.email as string).toLowerCase());
-  }
-  const verified = knownEmails.has(row.from_email.toLowerCase());
+  const verified = await isReplySenderVerified(supabase, {
+    fromEmail: row.from_email,
+    reviewStakeholderEmail: review.stakeholder_email as string,
+    projectId: project.id as string,
+    templateId: project.template_id as string | null,
+    submittedBy: project.submitted_by as string | null,
+  });
 
   const replyText = (row.stripped_reply_text || row.text_body || "").trim();
   const receivedAt = new Date().toISOString();

@@ -18,6 +18,19 @@ export interface TargetRef {
   reviewLabel?: string;
 }
 
+// What a reviewer needs to decide on a stakeholder reply, computed on load
+// (read-only) for open rows that have a proposed review.
+export interface QueueReviewContext {
+  cycle: number;
+  stakeholderName: string;
+  dispatchedAt: string | null;
+  expiresAt: string | null;
+  // "link expired" / "already responded" when the tag isn't a live match.
+  note: string | null;
+  // Is the sender on this project's reviewer list (or the reviewer/submitter)?
+  senderVerified: boolean;
+}
+
 export interface QueueRow {
   id: string;
   receivedAt: string;
@@ -25,6 +38,8 @@ export interface QueueRow {
   fromName: string | null;
   subject: string | null;
   textBody: string | null;
+  // Only what the sender wrote this time, without the quoted thread.
+  strippedReply: string | null;
   attachments: QueueAttachmentView[];
   proposedCategory: QueueCategory;
   proposedTarget: TargetRef | null;
@@ -38,6 +53,8 @@ export interface QueueRow {
   clarificationCandidates: { projectLabel: string; reviewLabel: string }[] | null;
   clarificationReplyText: string | null;
   clarificationMessage: string | null;
+  clarificationExpiresAt: string | null;
+  context: QueueReviewContext | null;
 }
 
 export const CATEGORY_LABEL: Record<QueueCategory, string> = {

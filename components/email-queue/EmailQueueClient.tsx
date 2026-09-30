@@ -64,6 +64,22 @@ const suggestionChip = (selected: boolean) =>
 const FIELD =
   "rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500";
 
+// Open items are worked oldest-first, and turn amber once they've waited this
+// long, so a stakeholder isn't left hanging behind newer mail.
+const OVERDUE_HOURS = 24;
+
+function ageOf(iso: string): { label: string; hours: number } {
+  const ms = Math.max(0, Date.now() - new Date(iso).getTime());
+  const hours = ms / 3_600_000;
+  if (hours < 1) return { label: `${Math.max(1, Math.round(ms / 60_000))}m`, hours };
+  if (hours < 24) return { label: `${Math.floor(hours)}h`, hours };
+  const days = Math.floor(hours / 24);
+  const rem = Math.floor(hours - days * 24);
+  return { label: rem > 0 && days < 7 ? `${days}d ${rem}h` : `${days}d`, hours };
+}
+
+const formatDay = (iso: string) => new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+
 // One resolve, waiting out its undo window. `run` is the real server call.
 type Commit = {
   rowId: string;
@@ -89,6 +105,8 @@ function CategoryBadge({ category }: { category: QueueCategory }) {
 }
 
 function ListRow({ row, active, onSelect }: { row: QueueRow; active: boolean; onSelect: () => void }) {
+  const open = RESOLVABLE_STATUSES.includes(row.status);
+  const age = open ? ageOf(row.receivedAt) : null;
   return (
     <button
       type="button"
@@ -106,8 +124,18 @@ function ListRow({ row, active, onSelect }: { row: QueueRow; active: boolean; on
         </span>
       </div>
       <p className="truncate text-xs text-zinc-600">{row.subject || "(no subject)"}</p>
-      <div className="mt-1">
+      <div className="mt-1 flex items-center justify-between gap-2">
         <CategoryBadge category={row.proposedCategory} />
+        {age && (
+          <span
+            suppressHydrationWarning
+            className={`shrink-0 text-xs tabular-nums ${
+              age.hours >= OVERDUE_HOURS ? "font-medium text-amber-700" : "text-zinc-500"
+            }`}
+          >
+            Waiting {age.label}
+          </span>
+        )}
       </div>
     </button>
   );
@@ -600,6 +628,52 @@ function ResolveActions({
   );
 }
 
+function ReviewContextBlock({ context }: { context: NonNullable<QueueRow["context"]> }) {
+  return (
+    <div className="mt-3 max-w-xl space-y-1.5 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-600">
+      <p className="tabular-nums">
+        <span className="font-medium text-zinc-800">Replying to:</span> Cycle {context.cycle} · {context.stakeholderName}
+        {context.dispatchedAt ? ` · sent ${formatDay(context.dispatchedAt)}` : ""}
+        {context.expiresAt ? ` · link ${new Date(context.expiresAt) < new Date() ? "expired" : "expires"} ${formatDay(context.expiresAt)}` : ""}
+        {context.note && (
+          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">{context.note}</span>
+        )}
+      </p>
+      <p className={context.senderVerified ? "text-green-700" : "font-medium text-amber-800"}>
+        {context.senderVerified
+          ? "Sender is on this project's reviewer list."
+          : "Sender isn't on this project's reviewer list. It will be filed as unverified."}
+      </p>
+    </div>
+  );
+}
+
+// The reply on its own by default; the quoted thread is a click away.
+function MessageBody({ row }: { row: QueueRow }) {
+  const [showFull, setShowFull] = useState(false);
+  const full = row.textBody?.trim() || "";
+  const reply = row.strippedReply;
+  const canToggle = !!reply && reply !== full;
+  const text = canToggle && !showFull ? reply : full;
+
+  return (
+    <div className="mt-4 max-w-xl">
+      <p className="whitespace-pre-wrap break-words rounded-lg bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-700">
+        {text || "(empty message body)"}
+      </p>
+      {canToggle && (
+        <button
+          type="button"
+          onClick={() => setShowFull((v) => !v)}
+          className={`press mt-1.5 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900 ${BTN_FOCUS} [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:px-3`}
+        >
+          {showFull ? "Show reply only" : "Show full email, including quoted thread"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ToastBar({
   toast,
   leaving,
@@ -676,7 +750,13 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
   // Below md the list and the detail are separate screens.
   const [showDetail, setShowDetail] = useState(false);
   const liveRows = rows.filter((r) => !hidden.has(r.id));
-  const visible = liveRows.filter((r) => r.status === tab);
+  const visible = liveRows
+    .filter((r) => r.status === tab)
+    .sort((a, b) =>
+      RESOLVABLE_STATUSES.includes(tab)
+        ? new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
+        : new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+    );
   const [selectedId, setSelectedId] = useState<string>(visible[0]?.id ?? "");
   const pendingRef = useRef<{ commit: Commit; timer: ReturnType<typeof setTimeout> } | null>(null);
   const focusRowRef = useRef(false);
@@ -929,9 +1009,9 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
                   </div>
                 )}
 
-                <p className="mt-4 max-w-xl whitespace-pre-wrap break-words rounded-lg bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-700">
-                  {selected.textBody?.trim() || "(empty message body)"}
-                </p>
+                {selected.context && <ReviewContextBlock context={selected.context} />}
+
+                <MessageBody key={selected.id} row={selected} />
 
                 {selected.proposedTarget && (
                   <p className="mt-3 text-xs text-zinc-500">
@@ -946,6 +1026,14 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
                       Asked {formatDateTime(selected.clarificationRequestedAt)}:{" "}
                       {selected.clarificationMessage?.trim() || "(message not recorded)"}
                     </p>
+                    {selected.status === "awaiting_clarification" && (
+                      <p suppressHydrationWarning className="mt-1.5 border-t border-amber-200 pt-1.5 tabular-nums">
+                        Waiting {ageOf(selected.clarificationRequestedAt).label} for a reply
+                        {selected.clarificationExpiresAt
+                          ? ` · their reply link ${new Date(selected.clarificationExpiresAt) < new Date() ? "expired" : "expires"} ${formatDay(selected.clarificationExpiresAt)}`
+                          : ""}
+                      </p>
+                    )}
                     {selected.clarificationCandidates && selected.clarificationCandidates.length > 0 && (
                       <p className="mt-1.5 border-t border-amber-200 pt-1.5">
                         Their open reviews at the time:{" "}
