@@ -43,7 +43,7 @@ export function AdminNavRestrictionsForm({ restricted }: { restricted: AdminNavK
               name="restricted"
               value={item.key}
               defaultChecked={restricted.includes(item.key)}
-              className="h-4 w-4 rounded-sm border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+              className="h-4 w-4 rounded-sm border-zinc-300 text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
             />
             {item.label}
           </label>

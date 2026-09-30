@@ -49,6 +49,7 @@ export function ConfirmResolveButton({ onResolve }: { onResolve: () => Promise<b
       <div className="flex items-center gap-1.5">
         <button
           type="button"
+          autoFocus
           onClick={() => {
             setConfirming(false);
             setFailed(false);

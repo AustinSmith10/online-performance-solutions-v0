@@ -75,7 +75,7 @@ export function KillSwitchForm({
               setChecked(e.target.checked);
               setConfirming(false);
             }}
-            className="h-4 w-4 rounded-sm border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+            className="h-4 w-4 rounded-sm border-zinc-300 text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
           />
           {checkboxLabel}
         </label>
@@ -88,14 +88,14 @@ export function KillSwitchForm({
                 type="button"
                 onClick={() => setConfirming(false)}
                 disabled={pending}
-                className="press rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+                className="press rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:min-h-10"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={pending}
-                className="press rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700 disabled:opacity-50"
+                className="press rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700 disabled:opacity-50 [@media(pointer:coarse)]:min-h-10"
               >
                 {pending ? "Turning off…" : "Yes, turn off"}
               </button>
@@ -106,7 +106,7 @@ export function KillSwitchForm({
             type={turningOff ? "button" : "submit"}
             onClick={turningOff ? () => setConfirming(true) : undefined}
             disabled={pending || !dirty}
-            className="press rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50"
+            className="press rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50 [@media(pointer:coarse)]:min-h-10"
           >
             {pending ? "Saving…" : turningOff ? "Turn off…" : "Save changes"}
           </button>

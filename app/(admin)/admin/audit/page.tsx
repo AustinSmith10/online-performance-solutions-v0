@@ -253,21 +253,21 @@ export default async function AuditPage({
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
               <span>Active:</span>
               {activeCat && (
-                <span className={`rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700`}>
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
                   {CATEGORIES[activeCat].label}
                 </span>
               )}
               {event_type && (
-                <span className="rounded-full bg-zinc-100 px-2 py-0.5">
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
                   {EVENT_LABELS[event_type] ?? event_type}
                 </span>
               )}
-              {email && <span className="rounded-full bg-zinc-100 px-2 py-0.5">Email: {email}</span>}
+              {email && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">Email: {email}</span>}
               {org_name && (
-                <span className="rounded-full bg-zinc-100 px-2 py-0.5">Client: {org_name}</span>
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">Client: {org_name}</span>
               )}
-              {from && <span className="rounded-full bg-zinc-100 px-2 py-0.5">From {from}</span>}
-              {to && <span className="rounded-full bg-zinc-100 px-2 py-0.5">To {to}</span>}
+              {from && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">From {from}</span>}
+              {to && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">To {to}</span>}
             </div>
           )}
         </div>
@@ -337,7 +337,7 @@ export default async function AuditPage({
                         <span className="text-xs font-medium text-zinc-800">{label}</span>
                         {catInfo && (
                           <span
-                            className={`inline-block w-fit rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700`}
+                            className="inline-block w-fit rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700"
                           >
                             {catInfo.label}
                           </span>

@@ -515,10 +515,66 @@ function ResolveActions({
   );
 }
 
+function ToastBar({
+  toast,
+  leaving,
+  onUndo,
+  onDismiss,
+}: {
+  toast: Toast;
+  leaving?: boolean;
+  onUndo?: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      role={toast.kind === "error" ? "alert" : "status"}
+      data-leaving={leaving ? "true" : undefined}
+      className={`toast-item flex items-center gap-3 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg ${
+        leaving ? "pointer-events-none" : ""
+      }`}
+    >
+      {toast.kind === "error" ? (
+        <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
+      ) : (
+        <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+          <path
+            fillRule="evenodd"
+            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+            clipRule="evenodd"
+          />
+        </svg>
+      )}
+      <span className="min-w-0 flex-1 break-words">{toast.message}</span>
+      {toast.kind === "undo" && onUndo && (
+        <button
+          type="button"
+          onClick={onUndo}
+          className="press shrink-0 rounded-md px-2 py-1 text-sm font-semibold text-white transition-colors duration-150 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [@media(pointer:coarse)]:min-h-10"
+        >
+          Undo
+        </button>
+      )}
+      {(toast.kind === "error" || (toast.kind === "info" && toast.persistent)) && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="press shrink-0 rounded-md px-2 py-1 text-sm font-medium text-zinc-300 transition-colors duration-150 hover:bg-zinc-700 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [@media(pointer:coarse)]:min-h-10"
+        >
+          Dismiss
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
   const router = useRouter();
   const [tab, setTab] = useState<QueueStatus>("pending");
   const [toast, setToast] = useState<Toast | null>(null);
+  // Messages that must survive the next action (errors, follow-up work) live
+  // apart from the transient toast, so a new Undo toast never replaces them.
+  const [note, setNote] = useState<Toast | null>(null);
   // The toast stays mounted for its 150ms exit (.toast-item[data-leaving]),
   // so it leaves the way it came in instead of vanishing.
   const [renderedToast, setRenderedToast] = useState<Toast | null>(toast);
@@ -567,6 +623,9 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
 
   const execute = useCallback(
     async (commit: Commit) => {
+      // The undo window is over for this action; a still-visible Undo button
+      // would do nothing. (A newer pending commit keeps its own toast.)
+      if (!pendingRef.current) setToast((t) => (t?.kind === "undo" ? null : t));
       let res: QueueActionState;
       try {
         res = await commit.run();
@@ -575,8 +634,9 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
       }
       if (res.error) {
         unhide(commit.rowId);
-        setSelectedId(commit.rowId);
-        setToast({ kind: "error", message: res.error });
+        // Don't steal the selection if the admin has already moved on.
+        setSelectedId((cur) => cur || commit.rowId);
+        setNote({ kind: "error", message: res.error });
         return;
       }
       if (res.redirectTo) {
@@ -584,7 +644,8 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
         return;
       }
       router.refresh();
-      setToast({ kind: "info", message: commit.message, persistent: commit.persistent });
+      if (commit.persistent) setNote({ kind: "info", message: commit.message, persistent: true });
+      else if (!pendingRef.current) setToast({ kind: "info", message: commit.message });
     },
     [router, unhide]
   );
@@ -604,8 +665,10 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
       if (document.hidden) flushPending();
     };
     document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flushPending);
     return () => {
       document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", flushPending);
       flushPending();
     };
   }, [flushPending]);
@@ -716,7 +779,7 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
             }`}
           >
             {visible.length === 0 && (
-              <p className="m-3 rounded-lg border border-dashed border-zinc-200 p-4 text-center text-sm text-zinc-500">
+              <p className="m-3 rounded-lg bg-zinc-50 p-4 text-center text-sm text-zinc-500">
                 {EMPTY_TEXT[tab]}
               </p>
             )}
@@ -737,7 +800,7 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
             <button
               type="button"
               onClick={() => setShowDetail(false)}
-              className="press mb-3 inline-flex w-fit items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 md:hidden [@media(pointer:coarse)]:min-h-10"
+              className="press mb-3 inline-flex w-fit items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 md:hidden [@media(pointer:coarse)]:min-h-10"
             >
               <span aria-hidden="true">←</span>
               Back to list
@@ -840,41 +903,11 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
         </div>
       </div>
 
-      {renderedToast && (
-        <div
-          role={renderedToast.kind === "error" ? "alert" : "status"}
-          data-leaving={toastLeaving ? "true" : undefined}
-          className={`toast-item ${toastLeaving ? "pointer-events-none" : ""} fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-50 flex items-center gap-3 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg sm:left-auto sm:max-w-md`}
-        >
-          {renderedToast.kind === "error" ? (
-            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
-          ) : (
-            <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-          )}
-          <span className="min-w-0 flex-1 break-words">{renderedToast.message}</span>
-          {renderedToast.kind === "undo" && (
-            <button
-              type="button"
-              onClick={undo}
-              className="press shrink-0 rounded-md px-2 py-1 text-sm font-semibold text-white underline-offset-2 transition-colors duration-150 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [@media(pointer:coarse)]:min-h-10"
-            >
-              Undo
-            </button>
-          )}
-          {(renderedToast.kind === "error" || (renderedToast.kind === "info" && renderedToast.persistent)) && (
-            <button
-              type="button"
-              onClick={() => setToast(null)}
-              className="press shrink-0 rounded-md px-2 py-1 text-sm font-medium text-zinc-300 transition-colors duration-150 hover:bg-zinc-700 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [@media(pointer:coarse)]:min-h-10"
-            >
-              Dismiss
-            </button>
+      {(note || renderedToast) && (
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-50 flex flex-col gap-2 sm:left-auto sm:max-w-md">
+          {note && <ToastBar toast={note} onDismiss={() => setNote(null)} />}
+          {renderedToast && (
+            <ToastBar toast={renderedToast} leaving={toastLeaving} onUndo={undo} onDismiss={() => setToast(null)} />
           )}
         </div>
       )}

@@ -16,7 +16,7 @@ export type RecoveryProjectRow = {
 };
 
 const CHECKBOX =
-  "mt-0.5 h-4 w-4 shrink-0 rounded-sm border-zinc-300 text-zinc-900 focus:ring-zinc-500 [@media(pointer:coarse)]:h-5 [@media(pointer:coarse)]:w-5";
+  "mt-0.5 h-4 w-4 shrink-0 rounded-sm border-zinc-300 text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:h-5 [@media(pointer:coarse)]:w-5";
 
 // Restore is reversible and cheap, so it can be done in bulk. Delete forever
 // stays one row at a time on purpose: it is the irreversible one.
