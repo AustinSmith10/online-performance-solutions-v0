@@ -680,7 +680,7 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-white">
-        <div role="tablist" aria-label="Queue status" className="flex gap-1 overflow-x-auto border-b border-zinc-200 px-4 pt-2">
+        <div role="tablist" aria-label="Queue status" className="flex gap-1 overflow-x-auto overscroll-x-contain border-b border-zinc-200 px-4 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((t, i) => (
             <button
               key={t.key}
@@ -711,7 +711,7 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
           className="flex md:h-[32rem]"
         >
           <div
-            className={`w-full shrink-0 overflow-y-auto border-zinc-200 md:block md:w-80 md:border-r ${
+            className={`w-full shrink-0 overflow-y-auto overscroll-contain border-zinc-200 md:block md:w-80 md:border-r ${
               showDetail ? "hidden" : "block max-h-[70dvh] md:max-h-none"
             }`}
           >
@@ -733,7 +733,7 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
             ))}
           </div>
 
-          <div className={`min-w-0 flex-1 overflow-y-auto p-4 md:block md:p-6 ${showDetail ? "block" : "hidden"}`}>
+          <div className={`min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 md:block md:p-6 ${showDetail ? "block" : "hidden"}`}>
             <button
               type="button"
               onClick={() => setShowDetail(false)}

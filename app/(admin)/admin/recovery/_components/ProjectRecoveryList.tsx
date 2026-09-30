@@ -100,17 +100,19 @@ export function ProjectRecoveryList({ rows }: { rows: RecoveryProjectRow[] }) {
             }`}
           >
             <div className="flex min-w-0 flex-1 items-start gap-3">
-              <input
-                type="checkbox"
-                checked={selected.has(p.id)}
-                onChange={() => toggle(p.id)}
-                aria-label={`Select ${p.label}`}
-                className={CHECKBOX}
-              />
+              <label className="-m-2 flex shrink-0 p-2 [@media(pointer:coarse)]:-m-3 [@media(pointer:coarse)]:p-3">
+                <input
+                  type="checkbox"
+                  checked={selected.has(p.id)}
+                  onChange={() => toggle(p.id)}
+                  aria-label={`Select ${p.label}`}
+                  className={CHECKBOX}
+                />
+              </label>
               <div className="min-w-0 flex-1">
                 <Link
                   href={`/admin/projects/${p.id}`}
-                  className="break-words text-sm font-medium text-zinc-900 transition-colors duration-150 hover:text-zinc-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 sm:truncate"
+                  className="inline-block break-words text-sm font-medium text-zinc-900 transition-colors duration-150 [@media(pointer:coarse)]:py-1.5 hover:text-zinc-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 sm:truncate"
                 >
                   {p.label}
                 </Link>
