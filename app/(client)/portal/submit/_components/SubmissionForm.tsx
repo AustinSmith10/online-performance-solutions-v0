@@ -17,6 +17,7 @@ import {
 import { streamUploadedFile, reducePipelineFile } from "./streamUpload";
 import { createClient } from "@/lib/supabase/client";
 import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
+import { SplitWithViewer } from "./SubmitDocumentViewer";
 import { matchDevelopmentName, type MetricsPickRow } from "@/lib/documents/metrics-autofill";
 import { ClientWorkspace } from "../../_components/ClientWorkspace";
 import { ClientHeaderCard } from "../../_components/ClientHeaderCard";
@@ -385,6 +386,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
             </FocusCard>
           }
           overviewTab={
+            <SplitWithViewer documents={documents}>
             <div className="space-y-3">
               {notFoundCount > 0 && (
                 <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
@@ -472,6 +474,7 @@ function ReviewStep({ state, submitAction, submitPending, submitState, adminOrgI
                 Fields marked <span className="text-red-500">*</span> are required before submitting.
               </p>
             </div>
+            </SplitWithViewer>
           }
           documentsTab={
             documents.length > 0 ? (
