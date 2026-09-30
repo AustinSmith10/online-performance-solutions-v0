@@ -78,8 +78,8 @@ export function ProjectRecoveryList({ rows }: { rows: RecoveryProjectRow[] }) {
         </label>
         {selected.size > 0 && (
           <>
-            <span className="text-xs tabular-nums text-zinc-500">{selected.size} selected</span>
-            <button type="button" onClick={() => void restoreSelected()} disabled={busy} className={PILL_NEUTRAL}>
+            <span className="rise-in text-xs tabular-nums text-zinc-500">{selected.size} selected</span>
+            <button type="button" onClick={() => void restoreSelected()} disabled={busy} className={`rise-in ${PILL_NEUTRAL}`}>
               {busy ? "Restoring…" : `Restore ${selected.size} selected`}
             </button>
           </>

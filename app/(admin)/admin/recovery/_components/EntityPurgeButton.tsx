@@ -47,7 +47,7 @@ export function EntityPurgeButton({
   const nameOk = !confirmName || typed.trim().toLowerCase() === confirmName.trim().toLowerCase();
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="rise-in flex flex-col items-end gap-2">
       <p role="alert" className="max-w-xs text-right text-xs font-medium text-red-700">
         {warning}
       </p>

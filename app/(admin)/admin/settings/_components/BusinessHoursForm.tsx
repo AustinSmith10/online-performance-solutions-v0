@@ -26,13 +26,13 @@ export function BusinessHoursForm({ hours }: { hours: BusinessHours }) {
       </p>
 
       {state.errors?.form?.map((e) => (
-        <p key={e} className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p key={e} className="rise-in mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
           {e}
         </p>
       ))}
 
       {state.saved && (
-        <p role="status" className="mt-4 text-sm font-medium text-green-700">Business hours updated.</p>
+        <p role="status" className="rise-in mt-4 text-sm font-medium text-green-700">Business hours updated.</p>
       )}
 
       <form action={action} {...formProps} className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">

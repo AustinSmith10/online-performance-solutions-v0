@@ -198,7 +198,7 @@ function ReassignPanel({
         : !!projectId && !!reviewId;
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg bg-zinc-50 p-4">
+    <div className="rise-in flex flex-wrap items-end gap-3 rounded-lg bg-zinc-50 p-4">
       {suggestions.length > 0 && (
         <div className="w-full">
           <p className="text-xs font-medium text-zinc-700">
@@ -348,7 +348,7 @@ function ClarificationPanel({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg bg-zinc-50 p-4">
+    <div className="rise-in flex flex-col gap-2 rounded-lg bg-zinc-50 p-4">
       {suggestions && suggestions.length > 0 && (
         <p className="text-xs text-zinc-500">
           {row.fromName ?? row.fromEmail} has open review{suggestions.length === 1 ? "" : "s"} on:{" "}
@@ -404,7 +404,7 @@ function RejectPanel({
   const [reason, setReason] = useState("");
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg bg-zinc-50 p-4">
+    <div className="rise-in flex flex-col gap-2 rounded-lg bg-zinc-50 p-4">
       <label htmlFor={`reject-${row.id}`} className="text-xs font-medium text-zinc-700">
         Reason (optional, kept on the record)
       </label>
@@ -519,6 +519,16 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
   const router = useRouter();
   const [tab, setTab] = useState<QueueStatus>("pending");
   const [toast, setToast] = useState<Toast | null>(null);
+  // The toast stays mounted for its 150ms exit (.toast-item[data-leaving]),
+  // so it leaves the way it came in instead of vanishing.
+  const [renderedToast, setRenderedToast] = useState<Toast | null>(toast);
+  if (toast && toast !== renderedToast) setRenderedToast(toast);
+  const toastLeaving = !toast && renderedToast !== null;
+  useEffect(() => {
+    if (!toastLeaving) return;
+    const t = setTimeout(() => setRenderedToast(null), 150);
+    return () => clearTimeout(t);
+  }, [toastLeaving]);
   // Rows resolved this session that the server hasn't caught up on yet, or
   // that are waiting out their undo window. Hidden so the list stays honest.
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -735,7 +745,7 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
             {!selected ? (
               <p className="text-sm text-zinc-500">Select an email.</p>
             ) : (
-              <>
+              <div key={selected.id} className="pane-in">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="break-words text-base font-semibold text-zinc-900">{selected.subject || "(no subject)"}</h2>
                   <CategoryBadge category={selected.proposedCategory} />
@@ -824,18 +834,19 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
                     </div>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {toast && (
+      {renderedToast && (
         <div
-          role={toast.kind === "error" ? "alert" : "status"}
-          className="toast-item fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-50 flex items-center gap-3 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg sm:left-auto sm:max-w-md"
+          role={renderedToast.kind === "error" ? "alert" : "status"}
+          data-leaving={toastLeaving ? "true" : undefined}
+          className={`toast-item ${toastLeaving ? "pointer-events-none" : ""} fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-50 flex items-center gap-3 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg sm:left-auto sm:max-w-md`}
         >
-          {toast.kind === "error" ? (
+          {renderedToast.kind === "error" ? (
             <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
           ) : (
             <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-green-400" viewBox="0 0 20 20" fill="currentColor">
@@ -846,8 +857,8 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
               />
             </svg>
           )}
-          <span className="min-w-0 flex-1 break-words">{toast.message}</span>
-          {toast.kind === "undo" && (
+          <span className="min-w-0 flex-1 break-words">{renderedToast.message}</span>
+          {renderedToast.kind === "undo" && (
             <button
               type="button"
               onClick={undo}
@@ -856,7 +867,7 @@ export function EmailQueueClient({ rows }: { rows: QueueRow[] }) {
               Undo
             </button>
           )}
-          {(toast.kind === "error" || (toast.kind === "info" && toast.persistent)) && (
+          {(renderedToast.kind === "error" || (renderedToast.kind === "info" && renderedToast.persistent)) && (
             <button
               type="button"
               onClick={() => setToast(null)}

@@ -25,7 +25,7 @@ export function PurgeButton({ projectId, label }: { projectId: string; label?: s
   // Cancel sits where "Delete forever" was, so a double-click on the original
   // button lands on the safe choice, not the destructive one.
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="rise-in flex flex-col items-end gap-2">
       <p role="alert" className="max-w-xs text-right text-xs font-medium text-red-700">
         This will permanently remove the project and all its files. This cannot be undone.
       </p>

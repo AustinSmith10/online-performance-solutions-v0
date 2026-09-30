@@ -54,13 +54,13 @@ export function KillSwitchForm({
       <p className="mt-0.5 text-xs text-zinc-500">{description}</p>
 
       {state.errors?.form?.map((e) => (
-        <p key={e} role="alert" className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p key={e} role="alert" className="rise-in mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
           {e}
         </p>
       ))}
 
       {state.saved && (
-        <p role="status" className="mt-4 text-sm font-medium text-green-700">
+        <p role="status" className="rise-in mt-4 text-sm font-medium text-green-700">
           {savedMessage}
         </p>
       )}
@@ -81,7 +81,7 @@ export function KillSwitchForm({
         </label>
 
         {turningOff && confirming ? (
-          <div className="flex w-full flex-col gap-2 rounded-lg bg-amber-50 p-3">
+          <div className="rise-in flex w-full flex-col gap-2 rounded-lg bg-amber-50 p-3">
             <p className="text-xs font-medium text-amber-800">{offWarning}</p>
             <div className="flex items-center gap-2">
               <button

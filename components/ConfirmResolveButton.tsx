@@ -39,7 +39,7 @@ export function ConfirmResolveButton({ onResolve }: { onResolve: () => Promise<b
   }
 
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1.5">
+    <div className="rise-in flex shrink-0 flex-col items-end gap-1.5">
       <p className="text-xs text-zinc-600">Hide until it recurs?</p>
       {failed && (
         <p role="alert" className="text-xs text-red-700">
