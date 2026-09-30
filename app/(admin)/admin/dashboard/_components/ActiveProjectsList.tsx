@@ -265,7 +265,7 @@ function FilterPanel({
       </div>
 
       <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-3">
-        <button type="button" onClick={() => onChange(EMPTY_FILTERS)} className="text-xs text-zinc-500 hover:text-zinc-800 hover:underline">
+        <button type="button" onClick={() => onChange(EMPTY_FILTERS)} className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900">
           Clear all
         </button>
         <span className="text-xs text-zinc-500">{isFilterActive(filters) ? "Filters applied" : "No filters"}</span>
@@ -428,7 +428,7 @@ export function ActiveProjectsList({ projects, storageKey }: { projects: ActiveP
               type="button"
               onClick={() => selectPreset(preset.id)}
               title="Drag to reorder"
-              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors [@media(pointer:coarse)]:min-h-10 ${
                 activePresetId === preset.id ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
               }`}
             >
@@ -458,7 +458,7 @@ export function ActiveProjectsList({ projects, storageKey }: { projects: ActiveP
           <button
             type="button"
             onClick={() => setPanelOpen((v) => !v)}
-            className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium ${
+            className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium [@media(pointer:coarse)]:min-h-10 ${
               isFilterActive(filters) && activePresetId === "" ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
             }`}
           >
@@ -477,7 +477,7 @@ export function ActiveProjectsList({ projects, storageKey }: { projects: ActiveP
             setActivePresetId("");
             setPanelOpen(true);
           }}
-          className="rounded-full border border-dashed border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-400 hover:border-zinc-400 hover:text-zinc-700"
+          className="rounded-full border border-dashed border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-500 hover:border-zinc-500 hover:text-zinc-700 [@media(pointer:coarse)]:min-h-10"
         >
           +
         </button>
@@ -495,7 +495,7 @@ export function ActiveProjectsList({ projects, storageKey }: { projects: ActiveP
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center">
           <p className="text-sm font-medium text-zinc-900">No projects match these filters</p>
-          <button type="button" onClick={() => selectPreset("all-active")} className="mt-2 text-sm text-zinc-600 hover:text-zinc-900 hover:underline">
+          <button type="button" onClick={() => selectPreset("all-active")} className="mt-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900">
             Clear filters
           </button>
         </div>

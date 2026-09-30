@@ -63,7 +63,7 @@ export function PbdbDispatchSchedule({
         type="button"
         onClick={handleSendNow}
         disabled={pending}
-        className="mt-2 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+        className="press-subtle mt-2 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
       >
         {pending ? "Sending…" : "Send now"}
       </button>

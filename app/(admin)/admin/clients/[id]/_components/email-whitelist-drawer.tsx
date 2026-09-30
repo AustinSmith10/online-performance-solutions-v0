@@ -1,5 +1,6 @@
 "use client";
 
+import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { useState, useEffect, useRef, useActionState } from "react";
 import { addEmailDomain, removeEmailDomain, type WhitelistState } from "@/app/actions/clients";
 import { Drawer } from "@/components/Drawer";
@@ -66,12 +67,7 @@ export function EmailWhitelistDrawer({ orgId, domains }: Props) {
                   <li key={domain} className="flex items-center justify-between py-2.5">
                     <span className="font-mono text-xs text-zinc-800">{domain}</span>
                     <form action={removeAction}>
-                      <button
-                        type="submit"
-                        className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 transition-colors duration-150 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
-                      >
-                        Remove
-                      </button>
+                      <FormSubmitButton pendingLabel="Removing…" className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 transition-colors duration-150 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700">Remove</FormSubmitButton>
                     </form>
                   </li>
                 );

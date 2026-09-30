@@ -41,7 +41,7 @@ export function ReExtractButton({
         type="button"
         onClick={handleClick}
         disabled={pending}
-        className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 disabled:opacity-50"
+        className="press-subtle rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 disabled:opacity-50"
       >
         {pending ? "Re-extracting…" : "Re-extract from documents"}
       </button>

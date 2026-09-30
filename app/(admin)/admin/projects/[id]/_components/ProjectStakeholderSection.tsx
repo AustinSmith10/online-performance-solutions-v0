@@ -1,5 +1,6 @@
 "use client";
 
+import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { useActionState } from "react";
 import {
   removeProjectStakeholder,
@@ -75,9 +76,7 @@ export function ProjectStakeholderSection({
                       <td className="py-2 text-right">
                         {!locked && (
                           <form action={removeAction}>
-                            <button type="submit" className="text-xs text-red-600 hover:underline">
-                              Remove
-                            </button>
+                            <FormSubmitButton pendingLabel="Removing…" className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 transition-colors duration-150 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700">Remove</FormSubmitButton>
                           </form>
                         )}
                       </td>
@@ -135,7 +134,7 @@ function AddFromRosterForm({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {pending ? "Adding…" : "Add"}
         </button>
@@ -179,7 +178,7 @@ function AddOneOffForm({ projectId }: { projectId: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+        className="press-subtle rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
       >
         {pending ? "Adding…" : "Add one-off reviewer"}
       </button>

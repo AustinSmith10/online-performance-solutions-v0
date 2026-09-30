@@ -33,7 +33,7 @@ export function AccessNoticeBanner() {
           type="button"
           onClick={() => setDismissed(true)}
           aria-label="Dismiss"
-          className="shrink-0 rounded px-2 text-sm text-amber-500 hover:bg-amber-100 hover:text-amber-700"
+          className="shrink-0 rounded-md px-2 text-sm text-amber-500 hover:bg-amber-100 hover:text-amber-700"
         >
           Dismiss
         </button>

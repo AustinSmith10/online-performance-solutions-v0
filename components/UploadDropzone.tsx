@@ -174,7 +174,7 @@ export function UploadDropzone({
           {browseIdx >= 0 ? (
             <>
               {prompt.slice(0, browseIdx)}
-              <span className="font-medium text-zinc-900 underline underline-offset-2">browse</span>
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-900">browse</span>
               {prompt.slice(browseIdx + 6)}
             </>
           ) : (

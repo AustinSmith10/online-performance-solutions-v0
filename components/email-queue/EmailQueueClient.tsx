@@ -114,7 +114,7 @@ function ListRow({ row, active, onSelect }: { row: QueueRow; active: boolean; on
       data-row-id={row.id}
       onClick={onSelect}
       aria-current={active ? "true" : undefined}
-      className={`w-full border-b border-zinc-100 px-3 py-2.5 text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:min-h-14 ${
+      className={`press-subtle w-full border-b border-zinc-100 px-3 py-2.5 text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:min-h-14 ${
         active ? "bg-zinc-100" : "hover:bg-zinc-50"
       }`}
     >

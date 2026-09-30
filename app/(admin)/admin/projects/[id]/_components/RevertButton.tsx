@@ -54,7 +54,7 @@ export function RevertButton({ projectId }: { projectId: string }) {
                 <button
                   type="submit"
                   disabled={pending}
-                  className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  className="press-subtle flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                 >
                   {pending ? "Reverting…" : "Confirm revert"}
                 </button>

@@ -145,19 +145,19 @@ function ZoomBar({
       <span className="mx-1 h-4 w-px bg-zinc-300" />
       <button
         type="button"
-        className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+        className="press-subtle rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
         onClick={onFit}
       >
         Fit width
       </button>
       <button
         type="button"
-        className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+        className="press-subtle rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
         onClick={() => onZoom(1)}
       >
         100%
       </button>
-      {note && <span className="ml-auto text-xs text-zinc-400">{note}</span>}
+      {note && <span className="ml-auto text-xs text-zinc-500">{note}</span>}
     </div>
   );
 }
@@ -497,7 +497,7 @@ function PdfCanvasViewer({ src, className, fill }: { src: string; className: str
         className="flex-1 overflow-auto bg-zinc-100 p-3 outline-none [overflow-anchor:none]"
       >
         {status === "loading" && (
-          <p className="py-10 text-center text-sm text-zinc-400">Loading preview…</p>
+          <p className="py-10 text-center text-sm text-zinc-500">Loading preview…</p>
         )}
         {doc &&
           pages.map((p) => (

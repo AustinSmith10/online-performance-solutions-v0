@@ -128,14 +128,14 @@ export function UnsavedChangesProvider({ children }: { children: React.ReactNode
           <button
             type="button"
             onClick={handleLeave}
-            className="rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            className="press-subtle rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
           >
             Leave without saving
           </button>
           <button
             type="button"
             onClick={handleStay}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+            className="press-subtle rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Stay and save
           </button>

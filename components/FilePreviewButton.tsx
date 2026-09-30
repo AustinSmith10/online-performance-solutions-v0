@@ -152,7 +152,7 @@ export function FilePreviewButton({
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                  className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600"
                 >
                   Close
                 </button>
@@ -175,7 +175,7 @@ export function FilePreviewButton({
                     ) : (
                       <div className="mx-auto w-56">
                         <ProgressTrack pct={shownPct} tone="zinc" />
-                        <p className="mt-1.5 text-xs tabular-nums text-zinc-400">{shownPct}%</p>
+                        <p className="mt-1.5 text-xs tabular-nums text-zinc-500">{shownPct}%</p>
                       </div>
                     )}
                     <p className="mt-4 text-sm text-zinc-500">Rendering preview…</p>

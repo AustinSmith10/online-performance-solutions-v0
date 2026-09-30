@@ -55,7 +55,7 @@ export function UpdateEmailForm({ reviewId, projectId, currentEmail }: Props) {
                 <button
                   type="submit"
                   disabled={pending || newEmail === currentEmail || !newEmail}
-                  className="flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+                  className="press-subtle flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                 >
                   {pending ? "Saving…" : "Confirm & resend"}
                 </button>
@@ -76,7 +76,7 @@ export function UpdateEmailForm({ reviewId, projectId, currentEmail }: Props) {
         <button
           type="submit"
           disabled={newEmail === currentEmail || !newEmail}
-          className="shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+          className="press-subtle shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
         >
           Update email & resend
         </button>

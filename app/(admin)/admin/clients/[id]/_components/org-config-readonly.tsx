@@ -1,5 +1,6 @@
 "use client";
 
+import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { useState, useEffect } from "react";
 import { useActionState } from "react";
 import {
@@ -134,9 +135,7 @@ function EditableRow({
           <div className="flex items-center gap-1 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100">
             {linkedEntry ? (
               <form action={boundUnlink}>
-                <button type="submit" className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900">
-                  Unlink
-                </button>
+                <FormSubmitButton pendingLabel="Unlinking…" className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900">Unlink</FormSubmitButton>
               </form>
             ) : (
               <button

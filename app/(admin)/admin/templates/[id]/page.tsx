@@ -207,7 +207,7 @@ export default async function TemplatePage({
           {template.org && (
             <>
               Client{" "}
-              <Link href={`/admin/clients/${template.org.id}`} className="font-medium text-zinc-900 hover:underline">
+              <Link href={`/admin/clients/${template.org.id}`} className="font-medium text-zinc-900 transition-colors duration-150 hover:text-zinc-600">
                 {template.org.name}
               </Link>
               {" · "}
