@@ -28,12 +28,19 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
 
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
+  // Bumped on every open and close: a preview response for an older request
+  // must not overwrite the state of a newer one (or of a closed dialog).
+  const requestRef = useRef(0);
+  const close = () => {
+    requestRef.current += 1;
+    setOpen(false);
+  };
 
   // Escape closes; Tab is trapped inside the dialog while it is open.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setOpen(false); return; }
+      if (e.key === "Escape") { requestRef.current += 1; setOpen(false); return; }
       if (e.key !== "Tab" || !panelRef.current) return;
       const focusable = panelRef.current.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -77,9 +84,11 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
   }
 
   async function openPreview() {
+    const request = ++requestRef.current;
     setOpen(true);
     setState({ status: "loading" });
     const result: TemplateFileResult = await getTemplatePreviewUrl(templateId);
+    if (request !== requestRef.current) return;
     if ("error" in result) {
       setState({ status: "error", message: result.error });
       return;
@@ -106,7 +115,7 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
         createPortal(
           <div
             className="modal-backdrop fixed inset-0 z-[100] flex flex-col items-center bg-black/50 p-4"
-            onClick={() => setOpen(false)}
+            onClick={close}
           >
             <div
               ref={panelRef}
@@ -123,8 +132,8 @@ export function TemplateFileActions({ templateId }: { templateId: string }) {
                 </p>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
-                  className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700"
+                  onClick={close}
+                  className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:min-h-10"
                 >
                   Close
                 </button>

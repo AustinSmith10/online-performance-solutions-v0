@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef, useActionState } from "react";
+import { useState, useTransition, useEffect, useRef, useActionState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   addExtractionOnlyToken,
@@ -24,7 +24,9 @@ interface Row {
 // flash, no button text selection, 16px form fields on touch.
 const PLATFORM =
   "[-webkit-tap-highlight-color:transparent] [&_a]:touch-manipulation [&_button]:touch-manipulation [&_button]:select-none " +
-  "[@media(pointer:coarse)]:[&_input]:text-base [@media(pointer:coarse)]:[&_select]:text-base [@media(pointer:coarse)]:[&_textarea]:text-base";
+  "[@media(pointer:coarse)]:[&_input]:text-base [@media(pointer:coarse)]:[&_select]:text-base [@media(pointer:coarse)]:[&_textarea]:text-base " +
+  // 40px touch targets for the panel's Save / Remove / Add / Cancel buttons.
+  "[@media(pointer:coarse)]:[&_button]:min-h-10";
 
 const COMPARISON_MODE_OPTIONS = [
   { value: "exact", label: "Exact match" },
@@ -41,6 +43,15 @@ interface Props {
 export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Props) {
   const [open, setOpen] = useState(!!highlightToken);
   const [mounted, setMounted] = useState(false);
+  // Cards report while a save/remove is in flight; closing then would hide the
+  // outcome (and any error) of an action the admin is waiting on.
+  const busyIds = useRef(new Set<string>());
+  const [busy, setBusy] = useState(false);
+  const setCardBusy = useCallback((id: string, isBusy: boolean) => {
+    if (isBusy) busyIds.current.add(id);
+    else busyIds.current.delete(id);
+    setBusy(busyIds.current.size > 0);
+  }, []);
 
   useEffect(() => { queueMicrotask(() => setMounted(true)); }, []);
 
@@ -51,7 +62,7 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
   useEffect(() => {
     if (!open) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setOpen(false); return; }
+      if (e.key === "Escape") { if (!busy) setOpen(false); return; }
       if (e.key !== "Tab" || !panelRef.current) return;
       const focusable = panelRef.current.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -69,7 +80,7 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [open]);
+  }, [open, busy]);
 
   // Move focus into the panel on open and back to whatever opened it on close.
   useEffect(() => {
@@ -86,10 +97,12 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
     <>
       {/* Backdrop */}
       <div
-        onClick={() => setOpen(false)}
+        onClick={() => {
+          if (!busy) setOpen(false);
+        }}
         aria-hidden="true"
         style={{ opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none" }}
-        className="fixed inset-0 z-40 bg-black/20 transition-opacity duration-300 ease-[var(--ease-in-out)]"
+        className="fixed inset-0 z-40 bg-black/20 transition-opacity duration-300 ease-[var(--ease-in-out)] motion-reduce:duration-150"
       />
 
       {/* Slide-in panel */}
@@ -108,9 +121,9 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
           height: "100dvh",
           zIndex: 50,
           transform: open ? "translateX(0)" : "translateX(100%)",
-          transition: "transform 300ms var(--ease-in-out)",
         }}
-        className={`flex flex-col border-l border-zinc-200 bg-white outline-none ${PLATFORM}`}
+        // The slide is skipped under reduced motion; the backdrop still fades.
+        className={`flex flex-col border-l border-zinc-200 bg-white outline-none transition-transform duration-300 ease-[var(--ease-in-out)] motion-reduce:transition-none ${PLATFORM}`}
       >
         {/* Panel header */}
         <div className="flex shrink-0 items-start justify-between border-b border-zinc-200 px-5 py-4">
@@ -125,8 +138,9 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
           <button
             type="button"
             onClick={() => setOpen(false)}
+            disabled={busy}
             aria-label="Close panel"
-            className="ml-3 shrink-0 rounded-md p-1 text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700"
+            className="ml-3 shrink-0 rounded-md p-1 text-zinc-500 transition-colors duration-150 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50 [@media(pointer:coarse)]:p-3"
           >
             ✕
           </button>
@@ -143,6 +157,7 @@ export function ExtractionOnlyPanel({ templateId, tokens, highlightToken }: Prop
               templateId={templateId}
               token={token}
               highlight={token.placeholder_token === highlightToken}
+              onBusyChange={setCardBusy}
             />
           ))}
 
@@ -173,10 +188,12 @@ function ExtractionTokenCard({
   templateId,
   token,
   highlight,
+  onBusyChange,
 }: {
   templateId: string;
   token: Row;
   highlight?: boolean;
+  onBusyChange: (id: string, busy: boolean) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -184,6 +201,11 @@ function ExtractionTokenCard({
   const [isSavePending, startSaveTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | undefined>();
   const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    onBusyChange(token.id, isDeletePending || isSavePending);
+    return () => onBusyChange(token.id, false);
+  }, [token.id, isDeletePending, isSavePending, onBusyChange]);
 
   useEffect(() => {
     if (!highlight || !cardRef.current) return;
@@ -229,7 +251,7 @@ function ExtractionTokenCard({
               type="text"
               required
               defaultValue={token.display_label ?? ""}
-              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             />
           </div>
           <div>
@@ -241,7 +263,7 @@ function ExtractionTokenCard({
               required
               rows={4}
               defaultValue={token.extraction_hint ?? ""}
-              className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             />
           </div>
           <div>
@@ -251,7 +273,7 @@ function ExtractionTokenCard({
             <select
               name="comparison_mode"
               defaultValue={token.comparison_mode ?? "exact"}
-              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             >
               {COMPARISON_MODE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -364,7 +386,7 @@ function AddTokenForm({ templateId }: { templateId: string }) {
           type="text"
           required
           placeholder="EXTRACT_DEV_NAME"
-          className="w-full rounded-md border border-zinc-200 px-2 py-1.5 font-mono text-xs uppercase text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+          className="w-full rounded-md border border-zinc-200 px-2 py-1.5 font-mono text-sm uppercase text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
         />
         <p className="mt-0.5 text-xs text-zinc-500">Must start with EXTRACT_</p>
       </div>
@@ -378,7 +400,7 @@ function AddTokenForm({ templateId }: { templateId: string }) {
           type="text"
           required
           placeholder="e.g. Development name"
-          className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+          className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
         />
       </div>
 
@@ -391,7 +413,7 @@ function AddTokenForm({ templateId }: { templateId: string }) {
           required
           rows={3}
           placeholder="Tell Claude what to look for and where in the submitted documents…"
-          className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+          className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
         />
       </div>
 

@@ -162,7 +162,7 @@ export default async function TemplatePage({
   });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-4xl space-y-5 [@media(pointer:coarse)]:[&_button]:min-h-10">
       {/* Breadcrumb */}
       <BackLink href="/admin/templates">Templates</BackLink>
 

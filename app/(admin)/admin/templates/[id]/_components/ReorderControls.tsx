@@ -14,7 +14,7 @@ export function ReorderControls({
   onMove: (from: number, to: number) => void;
 }) {
   const btn =
-    "flex h-9 w-9 items-center justify-center rounded-md text-zinc-500 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-700 disabled:opacity-30 disabled:hover:bg-transparent sm:h-5 sm:w-5";
+    "flex h-9 w-9 [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10 items-center justify-center rounded-md text-zinc-500 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-700 disabled:opacity-30 disabled:hover:bg-transparent sm:h-5 sm:w-5";
   return (
     <span className="flex items-center gap-1 sm:flex-col sm:gap-0.5">
       <button

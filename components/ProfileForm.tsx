@@ -370,7 +370,7 @@ function Field({
           no id plumbing needed here. */}
       <label className="block text-sm font-medium text-zinc-700">
         {label}
-        <div className="mt-1">{children}</div>
+        <span className="mt-1 block">{children}</span>
       </label>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>

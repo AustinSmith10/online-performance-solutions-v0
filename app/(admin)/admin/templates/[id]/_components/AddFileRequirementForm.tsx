@@ -55,7 +55,7 @@ export function AddFileRequirementForm({ templateId }: { templateId: string }) {
             value={name}
             onChange={handleNameChange}
             placeholder="e.g. Building Plans"
-            className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+            className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
           />
         </div>
         <div className="flex-1">
@@ -77,7 +77,7 @@ export function AddFileRequirementForm({ templateId }: { templateId: string }) {
             min={1}
             max={20}
             defaultValue={1}
-            className="w-16 rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+            className="w-16 rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
           />
         </div>
       </div>

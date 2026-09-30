@@ -203,7 +203,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                         name={`label_${row.placeholder_token}`}
                         defaultValue={row.display_label ?? ""}
                         placeholder="e.g. Site address"
-                        className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                         required
                       />
                     </div>
@@ -216,7 +216,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                         defaultValue={row.extraction_hint ?? ""}
                         placeholder="Tell Claude what to look for and where in the submitted documents…"
                         rows={3}
-                        className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                         required
                       />
                     </div>
@@ -227,7 +227,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                       <select
                         name={`comparison_mode_${row.placeholder_token}`}
                         defaultValue={row.comparison_mode ?? "exact"}
-                        className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                       >
                         {COMPARISON_MODE_OPTIONS.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
@@ -255,7 +255,7 @@ function DraftMappingTable({ rows, templateId, missingOrgTokens = [] }: Omit<Pro
                         name={`label_${row.placeholder_token}`}
                         defaultValue={row.display_label ?? ""}
                         placeholder="e.g. Client name"
-                        className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                         required
                       />
                     </div>
@@ -450,7 +450,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
               defaultValue={row.display_label ?? ""}
               placeholder="e.g. Site address"
               required
-              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+              className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             />
           </div>
 
@@ -465,7 +465,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
                 placeholder="Tell Claude what to look for and where in the submitted documents…"
                 rows={3}
                 required
-                className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
             </div>
           )}
@@ -478,7 +478,7 @@ function TokenFieldsCol({ row, templateId }: { row: Row; templateId: string }) {
               <select
                 name="comparison_mode"
                 defaultValue={row.comparison_mode ?? "exact"}
-                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               >
                 {COMPARISON_MODE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>

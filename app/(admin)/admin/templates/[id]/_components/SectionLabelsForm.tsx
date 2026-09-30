@@ -133,7 +133,7 @@ function DraftSectionLabels({ templateId, labels }: Omit<Props, "isActivated">) 
                   name={section.labelField}
                   defaultValue={getLabelValue(labels, section.labelField)}
                   rows={2}
-                  className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
                 {section.labelHint && (
                   <p className="mt-1 text-xs text-zinc-500">{section.labelHint}</p>
@@ -148,7 +148,7 @@ function DraftSectionLabels({ templateId, labels }: Omit<Props, "isActivated">) 
                 defaultValue={getDescValue(labels, section.descField)}
                 rows={2}
                 placeholder="Add a short description…"
-                className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
               <p className="mt-1 text-xs text-zinc-500">{section.descHint}</p>
               {section.fixedNote && (
@@ -249,7 +249,7 @@ function SectionCard({
                   name={section.labelField}
                   defaultValue={currentLabel ?? ""}
                   rows={2}
-                  className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                 />
                 {section.labelHint && (
                   <p className="mt-1 text-xs text-zinc-500">{section.labelHint}</p>
@@ -264,7 +264,7 @@ function SectionCard({
                 defaultValue={currentDesc}
                 rows={2}
                 placeholder="Add a short description…"
-                className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                className="w-full resize-none rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
               <p className="mt-1 text-xs text-zinc-500">{section.descHint}</p>
               {section.fixedNote && (

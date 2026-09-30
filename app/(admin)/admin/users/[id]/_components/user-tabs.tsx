@@ -1,5 +1,6 @@
 "use client";
 
+import { TabBar } from "@/components/TabBar";
 import { useEffect, useState } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
@@ -70,28 +71,20 @@ function UserTabsInner({ user, clients, availabilityActions }: Props) {
 
   return (
     <div>
-      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-zinc-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {([
+      <TabBar
+        className="mb-6"
+        tabs={[
           { id: "profile" as Tab, label: "Profile" },
           { id: "availability" as Tab, label: "Availability" },
           { id: "disciplines" as Tab, label: "Disciplines" },
-        ]).map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => requestNavigate(() => setTab(t.id))}
-            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === t.id
-                ? "border-zinc-900 text-zinc-900"
-                : "border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+        ]}
+        active={tab}
+        onSelect={(id) => requestNavigate(() => setTab(id))}
+        idPrefix="user"
+        label="User sections"
+      />
 
-      <div key={tab} className="pane-in">
+      <div key={tab} id="user-panel" role="tabpanel" aria-labelledby={`user-tab-${tab}`} className="pane-in">
       {tab === "profile" && profileContent}
 
       {tab === "availability" && (
@@ -203,7 +196,8 @@ function ProfileSection({
   user: UserTabsUser;
   clients: Pick<Client, "id" | "name">[];
 }) {
-  const showOrg = user.role === "stakeholder";
+  // Also when a client is already stored, so it stays visible and clearable.
+  const showOrg = user.role === "stakeholder" || !!user.client_id;
 
   const fields: FieldDef[] = [
     { key: "first_name", label: "First name", kind: "text", required: true },

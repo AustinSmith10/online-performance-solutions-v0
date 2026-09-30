@@ -42,7 +42,12 @@ export function Drawer({ isOpen, onClose, title, subtitle, footer, successMessag
   useEffect(() => {
     if (isOpen) {
       previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
-      panelRef.current?.focus();
+      // Land on the first form field when there is one (what autoFocus gave
+      // the dialogs this replaced); otherwise on the panel itself.
+      const field = panelRef.current?.querySelector<HTMLElement>(
+        "input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled])"
+      );
+      (field ?? panelRef.current)?.focus();
     } else {
       previouslyFocusedRef.current?.focus();
       previouslyFocusedRef.current = null;
