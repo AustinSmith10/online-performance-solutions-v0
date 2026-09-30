@@ -190,7 +190,7 @@ export default async function UsersPage({
           <div className="flex items-center gap-2">
           {caller.role === "super_admin" && (
             <Link
-              href="/admin/tags"
+              href="/admin/settings?tab=tags"
               className="press-subtle rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-100 [@media(pointer:coarse)]:min-h-10"
             >
               Manage tags
@@ -338,7 +338,7 @@ export default async function UsersPage({
         <div className="flex items-center gap-2">
           {caller.role === "super_admin" && (
             <Link
-              href="/admin/tags"
+              href="/admin/settings?tab=tags"
               className="press-subtle rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-100 [@media(pointer:coarse)]:min-h-10"
             >
               Manage tags

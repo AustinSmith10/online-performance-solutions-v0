@@ -259,10 +259,13 @@ Rows carry a checkbox with a 44px tap area; a bar with the count and "Restore N 
 
 ## Account tags (internal only)
 
-Tags are reusable labels the super admin defines (`/admin/tags`, Work group in the sidebar, plus a "Manage tags" button on the Internal Users and Stakeholders headers) and staff assign to accounts. Stakeholders never see them, and they never enter documents, emails or notification text (`lib/tags/tag-isolation.test.ts`).
+Tags are reusable labels the super admin defines (Settings → Tags, `/admin/settings?tab=tags`; `/admin/tags` redirects there; plus a "Manage tags" button on the Internal Users and Stakeholders headers) and staff assign to accounts. Stakeholders never see them, and they never enter documents, emails or notification text (`lib/tags/tag-isolation.test.ts`).
 
 - **Chip:** the standard status-pill shape (`rounded-full px-2 py-0.5 text-xs font-medium`) in a quiet tint of the tag's hue (12% wash, label darkened until it clears 4.5:1; `lib/tags/color.ts`). Because colour is reserved for workflow state, tags read as labels, not status. One component (`TagChip`/`TagChips`), placed on the name line straight after the name, never in the name string.
 - **Colour choice:** eight curated swatches in the manager (radio group with a live preview chip), not a free colour picker.
 - **Assigning:** a "Tags" row with the current chips and an "Add tag / Edit tags" dashed pill that opens a checklist popover (`TagAssigner`). Ticking assigns and unticking removes immediately (optimistic, rolled back on error). Origin-aware `tray-pop`, portalled, flips upward near the bottom edge; Esc closes and returns focus; 40px targets on coarse pointers.
 - **Pickers:** where a native `<select>` cannot hold chips (the submit-on-behalf stakeholder picker) a listbox shows name and email left, chips right.
 - **Deleting:** confirm in place; "Keep tag" sits where the trigger was and the destructive button states how many accounts lose the tag.
+
+### Settings tabs
+Settings is split into underline tabs so it is not one long scroll: Notifications & delivery, Documents & AI, and (super admin only) Platform and Tags. The URL is the state (`/admin/settings?tab=`), each tab is a link marked `aria-current`, an unknown or forbidden tab falls back to the first, and only the active tab's data is read.

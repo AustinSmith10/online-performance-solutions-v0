@@ -13,6 +13,7 @@ export interface TagActionState {
 
 function revalidateTagSurfaces() {
   revalidatePath("/admin/tags");
+  revalidatePath("/admin/settings");
   revalidatePath("/admin/stakeholders");
   revalidatePath("/admin/users");
   revalidatePath("/admin/projects/submit");

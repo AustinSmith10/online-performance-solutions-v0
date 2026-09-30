@@ -150,7 +150,7 @@ export default async function UserDetailPage({
                   targetUserId={u.id}
                   assigned={userTags}
                   allTags={allTags}
-                  manageHref={caller.role === "super_admin" ? "/admin/tags" : undefined}
+                  manageHref={caller.role === "super_admin" ? "/admin/settings?tab=tags" : undefined}
                 />
               ) : (
                 <TagChips tags={userTags} />
