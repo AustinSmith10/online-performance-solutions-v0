@@ -114,7 +114,7 @@ export function ProjectRecoveryList({ rows }: { rows: RecoveryProjectRow[] }) {
                 >
                   {p.label}
                 </Link>
-                <p className="mt-0.5 text-xs text-zinc-500 sm:truncate">{p.meta}</p>
+                <p className="mt-0.5 text-xs tabular-nums text-zinc-500 sm:truncate">{p.meta}</p>
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 pl-7 sm:justify-end sm:pl-0">

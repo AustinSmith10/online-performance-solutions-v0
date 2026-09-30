@@ -460,7 +460,7 @@ function EntityRowList<T>({
             >
               <div className="min-w-0 flex-1">
                 <span className="break-words text-sm font-medium text-zinc-900 sm:truncate">{primary}</span>
-                <p className="mt-0.5 text-xs text-zinc-500 sm:truncate">{meta}</p>
+                <p className="mt-0.5 text-xs tabular-nums text-zinc-500 sm:truncate">{meta}</p>
               </div>
               <div className="flex shrink-0 flex-wrap items-start gap-2">{action}</div>
             </div>

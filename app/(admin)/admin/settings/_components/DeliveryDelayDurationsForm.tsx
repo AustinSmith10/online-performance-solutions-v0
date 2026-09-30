@@ -90,7 +90,7 @@ function DurationField({
           step={1}
           defaultValue={defaultValue}
           required
-          className={input}
+          className={`${input} tabular-nums`}
         />
         <select name={unitName} defaultValue={defaultUnit} className={input}>
           <option value="workingDays">Working days</option>

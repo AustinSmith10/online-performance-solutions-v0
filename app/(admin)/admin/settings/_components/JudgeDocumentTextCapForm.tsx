@@ -46,7 +46,7 @@ export function JudgeDocumentTextCapForm({ cap }: { cap: number }) {
             step={1}
             defaultValue={cap}
             required
-            className="mt-1 block w-40 rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm transition-colors duration-150 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            className="tabular-nums mt-1 block w-40 rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm transition-colors duration-150 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
           />
           {state.errors?.cap && <p className="mt-1 text-xs text-red-600">{state.errors.cap[0]}</p>}
         </div>
