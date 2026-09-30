@@ -8,6 +8,7 @@ import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import { getCurrentRevNumber, getLatestRevisionHistoryRow } from "@/lib/documents/revision-history";
 import { groupPbdbVersions } from "@/lib/documents/pbdb-versions";
 import { groupPbdrVersions } from "@/lib/documents/pbdr-versions";
+import { findSentPbdbFileIds } from "@/lib/documents/sent-pdf";
 import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
 import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
 import { resolveStaffStatus } from "@/lib/delivery/effective-status";
@@ -670,6 +671,16 @@ export async function ProjectWorkspace({
     revisionHistory: revisionRows.filter((r) => r.doc_type === "pbdb"),
     revisionNotesByCycle,
   });
+  // #208: which PBDB rows have a stored PDF that actually went to stakeholders.
+  const sentPbdbFileIds = await findSentPbdbFileIds(
+    supabase,
+    id,
+    (pbdbFiles as { id: string; version: number; review_cycle: number }[]).map((f) => ({
+      id: f.id,
+      version: f.version,
+      review_cycle: f.review_cycle,
+    }))
+  );
   const pbdrGrouping = groupPbdrVersions({
     files: pbdrFiles as { id: string; original_filename: string; version: number; created_at: string }[],
     revisionHistory: revisionRows,
@@ -1335,6 +1346,7 @@ export async function ProjectWorkspace({
           projectId={id}
           grouping={pbdbGrouping}
           canRegenerate={canRegeneratePbdb}
+          sentFileIds={sentPbdbFileIds}
         />
       )}
       {isAdmin && !isDeleted && project.status !== "paused" && (
@@ -1531,6 +1543,8 @@ export async function ProjectWorkspace({
               // The PBDR download route only serves the latest file, so older
               // revisions are listed (and previewable) but not downloadable.
               hrefFor={(_fileId, tier) => (tier === "active" ? `/api/download/pbdr/${id}` : null)}
+              // #208: every delivered PBDR revision keeps its stored PDF downloadable.
+              sentHrefFor={(fileId) => `/api/download/sent/${fileId}`}
             />
           </div>
         </CollapsibleSection>

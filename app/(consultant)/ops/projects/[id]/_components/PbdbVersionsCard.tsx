@@ -6,11 +6,14 @@ export function PbdbVersionsCard({
   projectId,
   grouping,
   canRegenerate,
+  sentFileIds,
   id,
 }: {
   projectId: string;
   grouping: PbdbVersionGrouping;
   canRegenerate: boolean;
+  /** #208: PBDB rows with a stored sent PDF. */
+  sentFileIds?: ReadonlySet<string>;
   id?: string;
 }) {
   return (
@@ -30,6 +33,7 @@ export function PbdbVersionsCard({
         historical={grouping.historical}
         drafts={grouping.drafts}
         hrefFor={(fileId) => `/api/download/pbdb/${fileId}`}
+        sentHrefFor={(fileId) => (sentFileIds?.has(fileId) ? `/api/download/sent/${fileId}` : null)}
         // QaUploadedBanner scrolls to / highlights this row after a QA upload.
         activeRowId={grouping.active.badge === "none" ? undefined : "qa-pbdb-row"}
       />

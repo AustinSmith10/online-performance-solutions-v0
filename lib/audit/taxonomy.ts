@@ -66,6 +66,7 @@ export const CATEGORIES: Record<string, { label: string; color: string; events: 
       "project.complete",
       "project.pbdr_downloaded",
       "project.pbdb_downloaded",
+      "project.sent_pdf_downloaded",
       "evidence.attached",
     ],
   },
@@ -203,6 +204,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "project.complete": "Project marked complete",
   "project.pbdr_downloaded": "PBDR downloaded",
   "project.pbdb_downloaded": "PBDB downloaded",
+  "project.sent_pdf_downloaded": "Sent PDF downloaded",
   "evidence.attached": "Evidence attached",
   "stakeholder.responded": "Stakeholder responded",
   "stakeholder.responded_via_portal": "Stakeholder responded via portal",
@@ -493,6 +495,12 @@ export function formatDetails(
       break;
 
     case "project.pbdr_downloaded":
+      if (s(metadata.role)) parts.push(s(metadata.role).replace(/_/g, " "));
+      if (s(metadata.filename)) parts.push(s(metadata.filename));
+      break;
+
+    case "project.sent_pdf_downloaded":
+      if (s(metadata.doc_type)) parts.push(s(metadata.doc_type).toUpperCase());
       if (s(metadata.role)) parts.push(s(metadata.role).replace(/_/g, " "));
       if (s(metadata.filename)) parts.push(s(metadata.filename));
       break;
