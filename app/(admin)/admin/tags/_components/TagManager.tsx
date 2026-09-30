@@ -19,29 +19,103 @@ const BTN_SECONDARY =
 const BTN_PRIMARY =
   "press rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50 [@media(pointer:coarse)]:min-h-10";
 
-/** Eight curated colours instead of a free colour picker: every tag stays harmonious and legible. */
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Eight curated colours for the common case, plus a Custom option for when
+ * they run out (a colour wheel and a hex field). Any colour is safe: the chip
+ * darkens its label until it passes contrast (lib/tags/color.ts). `onChange`
+ * only ever receives a valid #rrggbb, so an in-progress hex never reaches the form.
+ */
 function SwatchPicker({ value, onChange, idPrefix }: { value: string; onChange: (hex: string) => void; idPrefix: string }) {
+  const isPreset = TAG_SWATCHES.some((s) => s.hex.toLowerCase() === value.toLowerCase());
+  const [customOpen, setCustomOpen] = useState(!isPreset);
+  const [text, setText] = useState(value);
+  const customActive = customOpen || !isPreset;
+
+  function commitText(next: string) {
+    const withHash = next.startsWith("#") ? next : `#${next}`;
+    setText(next);
+    if (HEX.test(withHash)) onChange(withHash.toLowerCase());
+  }
+
+  const ring = (on: boolean) =>
+    on ? "ring-2 ring-zinc-900 ring-offset-2" : "ring-1 ring-inset ring-black/10 hover:ring-black/25";
+  const target =
+    "press h-7 w-7 rounded-full transition-shadow duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10";
+
   return (
-    <div role="radiogroup" aria-label="Tag colour" className="flex flex-wrap items-center gap-1.5">
-      {TAG_SWATCHES.map((s) => {
-        const checked = s.hex.toLowerCase() === value.toLowerCase();
-        return (
-          <button
-            key={s.hex}
-            id={`${idPrefix}-${s.name}`}
-            type="button"
-            role="radio"
-            aria-checked={checked}
-            aria-label={s.name}
-            title={s.name}
-            onClick={() => onChange(s.hex)}
-            className={`press h-7 w-7 rounded-full transition-shadow duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10 ${
-              checked ? "ring-2 ring-zinc-900 ring-offset-2" : "ring-1 ring-inset ring-black/10 hover:ring-black/25"
-            }`}
-            style={{ backgroundColor: s.hex }}
+    <div className="space-y-2.5">
+      <div role="radiogroup" aria-label="Tag colour" className="flex flex-wrap items-center gap-1.5">
+        {TAG_SWATCHES.map((s) => {
+          const checked = !customActive && s.hex.toLowerCase() === value.toLowerCase();
+          return (
+            <button
+              key={s.hex}
+              id={`${idPrefix}-${s.name}`}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              aria-label={s.name}
+              title={s.name}
+              onClick={() => {
+                setCustomOpen(false);
+                setText(s.hex);
+                onChange(s.hex);
+              }}
+              className={`${target} ${ring(checked)}`}
+              style={{ backgroundColor: s.hex }}
+            />
+          );
+        })}
+        <button
+          id={`${idPrefix}-custom`}
+          type="button"
+          role="radio"
+          aria-checked={customActive}
+          aria-label="Custom colour"
+          title="Custom colour"
+          onClick={() => {
+            setCustomOpen(true);
+            setText(value);
+          }}
+          className={`${target} ${ring(customActive)}`}
+          style={{
+            background: customActive && HEX.test(value) ? value : "conic-gradient(from 0deg, #ef4444, #f59e0b, #22c55e, #06b6d4, #6366f1, #d946ef, #ef4444)",
+          }}
+        />
+      </div>
+      {customActive && (
+        <div className="rise-in flex flex-wrap items-center gap-2">
+          <input
+            type="color"
+            aria-label="Pick a colour"
+            value={HEX.test(value) ? value : "#2563eb"}
+            onChange={(e) => {
+              setText(e.target.value);
+              onChange(e.target.value.toLowerCase());
+            }}
+            className="h-9 w-11 cursor-pointer rounded-md border border-zinc-300 bg-white p-1 [@media(pointer:coarse)]:h-10"
           />
-        );
-      })}
+          <label className="sr-only" htmlFor={`${idPrefix}-hex`}>
+            Hex colour
+          </label>
+          <input
+            id={`${idPrefix}-hex`}
+            value={text}
+            onChange={(e) => commitText(e.target.value.trim())}
+            maxLength={7}
+            spellCheck={false}
+            autoComplete="off"
+            placeholder="#2563eb"
+            aria-invalid={!HEX.test(text.startsWith("#") ? text : `#${text}`)}
+            className="w-28 rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+          />
+          {!HEX.test(text.startsWith("#") ? text : `#${text}`) && (
+            <span className="text-xs text-zinc-500">Enter 6 hex digits, e.g. #2563eb</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
