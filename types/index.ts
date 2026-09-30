@@ -44,6 +44,7 @@ export type NotificationType =
   | "email_reply_without_thread_token"
   | "email_queue_reply_received"
   | "email_queue_unrecognised_reply"
+  | "email_queue_clarification_unanswered"
   | "email_draft_notification_failed"
   | "pbdb_generation_failed";
 

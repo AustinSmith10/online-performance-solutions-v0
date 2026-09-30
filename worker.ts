@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { assertSchemaCurrentOrExit } from "@/lib/schema/drift-guard";
 import { purgeRecoveryBin } from "@/lib/jobs/purge-recovery-bin";
 import { purgeRejectedInboundAttachments } from "@/lib/jobs/purge-rejected-inbound-attachments";
+import { sendClarificationReminders } from "@/lib/jobs/clarification-reminders";
 import { dispatchPbdb } from "@/lib/stakeholders/dispatch";
 import { sendStakeholderBufferUpdate } from "@/lib/stakeholders/buffer-update";
 import { getPublicHolidays } from "@/lib/delivery/public-holidays";
@@ -97,6 +98,7 @@ async function main() {
     "clear-stale-progress",
     AVAILABLE_REQUESTS_DIGEST_QUEUE,
     "reconcile-digest-schedule",
+    "clarification-reminders",
   ]) {
     await boss.createQueue(queue, { retryBackoff: true });
   }
@@ -135,6 +137,19 @@ async function main() {
     console.log(`[purge-rejected-inbound-attachments] purged attachments for ${purgedCount} queue entries`);
     if (failedQueueIds.length > 0) {
       throw new Error(`failed to purge queue entries: ${failedQueueIds.join(", ")}`);
+    }
+  });
+
+  // Nudge staff about email-queue clarification requests the sender never
+  // answered (day 3 and day 7, once each). Weekdays at 09:30.
+  await boss.schedule("clarification-reminders", "30 9 * * 1-5", {});
+  await work("clarification-reminders", async () => {
+    const supabase = createAdminClient();
+    const { reminded, failedQueueIds } = await sendClarificationReminders(supabase);
+
+    console.log(`[clarification-reminders] reminded staff about ${reminded} unanswered clarification(s)`);
+    if (failedQueueIds.length > 0) {
+      throw new Error(`failed to record reminder for queue entries: ${failedQueueIds.join(", ")}`);
     }
   });
 
