@@ -279,7 +279,7 @@ export default async function AdminDashboardPage({
       <TourHighlight id="admin_active_projects">
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
               Active projects ({allActive.length})
             </h2>
             <Link

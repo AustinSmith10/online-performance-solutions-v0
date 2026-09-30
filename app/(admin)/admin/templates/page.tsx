@@ -42,8 +42,8 @@ function SortPills({ params, sortCol, sortOrder }: { params: Record<string, stri
             key={o.col}
             href={sortHref(params, o.col)}
             aria-current={active ? "true" : undefined}
-            className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 ${
-              active ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+            className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:items-center [@media(pointer:coarse)]:px-3 ${
+              active ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-900"
             }`}
           >
             {o.label} {active ? (sortOrder === "asc" ? "↑" : "↓") : ""}

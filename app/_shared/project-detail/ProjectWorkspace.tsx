@@ -1005,8 +1005,8 @@ export async function ProjectWorkspace({
   if (isDeleted) {
     focusCard = (
       <FocusCard tone="amber" title="In the recovery bin" subtitle="Permanently deleted after 30 days.">
-        <Link href="/admin/recovery" className="text-sm font-medium text-amber-800 underline hover:text-amber-900">
-          Go to recovery bin →
+        <Link href="/admin/recovery" className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 transition-colors duration-150 hover:bg-amber-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700">
+          Go to recovery bin
         </Link>
       </FocusCard>
     );
@@ -1042,8 +1042,8 @@ export async function ProjectWorkspace({
         {disciplineConsultants.length === 0 && (
           <p className="mt-3 text-sm text-zinc-500">
             No consultants tagged for this discipline.{" "}
-            <Link href="/admin/users/invite" className="underline hover:text-zinc-700">
-              Create account →
+            <Link href="/admin/users/invite" className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900">
+              Create account
             </Link>
           </p>
         )}
@@ -1407,7 +1407,7 @@ export async function ProjectWorkspace({
               <Row
                 label="Email"
                 value={
-                  <a href={`mailto:${project.submitter.email}`} className="text-blue-600 hover:underline">
+                  <a href={`mailto:${project.submitter.email}`} className="text-zinc-700 transition-colors duration-150 hover:text-zinc-900">
                     {project.submitter.email}
                   </a>
                 }
@@ -1416,7 +1416,7 @@ export async function ProjectWorkspace({
                 <Row
                   label="Phone"
                   value={
-                    <a href={`tel:${project.submitter.phone}`} className="text-blue-600 hover:underline">
+                    <a href={`tel:${project.submitter.phone}`} className="text-zinc-700 transition-colors duration-150 hover:text-zinc-900">
                       {project.submitter.phone}
                     </a>
                   }
@@ -1856,8 +1856,8 @@ export async function ProjectWorkspace({
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <span className="font-semibold">This project is in the recovery bin.</span>{" "}
           It will be permanently deleted after 30 days.{" "}
-          <Link href="/admin/recovery" className="font-medium underline hover:text-amber-900">
-            Go to recovery bin →
+          <Link href="/admin/recovery" className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 transition-colors duration-150 hover:bg-amber-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700">
+            Go to recovery bin
           </Link>
         </div>
       )}

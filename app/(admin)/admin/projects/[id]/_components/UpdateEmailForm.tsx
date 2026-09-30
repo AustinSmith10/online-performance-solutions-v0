@@ -29,11 +29,11 @@ export function UpdateEmailForm({ reviewId, projectId, currentEmail }: Props) {
             </p>
             <div className="mt-4 space-y-2 rounded-md border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm">
               <div className="flex items-baseline gap-2">
-                <span className="w-12 shrink-0 text-xs text-zinc-400">From</span>
+                <span className="w-12 shrink-0 text-xs text-zinc-500">From</span>
                 <span className="font-mono text-xs text-zinc-600 break-all">{currentEmail}</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="w-12 shrink-0 text-xs text-zinc-400">To</span>
+                <span className="w-12 shrink-0 text-xs text-zinc-500">To</span>
                 <span className="font-mono text-xs font-medium text-zinc-900 break-all">{newEmail}</span>
               </div>
             </div>

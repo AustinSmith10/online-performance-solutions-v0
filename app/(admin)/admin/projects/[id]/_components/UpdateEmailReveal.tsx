@@ -24,7 +24,7 @@ export function UpdateEmailReveal({
     return (
       <div className="flex items-center gap-2">
         <UpdateEmailForm reviewId={reviewId} projectId={projectId} currentEmail={currentEmail} />
-        <button type="button" onClick={() => setOpen(false)} className="text-xs text-zinc-400 hover:text-zinc-600">
+        <button type="button" onClick={() => setOpen(false)} className="text-xs text-zinc-500 hover:text-zinc-600">
           Cancel
         </button>
       </div>

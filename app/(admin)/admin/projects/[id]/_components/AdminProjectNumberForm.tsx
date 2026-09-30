@@ -78,7 +78,7 @@ export function AdminProjectNumberForm({ projectId, currentNumber, suffix }: Pro
               <span className="rounded-md bg-zinc-100 px-3 py-1.5 font-mono text-sm text-zinc-900">
                 {currentNumber}
               </span>
-              <span className="text-xs text-zinc-400">→ document prefix: {currentNumber}-{suffix}</span>
+              <span className="text-xs text-zinc-500">→ document prefix: {currentNumber}-{suffix}</span>
             </div>
           ) : (
             <form action={action} onSubmit={field.markSubmitted} className="mt-3 space-y-3">
@@ -97,7 +97,7 @@ export function AdminProjectNumberForm({ projectId, currentNumber, suffix }: Pro
                   {...field.inputProps}
                   className={projectNumberInputClass(field.showError)}
                 />
-                <p className="mt-1 text-xs text-zinc-400">
+                <p className="mt-1 text-xs text-zinc-500">
                   Exactly six digits. The suffix <span className="font-mono">-{suffix}</span> is appended automatically in generated documents.
                 </p>
               </div>

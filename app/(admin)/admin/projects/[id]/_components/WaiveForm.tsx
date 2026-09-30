@@ -112,13 +112,13 @@ export function WaiveForm({ reviewId, projectId, stakeholderName, requireEvidenc
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="e.g. Stakeholder unreachable after 3 attempts"
-                  className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none"
                 />
               </div>
               {requireEvidence && (
                 <div>
                   <span className="mb-1.5 block text-xs font-medium text-zinc-700">
-                    Evidence <span className="font-normal text-zinc-400">(required)</span>
+                    Evidence <span className="font-normal text-zinc-500">(required)</span>
                   </span>
                   <UploadDropzone
                     accept="application/pdf,image/png,image/jpeg,image/tiff,message/rfc822,.eml,application/vnd.ms-outlook,.msg"

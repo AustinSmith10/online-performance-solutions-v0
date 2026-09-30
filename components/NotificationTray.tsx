@@ -41,6 +41,12 @@ const KIND_LABEL: Record<TrayEntry["kind"], string> = {
   needs_attention: "Needs attention",
 };
 
+// Filled pills, per the app's link style (no underlines).
+const ZINC_PILL =
+  "rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-200 hover:text-zinc-900";
+const AMBER_PILL =
+  "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 transition-colors duration-150 hover:bg-amber-200";
+
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400";
 
@@ -411,7 +417,7 @@ export function NotificationTray({
               <button
                 type="button"
                 onClick={() => void refresh()}
-                className={`press shrink-0 rounded-md px-2 py-1 font-medium underline-offset-2 hover:underline ${FOCUS_RING}`}
+                className={`press shrink-0 ${AMBER_PILL} ${FOCUS_RING}`}
               >
                 Retry
               </button>
@@ -472,7 +478,7 @@ export function NotificationTray({
                         {e.href && (
                           <Link
                             href={e.href}
-                            className={`-my-1 rounded py-1 text-xs font-medium text-zinc-900 underline-offset-2 hover:underline ${FOCUS_RING}`}
+                            className={`press ${ZINC_PILL} ${FOCUS_RING}`}
                           >
                             View
                           </Link>
@@ -484,7 +490,7 @@ export function NotificationTray({
                               ev.stopPropagation();
                               void markOneRead(e.id);
                             }}
-                            className={`-my-1 rounded py-1 text-xs font-medium text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline ${FOCUS_RING}`}
+                            className={`press ${ZINC_PILL} ${FOCUS_RING}`}
                           >
                             Mark read
                           </button>

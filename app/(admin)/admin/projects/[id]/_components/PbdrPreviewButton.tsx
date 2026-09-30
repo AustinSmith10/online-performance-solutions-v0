@@ -64,7 +64,7 @@ export function PbdrPreviewButton({ projectId }: { projectId: string }) {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600"
               >
                 Close
               </button>
@@ -82,7 +82,7 @@ export function PbdrPreviewButton({ projectId }: { projectId: string }) {
                   {!stalled && pct !== null && (
                     <div className="mx-auto mt-3 w-48">
                       <ProgressTrack pct={pct} tone="zinc" />
-                      <p className="mt-1 text-xs tabular-nums text-zinc-400">{pct}%</p>
+                      <p className="mt-1 text-xs tabular-nums text-zinc-500">{pct}%</p>
                     </div>
                   )}
                 </div>

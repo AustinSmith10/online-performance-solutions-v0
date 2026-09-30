@@ -183,7 +183,7 @@ function ProjectRow({ p }: { p: ActiveProjectItem }) {
 function CheckboxRow({ checked, label, onChange }: { checked: boolean; label: string; onChange: (v: boolean) => void }) {
   return (
     <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm text-zinc-700 transition-colors duration-150 hover:bg-zinc-50">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-3.5 w-3.5 rounded border-zinc-300" />
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-3.5 w-3.5 rounded-sm border-zinc-300" />
       {label}
     </label>
   );

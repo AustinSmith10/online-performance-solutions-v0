@@ -61,7 +61,7 @@ export function ProjectStakeholderSection({
       <div>
         <p className="mb-2 text-xs font-medium text-zinc-500">One-off reviewers for this project</p>
         {extras.length === 0 ? (
-          <p className="text-sm text-zinc-400">None added.</p>
+          <p className="text-sm text-zinc-500">None added.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[360px] text-sm">

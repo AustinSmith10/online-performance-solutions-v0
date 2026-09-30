@@ -313,7 +313,7 @@ function PasswordSection({
               required
               className={input}
             />
-            <ul className="mt-2 space-y-1 text-xs text-zinc-400">
+            <ul className="mt-2 space-y-1 text-xs text-zinc-500">
               <li>• At least 12 characters</li>
               <li>• One uppercase letter (A–Z)</li>
               <li>• One number (0–9)</li>
