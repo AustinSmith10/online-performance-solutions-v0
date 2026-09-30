@@ -26,7 +26,12 @@ export interface TrayEntry {
   resolvable: boolean;
 }
 
+// Queue notifications that aren't about one project (an unanswered
+// clarification, an unrecognised sender) have nowhere else to point.
+const QUEUE_NOTIFICATION_TYPES = new Set(["email_queue_clarification_unanswered", "email_queue_unrecognised_reply"]);
+
 export function notificationToEntry(n: Notification, projectBasePath: string): TrayEntry {
+  const queueHref = QUEUE_NOTIFICATION_TYPES.has(n.type) ? `${projectBasePath.replace(/\/projects$/, "")}/email-queue` : null;
   return {
     id: trayId.notification(n.id),
     kind: "notification",
@@ -34,7 +39,7 @@ export function notificationToEntry(n: Notification, projectBasePath: string): T
     // derive one the same way notify() does for new rows.
     title: n.title ?? deriveTitleFromMessage(n.message),
     message: n.message,
-    href: n.project_id ? `${projectBasePath}/${n.project_id}` : null,
+    href: n.project_id ? `${projectBasePath}/${n.project_id}` : queueHref,
     timestamp: n.created_at,
     isRead: n.is_read,
     resolvable: false,

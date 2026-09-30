@@ -66,7 +66,7 @@ function DiscrepancyBadge({
   if (modified.has(fieldKey)) return null;
   if (!hasCandidates) return null;
   return (
-    <span className="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
       Multiple values found — please check
     </span>
   );
@@ -99,7 +99,7 @@ function NotFoundBadge({
 
 function fieldClass(modified: Set<string>, fieldKey: string, hasCandidates?: boolean, isNotFound?: boolean) {
   if (modified.has(fieldKey)) return "border-zinc-200 bg-white focus:ring-zinc-400";
-  if (hasCandidates) return "border-orange-300 bg-orange-50 focus:ring-orange-400";
+  if (hasCandidates) return "border-amber-300 bg-amber-50 focus:ring-amber-400";
   if (isNotFound) return "border-blue-200 bg-blue-50 focus:ring-blue-400";
   return "border-zinc-200 bg-zinc-50 focus:ring-zinc-400";
 }
@@ -150,14 +150,14 @@ function TokenInput({
         className={`w-full rounded-md border px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${fieldClass(modified, field.token, hasCandidates, isNotFound)}`}
       />
       {hasCandidates && (
-        <div className="mt-2 space-y-1 rounded-md border border-orange-200 bg-orange-50/60 p-2">
-          <p className="text-xs font-medium text-orange-800">
+        <div className="mt-2 space-y-1 rounded-md border border-amber-200 bg-amber-50/60 p-2">
+          <p className="text-xs font-medium text-amber-900">
             Documents disagree — pick the correct value or edit it above:
           </p>
           {field.candidates!.map((c, i) => (
             <label
               key={`${c.value}-${i}`}
-              className="flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 text-xs text-zinc-700 hover:bg-orange-100"
+              className="flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 text-xs text-zinc-700 hover:bg-amber-100"
             >
               <input
                 type="radio"

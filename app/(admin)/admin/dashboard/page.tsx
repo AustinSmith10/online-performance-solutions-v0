@@ -191,33 +191,40 @@ export default async function AdminDashboardPage({
     .filter((p) => p.status === "dispatched" || p.status === "revision_required")
     .map((p) => p.id);
   const reviewsByProjectId = new Map<string, { status: string }[]>();
-  if (dispatchedIds.length > 0) {
-    const { data: reviewRows } = await supabase
-      .from("stakeholder_reviews")
-      .select("project_id, review_cycle, status")
-      .in("project_id", dispatchedIds);
-    const reviewCycleById = new Map(allActive.map((p) => [p.id, p.review_cycle]));
-    for (const pid of dispatchedIds) {
-      const cycle = reviewCycleById.get(pid);
-      reviewsByProjectId.set(
-        pid,
-        (reviewRows ?? []).filter((r) => r.project_id === pid && r.review_cycle === cycle)
-      );
-    }
-  }
 
-  // #115: a single aggregated query for "which of these projects has at
-  // least one stakeholder-confirmed verification mismatch" — not N+1 lookups
-  // per row.
-  const { data: mismatchRows } = allActive.length
-    ? await supabase
-        .from("project_files")
-        .select("project_id")
-        .in("project_id", allActive.map((p) => p.id))
-        .not("verification_mismatch_reasons", "is", null)
-        .not("verification_confirmed_at", "is", null)
-    : { data: [] };
-  const mismatchProjectIds = new Set((mismatchRows ?? []).map((r) => r.project_id as string));
+  // Both lookups depend only on the projects above, not on each other, so run
+  // them together instead of one round trip after the other.
+  //
+  // #115: the second is a single aggregated query for "which of these projects
+  // has at least one stakeholder-confirmed verification mismatch" — not N+1
+  // lookups per row.
+  const [reviewRowsResult, mismatchResult] = await Promise.all([
+    dispatchedIds.length > 0
+      ? supabase
+          .from("stakeholder_reviews")
+          .select("project_id, review_cycle, status")
+          .in("project_id", dispatchedIds)
+      : Promise.resolve({ data: [] as { project_id: string; review_cycle: number; status: string }[] }),
+    allActive.length
+      ? supabase
+          .from("project_files")
+          .select("project_id")
+          .in("project_id", allActive.map((p) => p.id))
+          .not("verification_mismatch_reasons", "is", null)
+          .not("verification_confirmed_at", "is", null)
+      : Promise.resolve({ data: [] as { project_id: string }[] }),
+  ]);
+
+  const reviewRows = reviewRowsResult.data ?? [];
+  const reviewCycleById = new Map(allActive.map((p) => [p.id, p.review_cycle]));
+  for (const pid of dispatchedIds) {
+    const cycle = reviewCycleById.get(pid);
+    reviewsByProjectId.set(
+      pid,
+      reviewRows.filter((r) => r.project_id === pid && r.review_cycle === cycle)
+    );
+  }
+  const mismatchProjectIds = new Set((mismatchResult.data ?? []).map((r) => r.project_id as string));
 
   const activeProjectItems: ActiveProjectItem[] = allActive.map((p) => {
     const status = resolveStaffStatus(p.status, reviewsByProjectId.get(p.id) ?? []);
