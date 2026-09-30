@@ -13,7 +13,7 @@ import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { ReplayTourButton } from "@/components/onboarding-tour/ReplayTourButton";
 import { Logo } from "@/components/Logo";
 
-const ALL_NAV_ITEMS: { href: string; label: string; group?: string; key?: AdminNavKey; count?: number }[] = [
+const ALL_NAV_ITEMS: { href: string; label: string; group?: string; key?: AdminNavKey; count?: number; superOnly?: boolean }[] = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/clients", label: "Clients", group: "Work", key: "clients" },
   { href: "/admin/projects", label: "Projects", group: "Work", key: "projects" },
@@ -25,6 +25,7 @@ const ALL_NAV_ITEMS: { href: string; label: string; group?: string; key?: AdminN
   { href: "/admin/audit", label: "Audit", group: "Admin", key: "audit" },
   { href: "/admin/recovery", label: "Recovery Bin", group: "Admin", key: "recovery" },
   { href: "/admin/system-health", label: "System Health", group: "Admin", key: "system-health" },
+  { href: "/admin/tags", label: "Tags", group: "Admin", superOnly: true },
   { href: "/admin/settings", label: "Settings", group: "Admin", key: "settings" },
 ];
 
@@ -52,7 +53,9 @@ export default async function AdminShellLayout({
     getEmailsEnabled(supabase),
   ]);
 
-  const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => !item.key || !restricted.includes(item.key)).map((item) =>
+  const NAV_ITEMS = ALL_NAV_ITEMS.filter(
+    (item) => (!item.superOnly || user.role === "super_admin") && (!item.key || !restricted.includes(item.key))
+  ).map((item) =>
     item.href === "/admin/email-queue" ? { ...item, count: pendingQueueCount } : item
   );
 
