@@ -5,6 +5,8 @@ import { getFailedInviteEmails } from "@/lib/admin/invite-status";
 import { DisciplineChips } from "./_components/DisciplineChips";
 import { CreateAccountModal } from "./_components/CreateAccountModal";
 import type { User, Client, ConsultantAvailability } from "@/types";
+import { getTagsByUserId } from "@/lib/tags/queries";
+import { TagChips } from "@/components/TagChip";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
@@ -176,6 +178,7 @@ export default async function UsersPage({
       supabase,
       users.map((u) => u.email).filter((e): e is string => !!e)
     );
+    const tagsByUser = await getTagsByUserId(supabase, users.map((u) => u.id));
 
     return (
       <div className="mx-auto max-w-4xl space-y-6">
@@ -265,6 +268,7 @@ export default async function UsersPage({
                     </span>
                     <p className="mt-0.5 truncate text-xs text-zinc-500">{u.email}</p>
                     <DisciplineChips disciplines={u.disciplines} className="mt-1" />
+                    <TagChips tags={tagsByUser.get(u.id)} className="mt-1" />
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {u.email && failedInviteEmails.has(u.email) && (
@@ -310,6 +314,7 @@ export default async function UsersPage({
     supabase,
     users.map((u) => u.email).filter((e): e is string => !!e)
   );
+  const tagsByUser = await getTagsByUserId(supabase, users.map((u) => u.id));
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -395,6 +400,7 @@ export default async function UsersPage({
                     {ROLE_LABELS[u.role] ?? u.role}{u.role === "stakeholder" && <> · {u.clients?.name ?? "—"}</>} · Joined {new Date(u.created_at).toLocaleDateString("en-AU")}
                   </p>
                   <DisciplineChips disciplines={u.disciplines} className="mt-1" />
+                  <TagChips tags={tagsByUser.get(u.id)} className="mt-1" />
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {u.email && failedInviteEmails.has(u.email) && (

@@ -8,9 +8,10 @@
 import { useState } from "react";
 import { SubmissionForm } from "@/app/(client)/portal/submit/_components/SubmissionForm";
 import { BackLink } from "@/components/BackLink";
+import { StakeholderPicker, type PickerStakeholder } from "./StakeholderPicker";
 
 type Org = { id: string; name: string };
-type Stakeholder = { id: string; name: string; email: string };
+type Stakeholder = PickerStakeholder;
 type Template = { id: string; name: string };
 type FileRequirement = {
   id: string;
@@ -88,19 +89,16 @@ export function SubmitOnBehalfForm({
       <div>
         <label className="block text-xs font-medium text-zinc-700">
           Stakeholder account <span className="text-red-500">*</span>
-          <select
-            value={stakeholderId}
-            onChange={(e) => setStakeholderId(e.target.value)}
-            disabled={!orgId || stakeholders.length === 0}
-            className={`mt-1 ${selectClass}`}
-          >
-            <option value="" disabled>
-              {!orgId ? "Select a client first" : stakeholders.length === 0 ? "No stakeholder accounts" : "Select a stakeholder…"}
-            </option>
-            {stakeholders.map((u) => (
-              <option key={u.id} value={u.id}>{u.name} — {u.email}</option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <StakeholderPicker
+              stakeholders={stakeholders}
+              value={stakeholderId}
+              onChange={setStakeholderId}
+              disabled={!orgId || stakeholders.length === 0}
+              placeholder={!orgId ? "Select a client first" : stakeholders.length === 0 ? "No stakeholder accounts" : "Select a stakeholder…"}
+              className={selectClass}
+            />
+          </div>
         </label>
       </div>
 

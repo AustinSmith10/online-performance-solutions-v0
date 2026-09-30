@@ -8,6 +8,8 @@ import { previewNextSendTime } from "@/lib/documents/pending-delivery";
 import { getCurrentRevNumber, getLatestRevisionHistoryRow } from "@/lib/documents/revision-history";
 import { groupPbdbVersions } from "@/lib/documents/pbdb-versions";
 import { groupPbdrVersions } from "@/lib/documents/pbdr-versions";
+import { getTagsByUserId, listTags } from "@/lib/tags/queries";
+import { TagAssigner } from "@/components/TagAssigner";
 import { findSentPbdbFileIds } from "@/lib/documents/sent-pdf";
 import { deriveRoundStatus } from "@/lib/stakeholders/review-round";
 import { classifyPbdbDispatchReadiness } from "@/lib/stakeholders/dispatch-readiness";
@@ -720,6 +722,11 @@ export async function ProjectWorkspace({
   const assignedName = project.assigned
     ? [project.assigned.first_name, project.assigned.last_name].filter(Boolean).join(" ") || project.assigned.email
     : null;
+  // #213: internal-only tag chips beside the submitter (this workspace is staff-only).
+  const wsTags = project.submitter
+    ? (await getTagsByUserId(supabase, [project.submitter.id as string])).get(project.submitter.id as string) ?? []
+    : [];
+  const wsAllTags = await listTags(supabase);
   const submitterName = project.submitter
     ? [project.submitter.first_name, project.submitter.last_name].filter(Boolean).join(" ") || project.submitter.email
     : null;
@@ -1382,6 +1389,15 @@ export async function ProjectWorkspace({
                   )}
                   {project.submitter?.email && (
                     <span className="ml-2 text-xs text-zinc-500"> · {project.submitter.email}</span>
+                  )}
+                  {project.submitter && (
+                    <div className="mt-1">
+                      <TagAssigner
+                        targetUserId={project.submitter.id as string}
+                        assigned={wsTags}
+                        allTags={wsAllTags}
+                      />
+                    </div>
                   )}
                 </>
               ) : (

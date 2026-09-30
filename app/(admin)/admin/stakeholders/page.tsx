@@ -4,6 +4,9 @@ import { requireRole } from "@/lib/auth/session";
 import { getFailedInviteEmails } from "@/lib/admin/invite-status";
 import { CreateAccountModal } from "../users/_components/CreateAccountModal";
 import type { User, Client } from "@/types";
+import { getTagsByUserId } from "@/lib/tags/queries";
+import { TagChips } from "@/components/TagChip";
+import type { Tag } from "@/lib/tags/queries";
 
 const SORT_COLS = ["invited_at", "first_name", "email"] as const;
 type SortCol = (typeof SORT_COLS)[number];
@@ -121,6 +124,7 @@ export default async function ClientsPage({
     supabase,
     clients.map((c) => c.email).filter((e): e is string => !!e)
   );
+  const tagsByUser = await getTagsByUserId(supabase, clients.map((c) => c.id));
 
   return (
     <ClientsLayout
@@ -132,6 +136,7 @@ export default async function ClientsPage({
       orgs={orgs}
       callerRole={caller.role as string}
       failedInviteEmails={failedInviteEmails}
+      tagsByUser={tagsByUser}
     />
   );
 }
@@ -145,6 +150,7 @@ function ClientsLayout({
   orgs,
   callerRole,
   failedInviteEmails,
+  tagsByUser,
 }: {
   clients: ClientRow[];
   params: Record<string, string | undefined>;
@@ -154,6 +160,7 @@ function ClientsLayout({
   orgs: Pick<Client, "id" | "name">[];
   callerRole: string;
   failedInviteEmails: Set<string>;
+  tagsByUser?: Map<string, Tag[]>;
 }) {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -227,8 +234,11 @@ function ClientsLayout({
                 }`}
               >
                 <div className="min-w-0 flex-1">
-                  <span className="truncate text-sm font-medium text-zinc-900">
-                    {c.first_name && c.last_name ? `${c.first_name} ${c.last_name}` : c.email}
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="truncate text-sm font-medium text-zinc-900">
+                      {c.first_name && c.last_name ? `${c.first_name} ${c.last_name}` : c.email}
+                    </span>
+                    <TagChips tags={tagsByUser?.get(c.id)} />
                   </span>
                   <p className="mt-0.5 truncate text-xs tabular-nums text-zinc-500">
                     {c.clients?.name ?? "—"}

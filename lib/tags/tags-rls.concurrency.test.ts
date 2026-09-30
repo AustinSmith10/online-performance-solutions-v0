@@ -49,7 +49,8 @@ async function createUser(role: Role): Promise<string> {
 }
 
 /** Runs `fn` as the `authenticated` DB role with auth.uid() = the given user, then rolls back. */
-async function asUser<T>(role: Role, fn: (q: (sql: string, params?: unknown[]) => Promise<{ rows: any[] }>) => Promise<T>): Promise<T> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function asUser<T>(role: Role, fn: (q: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, any>[] }>) => Promise<T>): Promise<T> {
   await db.query("BEGIN");
   try {
     await db.query("SET LOCAL ROLE authenticated");
