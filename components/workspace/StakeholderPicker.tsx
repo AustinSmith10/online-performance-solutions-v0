@@ -93,11 +93,11 @@ export function StakeholderPicker({
         className={`flex w-full items-center gap-2 text-left ${className}`}
       >
         {selected ? (
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="truncate">
-              {selected.name} — {selected.email}
+          <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+            <span className="min-w-0 truncate">
+              {selected.name} <span className="text-zinc-500">{selected.email}</span>
             </span>
-            <TagChips tags={selected.tags} />
+            <TagChips tags={selected.tags} className="shrink-0" />
           </span>
         ) : (
           <span className="flex-1 truncate text-zinc-400">{placeholder}</span>
@@ -120,14 +120,14 @@ export function StakeholderPicker({
               onMouseEnter={() => setActive(i)}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(s.id)}
-              className={`flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm text-zinc-900 ${
+              className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm text-zinc-900 [@media(pointer:coarse)]:min-h-11 ${
                 i === active ? "bg-zinc-100" : ""
               } ${s.id === value ? "font-medium" : ""}`}
             >
               <span className="min-w-0 truncate">
-                {s.name} — {s.email}
+                {s.name} <span className="text-zinc-500">{s.email}</span>
               </span>
-              <TagChips tags={s.tags} />
+              <TagChips tags={s.tags} className="shrink-0" />
             </li>
           ))}
         </ul>

@@ -177,12 +177,14 @@ export default async function ConsultantsPage({
                 }`}
               >
                 <div className="min-w-0 flex-1">
-                  <span className="truncate text-sm font-medium text-zinc-900">
-                    {c.first_name && c.last_name ? `${c.first_name} ${c.last_name}` : c.email}
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-zinc-900">
+                      {c.first_name && c.last_name ? `${c.first_name} ${c.last_name}` : c.email}
+                    </span>
+                    <TagChips tags={tagsByUser.get(c.id)} className="min-w-0" />
                   </span>
                   <p className="mt-0.5 truncate text-xs text-zinc-500">{c.email}</p>
                   <DisciplineChips disciplines={c.disciplines} className="mt-1" />
-                  <TagChips tags={tagsByUser.get(c.id)} className="mt-1" />
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {c.is_locked ? (

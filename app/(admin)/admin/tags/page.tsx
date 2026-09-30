@@ -17,10 +17,11 @@ export default async function AdminTagsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-900">Tags</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Labels like &ldquo;Manager&rdquo; or &ldquo;VIP&rdquo; shown beside an account&apos;s name in the internal
-          app. Stakeholders never see tags, and they never appear in documents or emails.
+        <h1 className="text-xl font-semibold text-balance text-zinc-900">Tags</h1>
+        <p className="mt-1 max-w-[65ch] text-sm text-zinc-500">
+          Labels like &ldquo;Manager&rdquo; or &ldquo;VIP&rdquo; that sit beside an account&apos;s name for staff.
+          Assign them from any user&apos;s page. Stakeholders never see tags, and they never appear in documents or
+          emails.
         </p>
       </div>
       <TagManager tags={tags.map((t) => ({ ...t, assignedCount: usage.get(t.id) ?? 0 }))} />

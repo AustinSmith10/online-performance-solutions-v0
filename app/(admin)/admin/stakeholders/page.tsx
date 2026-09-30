@@ -169,7 +169,17 @@ function ClientsLayout({
           <h1 className="text-xl font-semibold text-balance text-zinc-900">Stakeholders</h1>
           <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-zinc-700">{clients.length}</span>
         </div>
-        <CreateAccountModal orgs={orgs} callerRole={callerRole} />
+        <div className="flex items-center gap-2">
+          {callerRole === "super_admin" && (
+            <Link
+              href="/admin/tags"
+              className="press-subtle rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-100 [@media(pointer:coarse)]:min-h-10"
+            >
+              Manage tags
+            </Link>
+          )}
+          <CreateAccountModal orgs={orgs} callerRole={callerRole} />
+        </div>
       </div>
 
       <form method="GET" className="rounded-xl border border-zinc-200 bg-white p-4">
@@ -234,11 +244,11 @@ function ClientsLayout({
                 }`}
               >
                 <div className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium text-zinc-900">
                       {c.first_name && c.last_name ? `${c.first_name} ${c.last_name}` : c.email}
                     </span>
-                    <TagChips tags={tagsByUser?.get(c.id)} />
+                    <TagChips tags={tagsByUser?.get(c.id)} className="min-w-0" />
                   </span>
                   <p className="mt-0.5 truncate text-xs tabular-nums text-zinc-500">
                     {c.clients?.name ?? "—"}

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { tagColors } from "@/lib/tags/color";
 
 export interface TagChipData {
   id: string;
@@ -6,34 +7,30 @@ export interface TagChipData {
   color: string;
 }
 
-/** Black or white text, whichever reads better on the tag's hex colour. */
-export function readableTextColor(hex: string): string {
-  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-  if (!m) return "#18181b";
-  const [r, g, b] = [m[1], m[2], m[3]].map((h) => parseInt(h, 16) / 255);
-  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  const luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-  return luminance > 0.4 ? "#18181b" : "#ffffff";
-}
-
 /**
- * The one way a tag is drawn (#213). Tags are rendered through this
- * component beside a name — never concatenated into a name string — so they
- * cannot leak into documents, emails or stored text. Internal UI only.
+ * The one way a tag is drawn (#213). Tags render through this component beside
+ * a name, never concatenated into a name string, so they cannot leak into
+ * documents, emails or stored text. Internal UI only.
+ *
+ * A standard status-pill shape (DESIGN.md: rounded-full, 12px/500) in a quiet
+ * tint of the tag's hue, so a tag reads as a label, not as workflow state.
  */
 export function TagChip({ tag, className = "" }: { tag: TagChipData; className?: string }) {
-  const style: CSSProperties = { backgroundColor: tag.color, color: readableTextColor(tag.color) };
+  const { bg, fg } = tagColors(tag.color);
+  const style: CSSProperties = { backgroundColor: bg, color: fg };
   return (
     <span
       data-tag-chip
       style={style}
-      className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium leading-none ${className}`}
+      title={tag.name}
+      className={`inline-flex max-w-[10rem] shrink-0 items-center truncate whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${className}`}
     >
       {tag.name}
     </span>
   );
 }
 
+/** A row of chips. Renders nothing when there are none, so callers never leave an empty gap. */
 export function TagChips({ tags, className = "" }: { tags: TagChipData[] | undefined; className?: string }) {
   if (!tags || tags.length === 0) return null;
   return (

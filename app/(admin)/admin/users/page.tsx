@@ -187,7 +187,17 @@ export default async function UsersPage({
             <h1 className="text-xl font-semibold text-balance text-zinc-900">Internal Users</h1>
             <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-zinc-700">{users.length}</span>
           </div>
+          <div className="flex items-center gap-2">
+          {caller.role === "super_admin" && (
+            <Link
+              href="/admin/tags"
+              className="press-subtle rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-100 [@media(pointer:coarse)]:min-h-10"
+            >
+              Manage tags
+            </Link>
+          )}
           <CreateAccountModal orgs={orgs} callerRole={caller.role as string} />
+        </div>
         </div>
 
         <TabBar tab={tab} />
@@ -263,12 +273,14 @@ export default async function UsersPage({
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <span className="truncate text-sm font-medium text-zinc-900">
-                      {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium text-zinc-900">
+                        {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
+                      </span>
+                      <TagChips tags={tagsByUser.get(u.id)} className="min-w-0" />
                     </span>
                     <p className="mt-0.5 truncate text-xs text-zinc-500">{u.email}</p>
                     <DisciplineChips disciplines={u.disciplines} className="mt-1" />
-                    <TagChips tags={tagsByUser.get(u.id)} className="mt-1" />
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {u.email && failedInviteEmails.has(u.email) && (
@@ -323,7 +335,17 @@ export default async function UsersPage({
           <h1 className="text-xl font-semibold text-balance text-zinc-900">Internal Users</h1>
           <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-sm font-medium tabular-nums text-zinc-700">{users.length}</span>
         </div>
-        <CreateAccountModal orgs={orgs} callerRole={caller.role as string} />
+        <div className="flex items-center gap-2">
+          {caller.role === "super_admin" && (
+            <Link
+              href="/admin/tags"
+              className="press-subtle rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-100 [@media(pointer:coarse)]:min-h-10"
+            >
+              Manage tags
+            </Link>
+          )}
+          <CreateAccountModal orgs={orgs} callerRole={caller.role as string} />
+        </div>
       </div>
 
       <TabBar tab={tab} />
@@ -393,14 +415,16 @@ export default async function UsersPage({
                 }`}
               >
                 <div className="min-w-0 flex-1">
-                  <span className="truncate text-sm font-medium text-zinc-900">
-                    {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-zinc-900">
+                      {u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.email}
+                    </span>
+                    <TagChips tags={tagsByUser.get(u.id)} className="min-w-0" />
                   </span>
                   <p className="mt-0.5 truncate text-xs tabular-nums text-zinc-500">
                     {ROLE_LABELS[u.role] ?? u.role}{u.role === "stakeholder" && <> · {u.clients?.name ?? "—"}</>} · Joined {new Date(u.created_at).toLocaleDateString("en-AU")}
                   </p>
                   <DisciplineChips disciplines={u.disciplines} className="mt-1" />
-                  <TagChips tags={tagsByUser.get(u.id)} className="mt-1" />
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {u.email && failedInviteEmails.has(u.email) && (

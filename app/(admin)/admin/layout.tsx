@@ -19,13 +19,13 @@ const ALL_NAV_ITEMS: { href: string; label: string; group?: string; key?: AdminN
   { href: "/admin/projects", label: "Projects", group: "Work", key: "projects" },
   { href: "/admin/stakeholders", label: "Stakeholders", group: "Work", key: "stakeholders" },
   { href: "/admin/users", label: "Internal Users", group: "Work", key: "users" },
+  { href: "/admin/tags", label: "Tags", group: "Work", superOnly: true },
   { href: "/admin/email-queue", label: "Email Queue", group: "Work" },
   { href: "/admin/templates", label: "Templates", group: "Admin", key: "templates" },
   { href: "/admin/credits", label: "Credits", group: "Admin", key: "credits" },
   { href: "/admin/audit", label: "Audit", group: "Admin", key: "audit" },
   { href: "/admin/recovery", label: "Recovery Bin", group: "Admin", key: "recovery" },
   { href: "/admin/system-health", label: "System Health", group: "Admin", key: "system-health" },
-  { href: "/admin/tags", label: "Tags", group: "Admin", superOnly: true },
   { href: "/admin/settings", label: "Settings", group: "Admin", key: "settings" },
 ];
 

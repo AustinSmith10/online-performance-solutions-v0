@@ -122,11 +122,6 @@ export default async function UserDetailPage({
               {u.role.replace("_", " ")}
             </span>
             <DisciplineChips disciplines={u.disciplines} />
-            {mayTag ? (
-              <TagAssigner targetUserId={u.id} assigned={userTags} allTags={allTags} />
-            ) : (
-              <TagChips tags={userTags} />
-            )}
             {u.is_active ? (
               <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
                 Active
@@ -147,6 +142,21 @@ export default async function UserDetailPage({
               </span>
             )}
           </div>
+          {(mayTag || userTags.length > 0) && (
+            <div className="mt-2.5 flex items-center gap-2">
+              <span className="text-xs font-medium text-zinc-500">Tags</span>
+              {mayTag ? (
+                <TagAssigner
+                  targetUserId={u.id}
+                  assigned={userTags}
+                  allTags={allTags}
+                  manageHref={caller.role === "super_admin" ? "/admin/tags" : undefined}
+                />
+              ) : (
+                <TagChips tags={userTags} />
+              )}
+            </div>
+          )}
         </div>
         <UserHeaderActions
           userId={u.id}
