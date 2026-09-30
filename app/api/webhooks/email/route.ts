@@ -107,8 +107,20 @@ export async function POST(req: NextRequest) {
   // (already acknowledged/waived/modifications-requested) review's token
   // must not still count as a live match; it's simply treated as no match
   // and falls through to the ordinary sender-lookup gate below.
+  // A token that resolves to a review but is expired or already answered is
+  // still worth remembering: it is never trusted as a match (#99), but if the
+  // sender turns out to be unknown we tell them why, and tell staff.
+  let staleReview: { project_id: string; stakeholder_name: string; expired: boolean } | null = null;
   if (payload.MailboxHash) {
     const validated = await validateToken(payload.MailboxHash);
+
+    if (validated && (validated.isExpired || validated.review.status !== "pending")) {
+      staleReview = {
+        project_id: validated.review.project_id,
+        stakeholder_name: validated.review.stakeholder_name,
+        expired: validated.review.status === "pending",
+      };
+    }
 
     if (validated && !validated.isExpired && validated.review.status === "pending") {
       const review = validated.review;
@@ -160,6 +172,29 @@ export async function POST(req: NextRequest) {
         proposedStakeholderReviewId: null,
         matchReason: "stakeholder_table_fallback",
       });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (staleReview) {
+      const stale = staleReview;
+      await sendEmail({
+        to: fromEmail,
+        subject: "OPS: We couldn't process your reply",
+        html: staleLinkHtml(stale.expired),
+        source: "webhook_stale_review_token",
+      });
+      await auditLog("email.stale_token_unrecognised_sender", null, fromEmail, {
+        metadata: { message_id: payload.MessageID, expired: stale.expired },
+      });
+      // Not queued and the token is not trusted, but a real reviewer may be
+      // trying to respond from another address: staff should hear about it.
+      await notifyProjectStaff(supabase, stale.project_id, {
+        type: "email_queue_unrecognised_reply",
+        message: (ref) =>
+          `${stale.stakeholder_name}'s approval link for ${ref} was used from an unrecognised address (${fromEmail}) after it ${
+            stale.expired ? "expired" : "was already answered"
+          }. The email was not queued. Contact the reviewer if they still need to respond.`,
+      }).catch((err) => console.error("[email-webhook] Failed to notify staff of stale-token reply:", err));
       return NextResponse.json({ ok: true });
     }
 
@@ -241,6 +276,14 @@ export async function POST(req: NextRequest) {
     } else {
       await auditLog("email.thread_reply_invalid", user.id, user.email, {
         metadata: { mailbox_hash: payload.MailboxHash, message_id: payload.MessageID },
+      });
+      // Previously silent: the sender assumed their reply had landed. Kept
+      // generic on purpose, so it reveals nothing about the project it named.
+      await sendEmail({
+        to: fromEmail,
+        subject: "OPS: We couldn't attach your reply",
+        html: threadReplyRejectedHtml(),
+        source: "webhook_thread_reply_invalid",
       });
     }
     return NextResponse.json({ ok: true });
@@ -416,6 +459,22 @@ function noAttachmentHtml(email: string, orgName: string): string {
   <li>Reply to this email with your Purchase Order and building plans attached, or</li>
   <li>Submit your request directly via the <a href="${e(process.env.NEXT_PUBLIC_APP_URL ?? "")}/portal/submit">OPS portal</a>.</li>
 </ul>
+<p>Regards,<br>OPS Team</p>`;
+}
+
+function staleLinkHtml(expired: boolean): string {
+  return `<p>Hi,</p>
+<p>We received your reply to an approval request, but we couldn't process it: the approval link ${
+    expired ? "has expired" : "has already been used"
+  }, and this address isn't one we have on file for it.</p>
+<p>Please contact your OPS consultant so they can help you respond.</p>
+<p>Regards,<br>OPS Team</p>`;
+}
+
+function threadReplyRejectedHtml(): string {
+  return `<p>Hi,</p>
+<p>We received your reply, but we couldn't attach it to the report request it was addressed to. It may already have been submitted, or it may not have been started from your account, so nothing was added.</p>
+<p>Please add your documents through the <a href="${e(process.env.NEXT_PUBLIC_APP_URL ?? "")}/portal">OPS portal</a>, or contact your OPS account manager.</p>
 <p>Regards,<br>OPS Team</p>`;
 }
 

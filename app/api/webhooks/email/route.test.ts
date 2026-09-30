@@ -449,6 +449,10 @@ describe("POST /api/webhooks/email", () => {
         "client@example.com",
         expect.anything()
       );
+      // No longer silent: the sender is told nothing was attached.
+      expect(mockSendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: "client@example.com", subject: "OPS: We couldn't attach your reply" })
+      );
     });
 
     it("rejects a MailboxHash pointing to a non-draft project", async () => {
@@ -470,6 +474,7 @@ describe("POST /api/webhooks/email", () => {
         expect.anything(),
         expect.anything()
       );
+      expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({ subject: "OPS: We couldn't attach your reply" }));
     });
   });
 
@@ -585,10 +590,19 @@ describe("POST /api/webhooks/email", () => {
 
       expect(res.status).toBe(200);
       expect(insert).not.toHaveBeenCalled();
-      const bounced = mockSendEmail.mock.calls.some((c) =>
-        (c[0] as { subject: string }).subject?.includes("Unrecognised")
+      // Still bounced, never queued, but now with a reason and a staff heads-up.
+      expect(mockSendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: "stakeholder@external.com", subject: "OPS: We couldn't process your reply" })
       );
-      expect(bounced).toBe(true);
+      expect(mockSendEmail.mock.calls.some((c) => (c[0] as { subject: string }).subject?.includes("Unrecognised"))).toBe(false);
+      expect(mockNotifyStaff).toHaveBeenCalledOnce();
+      const [, projectId, opts] = mockNotifyStaff.mock.calls[0];
+      expect(projectId).toBe("proj-1");
+      expect(opts.type).toBe("email_queue_unrecognised_reply");
+      const text = opts.message("221083");
+      expect(text).toContain("expired");
+      expect(text).toContain("stakeholder@external.com");
+      expect(text).toContain("was not queued");
     });
 
     it("#99: treats an already-acknowledged (non-pending) token as no match", async () => {
@@ -616,6 +630,20 @@ describe("POST /api/webhooks/email", () => {
 
       expect(res.status).toBe(200);
       expect(insert).not.toHaveBeenCalled();
+      expect(mockNotifyStaff.mock.calls[0][2].message("221083")).toContain("already answered");
+    });
+
+    it("does not tell staff about an unrecognised sender when there is no review token at all", async () => {
+      mockValidateToken.mockResolvedValue(null);
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn(() => makeQueryBuilder()),
+        storage: { from: vi.fn().mockReturnValue({ upload: vi.fn().mockResolvedValue({ error: null }) }) },
+      } as unknown as ReturnType<typeof createAdminClient>);
+
+      await POST(makeRequest({ ...BASE_PAYLOAD, From: "nobody@nowhere.com", FromFull: { Email: "nobody@nowhere.com", Name: "N", MailboxHash: "" } }));
+
+      expect(mockNotifyStaff).not.toHaveBeenCalled();
+      expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({ subject: "OPS: Unrecognised sender" }));
     });
   });
 
