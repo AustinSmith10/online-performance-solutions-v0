@@ -131,6 +131,10 @@ function ReassignPanel({
   );
   const [reviewId, setReviewId] = useState(row.proposedTarget?.reviewId ?? "");
   const [suggestions, setSuggestions] = useState<CandidateReview[]>([]);
+  // Combobox state: focus stays in the input, `activeIndex` is the highlighted
+  // option (announced through aria-activedescendant), Esc closes the list.
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [dismissed, setDismissed] = useState(false);
 
   // Suggested reviews for this exact sender — mainly useful for
   // stakeholder_table_fallback entries, which have no proposedTarget at all
@@ -174,6 +178,42 @@ function ReassignPanel({
       setReviewOptions(results);
     });
   }, [projectId, category]);
+
+  const listOpen = !!projectQuery && !projectId && !dismissed;
+  const listboxId = `reassign-project-list-${row.id}`;
+  const optionId = (id: string) => `reassign-option-${row.id}-${id}`;
+  const active = activeIndex >= 0 && activeIndex < projectOptions.length ? activeIndex : -1;
+  const activeOptionId = listOpen && active >= 0 ? optionId(projectOptions[active].id) : undefined;
+
+  useEffect(() => {
+    if (activeOptionId) document.getElementById(activeOptionId)?.scrollIntoView({ block: "nearest" });
+  }, [activeOptionId]);
+
+  function pickProject(p: ProjectSearchResult) {
+    setProjectId(p.id);
+    setProjectQuery(p.label);
+    setReviewId("");
+    setActiveIndex(-1);
+  }
+
+  function onProjectKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!listOpen) setDismissed(false);
+      else setActiveIndex(Math.min(active + 1, projectOptions.length - 1));
+    } else if (e.key === "ArrowUp" && listOpen) {
+      e.preventDefault();
+      setActiveIndex(active <= 0 ? projectOptions.length - 1 : active - 1);
+    } else if (e.key === "Enter" && listOpen && active >= 0) {
+      e.preventDefault();
+      pickProject(projectOptions[active]);
+    } else if (e.key === "Escape" && listOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      setDismissed(true);
+      setActiveIndex(-1);
+    }
+  }
 
   const effectiveReviewOptions = category === "stakeholder_response" && projectId ? reviewOptions : [];
 
@@ -245,31 +285,51 @@ function ReassignPanel({
           <label htmlFor={`reassign-project-${row.id}`} className="block text-xs font-medium text-zinc-700">Step 1 — project</label>
           <input
             id={`reassign-project-${row.id}`}
+            role="combobox"
+            aria-expanded={listOpen && projectOptions.length > 0}
+            aria-controls={listboxId}
+            aria-autocomplete="list"
+            aria-activedescendant={activeOptionId}
+            autoComplete="off"
             value={projectQuery}
             onChange={(e) => {
               setProjectQuery(e.target.value);
               setProjectId("");
               setReviewId("");
+              setDismissed(false);
+              setActiveIndex(-1);
             }}
+            onKeyDown={onProjectKeyDown}
             placeholder="Search address / PO / project #…"
             className={`mt-1 block w-56 max-w-full ${FIELD}`}
           />
-          {projectQuery && !projectId && (
-            <div className="mt-1 max-h-40 w-56 overflow-y-auto rounded-md border border-zinc-200 bg-white shadow-sm">
-              {projectOptions.length === 0 && <p className="px-2 py-1.5 text-xs text-zinc-500">No matches.</p>}
-              {projectOptions.map((p) => (
-                <button
+          {listOpen && projectOptions.length === 0 && (
+            <p role="status" className="mt-1 w-56 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-500 shadow-sm">
+              No matches.
+            </p>
+          )}
+          {listOpen && projectOptions.length > 0 && (
+            <div
+              id={listboxId}
+              role="listbox"
+              aria-label="Matching projects"
+              className="mt-1 max-h-40 w-56 overflow-y-auto rounded-md border border-zinc-200 bg-white shadow-sm"
+            >
+              {projectOptions.map((p, i) => (
+                <div
                   key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setProjectId(p.id);
-                    setProjectQuery(p.label);
-                    setReviewId("");
-                  }}
-                  className="block w-full truncate px-2 py-1.5 text-left text-xs text-zinc-700 transition-colors duration-150 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-zinc-900 [@media(pointer:coarse)]:min-h-10"
+                  id={optionId(p.id)}
+                  role="option"
+                  aria-selected={i === active}
+                  // Keep focus in the input so typing and arrows keep working.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickProject(p)}
+                  className={`cursor-pointer truncate px-2 py-1.5 text-left text-xs text-zinc-700 transition-colors duration-150 [@media(pointer:coarse)]:flex [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:items-center ${
+                    i === active ? "bg-zinc-100" : "hover:bg-zinc-50"
+                  }`}
                 >
                   {p.label}
-                </button>
+                </div>
               ))}
             </div>
           )}
