@@ -296,7 +296,7 @@ describe("executeQueueRowResolution", () => {
 
       expect(result.ok).toBe(true);
       expect(mockClaimExtractionSlots).toHaveBeenCalledWith(supabase, "user-1", 1);
-      expect(mockExtractDocumentFields).toHaveBeenCalledWith([], expect.anything());
+      expect(mockExtractDocumentFields).toHaveBeenCalledWith([], expect.anything(), expect.objectContaining({ userId: "user-1" }));
     });
 
     it("is a no-op success when the row has no attachments", async () => {

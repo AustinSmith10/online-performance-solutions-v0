@@ -99,7 +99,7 @@ export type UploadPipelineEvent =
   // Clean — extraction is starting; `fields` are the human labels being read.
   | { type: "extracting"; fields: string[]; total: number }
   | { type: "extract_progress"; found: number; total: number }
-  | { type: "extracted"; found: number; total: number }
+  | { type: "extracted"; found: number; total: number; note?: string }
   // Terminal success. extractionStatus is "completed", "failed", or
   // "not_applicable"; mismatchReasons echoes file_created for a flagged file
   // that still reached a terminal state.
@@ -180,7 +180,8 @@ export async function* runUploadPipeline(
       buffer,
       isPdf,
       sampleText,
-      docTextCap
+      docTextCap,
+      { userId: actor.id, projectId }
     );
   } catch (err) {
     console.error(`[upload-pipeline] verification failed for "${name}", failing open:`, err);
@@ -262,7 +263,8 @@ export async function* runUploadPipeline(
       (found) => {
         queue.push({ type: "extract_progress", found: Math.min(found, total), total });
         ping();
-      }
+      },
+      { userId: actor.id, projectId }
     )
       .then((r) => {
         single = r;
@@ -298,7 +300,14 @@ export async function* runUploadPipeline(
     await touchProject(supabase, projectId);
 
     const found = countExtracted(single, total);
-    yield { type: "extracted", found, total };
+    yield {
+      type: "extracted",
+      found,
+      total,
+      ...((single as SingleDocExtraction).result.skipped === "no_text"
+        ? { note: "No readable text in this file — you can enter the details on the next step." }
+        : {}),
+    };
     yield { type: "settled", fileId, extractionStatus: "completed", mismatchReasons: null, extractionError: null };
   } catch (err) {
     console.error(`[upload-pipeline] extraction failed for file ${fileId}:`, err);

@@ -5,7 +5,14 @@ import { join } from "path";
 vi.mock("server-only", () => ({}));
 
 const messagesCreate = vi.fn();
-const { mockGetExtractionCap } = vi.hoisted(() => ({ mockGetExtractionCap: vi.fn() }));
+const { mockGetExtractionCap, messagesStream, mockRecordAiUsage, mockClaimSlot } = vi.hoisted(() => ({
+  mockGetExtractionCap: vi.fn(),
+  messagesStream: vi.fn(),
+  mockRecordAiUsage: vi.fn(),
+  mockClaimSlot: vi.fn(),
+}));
+vi.mock("@/lib/ai/usage", () => ({ recordAiUsage: mockRecordAiUsage }));
+vi.mock("@/lib/documents/extraction-budget", () => ({ claimExtractionSlot: mockClaimSlot }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/settings/extraction-document-text-cap", async (orig) => ({
   ...(await orig<object>()),
@@ -13,7 +20,7 @@ vi.mock("@/lib/settings/extraction-document-text-cap", async (orig) => ({
 }));
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class {
-    messages = { create: messagesCreate };
+    messages = { create: messagesCreate, stream: messagesStream };
   },
 }));
 
@@ -21,17 +28,36 @@ vi.mock("@anthropic-ai/sdk", () => ({
 // bypasses vi.mock's module interception — so a real, valid PDF is used
 // instead of a mocked parser.
 const VALID_PDF = readFileSync(join(__dirname, "__fixtures__/valid-sample.pdf"));
+const BLANK_PDF = readFileSync(join(__dirname, "__fixtures__/blank-no-text.pdf"));
 
 import {
   parseJson,
   mergeExtractionResults,
   extractSingleDocument,
+  extractSingleDocumentStreaming,
+  hasReadableText,
   runTextCompletion,
   countCompletedFields,
   extractionFieldTotal,
   type SingleDocExtraction,
   type ExtractToken,
 } from "./extractor";
+
+describe("hasReadableText — scan detection", () => {
+  it("treats a near-empty text layer as unreadable", () => {
+    expect(hasReadableText("", 1)).toBe(false);
+    expect(hasReadableText("  Scanned by Xerox  ", 5)).toBe(false);
+  });
+
+  it("treats a long scan with a stray footer per page as unreadable", () => {
+    expect(hasReadableText("x".repeat(120), 20)).toBe(false);
+  });
+
+  it("treats ordinary documents as readable", () => {
+    expect(hasReadableText("Purchase Order PO-123 ".repeat(20), 1)).toBe(true);
+    expect(hasReadableText("x".repeat(93_000), 27)).toBe(true);
+  });
+});
 
 describe("countCompletedFields — streamed extraction progress (#115)", () => {
   it("counts only fully-emitted confidence pairs in a partial JSON snapshot", () => {
@@ -232,6 +258,9 @@ describe("single-vendor (Anthropic-only) fail-open behavior", () => {
 
   beforeEach(() => {
     messagesCreate.mockReset();
+    messagesStream.mockReset();
+    mockRecordAiUsage.mockReset();
+    mockClaimSlot.mockReset();
     process.env.ANTHROPIC_API_KEY = "test-key";
   });
 
@@ -250,6 +279,88 @@ describe("single-vendor (Anthropic-only) fail-open behavior", () => {
       extractSingleDocument({ label: "doc.pdf", buffer: VALID_PDF }, TOKENS)
     ).rejects.toThrow("Anthropic down");
     expect(messagesCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("the streaming path also re-throws a provider failure instead of returning an empty 'completed' result", async () => {
+    messagesStream.mockImplementation(() => ({
+      on: () => {},
+      finalMessage: () => Promise.reject(new Error("Anthropic down")),
+    }));
+
+    await expect(
+      extractSingleDocumentStreaming({ label: "doc.pdf", buffer: VALID_PDF }, TOKENS)
+    ).rejects.toThrow("Anthropic down");
+  });
+
+  it("skips the AI call for a PDF with no readable text and logs it", async () => {
+    const single = await extractSingleDocument({ label: "scan.pdf", buffer: BLANK_PDF }, TOKENS, { userId: "u1" });
+
+    expect(messagesCreate).not.toHaveBeenCalled();
+    expect(single.result.skipped).toBe("no_text");
+    expect(single.result.fields.EXTRACT_ADDRESS).toEqual([{ value: "", confidence: "low" }]);
+    expect(mockRecordAiUsage).toHaveBeenCalledWith("scan skipped (extraction)", "none", undefined, { userId: "u1" });
+  });
+
+  it("skips the AI call on the streaming path too", async () => {
+    const single = await extractSingleDocumentStreaming({ label: "scan.pdf", buffer: BLANK_PDF }, TOKENS);
+
+    expect(messagesStream).not.toHaveBeenCalled();
+    expect(single.result.skipped).toBe("no_text");
+  });
+
+  it("logs token usage for a successful extraction", async () => {
+    messagesCreate.mockResolvedValue({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            po_number: { value: "PO1", confidence: "high" },
+            EXTRACT_ADDRESS: [{ value: "1 A St", confidence: "high" }],
+          }),
+        },
+      ],
+      usage: { input_tokens: 1234, output_tokens: 56 },
+    });
+
+    await extractSingleDocument({ label: "doc.pdf", buffer: VALID_PDF }, TOKENS, {
+      userId: "u1",
+      projectId: "p1",
+    });
+
+    expect(mockRecordAiUsage).toHaveBeenCalledWith(
+      "document extraction",
+      "claude-sonnet-5-5",
+      { input_tokens: 1234, output_tokens: 56 },
+      { userId: "u1", projectId: "p1" }
+    );
+  });
+
+  it("runTextCompletion charges the daily budget and skips the call once it is used up", async () => {
+    mockClaimSlot.mockResolvedValue({ allowed: false, limit: 30 });
+
+    const text = await runTextCompletion("prompt", "file requirement AI judge", undefined, { userId: "u1" });
+
+    expect(text).toBe("");
+    expect(mockClaimSlot).toHaveBeenCalledWith(expect.anything(), "u1");
+    expect(messagesCreate).not.toHaveBeenCalled();
+  });
+
+  it("runTextCompletion proceeds and logs usage when the budget allows it", async () => {
+    mockClaimSlot.mockResolvedValue({ allowed: true, limit: 30 });
+    messagesCreate.mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+      usage: { input_tokens: 10, output_tokens: 2 },
+    });
+
+    const text = await runTextCompletion("prompt", "stakeholder email comment extraction", undefined, { userId: "u1" });
+
+    expect(text).toBe("ok");
+    expect(mockRecordAiUsage).toHaveBeenCalledWith(
+      "stakeholder email comment extraction",
+      "claude-haiku-4-5-20251001",
+      { input_tokens: 10, output_tokens: 2 },
+      { userId: "u1" }
+    );
   });
 
   it("runTextCompletion returns an empty string when Anthropic throws — no fallback provider", async () => {

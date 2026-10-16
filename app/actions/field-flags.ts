@@ -368,7 +368,10 @@ export async function reExtractProject(projectId: string): Promise<ReExtractResu
   // retriable error rather than "re-extract succeeded" with nothing changed.
   let extraction: Awaited<ReturnType<typeof extractDocumentFields>>;
   try {
-    extraction = await extractDocumentFields(documents, extractTokens);
+    extraction = await extractDocumentFields(documents, extractTokens, {
+      userId: profile.id as string,
+      projectId,
+    });
   } catch (err) {
     console.error(`[reExtractProject] extraction failed for ${projectId}:`, err);
     return {

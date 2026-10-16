@@ -1,5 +1,12 @@
 import "server-only";
-import { extractPdfTextAndPageCount, runTextCompletion, type JsonOutputSchema } from "@/lib/documents/extractor";
+import {
+  extractPdfTextAndPageCount,
+  hasReadableText,
+  runTextCompletion,
+  type JsonOutputSchema,
+} from "@/lib/documents/extractor";
+import { recordAiUsage } from "@/lib/ai/usage";
+import type { AiCallContext } from "@/lib/ai/usage";
 import { DEFAULT_JUDGE_DOCUMENT_TEXT_CHAR_CAP } from "@/lib/settings/judge-document-text-cap";
 
 const JUDGE_SCHEMA: JsonOutputSchema = {
@@ -134,7 +141,8 @@ export async function runAiJudgeCheck(
   requirement: { aiJudgeHint: string | null; name?: string },
   docText: string,
   sampleText?: string | null,
-  docTextCap: number = DEFAULT_JUDGE_DOCUMENT_TEXT_CHAR_CAP
+  docTextCap: number = DEFAULT_JUDGE_DOCUMENT_TEXT_CHAR_CAP,
+  ctx?: AiCallContext
 ): Promise<AiJudgeResult | null> {
   if (!requirement.aiJudgeHint) return null;
 
@@ -149,7 +157,8 @@ export async function runAiJudgeCheck(
     const raw = await runTextCompletion(
       buildJudgePrompt(requirement.aiJudgeHint, docText, sampleText, docTextCap),
       "file requirement AI judge",
-      JUDGE_SCHEMA
+      JUDGE_SCHEMA,
+      ctx
     );
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return unverified();
@@ -187,7 +196,8 @@ export async function verifyUploadAgainstRequirement(
   buffer: Buffer,
   isPdf: boolean,
   sampleText?: string | null,
-  docTextCap: number = DEFAULT_JUDGE_DOCUMENT_TEXT_CHAR_CAP
+  docTextCap: number = DEFAULT_JUDGE_DOCUMENT_TEXT_CHAR_CAP,
+  ctx?: AiCallContext
 ): Promise<string[]> {
   if (!isPdf) return [];
 
@@ -201,12 +211,29 @@ export async function verifyUploadAgainstRequirement(
 
   const reasons: string[] = [];
 
+  // A scan / image-only PDF has no text to match markers, a regex or the AI
+  // judge against. Checking anyway would flag every such upload "Needs review"
+  // and ask the submitter to confirm it by hand, so only the text-independent
+  // page-count range is checked; the text-based layers are skipped, never
+  // failed — consistent with this layer's "never hard block" posture.
+  if (!hasReadableText(doc.text, doc.pageCount)) {
+    if (requirement.aiJudgeHint) void recordAiUsage("scan skipped (document check)", "none", undefined, ctx);
+    const pageRange = runDeterministicCheck(
+      { ...requirement, markerTextPatterns: null, markerRegex: null, aiJudgeHint: null },
+      doc
+    );
+    if (pageRange && !pageRange.ok) {
+      reasons.push(pageRange.reason ?? `Doesn't look like ${requirement.name}.`);
+    }
+    return reasons;
+  }
+
   const deterministic = runDeterministicCheck(requirement, doc);
   if (deterministic && !deterministic.ok) {
     reasons.push(deterministic.reason ?? `Doesn't look like ${requirement.name}.`);
   }
 
-  const judged = await runAiJudgeCheck(requirement, doc.text, sampleText, docTextCap);
+  const judged = await runAiJudgeCheck(requirement, doc.text, sampleText, docTextCap, ctx);
   if (judged && !judged.ok) {
     reasons.push(judged.reason ?? `May not be ${requirement.name}.`);
   } else if (judged?.unverified) {

@@ -3,6 +3,8 @@ import { createRequire } from "module";
 import Anthropic from "@anthropic-ai/sdk";
 import { classifyProviderError, reportProviderFailure } from "@/lib/ai/provider-failure";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordAiUsage, type AiCallContext } from "@/lib/ai/usage";
+import { claimExtractionSlot } from "@/lib/documents/extraction-budget";
 import { getAiExtractionEnabled } from "@/lib/settings/ai-extraction-enabled";
 import {
   getExtractionDocumentTextCharCap,
@@ -186,6 +188,10 @@ function asExtractedFieldList(v: unknown): ExtractedField[] {
 export interface SingleDocResult {
   po_number: ExtractedField;
   fields: Record<string, ExtractedField[]>;
+  // Set when the AI call was deliberately skipped because the PDF has no
+  // readable text layer (a scan or image-only file). The fields are the usual
+  // empty placeholders; the submitter enters them by hand.
+  skipped?: "no_text";
 }
 
 // Exported for unit testing (#64) — pure parsing, no I/O.
@@ -245,11 +251,6 @@ function renderPageByLayout(pageData: PdfPageProxy): Promise<string> {
     });
 }
 
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  const { text } = await extractPdfTextAndPageCount(buffer);
-  return text;
-}
-
 /**
  * Shared PDF text + page count extraction, reused by both the field
  * extractor above and the file-requirement verification layer (#113) — the
@@ -261,6 +262,27 @@ export async function extractPdfTextAndPageCount(
 ): Promise<{ text: string; pageCount: number }> {
   const data = await pdfParse(buffer, { pagerender: renderPageByLayout });
   return { text: (data.text as string).trim(), pageCount: (data as unknown as { numpages: number }).numpages };
+}
+
+// A PDF whose text layer is near-empty (a scan, or an image-only export) has
+// nothing for the text model to read; sending it would spend tokens to get
+// back empty fields. Average-per-page as well as total, so one stray scanner
+// footer on a long scan doesn't make it look readable. Real drawing sets run
+// ~1,000+ characters per page from the title block alone.
+const MIN_READABLE_TOTAL_CHARS = 100;
+const MIN_READABLE_CHARS_PER_PAGE = 40;
+
+export function hasReadableText(text: string, pageCount: number): boolean {
+  const length = text.trim().length;
+  return length >= MIN_READABLE_TOTAL_CHARS && length / Math.max(pageCount, 1) >= MIN_READABLE_CHARS_PER_PAGE;
+}
+
+function emptyExtraction(tokenNames: string[], skipped?: "no_text"): SingleDocResult {
+  return {
+    po_number: { ...EMPTY_FIELD },
+    fields: Object.fromEntries(tokenNames.map((t) => [t, [{ ...EMPTY_FIELD }]])),
+    ...(skipped ? { skipped } : {}),
+  };
 }
 
 // Dynamic per call — the token set varies by template. A single shared
@@ -291,9 +313,12 @@ function buildExtractionSchema(tokenNames: string[]): JsonOutputSchema {
   };
 }
 
+const EXTRACTION_MODEL = "claude-sonnet-5-5";
+
 async function extractWithAnthropic(
   prompt: string,
-  tokenNames: string[]
+  tokenNames: string[],
+  ctx?: AiCallContext
 ): Promise<SingleDocResult> {
   // 180s — sized for up to 150k chars of input (MAX_EXTRACTION_DOCUMENT_TEXT_CHAR_CAP). Do not
   // lower this: a shorter timeout fails silently into an empty extraction
@@ -301,11 +326,10 @@ async function extractWithAnthropic(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 180_000 });
   const schema = buildExtractionSchema(tokenNames);
   const response = await client.messages.create({
-    // Confirmed against GET /v1/models (2026-08-20, #154): "claude-sonnet-5"
-    // is currently the only ID Anthropic exposes for this model — there is
-    // no dated snapshot variant yet. Re-check the models endpoint and pin
-    // to a dated ID once one exists.
-    model: "claude-sonnet-5",
+    // Moved from "claude-sonnet-5" to the current Sonnet generation on
+    // 2026-10-16. Undated alias: re-check GET /v1/models and pin to a dated
+    // ID once Anthropic exposes one.
+    model: EXTRACTION_MODEL,
     max_tokens: 1024,
     // #174 originally pinned temperature: 0 here for determinism, but Sonnet 5
     // removed the sampling params — sending `temperature` (even 0) is a 400,
@@ -315,6 +339,7 @@ async function extractWithAnthropic(
     messages: [{ role: "user", content: prompt }],
     output_config: { format: { type: "json_schema", schema: schema.schema } },
   });
+  void recordAiUsage("document extraction", EXTRACTION_MODEL, response.usage, ctx);
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
   return parseJson(text, tokenNames);
 }
@@ -346,7 +371,8 @@ async function isAiExtractionEnabled(): Promise<boolean> {
 
 async function runSingleExtraction(
   prompt: string,
-  tokenNames: string[]
+  tokenNames: string[],
+  ctx?: AiCallContext
 ): Promise<SingleDocResult> {
   const empty: SingleDocResult = {
     po_number: { ...EMPTY_FIELD },
@@ -362,7 +388,7 @@ async function runSingleExtraction(
 
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      return await extractWithAnthropic(prompt, tokenNames);
+      return await extractWithAnthropic(prompt, tokenNames, ctx);
     } catch (err) {
       console.error("[extractor] Anthropic extraction failed:", err);
       const status = classifyProviderError(err);
@@ -391,12 +417,17 @@ export interface SingleDocExtraction {
 
 export async function extractSingleDocument(
   doc: ExtractionDocument,
-  extractTokens: ExtractToken[]
+  extractTokens: ExtractToken[],
+  ctx?: AiCallContext
 ): Promise<SingleDocExtraction> {
   const tokenNames = extractTokens.map((t) => t.token);
-  const text = await extractPdfText(doc.buffer);
+  const { text, pageCount } = await extractPdfTextAndPageCount(doc.buffer);
+  if (!hasReadableText(text, pageCount)) {
+    void recordAiUsage("scan skipped (extraction)", "none", undefined, ctx);
+    return { label: doc.label, result: emptyExtraction(tokenNames, "no_text") };
+  }
   const prompt = buildPrompt([{ label: doc.label, text }], extractTokens, await getExtractionCap());
-  const result = await runSingleExtraction(prompt, tokenNames);
+  const result = await runSingleExtraction(prompt, tokenNames, ctx);
   return { label: doc.label, result };
 }
 
@@ -422,12 +453,13 @@ export function countCompletedFields(snapshot: string): number {
 async function extractWithAnthropicStreaming(
   prompt: string,
   tokenNames: string[],
-  onProgress: (found: number) => void
+  onProgress: (found: number) => void,
+  ctx?: AiCallContext
 ): Promise<SingleDocResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 180_000 });
   const schema = buildExtractionSchema(tokenNames);
   const stream = client.messages.stream({
-    model: "claude-sonnet-5",
+    model: EXTRACTION_MODEL,
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
     output_config: { format: { type: "json_schema", schema: schema.schema } },
@@ -440,6 +472,7 @@ async function extractWithAnthropicStreaming(
     }
   });
   const message = await stream.finalMessage();
+  void recordAiUsage("document extraction", EXTRACTION_MODEL, message.usage, ctx);
   const text = message.content[0]?.type === "text" ? message.content[0].text : "";
   return parseJson(text, tokenNames);
 }
@@ -447,7 +480,8 @@ async function extractWithAnthropicStreaming(
 async function runSingleExtractionStreaming(
   prompt: string,
   tokenNames: string[],
-  onProgress: (found: number) => void
+  onProgress: (found: number) => void,
+  ctx?: AiCallContext
 ): Promise<SingleDocResult> {
   const empty: SingleDocResult = {
     po_number: { ...EMPTY_FIELD },
@@ -458,11 +492,16 @@ async function runSingleExtractionStreaming(
 
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      return await extractWithAnthropicStreaming(prompt, tokenNames, onProgress);
+      return await extractWithAnthropicStreaming(prompt, tokenNames, onProgress, ctx);
     } catch (err) {
       console.error("[extractor] streaming Anthropic extraction failed:", err);
       const status = classifyProviderError(err);
       if (status) void reportProviderFailure({ provider: "anthropic", status, context: "document extraction", error: err });
+      // Same contract as runSingleExtraction (#174): a genuine call/parse
+      // failure must surface as a failed extraction, not be recorded as a
+      // completed one with nothing found. The upload pipeline catches this
+      // and marks the file extraction_status = "failed".
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
 
@@ -478,11 +517,16 @@ export function extractionFieldTotal(extractTokens: ExtractToken[]): number {
 export async function extractSingleDocumentStreaming(
   doc: ExtractionDocument,
   extractTokens: ExtractToken[],
-  onProgress?: (found: number, total: number) => void
+  onProgress?: (found: number, total: number) => void,
+  ctx?: AiCallContext
 ): Promise<SingleDocExtraction> {
   const tokenNames = extractTokens.map((t) => t.token);
   const total = extractionFieldTotal(extractTokens);
-  const text = await extractPdfText(doc.buffer);
+  const { text, pageCount } = await extractPdfTextAndPageCount(doc.buffer);
+  if (!hasReadableText(text, pageCount)) {
+    void recordAiUsage("scan skipped (extraction)", "none", undefined, ctx);
+    return { label: doc.label, result: emptyExtraction(tokenNames, "no_text") };
+  }
   const prompt = buildPrompt([{ label: doc.label, text }], extractTokens, await getExtractionCap());
   let last = 0;
   const result = await runSingleExtractionStreaming(prompt, tokenNames, (found) => {
@@ -491,7 +535,7 @@ export async function extractSingleDocumentStreaming(
       last = clamped;
       onProgress?.(clamped, total);
     }
-  });
+  }, ctx);
   return { label: doc.label, result };
 }
 
@@ -547,16 +591,19 @@ export function mergeExtractionResults(
 // that still want the full batch-and-merge behavior in one call.
 export async function extractDocumentFields(
   documents: ExtractionDocument[],
-  extractTokens: ExtractToken[]
+  extractTokens: ExtractToken[],
+  ctx?: AiCallContext
 ): Promise<DynamicExtractionResult> {
   if (documents.length === 0) return mergeExtractionResults([], extractTokens);
 
   const perDocResults = await Promise.all(
-    documents.map((doc) => extractSingleDocument(doc, extractTokens))
+    documents.map((doc) => extractSingleDocument(doc, extractTokens, ctx))
   );
 
   return mergeExtractionResults(perDocResults, extractTokens);
 }
+
+const TEXT_COMPLETION_MODEL = "claude-haiku-4-5-20251001";
 
 // Shared text-completion helper for non-extraction AI calls that live
 // alongside this pipeline — the file-requirement AI judge
@@ -570,14 +617,28 @@ export async function extractDocumentFields(
 //
 // Haiku — these are all short-output classification/extraction judgments,
 // not tasks that need frontier-tier reasoning.
+//
+// `ctx.userId`, when given, charges one slot to that user's daily AI budget
+// (same budget as document extraction) and returns "" — the callers' existing
+// "no AI answer" fallback — once it's exhausted. Callers without a user (none
+// today) are unmetered. Token usage is logged to ai_usage_events either way.
 export async function runTextCompletion(
   prompt: string,
   context = "AI text completion",
-  outputSchema?: JsonOutputSchema
+  outputSchema?: JsonOutputSchema,
+  ctx?: AiCallContext
 ): Promise<string> {
   // Kill switch (#153) — same fallback shape as the no-API-key path below.
   if (!(await isAiExtractionEnabled())) {
     return "";
+  }
+
+  if (ctx?.userId) {
+    const { allowed, limit } = await claimExtractionSlot(createAdminClient(), ctx.userId);
+    if (!allowed) {
+      console.warn(`[extractor] ${context}: daily AI budget (${limit}/24h) reached for user ${ctx.userId}`);
+      return "";
+    }
   }
 
   if (process.env.ANTHROPIC_API_KEY) {
@@ -587,7 +648,7 @@ export async function runTextCompletion(
       const response = await client.messages.create({
         // Pinned to the dated snapshot confirmed via GET /v1/models
         // (2026-08-20, #154).
-        model: "claude-haiku-4-5-20251001",
+        model: TEXT_COMPLETION_MODEL,
         max_tokens: 512,
         // #174: deterministic judgments — a wrong-type document should get
         // the same verdict on every retry, not flicker between runs. Haiku 4.5
@@ -598,6 +659,7 @@ export async function runTextCompletion(
           ? { output_config: { format: { type: "json_schema" as const, schema: outputSchema.schema } } }
           : {}),
       });
+      void recordAiUsage(context, TEXT_COMPLETION_MODEL, response.usage, ctx);
       return response.content[0]?.type === "text" ? response.content[0].text : "";
     } catch (err) {
       console.error("[extractor] runTextCompletion Anthropic failed:", err);

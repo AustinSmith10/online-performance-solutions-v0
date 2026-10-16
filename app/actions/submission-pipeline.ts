@@ -111,7 +111,9 @@ async function runExtractionForFile(
   await supabase.from("project_files").update({ extraction_status: "running" as ExtractionStatus }).eq("id", fileId);
   try {
     const { extractTokens } = await loadExtractTokens(supabase, orgId, templateId);
-    const singleResult: SingleDocExtraction = await extractSingleDocument({ label, buffer }, extractTokens);
+    const singleResult: SingleDocExtraction = await extractSingleDocument({ label, buffer }, extractTokens, {
+      userId: actorId,
+    });
     await supabase
       .from("project_files")
       .update({ extraction_status: "completed" as ExtractionStatus, extraction_result: singleResult, extraction_error: null })

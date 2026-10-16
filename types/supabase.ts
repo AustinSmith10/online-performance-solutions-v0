@@ -118,6 +118,54 @@ export type Database = {
           },
         ]
       }
+      ai_usage_events: {
+        Row: {
+          created_at: string
+          feature: string
+          id: string
+          input_tokens: number
+          model: string
+          output_tokens: number
+          project_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          feature: string
+          id?: string
+          input_tokens?: number
+          model: string
+          output_tokens?: number
+          project_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          feature?: string
+          id?: string
+          input_tokens?: number
+          model?: string
+          output_tokens?: number
+          project_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_usage_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           key: string
@@ -1895,6 +1943,16 @@ export type Database = {
         Returns: undefined
       }
       admin_delete_user: { Args: { p_user_id: string }; Returns: undefined }
+      ai_usage_summary: {
+        Args: { p_since: string }
+        Returns: {
+          calls: number
+          feature: string
+          input_tokens: number
+          model: string
+          output_tokens: number
+        }[]
+      }
       claim_extraction_slot: {
         Args: { p_limit: number; p_user_id: string; p_window_hours?: number }
         Returns: {
