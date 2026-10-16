@@ -102,4 +102,15 @@ describe("reducePipelineFile — SSE event fold (#115)", () => {
     expect(f.extractionError).toBe("Daily extraction limit reached (50/24h).");
     expect(f.stageDetail).toBeNull();
   });
+
+  it("shows the event's note instead of 'Found N of M' when extraction was skipped (scan)", () => {
+    const f = reducePipelineFile(base(), {
+      type: "extracted",
+      found: 0,
+      total: 3,
+      note: "No readable text in this file — you can enter the details on the next step.",
+    });
+    expect(f.stageDetail).toBe("No readable text in this file — you can enter the details on the next step.");
+  });
+
 });

@@ -122,6 +122,7 @@ jobs:
         env:
           SUPABASE_TEST_URL: ${{ env.API_URL }}
           SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ env.SERVICE_ROLE_KEY }}
+          SUPABASE_TEST_ANON_KEY: ${{ env.ANON_KEY }}
         run: npm run test:concurrency
 
       - name: Stop Supabase

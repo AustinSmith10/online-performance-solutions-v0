@@ -1417,7 +1417,7 @@ export type ExtractEmailResult = { text: string } | { error: string };
 export async function extractStakeholderCommentsFromEmail(
   emlText: string
 ): Promise<ExtractEmailResult> {
-  await requireRole("consultant", "admin", "super_admin");
+  const actor = await requireRole("consultant", "admin", "super_admin");
 
   const body = parseEmlBody(emlText).slice(0, 8000).trim();
   if (!body) return { error: "Could not find any text in this email." };
@@ -1432,7 +1432,9 @@ Extract only the substantive message the sender wrote — their actual reply —
   // Reuses the extraction pipeline's shared completion helper instead of a
   // bespoke call, and gets classifyProviderError/reportProviderFailure
   // alerting for free (previously missing here, unlike every other AI call site).
-  const text = (await runTextCompletion(prompt, "stakeholder email comment extraction")).trim();
+  const text = (
+    await runTextCompletion(prompt, "stakeholder email comment extraction", undefined, { userId: actor.id as string })
+  ).trim();
   return { text: text || body };
 }
 

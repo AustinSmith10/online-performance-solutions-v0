@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/ai/usage", () => ({ recordAiUsage: vi.fn() }));
 vi.mock("@/lib/documents/extractor", async () => {
   const actual = await vi.importActual<typeof import("@/lib/documents/extractor")>("@/lib/documents/extractor");
   return { ...actual, runTextCompletion: vi.fn() };
@@ -139,5 +142,36 @@ describe("verifyUploadAgainstRequirement", () => {
       false
     );
     expect(reasons).toEqual([]);
+  });
+
+  // A scan / image-only PDF has no text layer: text markers, regex and the AI
+  // judge can't be evaluated, and must not flag it "Needs review" or spend a call.
+  describe("PDF with no readable text (scan)", () => {
+    const BLANK_PDF = readFileSync(join(__dirname, "__fixtures__/blank-no-text.pdf"));
+
+    it("skips the text markers, regex and AI judge instead of failing them", async () => {
+      const reasons = await verifyUploadAgainstRequirement(
+        {
+          name: "PO",
+          ...NO_MARKERS,
+          markerTextPatterns: ["Purchase Order"],
+          markerRegex: "PO-\\d+",
+          aiJudgeHint: "a purchase order",
+        },
+        BLANK_PDF,
+        true
+      );
+      expect(reasons).toEqual([]);
+      expect(runTextCompletion).not.toHaveBeenCalled();
+    });
+
+    it("still enforces the text-independent page-count range", async () => {
+      const reasons = await verifyUploadAgainstRequirement(
+        { name: "PO", ...NO_MARKERS, markerPageCountMin: 3 },
+        BLANK_PDF,
+        true
+      );
+      expect(reasons).toEqual(["Expected 3–∞ pages, got 1."]);
+    });
   });
 });

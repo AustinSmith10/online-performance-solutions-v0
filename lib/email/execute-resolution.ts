@@ -349,7 +349,8 @@ async function executeNewSubmission(
       }
       extracted = await extractDocumentFields(
         pdfBuffers.slice(0, granted).map((buf, i) => ({ label: `Attachment ${i + 1}`, buffer: buf })),
-        extractTokens
+        extractTokens,
+        { userId: user.id as string }
       );
     } catch (err) {
       console.error("[email-queue] Extraction failed (non-fatal):", err);
@@ -620,7 +621,8 @@ async function executeThreadReply(
       }
       const extracted = await extractDocumentFields(
         pdfBuffers.slice(0, granted).map((buf, i) => ({ label: `Attachment ${i + 1}`, buffer: buf })),
-        extractTokens
+        extractTokens,
+        { userId: submitterId, projectId }
       );
 
       // Whichever attachment(s) on this thread reply actually contain the

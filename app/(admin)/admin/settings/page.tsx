@@ -18,6 +18,8 @@ import { EmailsEnabledForm } from "./_components/EmailsEnabledForm";
 import { JudgeDocumentTextCapForm } from "./_components/JudgeDocumentTextCapForm";
 import { ExtractionDocumentTextCapForm } from "./_components/ExtractionDocumentTextCapForm";
 import { ExtractionDailyLimitForm } from "./_components/ExtractionDailyLimitForm";
+import { AiUsagePanel } from "./_components/AiUsagePanel";
+import { getAiUsageSummary } from "@/lib/ai/usage-summary";
 import { AiExtractionEnabledForm } from "./_components/AiExtractionEnabledForm";
 import { BusinessTimezoneForm } from "./_components/BusinessTimezoneForm";
 import { SettingsSection } from "./_components/SettingsSection";
@@ -83,13 +85,21 @@ export default async function AdminSettingsPage({
       </>
     );
   } else if (active === "documents") {
-    const [judgeDocumentTextCap, extractionDocumentTextCap, extractionDailyLimit, aiExtractionEnabled] =
-      await Promise.all([
-        getJudgeDocumentTextCharCap(supabase),
-        getExtractionDocumentTextCharCap(supabase),
-        getExtractionDailyLimit(supabase),
-        isSuperAdmin ? getAiExtractionEnabled(supabase) : Promise.resolve(true),
-      ]);
+    const [
+      judgeDocumentTextCap,
+      extractionDocumentTextCap,
+      extractionDailyLimit,
+      aiExtractionEnabled,
+      aiUsage7,
+      aiUsage30,
+    ] = await Promise.all([
+      getJudgeDocumentTextCharCap(supabase),
+      getExtractionDocumentTextCharCap(supabase),
+      getExtractionDailyLimit(supabase),
+      isSuperAdmin ? getAiExtractionEnabled(supabase) : Promise.resolve(true),
+      getAiUsageSummary(supabase, 7),
+      getAiUsageSummary(supabase, 30),
+    ]);
     panel = (
       <>
         <SettingsSection
@@ -99,6 +109,12 @@ export default async function AdminSettingsPage({
           <ExtractionDailyLimitForm limit={extractionDailyLimit} />
           <ExtractionDocumentTextCapForm cap={extractionDocumentTextCap} />
           <JudgeDocumentTextCapForm cap={judgeDocumentTextCap} />
+        </SettingsSection>
+        <SettingsSection
+          title="AI usage"
+          description="Tokens and estimated cost of the AI calls made for documents and emails."
+        >
+          <AiUsagePanel last7={aiUsage7} last30={aiUsage30} />
         </SettingsSection>
         {isSuperAdmin && (
           <SettingsSection

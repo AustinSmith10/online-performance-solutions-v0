@@ -119,7 +119,7 @@ export function reducePipelineFile(
     case "extracted":
       return {
         ...file,
-        stageDetail: `Found ${event.found} of ${event.total} values`,
+        stageDetail: event.note ?? `Found ${event.found} of ${event.total} values`,
         extractProgress: { found: event.found, total: event.total },
       };
     case "settled":
